@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, systemPreferences, shell, desktopCapturer } from 'electron';
+import { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, systemPreferences, shell, desktopCapturer, dialog } from 'electron';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
@@ -128,6 +128,179 @@ ipcMain.handle('check-accessibility-permission', () => {
         return 'unknown';
     }
     return 'granted';
+});
+// App Icon Cache
+const appIconCache = new Map();
+// Get App Icon
+ipcMain.handle('get-app-icon', async (event, appName) => {
+    if (process.platform !== 'darwin') {
+        console.log(`[Main] get-app-icon: Not macOS, returning null for ${appName}`);
+        return null;
+    }
+    // Check cache first
+    if (appIconCache.has(appName)) {
+        console.log(`[Main] get-app-icon: Using cached icon for ${appName}`);
+        return appIconCache.get(appName);
+    }
+    console.log(`[Main] get-app-icon: Attempting to get icon for ${appName}`);
+    try {
+        const { exec } = await import('child_process');
+        const { promisify } = await import('util');
+        const execAsync = promisify(exec);
+        // Method 1: Try to get bundle path via AppleScript
+        try {
+            const bundleScript = `osascript -e 'tell application "System Events" to get POSIX path of (application file of application process "${appName.replace(/"/g, '\\"')}")'`;
+            const bundleResult = await execAsync(bundleScript, { timeout: 5000 });
+            const bundlePath = bundleResult.stdout.trim();
+            console.log(`[Main] get-app-icon: Bundle path for ${appName}: ${bundlePath}`);
+            if (bundlePath && bundlePath !== '' && !bundlePath.includes('error')) {
+                // Try to find icon file in bundle
+                const possibleIconPaths = [
+                    path.join(bundlePath, 'Contents', 'Resources', 'AppIcon.icns'),
+                    path.join(bundlePath, 'Contents', 'Resources', `${appName}.icns`),
+                    path.join(bundlePath, 'Contents', 'Resources', 'application.icns'),
+                    path.join(bundlePath, 'Contents', 'Resources', 'icon.icns'),
+                ];
+                for (const iconPath of possibleIconPaths) {
+                    if (fs.existsSync(iconPath)) {
+                        console.log(`[Main] get-app-icon: Found icon at ${iconPath}`);
+                        try {
+                            // Convert ICNS to PNG using sips, then read as base64
+                            const tempPngPath = path.join(app.getPath('temp'), `icon-${appName.replace(/[^a-zA-Z0-9]/g, '_')}-${Date.now()}.png`);
+                            try {
+                                // Convert ICNS to PNG
+                                const convertScript = `sips -s format png "${iconPath}" --out "${tempPngPath}"`;
+                                const convertResult = await execAsync(convertScript, {
+                                    timeout: 10000,
+                                    maxBuffer: 1024 * 1024
+                                });
+                                // Check if conversion was successful
+                                if (fs.existsSync(tempPngPath)) {
+                                    const iconBuffer = await fs.promises.readFile(tempPngPath);
+                                    const base64Icon = iconBuffer.toString('base64');
+                                    // Clean up temp file
+                                    await fs.promises.unlink(tempPngPath).catch((err) => {
+                                        console.log(`[Main] get-app-icon: Failed to delete temp file: ${err}`);
+                                    });
+                                    if (base64Icon && base64Icon.length > 100) {
+                                        const dataUri = `data:image/png;base64,${base64Icon}`;
+                                        appIconCache.set(appName, dataUri);
+                                        console.log(`[Main] get-app-icon: Successfully converted icon for ${appName} (${Math.round(base64Icon.length / 1024)}KB)`);
+                                        return dataUri;
+                                    }
+                                    else {
+                                        console.log(`[Main] get-app-icon: Converted icon too small or invalid (${base64Icon?.length || 0} bytes)`);
+                                    }
+                                }
+                                else {
+                                    console.log(`[Main] get-app-icon: Conversion failed - temp file not created. sips output: ${convertResult.stdout.substring(0, 200)}`);
+                                }
+                            }
+                            catch (convertError) {
+                                console.log(`[Main] get-app-icon: sips conversion failed: ${convertError.message}`);
+                                if (convertError.stdout) {
+                                    console.log(`[Main] get-app-icon: sips stdout: ${convertError.stdout.substring(0, 200)}`);
+                                }
+                                if (convertError.stderr) {
+                                    console.log(`[Main] get-app-icon: sips stderr: ${convertError.stderr.substring(0, 200)}`);
+                                }
+                                // Clean up temp file if it exists
+                                if (fs.existsSync(tempPngPath)) {
+                                    await fs.promises.unlink(tempPngPath).catch(() => { });
+                                }
+                            }
+                        }
+                        catch (error) {
+                            console.log(`[Main] get-app-icon: Error processing icon at ${iconPath}: ${error.message}`);
+                            continue;
+                        }
+                    }
+                }
+            }
+        }
+        catch (bundleError) {
+            console.log(`[Main] get-app-icon: Could not get bundle path for ${appName}:`, bundleError);
+        }
+        // Method 2: Try using /Applications path directly
+        try {
+            const appPath = `/Applications/${appName}.app`;
+            if (fs.existsSync(appPath)) {
+                const iconPath = path.join(appPath, 'Contents', 'Resources', 'AppIcon.icns');
+                if (fs.existsSync(iconPath)) {
+                    console.log(`[Main] get-app-icon: Found icon via /Applications path`);
+                    const convertScript = `sips -s format png "${iconPath}" --out - 2>/dev/null | base64`;
+                    const convertResult = await execAsync(convertScript, {
+                        encoding: 'utf8',
+                        maxBuffer: 10 * 1024 * 1024,
+                        timeout: 5000
+                    });
+                    const base64Icon = convertResult.stdout.trim();
+                    if (base64Icon && base64Icon.length > 0) {
+                        const dataUri = `data:image/png;base64,${base64Icon}`;
+                        appIconCache.set(appName, dataUri);
+                        console.log(`[Main] get-app-icon: Successfully got icon via /Applications for ${appName}`);
+                        return dataUri;
+                    }
+                }
+            }
+        }
+        catch (appPathError) {
+            console.log(`[Main] get-app-icon: /Applications method failed:`, appPathError);
+        }
+        console.log(`[Main] get-app-icon: Could not find icon for ${appName}, returning null`);
+        // Fallback: return null (UI will show default icon)
+        return null;
+    }
+    catch (error) {
+        console.error(`[Main] get-app-icon: Error getting icon for ${appName}:`, error);
+        return null;
+    }
+});
+// File Save Dialog
+ipcMain.handle('show-save-dialog', async (event, options) => {
+    try {
+        if (!win) {
+            return { canceled: true };
+        }
+        const result = await dialog.showSaveDialog(win, {
+            title: 'Export Timesheet',
+            defaultPath: options.defaultFilename || 'timesheet.csv',
+            filters: [
+                { name: 'CSV Files', extensions: ['csv'] },
+                { name: 'All Files', extensions: ['*'] }
+            ]
+        });
+        return result;
+    }
+    catch (error) {
+        console.error('[Main] Error showing save dialog:', error);
+        return { canceled: true, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+});
+// Write file
+ipcMain.handle('write-file', async (event, filePath, content) => {
+    try {
+        if (!filePath) {
+            throw new Error('File path is required');
+        }
+        if (typeof content !== 'string') {
+            throw new Error('Content must be a string');
+        }
+        // Ensure directory exists
+        const dir = path.dirname(filePath);
+        await fs.promises.mkdir(dir, { recursive: true });
+        // Write file with UTF-8 encoding
+        await fs.promises.writeFile(filePath, content, 'utf-8');
+        console.log('[Main] File written successfully:', filePath);
+        return { success: true };
+    }
+    catch (error) {
+        console.error('[Main] Failed to write file:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error'
+        };
+    }
 });
 function createTray() {
     const iconPath = path.join(process.env.VITE_PUBLIC || '', 'tray-icon.png');

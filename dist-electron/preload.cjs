@@ -23,5 +23,6 @@ electron_1.contextBridge.exposeInMainWorld('electron', {
         captureScreenshot: () => electron_1.ipcRenderer.invoke('capture-screenshot'),
         getActiveWindow: () => electron_1.ipcRenderer.invoke('get-active-window'),
         checkAccessibilityPermission: () => electron_1.ipcRenderer.invoke('check-accessibility-permission'),
+        getAppIcon: (appName) => electron_1.ipcRenderer.invoke('get-app-icon', appName),
     },
 });
