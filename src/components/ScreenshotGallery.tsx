@@ -90,8 +90,6 @@ export function ScreenshotGallery({ screenshotPaths, metadata, onClose, onScreen
             prevScreenshot();
         } else if (e.key === 'ArrowRight') {
             nextScreenshot();
-        } else if (e.key === 'i' || e.key === 'I') {
-            setShowMetadata(!showMetadata);
         }
     };
 
@@ -130,6 +128,22 @@ export function ScreenshotGallery({ screenshotPaths, metadata, onClose, onScreen
         }
     };
 
+    const handleOpenInFinder = async () => {
+        try {
+            // @ts-ignore
+            if (window.electron?.ipcRenderer?.showItemInFolder) {
+                // @ts-ignore
+                const result = await window.electron.ipcRenderer.showItemInFolder(currentScreenshot);
+                
+                if (!result.success) {
+                    console.error('Failed to open in finder:', result.error);
+                }
+            }
+        } catch (error) {
+            console.error('Failed to open in finder:', error);
+        }
+    };
+
     return (
         <div 
             className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center"
@@ -138,26 +152,23 @@ export function ScreenshotGallery({ screenshotPaths, metadata, onClose, onScreen
             tabIndex={-1}
         >
             {/* Simple Header */}
-            <div className="absolute top-4 left-4 right-4 flex justify-between items-center z-20">
-                <div className="flex items-center gap-4">
-                    {/* Info Toggle */}
+            <div className="absolute top-4 left-4 right-4 flex justify-end items-center z-20">
+                
+                <div className="flex items-center gap-2">
+                    {/* Open in Finder Button */}
                     <button
                         onClick={(e) => {
                             e.stopPropagation();
-                            setShowMetadata(!showMetadata);
+                            handleOpenInFinder();
                         }}
-                        className="text-white hover:text-green-400 transition-colors bg-black/50 rounded-lg p-2"
-                        title="Toggle Info (I)"
+                        className="text-white hover:text-blue-400 transition-colors bg-black/50 rounded-lg p-2"
+                        title="Open in Finder"
                     >
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <circle cx="12" cy="12" r="10"/>
-                            <line x1="12" y1="16" x2="12" y2="12"/>
-                            <line x1="12" y1="8" x2="12.01" y2="8"/>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M3 7v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-6l-2-2H5a2 2 0 0 0-2 2Z"/>
                         </svg>
                     </button>
-                </div>
-                
-                <div className="flex items-center gap-2">
+
                     {/* Delete Button */}
                     <div className="bg-black/50 rounded-lg p-1">
                         <DeleteButton
@@ -271,25 +282,10 @@ export function ScreenshotGallery({ screenshotPaths, metadata, onClose, onScreen
                 </div>
             )}
 
-            {/* Counter and Help */}
-            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-4 text-white z-20">
-                {screenshotPaths.length > 1 && (
-                    <div className="bg-black/50 px-4 py-2 rounded-lg text-sm">
-                        {selectedIndex + 1} / {screenshotPaths.length}
-                    </div>
-                )}
-                <div className="bg-black/50 px-4 py-2 rounded-lg text-xs text-gray-300">
-                    <div className="flex items-center gap-4">
-                        <span>←→ Navigate</span>
-                        <span>I Info</span>
-                        <span>Esc Close</span>
-                    </div>
-                </div>
-            </div>
 
             {/* Thumbnail Strip */}
             {screenshotPaths.length > 1 && (
-                <div className="absolute bottom-20 left-1/2 -translate-x-1/2 flex gap-2 max-w-4xl overflow-x-auto px-4 z-20">
+                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2 max-w-4xl overflow-x-auto px-4 z-20">
                     {screenshotPaths.map((path, index) => (
                         <button
                             key={index}

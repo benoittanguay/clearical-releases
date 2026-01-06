@@ -20,13 +20,16 @@ interface AppGroup {
 }
 
 export function HistoryDetail({ entry, buckets, onBack, onUpdate, formatTime }: HistoryDetailProps) {
-    const { removeActivityFromEntry, removeAllActivitiesForApp, removeScreenshotFromEntry } = useStorage();
-    const [isEditing, setIsEditing] = useState(false);
+    const { removeActivityFromEntry, removeAllActivitiesForApp, removeScreenshotFromEntry, addManualActivityToEntry } = useStorage();
     const [description, setDescription] = useState(entry.description || '');
     const [selectedBucketId, setSelectedBucketId] = useState(entry.bucketId || '');
     const [expandedApps, setExpandedApps] = useState<Set<string>>(new Set());
     const [appIcons, setAppIcons] = useState<Map<string, string>>(new Map());
     const [selectedScreenshots, setSelectedScreenshots] = useState<string[] | null>(null);
+    const [saveTimeoutId, setSaveTimeoutId] = useState<NodeJS.Timeout | null>(null);
+    const [showManualEntryForm, setShowManualEntryForm] = useState(false);
+    const [manualDescription, setManualDescription] = useState('');
+    const [manualDuration, setManualDuration] = useState('');
 
     // Update local state when entry changes
     useEffect(() => {
@@ -34,28 +37,44 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, formatTime }: 
         setSelectedBucketId(entry.bucketId || '');
     }, [entry.id, entry.description, entry.bucketId]);
 
-    const handleSave = () => {
-        onUpdate(entry.id, {
-            description: description.trim() || undefined,
-            bucketId: selectedBucketId || null
-        });
-        setIsEditing(false);
-    };
-
-    const handleCancel = () => {
-        setDescription(entry.description || '');
-        setSelectedBucketId(entry.bucketId || '');
-        setIsEditing(false);
-    };
-
-    const handleKeyDown = (e: React.KeyboardEvent) => {
-        if (e.key === 'Escape') {
-            handleCancel();
-        } else if (e.key === 's' && (e.metaKey || e.ctrlKey)) {
-            e.preventDefault();
-            handleSave();
+    // Auto-save function with debouncing
+    const autoSave = () => {
+        if (saveTimeoutId) {
+            clearTimeout(saveTimeoutId);
         }
+        
+        const timeoutId = setTimeout(() => {
+            onUpdate(entry.id, {
+                description: description.trim() || undefined,
+                bucketId: selectedBucketId || null
+            });
+        }, 500); // 500ms debounce
+        
+        setSaveTimeoutId(timeoutId);
     };
+
+    // Auto-save when description or bucket changes
+    useEffect(() => {
+        // Only auto-save if the values are different from the original entry
+        if (description !== (entry.description || '') || selectedBucketId !== entry.bucketId) {
+            autoSave();
+        }
+        
+        return () => {
+            if (saveTimeoutId) {
+                clearTimeout(saveTimeoutId);
+            }
+        };
+    }, [description, selectedBucketId]);
+
+    // Cleanup timeout on unmount
+    useEffect(() => {
+        return () => {
+            if (saveTimeoutId) {
+                clearTimeout(saveTimeoutId);
+            }
+        };
+    }, []);
 
     const handleDeleteActivity = async (activityIndex: number) => {
         removeActivityFromEntry(entry.id, activityIndex);
@@ -78,7 +97,56 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, formatTime }: 
         }
     };
 
+    const handleAddManualEntry = () => {
+        if (!manualDescription.trim() || !manualDuration.trim()) return;
+        
+        // Parse duration from user input (supports formats like "1h 30m", "90m", "1.5h", "90")
+        const duration = parseDuration(manualDuration);
+        if (duration <= 0) return;
+        
+        addManualActivityToEntry(entry.id, manualDescription.trim(), duration);
+        
+        // Reset form
+        setManualDescription('');
+        setManualDuration('');
+        setShowManualEntryForm(false);
+    };
+
+    const parseDuration = (input: string): number => {
+        const str = input.toLowerCase().trim();
+        let totalMinutes = 0;
+        
+        // Parse "1h 30m" format
+        const hoursMatch = str.match(/(\d+(?:\.\d+)?)\s*h/);
+        const minutesMatch = str.match(/(\d+(?:\.\d+)?)\s*m/);
+        
+        if (hoursMatch) {
+            totalMinutes += parseFloat(hoursMatch[1]) * 60;
+        }
+        if (minutesMatch) {
+            totalMinutes += parseFloat(minutesMatch[1]);
+        }
+        
+        // If no h/m found, treat as minutes
+        if (!hoursMatch && !minutesMatch) {
+            const numMatch = str.match(/^(\d+(?:\.\d+)?)$/);
+            if (numMatch) {
+                totalMinutes = parseFloat(numMatch[1]);
+            }
+        }
+        
+        return Math.round(totalMinutes * 60 * 1000); // Convert to milliseconds
+    };
+
     const currentBucket = buckets.find(b => b.id === selectedBucketId);
+
+    // Calculate total activity time for debugging
+    const totalActivityTime = useMemo(() => {
+        if (!entry.windowActivity || entry.windowActivity.length === 0) {
+            return 0;
+        }
+        return entry.windowActivity.reduce((total, activity) => total + activity.duration, 0);
+    }, [entry.windowActivity]);
 
     // Group activities by app
     const appGroups = useMemo(() => {
@@ -158,7 +226,7 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, formatTime }: 
     };
 
     return (
-        <div className="w-full h-full flex flex-col" onKeyDown={handleKeyDown}>
+        <div className="w-full h-full flex flex-col">
             <div className="flex items-center gap-3 mb-6 flex-shrink-0">
                 <button
                     onClick={onBack}
@@ -176,27 +244,22 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, formatTime }: 
                 <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-700">
                 <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-3">
-                        {isEditing ? (
-                            <select
-                                value={selectedBucketId}
-                                onChange={(e) => setSelectedBucketId(e.target.value)}
-                                className="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                                autoFocus
-                            >
-                                <option value="">Select a bucket</option>
-                                {buckets.map(b => (
-                                    <option key={b.id} value={b.id}>{b.name}</option>
-                                ))}
-                            </select>
-                        ) : (
-                            <>
-                                {currentBucket && <div className="w-3 h-3 rounded-full" style={{ backgroundColor: currentBucket.color }}></div>}
-                                <span className="text-lg font-medium">{currentBucket?.name || 'Unknown'}</span>
-                            </>
-                        )}
+                        <select
+                            value={selectedBucketId}
+                            onChange={(e) => setSelectedBucketId(e.target.value)}
+                            className="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                        >
+                            <option value="">Select a bucket</option>
+                            {buckets.map(b => (
+                                <option key={b.id} value={b.id}>{b.name}</option>
+                            ))}
+                        </select>
+                        {currentBucket && <div className="w-3 h-3 rounded-full ml-2" style={{ backgroundColor: currentBucket.color }}></div>}
                     </div>
-                    <div className="text-2xl font-mono font-bold text-green-400">
-                        {formatTime(entry.duration)}
+                    <div className="flex flex-col items-end">
+                        <div className="text-2xl font-mono font-bold text-green-400">
+                            {formatTime(entry.duration)}
+                        </div>
                     </div>
                 </div>
                 <div className="text-sm text-gray-500 mb-3">
@@ -206,60 +269,83 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, formatTime }: 
                 <div>
                     <div className="flex items-center justify-between mb-2">
                         <label className="text-xs text-gray-400 uppercase font-semibold">Description</label>
-                        {!isEditing ? (
-                            <button
-                                onClick={() => setIsEditing(true)}
-                                className="px-3 py-1 bg-green-600 hover:bg-green-500 text-white text-xs font-medium rounded-lg transition-colors flex items-center gap-1"
-                            >
-                                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                                </svg>
-                                Edit
-                            </button>
-                        ) : (
-                            <div className="flex items-center gap-2">
-                                <button
-                                    onClick={handleCancel}
-                                    className="px-3 py-1 bg-gray-700 hover:bg-gray-600 text-white text-xs font-medium rounded-lg transition-colors"
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    onClick={handleSave}
-                                    className="px-3 py-1 bg-green-600 hover:bg-green-500 text-white text-xs font-medium rounded-lg transition-colors flex items-center gap-1"
-                                >
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                        <polyline points="20 6 9 17 4 12" />
-                                    </svg>
-                                    Save
-                                </button>
-                            </div>
-                        )}
-                    </div>
-                    {isEditing ? (
-                        <textarea
-                            value={description}
-                            onChange={(e) => setDescription(e.target.value)}
-                            placeholder="Add a description for this time entry..."
-                            className="w-full bg-gray-700 border border-gray-600 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 resize-none"
-                            rows={3}
-                        />
-                    ) : (
-                        <div className="text-sm text-gray-300 min-h-[3rem]">
-                            {entry.description ? (
-                                <p className="whitespace-pre-wrap">{entry.description}</p>
-                            ) : (
-                                <p className="text-gray-500 italic">No description</p>
-                            )}
+                        <div className="text-xs text-gray-500">
+                            Auto-saved
                         </div>
-                    )}
+                    </div>
+                    <textarea
+                        value={description}
+                        onChange={(e) => setDescription(e.target.value)}
+                        placeholder="Add a description for this time entry..."
+                        className="w-full bg-gray-700 border border-gray-600 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 resize-none"
+                        rows={3}
+                    />
                 </div>
                 </div>
 
                 {/* Window Activity - Grouped by App */}
                 <div>
-                    <h3 className="text-lg font-semibold mb-3 text-gray-300">Window Activity</h3>
+                    <div className="flex items-center justify-between mb-3">
+                        <h3 className="text-lg font-semibold text-gray-300">Window Activity</h3>
+                        <button
+                            onClick={() => setShowManualEntryForm(!showManualEntryForm)}
+                            className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-sm rounded-md transition-colors flex items-center gap-1"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <line x1="12" y1="5" x2="12" y2="19" />
+                                <line x1="5" y1="12" x2="19" y2="12" />
+                            </svg>
+                            Add Manual Entry
+                        </button>
+                    </div>
+                {/* Manual Entry Form */}
+                {showManualEntryForm && (
+                    <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-700 mb-4">
+                        <h4 className="text-sm font-semibold text-gray-300 mb-3">Add Manual Entry</h4>
+                        <div className="space-y-3">
+                            <div>
+                                <label className="block text-xs text-gray-400 mb-1">Description</label>
+                                <input
+                                    type="text"
+                                    value={manualDescription}
+                                    onChange={(e) => setManualDescription(e.target.value)}
+                                    placeholder="Enter activity description..."
+                                    className="w-full bg-gray-700 border border-gray-600 text-white text-sm rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs text-gray-400 mb-1">Duration</label>
+                                <input
+                                    type="text"
+                                    value={manualDuration}
+                                    onChange={(e) => setManualDuration(e.target.value)}
+                                    placeholder="e.g. 30m, 1h 30m, 90"
+                                    className="w-full bg-gray-700 border border-gray-600 text-white text-sm rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
+                                />
+                            </div>
+                            <div className="flex items-center gap-2 justify-end">
+                                <button
+                                    onClick={() => {
+                                        setShowManualEntryForm(false);
+                                        setManualDescription('');
+                                        setManualDuration('');
+                                    }}
+                                    className="px-3 py-1 text-gray-400 hover:text-white text-sm transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={handleAddManualEntry}
+                                    disabled={!manualDescription.trim() || !manualDuration.trim()}
+                                    className="px-3 py-1 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white text-sm rounded transition-colors"
+                                >
+                                    Add Entry
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 {appGroups.length === 0 ? (
                     <div className="text-gray-500 text-sm">No window activity recorded for this session.</div>
                 ) : (
@@ -290,7 +376,13 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, formatTime }: 
                                             >
                                                 <polyline points="6 9 12 15 18 9" />
                                             </svg>
-                                            {icon ? (
+                                            {group.appName === 'Manual Entry' ? (
+                                                <div className="w-6 h-6 rounded bg-gray-700 flex items-center justify-center flex-shrink-0">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-green-400">
+                                                        <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+                                                    </svg>
+                                                </div>
+                                            ) : icon ? (
                                                 <img 
                                                     src={icon} 
                                                     alt={group.appName}

@@ -36,6 +36,7 @@ interface StorageContextType {
     removeActivityFromEntry: (entryId: string, activityIndex: number) => void;
     removeAllActivitiesForApp: (entryId: string, appName: string) => void;
     removeScreenshotFromEntry: (screenshotPath: string) => void;
+    addManualActivityToEntry: (entryId: string, description: string, duration: number) => void;
 }
 
 const StorageContext = createContext<StorageContextType | undefined>(undefined);
@@ -101,7 +102,15 @@ export const StorageProvider: React.FC<{ children: React.ReactNode }> = ({ child
             if (entry.id === entryId && entry.windowActivity) {
                 const updatedActivity = [...entry.windowActivity];
                 updatedActivity.splice(activityIndex, 1);
-                return { ...entry, windowActivity: updatedActivity };
+                
+                // Recalculate total duration based on remaining activities
+                const newDuration = updatedActivity.reduce((sum, activity) => sum + activity.duration, 0);
+                
+                return { 
+                    ...entry, 
+                    windowActivity: updatedActivity,
+                    duration: newDuration
+                };
             }
             return entry;
         }));
@@ -113,7 +122,15 @@ export const StorageProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 const filteredActivity = entry.windowActivity.filter(
                     activity => activity.appName !== appName
                 );
-                return { ...entry, windowActivity: filteredActivity };
+                
+                // Recalculate total duration based on remaining activities
+                const newDuration = filteredActivity.reduce((sum, activity) => sum + activity.duration, 0);
+                
+                return { 
+                    ...entry, 
+                    windowActivity: filteredActivity,
+                    duration: newDuration
+                };
             }
             return entry;
         }));
@@ -137,6 +154,30 @@ export const StorageProvider: React.FC<{ children: React.ReactNode }> = ({ child
         }));
     };
 
+    const addManualActivityToEntry = (entryId: string, description: string, duration: number) => {
+        setEntries(entries.map(entry => {
+            if (entry.id === entryId) {
+                const manualActivity: WindowActivity = {
+                    appName: 'Manual Entry',
+                    windowTitle: description,
+                    timestamp: Date.now(),
+                    duration: duration
+                };
+                
+                const updatedActivity = [...(entry.windowActivity || []), manualActivity];
+                // Recalculate total duration including the new manual activity
+                const newDuration = updatedActivity.reduce((sum, activity) => sum + activity.duration, 0);
+                
+                return {
+                    ...entry,
+                    windowActivity: updatedActivity,
+                    duration: newDuration
+                };
+            }
+            return entry;
+        }));
+    };
+
     return (
         <StorageContext.Provider value={{ 
             buckets, 
@@ -148,7 +189,8 @@ export const StorageProvider: React.FC<{ children: React.ReactNode }> = ({ child
             removeEntry,
             removeActivityFromEntry,
             removeAllActivitiesForApp,
-            removeScreenshotFromEntry
+            removeScreenshotFromEntry,
+            addManualActivityToEntry
         }}>
             {children}
         </StorageContext.Provider>

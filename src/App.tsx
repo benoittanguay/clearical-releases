@@ -17,11 +17,15 @@ function App() {
   const [selectedEntry, setSelectedEntry] = useState<string | null>(null);
   const [showExportDialog, setShowExportDialog] = useState(false);
 
-  const { isRunning, elapsed, start: startTimer, stop: stopTimer, formatTime } = useTimer();
+  const { isRunning, isPaused, elapsed, start: startTimer, stop: stopTimer, pause: pauseTimer, resume: resumeTimer, reset: resetTimer, formatTime } = useTimer();
 
 
-  const handleToggle = async () => {
-    if (isRunning) {
+  const handleStartStop = async () => {
+    if (!isRunning) {
+      // Start timer fresh (elapsed should be 0)
+      startTimer();
+    } else {
+      // Stop timer and save entry
       const finalActivity = stopTimer();
       addEntry({
         startTime: Date.now() - elapsed,
@@ -30,8 +34,14 @@ function App() {
         bucketId: selectedBucket,
         windowActivity: finalActivity
       });
+    }
+  };
+
+  const handlePauseResume = () => {
+    if (isPaused) {
+      resumeTimer();
     } else {
-      startTimer();
+      pauseTimer();
     }
   };
 
@@ -115,8 +125,19 @@ function App() {
         <div className="flex-1 overflow-y-auto p-6 w-full relative">
           {currentView === 'timer' && (
             <div className="flex flex-col items-center justify-center h-full w-full">
-              <div className="text-7xl font-mono mb-10 font-bold text-green-400 tabular-nums tracking-wider text-shadow-glow">
-                {formatTime(elapsed)}
+              <div className="relative">
+                <div className={`text-7xl font-mono mb-10 font-bold tabular-nums tracking-wider text-shadow-glow transition-colors ${
+                  isPaused ? 'text-yellow-400' : 'text-green-400'
+                }`}>
+                  {formatTime(elapsed)}
+                </div>
+                {isPaused && (
+                  <div className="absolute -top-8 left-1/2 transform -translate-x-1/2">
+                    <div className="bg-yellow-500/20 text-yellow-400 text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full border border-yellow-500/30">
+                      Paused
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="w-full max-w-xs">
@@ -124,7 +145,7 @@ function App() {
                 <select
                   value={selectedBucket}
                   onChange={(e) => setSelectedBucket(e.target.value)}
-                  disabled={isRunning}
+                  disabled={isRunning && !isPaused}
                   className="w-full bg-gray-800/50 border border-gray-700 text-white text-sm rounded-lg focus:ring-green-500 focus:border-green-500 block p-3 mb-10 transition-colors hover:bg-gray-800"
                 >
                   {buckets.map(bucket => (
@@ -133,18 +154,35 @@ function App() {
                 </select>
               </div>
 
-              <button
-                onClick={handleToggle}
-                className={`
-                            w-full max-w-xs py-4 rounded-xl text-xl font-bold transition-all transform hover:-translate-y-1 active:scale-95 shadow-lg
-                            ${isRunning
-                    ? 'bg-red-500 hover:bg-red-600 shadow-red-500/30'
-                    : 'bg-green-500 hover:bg-green-600 shadow-green-500/30'
-                  }
-                        `}
-              >
-                {isRunning ? 'STOP TRACKING' : 'START TRACKING'}
-              </button>
+              <div className="w-full max-w-xs space-y-3">
+                <button
+                  onClick={handleStartStop}
+                  className={`
+                              w-full py-4 rounded-xl text-xl font-bold transition-all transform hover:-translate-y-1 active:scale-95 shadow-lg
+                              ${isRunning
+                      ? 'bg-red-500 hover:bg-red-600 shadow-red-500/30'
+                      : 'bg-green-500 hover:bg-green-600 shadow-green-500/30'
+                    }
+                          `}
+                >
+                  {isRunning ? 'STOP TRACKING' : 'START TRACKING'}
+                </button>
+
+                {isRunning && (
+                  <button
+                    onClick={handlePauseResume}
+                    className={`
+                                w-full py-3 rounded-lg text-lg font-medium transition-all transform hover:-translate-y-0.5 active:scale-95 shadow-md
+                                ${isPaused
+                        ? 'bg-blue-500 hover:bg-blue-600 shadow-blue-500/30'
+                        : 'bg-yellow-500 hover:bg-yellow-600 shadow-yellow-500/30'
+                      }
+                            `}
+                  >
+                    {isPaused ? 'RESUME' : 'PAUSE'}
+                  </button>
+                )}
+              </div>
             </div>
           )}
 

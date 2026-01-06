@@ -27,14 +27,36 @@ ipcMain.handle('capture-screenshot', async () => {
     }
 
     try {
-        // Get current active window info
+        // Get current active window info first
         let currentWindow = null;
         try {
-            currentWindow = await ipcMain.emit('get-active-window-sync');
-            // Since we can't easily get the sync result, we'll use a different approach
-            // Get window sources and try to match with the active window
+            // Get the active window using our existing handler
+            if (process.platform === 'darwin') {
+                const { exec } = await import('child_process');
+                const { promisify } = await import('util');
+                const execAsync = promisify(exec);
+
+                // Get active app name and window title
+                const appResult = await execAsync(
+                    `osascript -e 'tell application "System Events" to get name of first application process whose frontmost is true'`
+                );
+                const appName = appResult.stdout.trim();
+
+                let windowTitle = '';
+                try {
+                    const titleResult = await execAsync(
+                        `osascript -e 'tell application "System Events" to get title of front window of (first application process whose frontmost is true)'`
+                    );
+                    windowTitle = titleResult.stdout.trim();
+                } catch (e) {
+                    windowTitle = '(No window title available)';
+                }
+
+                currentWindow = { appName, windowTitle };
+                console.log('[Main] capture-screenshot - Active window:', currentWindow);
+            }
         } catch (error) {
-            console.log('[Main] Could not get active window info for screenshot');
+            console.log('[Main] Could not get active window info for screenshot:', error);
         }
 
         // Get all window sources
@@ -52,13 +74,32 @@ ipcMain.handle('capture-screenshot', async () => {
             console.log(`[Main] ${index}: "${source.name}" (${size.width}x${size.height})`);
         });
 
-        // Filter out the TimePortal app window itself and small windows
-        const validSources = sources.filter(source => 
-            !source.name.toLowerCase().includes('time-portal') &&
-            !source.name.toLowerCase().includes('timeportal') &&
-            source.thumbnail.getSize().width > 100 && // Filter out very small windows
-            source.thumbnail.getSize().height > 100
-        );
+        // Filter out the TimePortal app window itself and very small windows
+        const validSources = sources.filter(source => {
+            const lowerName = source.name.toLowerCase();
+            const size = source.thumbnail.getSize();
+            
+            // Filter out TimePortal app itself (but not documents that mention TimePortal)
+            if ((lowerName === 'time-portal') || (lowerName === 'timeportal') || 
+                (source.name.startsWith('time-portal') && !source.name.includes('—') && !source.name.includes('-'))) {
+                console.log('[Main] Filtering out TimePortal app window:', source.name);
+                return false;
+            }
+            
+            // Filter out very small windows (likely toolbar or menu items)
+            if (size.width < 200 || size.height < 100) {
+                console.log('[Main] Filtering out small window:', source.name, `(${size.width}x${size.height})`);
+                return false;
+            }
+            
+            // Filter out empty or unnamed windows
+            if (!source.name || source.name.trim() === '') {
+                console.log('[Main] Filtering out unnamed window');
+                return false;
+            }
+            
+            return true;
+        });
 
         console.log('[Main] Valid window sources after filtering:', validSources.length);
         if (validSources.length > 0) {
@@ -70,14 +111,79 @@ ipcMain.handle('capture-screenshot', async () => {
         }
 
         if (validSources.length > 0) {
-            // Try to get the frontmost window (first in the list is usually the active one)
-            const targetSource = validSources[0];
+            // Try to find the window that matches the active window
+            let targetSource = null;
+            
+            if (currentWindow && currentWindow.appName && currentWindow.windowTitle) {
+                console.log('[Main] Looking for window match - App:', currentWindow.appName, 'Title:', currentWindow.windowTitle);
+                
+                // Strategy 1: Exact window title match
+                const exactTitleMatch = validSources.find(source => 
+                    source.name === currentWindow.windowTitle
+                );
+                
+                if (exactTitleMatch) {
+                    targetSource = exactTitleMatch;
+                    console.log('[Main] Found exact window title match:', targetSource.name);
+                } else {
+                    // Strategy 2: Match windows that contain the app name
+                    const appNameMatches = validSources.filter(source => {
+                        const sourceLower = source.name.toLowerCase();
+                        const appNameLower = currentWindow.appName.toLowerCase();
+                        
+                        // Check if the window name contains the app name or vice versa
+                        return sourceLower.includes(appNameLower) || appNameLower.includes(sourceLower);
+                    });
+                    
+                    if (appNameMatches.length > 0) {
+                        // If multiple matches, prefer the one with the window title
+                        const titleMatch = appNameMatches.find(source => 
+                            source.name.includes(currentWindow.windowTitle) || 
+                            currentWindow.windowTitle.includes(source.name)
+                        );
+                        
+                        targetSource = titleMatch || appNameMatches[0];
+                        console.log('[Main] Found app name match:', targetSource.name, 'from', appNameMatches.length, 'candidates');
+                    } else {
+                        // Strategy 3: Partial title matching
+                        const partialMatch = validSources.find(source => 
+                            source.name.includes(currentWindow.windowTitle) || 
+                            currentWindow.windowTitle.includes(source.name)
+                        );
+                        
+                        if (partialMatch) {
+                            targetSource = partialMatch;
+                            console.log('[Main] Found partial window title match:', partialMatch.name);
+                        } else {
+                            console.log('[Main] No window match found. App:', currentWindow.appName, 'Title:', currentWindow.windowTitle);
+                            console.log('[Main] Available windows:', validSources.map(s => s.name));
+                        }
+                    }
+                }
+            } else {
+                console.log('[Main] No active window info available');
+            }
+            
+            // If we still don't have a target, we could either skip or fallback to screen capture
+            if (!targetSource) {
+                console.log('[Main] No matching window found for app:', currentWindow?.appName || 'unknown');
+                console.log('[Main] Available windows:', validSources.map(s => `"${s.name}"`).join(', '));
+                
+                // For now, return null to skip capturing unmatched windows
+                // This prevents capturing random windows when we can't match properly
+                return null;
+            }
             
             console.log('[Main] Capturing window:', targetSource.name, 
                        `(${targetSource.thumbnail.getSize().width}x${targetSource.thumbnail.getSize().height})`);
             
             const image = targetSource.thumbnail.toPNG();
-            const filename = `screenshot-${Date.now()}.png`;
+            
+            // Create a more descriptive filename with app name and timestamp
+            const timestamp = Date.now();
+            const appNameSafe = (currentWindow?.appName || 'Unknown').replace(/[^a-zA-Z0-9]/g, '_');
+            const windowTitleSafe = targetSource.name.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 50);
+            const filename = `${timestamp}_${appNameSafe}_${windowTitleSafe}.png`;
             const filePath = path.join(SCREENSHOTS_DIR, filename);
 
             await fs.promises.writeFile(filePath, image);
@@ -91,7 +197,11 @@ ipcMain.handle('capture-screenshot', async () => {
             if (screenSources.length > 0) {
                 console.log('[Main] Falling back to screen capture');
                 const image = screenSources[0].thumbnail.toPNG();
-                const filename = `screenshot-${Date.now()}.png`;
+                
+                // Use same naming convention for fallback
+                const timestamp = Date.now();
+                const appNameSafe = (currentWindow?.appName || 'Unknown').replace(/[^a-zA-Z0-9]/g, '_');
+                const filename = `${timestamp}_${appNameSafe}_SCREEN_FALLBACK.png`;
                 const filePath = path.join(SCREENSHOTS_DIR, filename);
 
                 await fs.promises.writeFile(filePath, image);
@@ -518,6 +628,25 @@ ipcMain.handle('get-screenshot', async (event, filePath: string) => {
     }
 });
 
+// Open file in Finder (macOS) or File Explorer (Windows/Linux)
+ipcMain.handle('show-item-in-folder', async (event, filePath: string) => {
+    try {
+        if (!filePath) {
+            throw new Error('File path is required');
+        }
+
+        console.log(`[Main] Opening file in folder: ${filePath}`);
+        shell.showItemInFolder(filePath);
+        return { success: true };
+    } catch (error) {
+        console.error('[Main] Error opening file in folder:', error);
+        return { 
+            success: false, 
+            error: error instanceof Error ? error.message : 'Unknown error' 
+        };
+    }
+});
+
 function createTray() {
     const iconPath = path.join(process.env.VITE_PUBLIC || '', 'tray-icon.png');
     console.log('Tray Icon Path:', iconPath);
@@ -566,7 +695,7 @@ function createWindow() {
     console.log('[Main] Preload Path:', preloadPath);
 
     win = new BrowserWindow({
-        width: 500,
+        width: 640,
         height: 450,
         show: true, // DEBUG
         frame: false,
