@@ -1,6 +1,7 @@
 import { app, BrowserWindow, Tray, Menu, screen, nativeImage, ipcMain, systemPreferences, shell, desktopCapturer, dialog } from 'electron';
 import path from 'path';
 import fs from 'fs';
+import os from 'os';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -26,21 +27,77 @@ ipcMain.handle('capture-screenshot', async () => {
     }
 
     try {
-        const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 1920, height: 1080 } });
-        console.log('[Main] Sources found:', sources.length);
-        const primarySource = sources[0]; // Assuming primary screen for now
+        // Get current active window info
+        let currentWindow = null;
+        try {
+            currentWindow = await ipcMain.emit('get-active-window-sync');
+            // Since we can't easily get the sync result, we'll use a different approach
+            // Get window sources and try to match with the active window
+        } catch (error) {
+            console.log('[Main] Could not get active window info for screenshot');
+        }
 
-        if (primarySource) {
-            console.log('[Main] Capturing source:', primarySource.name);
-            const image = primarySource.thumbnail.toPNG();
+        // Get all window sources
+        const sources = await desktopCapturer.getSources({ 
+            types: ['window'], 
+            thumbnailSize: { width: 1920, height: 1080 },
+            fetchWindowIcons: true 
+        });
+        console.log('[Main] Window sources found:', sources.length);
+
+        // Log all available windows for debugging
+        console.log('[Main] Available windows:');
+        sources.forEach((source, index) => {
+            const size = source.thumbnail.getSize();
+            console.log(`[Main] ${index}: "${source.name}" (${size.width}x${size.height})`);
+        });
+
+        // Filter out the TimePortal app window itself and small windows
+        const validSources = sources.filter(source => 
+            !source.name.toLowerCase().includes('time-portal') &&
+            !source.name.toLowerCase().includes('timeportal') &&
+            source.thumbnail.getSize().width > 100 && // Filter out very small windows
+            source.thumbnail.getSize().height > 100
+        );
+
+        console.log('[Main] Valid window sources after filtering:', validSources.length);
+        if (validSources.length > 0) {
+            console.log('[Main] Valid windows:');
+            validSources.forEach((source, index) => {
+                const size = source.thumbnail.getSize();
+                console.log(`[Main] ${index}: "${source.name}" (${size.width}x${size.height})`);
+            });
+        }
+
+        if (validSources.length > 0) {
+            // Try to get the frontmost window (first in the list is usually the active one)
+            const targetSource = validSources[0];
+            
+            console.log('[Main] Capturing window:', targetSource.name, 
+                       `(${targetSource.thumbnail.getSize().width}x${targetSource.thumbnail.getSize().height})`);
+            
+            const image = targetSource.thumbnail.toPNG();
             const filename = `screenshot-${Date.now()}.png`;
             const filePath = path.join(SCREENSHOTS_DIR, filename);
 
             await fs.promises.writeFile(filePath, image);
-            console.log('[Main] Screenshot saved:', filePath);
+            console.log('[Main] Window screenshot saved:', filePath);
             return filePath;
         } else {
-            console.log('[Main] No primary source found');
+            console.log('[Main] No valid window sources found for screenshot');
+            
+            // Fallback to screen capture if no windows available
+            const screenSources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 1920, height: 1080 } });
+            if (screenSources.length > 0) {
+                console.log('[Main] Falling back to screen capture');
+                const image = screenSources[0].thumbnail.toPNG();
+                const filename = `screenshot-${Date.now()}.png`;
+                const filePath = path.join(SCREENSHOTS_DIR, filename);
+
+                await fs.promises.writeFile(filePath, image);
+                console.log('[Main] Screen screenshot saved (fallback):', filePath);
+                return filePath;
+            }
         }
     } catch (error) {
         console.error('[Main] Failed to capture screenshot:', error);
@@ -151,6 +208,101 @@ ipcMain.handle('check-accessibility-permission', () => {
 // App Icon Cache
 const appIconCache = new Map<string, string>();
 
+// Robust app path detection using macOS system APIs
+const findAppPaths = async (appName: string, execAsync: any): Promise<string[]> => {
+    const foundPaths: string[] = [];
+    
+    try {
+        // Method 1: Use mdfind to search for apps by display name
+        const mdfindCmd = `mdfind "kMDItemDisplayName == '${appName.replace(/'/g, "\\'")}'c && kMDItemContentType == 'com.apple.application-bundle'"`;
+        const mdfindResult = await execAsync(mdfindCmd, { timeout: 3000 }).catch(() => ({ stdout: '' }));
+        
+        if (mdfindResult.stdout.trim()) {
+            const paths = mdfindResult.stdout.trim().split('\n').filter((p: string) => p.endsWith('.app'));
+            foundPaths.push(...paths);
+        }
+    } catch (error) {
+        console.log(`[Main] get-app-icon: mdfind failed for ${appName}:`, error);
+    }
+    
+    try {
+        // Method 2: Use mdfind to search by bundle name variations
+        const variations = [
+            appName,
+            appName.replace(/\s+/g, ''),
+            appName.replace(/\s+/g, '-'),
+            appName.replace(/\s+/g, '_'),
+        ];
+        
+        for (const variation of variations) {
+            const bundleCmd = `mdfind "kMDItemCFBundleName == '${variation.replace(/'/g, "\\'")}'c && kMDItemContentType == 'com.apple.application-bundle'"`;
+            const bundleResult = await execAsync(bundleCmd, { timeout: 2000 }).catch(() => ({ stdout: '' }));
+            
+            if (bundleResult.stdout.trim()) {
+                const paths = bundleResult.stdout.trim().split('\n').filter((p: string) => p.endsWith('.app'));
+                foundPaths.push(...paths);
+            }
+        }
+    } catch (error) {
+        console.log(`[Main] get-app-icon: bundle search failed for ${appName}:`, error);
+    }
+    
+    // Method 3: Common /Applications paths (fallback)
+    const commonPaths = [
+        `/Applications/${appName}.app`,
+        `/Applications/${appName.replace(/\s+/g, '')}.app`,
+        `/Applications/${appName.replace(/\s+/g, '-')}.app`,
+        `/Applications/${appName.replace(/\s+/g, '_')}.app`,
+    ];
+    
+    // Add system apps
+    if (appName === 'Finder') commonPaths.push('/System/Library/CoreServices/Finder.app');
+    if (appName === 'Safari') commonPaths.push('/Applications/Safari.app');
+    if (appName === 'Terminal') commonPaths.push('/Applications/Utilities/Terminal.app');
+    if (appName === 'Activity Monitor') commonPaths.push('/Applications/Utilities/Activity Monitor.app');
+    
+    foundPaths.push(...commonPaths);
+    
+    // Filter to only existing paths and remove duplicates
+    const existingPaths = [...new Set(foundPaths)].filter(p => fs.existsSync(p));
+    console.log(`[Main] get-app-icon: Found ${existingPaths.length} potential paths for ${appName}:`, existingPaths);
+    
+    return existingPaths;
+};
+
+// Find all possible icon paths in an app bundle
+const findIconPaths = (bundlePath: string): string[] => {
+    const iconPaths: string[] = [];
+    const resourcesDir = path.join(bundlePath, 'Contents', 'Resources');
+    
+    if (!fs.existsSync(resourcesDir)) {
+        return iconPaths;
+    }
+    
+    try {
+        // Read all files in Resources directory
+        const files = fs.readdirSync(resourcesDir);
+        
+        // Look for .icns files
+        const icnsFiles = files.filter(f => f.toLowerCase().endsWith('.icns'));
+        
+        // Prioritize common icon names
+        const priorityOrder = ['AppIcon.icns', 'app.icns', 'icon.icns', 'application.icns'];
+        const foundPriority = icnsFiles.filter(f => priorityOrder.includes(f));
+        const otherIcns = icnsFiles.filter(f => !priorityOrder.includes(f));
+        
+        // Add all found icons (priority first)
+        [...foundPriority, ...otherIcns].forEach(iconFile => {
+            iconPaths.push(path.join(resourcesDir, iconFile));
+        });
+        
+    } catch (error) {
+        console.log(`[Main] get-app-icon: Error reading resources directory for ${bundlePath}:`, error);
+    }
+    
+    return iconPaths;
+};
+
 // Get App Icon
 ipcMain.handle('get-app-icon', async (event, appName: string) => {
     if (process.platform !== 'darwin') {
@@ -171,112 +323,69 @@ ipcMain.handle('get-app-icon', async (event, appName: string) => {
         const { promisify } = await import('util');
         const execAsync = promisify(exec);
 
-        // Method 1: Try to get bundle path via AppleScript
-        try {
-            const bundleScript = `osascript -e 'tell application "System Events" to get POSIX path of (application file of application process "${appName.replace(/"/g, '\\"')}")'`;
-            const bundleResult = await execAsync(bundleScript, { timeout: 5000 });
-            const bundlePath = bundleResult.stdout.trim();
-
-            console.log(`[Main] get-app-icon: Bundle path for ${appName}: ${bundlePath}`);
-
-            if (bundlePath && bundlePath !== '' && !bundlePath.includes('error')) {
-                // Try to find icon file in bundle
-                const possibleIconPaths = [
-                    path.join(bundlePath, 'Contents', 'Resources', 'AppIcon.icns'),
-                    path.join(bundlePath, 'Contents', 'Resources', `${appName}.icns`),
-                    path.join(bundlePath, 'Contents', 'Resources', 'application.icns'),
-                    path.join(bundlePath, 'Contents', 'Resources', 'icon.icns'),
-                ];
-
-                for (const iconPath of possibleIconPaths) {
-                    if (fs.existsSync(iconPath)) {
-                        console.log(`[Main] get-app-icon: Found icon at ${iconPath}`);
-                        try {
-                            // Convert ICNS to PNG using sips, then read as base64
-                            const tempPngPath = path.join(app.getPath('temp'), `icon-${appName.replace(/[^a-zA-Z0-9]/g, '_')}-${Date.now()}.png`);
-                            
-                            try {
-                                // Convert ICNS to PNG
-                                const convertScript = `sips -s format png "${iconPath}" --out "${tempPngPath}"`;
-                                const convertResult = await execAsync(convertScript, { 
-                                    timeout: 10000,
-                                    maxBuffer: 1024 * 1024
-                                });
-                                
-                                // Check if conversion was successful
-                                if (fs.existsSync(tempPngPath)) {
-                                    const iconBuffer = await fs.promises.readFile(tempPngPath);
-                                    const base64Icon = iconBuffer.toString('base64');
-                                    
-                                    // Clean up temp file
-                                    await fs.promises.unlink(tempPngPath).catch((err) => {
-                                        console.log(`[Main] get-app-icon: Failed to delete temp file: ${err}`);
-                                    });
-                                    
-                                    if (base64Icon && base64Icon.length > 100) {
-                                        const dataUri = `data:image/png;base64,${base64Icon}`;
-                                        appIconCache.set(appName, dataUri);
-                                        console.log(`[Main] get-app-icon: Successfully converted icon for ${appName} (${Math.round(base64Icon.length / 1024)}KB)`);
-                                        return dataUri;
-                                    } else {
-                                        console.log(`[Main] get-app-icon: Converted icon too small or invalid (${base64Icon?.length || 0} bytes)`);
-                                    }
-                                } else {
-                                    console.log(`[Main] get-app-icon: Conversion failed - temp file not created. sips output: ${convertResult.stdout.substring(0, 200)}`);
-                                }
-                            } catch (convertError: any) {
-                                console.log(`[Main] get-app-icon: sips conversion failed: ${convertError.message}`);
-                                if (convertError.stdout) {
-                                    console.log(`[Main] get-app-icon: sips stdout: ${convertError.stdout.substring(0, 200)}`);
-                                }
-                                if (convertError.stderr) {
-                                    console.log(`[Main] get-app-icon: sips stderr: ${convertError.stderr.substring(0, 200)}`);
-                                }
-                                // Clean up temp file if it exists
-                                if (fs.existsSync(tempPngPath)) {
-                                    await fs.promises.unlink(tempPngPath).catch(() => {});
-                                }
-                            }
-                        } catch (error: any) {
-                            console.log(`[Main] get-app-icon: Error processing icon at ${iconPath}: ${error.message}`);
-                            continue;
-                        }
-                    }
-                }
-            }
-        } catch (bundleError) {
-            console.log(`[Main] get-app-icon: Could not get bundle path for ${appName}:`, bundleError);
+        // Use robust app path detection
+        const appPaths = await findAppPaths(appName, execAsync);
+        
+        if (appPaths.length === 0) {
+            console.log(`[Main] get-app-icon: No app paths found for ${appName}`);
+            return null;
         }
 
-        // Method 2: Try using /Applications path directly
-        try {
-            const appPath = `/Applications/${appName}.app`;
-            if (fs.existsSync(appPath)) {
-                const iconPath = path.join(appPath, 'Contents', 'Resources', 'AppIcon.icns');
-                if (fs.existsSync(iconPath)) {
-                    console.log(`[Main] get-app-icon: Found icon via /Applications path`);
-                    const convertScript = `sips -s format png "${iconPath}" --out - 2>/dev/null | base64`;
-                    const convertResult = await execAsync(convertScript, { 
-                        encoding: 'utf8', 
-                        maxBuffer: 10 * 1024 * 1024,
-                        timeout: 5000
-                    });
-                    const base64Icon = convertResult.stdout.trim();
+        // Try each found app path
+        for (const bundlePath of appPaths) {
+            console.log(`[Main] get-app-icon: Processing app bundle: ${bundlePath}`);
+            
+            // Find all icon paths in this bundle
+            const iconPaths = findIconPaths(bundlePath);
+            
+            if (iconPaths.length === 0) {
+                console.log(`[Main] get-app-icon: No icons found in ${bundlePath}`);
+                continue;
+            }
+            
+            // Try each icon path
+            for (const iconPath of iconPaths) {
+                console.log(`[Main] get-app-icon: Trying icon: ${iconPath}`);
+                
+                try {
+                    // Convert ICNS to PNG using sips
+                    const tempPngPath = path.join(os.tmpdir(), `icon-${appName.replace(/[^a-zA-Z0-9]/g, '_')}-${Date.now()}.png`);
+                    const convertScript = `sips -s format png "${iconPath}" --out "${tempPngPath}"`;
                     
-                    if (base64Icon && base64Icon.length > 0) {
-                        const dataUri = `data:image/png;base64,${base64Icon}`;
-                        appIconCache.set(appName, dataUri);
-                        console.log(`[Main] get-app-icon: Successfully got icon via /Applications for ${appName}`);
-                        return dataUri;
+                    const convertResult = await execAsync(convertScript, { 
+                        timeout: 10000,
+                        maxBuffer: 2 * 1024 * 1024
+                    });
+                    
+                    // Check if conversion was successful
+                    if (fs.existsSync(tempPngPath)) {
+                        const iconBuffer = await fs.promises.readFile(tempPngPath);
+                        const base64Icon = iconBuffer.toString('base64');
+                        
+                        // Clean up temp file
+                        await fs.promises.unlink(tempPngPath).catch((err) => {
+                            console.log(`[Main] get-app-icon: Failed to delete temp file: ${err}`);
+                        });
+                        
+                        if (base64Icon && base64Icon.length > 100) {
+                            const dataUri = `data:image/png;base64,${base64Icon}`;
+                            appIconCache.set(appName, dataUri);
+                            console.log(`[Main] get-app-icon: Successfully converted icon for ${appName} from ${iconPath} (${Math.round(base64Icon.length / 1024)}KB)`);
+                            return dataUri;
+                        } else {
+                            console.log(`[Main] get-app-icon: Icon too small or invalid: ${base64Icon?.length || 0} bytes`);
+                        }
+                    } else {
+                        console.log(`[Main] get-app-icon: Conversion failed - no output file created`);
                     }
+                } catch (error: any) {
+                    console.log(`[Main] get-app-icon: Error converting icon ${iconPath}: ${error.message}`);
+                    continue;
                 }
             }
-        } catch (appPathError) {
-            console.log(`[Main] get-app-icon: /Applications method failed:`, appPathError);
         }
 
-        console.log(`[Main] get-app-icon: Could not find icon for ${appName}, returning null`);
-        // Fallback: return null (UI will show default icon)
+        console.log(`[Main] get-app-icon: Could not find usable icon for ${appName}`);
         return null;
     } catch (error) {
         console.error(`[Main] get-app-icon: Error getting icon for ${appName}:`, error);
@@ -331,6 +440,81 @@ ipcMain.handle('write-file', async (event, filePath: string, content: string) =>
             success: false, 
             error: error instanceof Error ? error.message : 'Unknown error' 
         };
+    }
+});
+
+// Copy file
+ipcMain.handle('copy-file', async (event, sourcePath: string, destinationPath: string) => {
+    try {
+        if (!sourcePath || !destinationPath) {
+            throw new Error('Source and destination paths are required');
+        }
+
+        // Ensure destination directory exists
+        const dir = path.dirname(destinationPath);
+        await fs.promises.mkdir(dir, { recursive: true });
+        
+        await fs.promises.copyFile(sourcePath, destinationPath);
+        console.log(`[Main] File copied from ${sourcePath} to ${destinationPath}`);
+        return { success: true };
+    } catch (error) {
+        console.error('[Main] Error copying file:', error);
+        return { 
+            success: false, 
+            error: error instanceof Error ? error.message : 'Unknown error' 
+        };
+    }
+});
+
+// Delete file
+ipcMain.handle('delete-file', async (event, filePath: string) => {
+    try {
+        if (!filePath) {
+            throw new Error('File path is required');
+        }
+
+        // Check if file exists before trying to delete
+        if (fs.existsSync(filePath)) {
+            await fs.promises.unlink(filePath);
+            console.log(`[Main] File deleted: ${filePath}`);
+        } else {
+            console.log(`[Main] File not found (already deleted?): ${filePath}`);
+        }
+        
+        return { success: true };
+    } catch (error) {
+        console.error('[Main] Error deleting file:', error);
+        return { 
+            success: false, 
+            error: error instanceof Error ? error.message : 'Unknown error' 
+        };
+    }
+});
+
+// Get screenshot as data URL
+ipcMain.handle('get-screenshot', async (event, filePath: string) => {
+    try {
+        if (!filePath) {
+            throw new Error('File path is required');
+        }
+
+        // Check if file exists
+        if (!fs.existsSync(filePath)) {
+            console.log(`[Main] Screenshot not found: ${filePath}`);
+            return null;
+        }
+
+        // Read file and convert to base64
+        const fileBuffer = await fs.promises.readFile(filePath);
+        const base64Data = fileBuffer.toString('base64');
+        const mimeType = 'image/png'; // Screenshots are PNG files
+        const dataUrl = `data:${mimeType};base64,${base64Data}`;
+        
+        console.log(`[Main] Screenshot loaded: ${filePath} (${Math.round(base64Data.length / 1024)}KB)`);
+        return dataUrl;
+    } catch (error) {
+        console.error('[Main] Error loading screenshot:', error);
+        return null;
     }
 });
 

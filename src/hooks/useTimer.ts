@@ -21,6 +21,8 @@ export function useTimer() {
     const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const windowPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const lastWindowRef = useRef<{ appName: string, windowTitle: string, timestamp: number } | null>(null);
+    const currentActivityScreenshots = useRef<string[]>([]);
+    const lastScreenshotTime = useRef<number>(0);
 
     // Load state from local storage on mount
     useEffect(() => {
@@ -33,7 +35,10 @@ export function useTimer() {
 
             if (state.isRunning && state.startTime) {
                 // Calculate accrued time while app was potentially closed/inactive
-                // TODO: Implement resume logic
+                const now = Date.now();
+                const accruedTime = now - state.startTime;
+                setElapsed(accruedTime);
+                console.log('Timer resumed: accrued time:', accruedTime, 'ms');
             }
         }
     }, []);
@@ -48,12 +53,30 @@ export function useTimer() {
         const WINDOW_POLL_INTERVAL = 2 * 1000; // 2 seconds (increased from 10s for better tracking)
         let screenshotInterval: ReturnType<typeof setInterval>;
 
-        const capture = async () => {
+        const capture = async (reason = 'periodic') => {
+            const now = Date.now();
+            
+            console.log('[Renderer] Screenshot capture triggered:', reason, 'at', new Date(now).toLocaleTimeString());
+
             // @ts-ignore
             if (window.electron && window.electron.ipcRenderer && window.electron.ipcRenderer.captureScreenshot) {
-                // @ts-ignore
-                const path = await window.electron.ipcRenderer.captureScreenshot();
-                console.log('Auto-screenshot captured:', path);
+                try {
+                    // @ts-ignore
+                    const path = await window.electron.ipcRenderer.captureScreenshot();
+                    console.log('[Renderer] Screenshot captured:', path);
+                    if (path) {
+                        // Check for duplicates before adding (same path shouldn't happen, but just in case)
+                        if (!currentActivityScreenshots.current.includes(path)) {
+                            currentActivityScreenshots.current.push(path);
+                            lastScreenshotTime.current = now;
+                            console.log('[Renderer] Screenshot added to current activity. Total screenshots:', currentActivityScreenshots.current.length);
+                        } else {
+                            console.log('[Renderer] Screenshot path already exists, skipping duplicate');
+                        }
+                    }
+                } catch (error) {
+                    console.error('[Renderer] Failed to capture screenshot:', error);
+                }
             }
         };
 
@@ -79,17 +102,28 @@ export function useTimer() {
                             appName: lastWindowRef.current.appName,
                             windowTitle: lastWindowRef.current.windowTitle,
                             timestamp: lastWindowRef.current.timestamp,
-                            duration
+                            duration,
+                            screenshotPaths: currentActivityScreenshots.current.length > 0 ? [...currentActivityScreenshots.current] : undefined
                         };
 
+                        console.log('[Renderer] Creating new activity with screenshots:', {
+                            app: newActivity.appName,
+                            screenshotCount: currentActivityScreenshots.current.length,
+                            screenshotPaths: currentActivityScreenshots.current
+                        });
+
                         setWindowActivity(prev => [...prev, newActivity]);
+
+                        // Reset screenshot array for new activity
+                        console.log('[Renderer] Resetting screenshot array for new activity');
+                        currentActivityScreenshots.current = [];
 
                         // Reset screenshot timer on app switch
                         console.log('[Renderer] Resetting screenshot timer due to app switch');
                         if (screenshotInterval) {
                             clearInterval(screenshotInterval);
                         }
-                        capture(); // Take immediate screenshot on switch
+                        capture('app-switch'); // Take immediate screenshot on switch
                         screenshotInterval = setInterval(capture, CAPTURE_INTERVAL);
                     }
                 }
@@ -100,7 +134,7 @@ export function useTimer() {
 
         if (isRunning && startTime) {
             // Trigger immediately on start
-            capture();
+            capture('timer-start');
             pollWindow();
 
             intervalRef.current = setInterval(() => {
@@ -130,6 +164,8 @@ export function useTimer() {
         setStartTime(Date.now() - elapsed); // Resume or start fresh
         setWindowActivity([]); // Clear previous activity
         lastWindowRef.current = null;
+        currentActivityScreenshots.current = []; // Reset screenshots
+        lastScreenshotTime.current = 0; // Reset screenshot timing
     };
 
     const stop = () => {
@@ -143,11 +179,19 @@ export function useTimer() {
                 appName: lastWindowRef.current.appName,
                 windowTitle: lastWindowRef.current.windowTitle,
                 timestamp: lastWindowRef.current.timestamp,
-                duration
+                duration,
+                screenshotPaths: currentActivityScreenshots.current.length > 0 ? [...currentActivityScreenshots.current] : undefined
             }];
+
+            console.log('[Renderer] Creating final activity on stop with screenshots:', {
+                app: lastWindowRef.current.appName,
+                screenshotCount: currentActivityScreenshots.current.length,
+                screenshotPaths: currentActivityScreenshots.current
+            });
             setWindowActivity(finalActivity);
         }
         lastWindowRef.current = null;
+        currentActivityScreenshots.current = []; // Reset screenshots
         return finalActivity;
     };
 
@@ -157,6 +201,8 @@ export function useTimer() {
         setStartTime(null);
         setWindowActivity([]);
         lastWindowRef.current = null;
+        currentActivityScreenshots.current = []; // Reset screenshots
+        lastScreenshotTime.current = 0; // Reset screenshot timing
     };
 
     const formatTime = (ms: number) => {

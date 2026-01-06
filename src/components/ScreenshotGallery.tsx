@@ -1,19 +1,79 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { DeleteButton } from './DeleteButton';
+
+interface ScreenshotMetadata {
+    path: string;
+    timestamp: number;
+    appName?: string;
+    windowTitle?: string;
+}
 
 interface ScreenshotGalleryProps {
     screenshotPaths: string[];
+    metadata?: ScreenshotMetadata[];
     onClose: () => void;
+    onScreenshotDeleted?: (screenshotPath: string) => void;
 }
 
-export function ScreenshotGallery({ screenshotPaths, onClose }: ScreenshotGalleryProps) {
+export function ScreenshotGallery({ screenshotPaths, metadata, onClose, onScreenshotDeleted }: ScreenshotGalleryProps) {
     const [selectedIndex, setSelectedIndex] = useState(0);
-    const [isFullscreen, setIsFullscreen] = useState(false);
+    const [showMetadata, setShowMetadata] = useState(true);
+    const [loadedImages, setLoadedImages] = useState<Map<string, string>>(new Map());
+
+    // Load images via IPC
+    useEffect(() => {
+        const loadImages = async () => {
+            console.log('[ScreenshotGallery] Loading images for paths:', screenshotPaths);
+            console.log('[ScreenshotGallery] Electron API available:', !!window.electron?.ipcRenderer?.getScreenshot);
+
+            const imagePromises = screenshotPaths.map(async (path) => {
+                if (loadedImages.has(path)) {
+                    console.log('[ScreenshotGallery] Using cached image for:', path);
+                    return { path, dataUrl: loadedImages.get(path)! };
+                }
+
+                console.log('[ScreenshotGallery] Loading image:', path);
+                try {
+                    // @ts-ignore
+                    if (window.electron?.ipcRenderer?.getScreenshot) {
+                        // @ts-ignore
+                        const dataUrl = await window.electron.ipcRenderer.getScreenshot(path);
+                        console.log('[ScreenshotGallery] Received dataUrl for:', path, dataUrl ? 'SUCCESS' : 'NULL');
+                        return { path, dataUrl };
+                    } else {
+                        console.error('[ScreenshotGallery] getScreenshot method not available');
+                    }
+                } catch (error) {
+                    console.error('[ScreenshotGallery] Failed to load screenshot:', path, error);
+                }
+                return { path, dataUrl: null };
+            });
+
+            const results = await Promise.all(imagePromises);
+            const newImageMap = new Map(loadedImages);
+            
+            results.forEach(({ path, dataUrl }) => {
+                if (dataUrl) {
+                    newImageMap.set(path, dataUrl);
+                    console.log('[ScreenshotGallery] Added to image map:', path);
+                }
+            });
+
+            console.log('[ScreenshotGallery] Total loaded images:', newImageMap.size);
+            setLoadedImages(newImageMap);
+        };
+
+        if (screenshotPaths.length > 0) {
+            loadImages();
+        }
+    }, [screenshotPaths]);
 
     if (screenshotPaths.length === 0) {
         return null;
     }
 
     const currentScreenshot = screenshotPaths[selectedIndex];
+    const currentMetadata = metadata?.[selectedIndex];
 
     const nextScreenshot = () => {
         setSelectedIndex((prev) => (prev + 1) % screenshotPaths.length);
@@ -30,6 +90,43 @@ export function ScreenshotGallery({ screenshotPaths, onClose }: ScreenshotGaller
             prevScreenshot();
         } else if (e.key === 'ArrowRight') {
             nextScreenshot();
+        } else if (e.key === 'i' || e.key === 'I') {
+            setShowMetadata(!showMetadata);
+        }
+    };
+
+    const formatTimestamp = (timestamp: number) => {
+        return new Date(timestamp).toLocaleString();
+    };
+
+    const handleDeleteScreenshot = async () => {
+        const screenshotToDelete = currentScreenshot;
+        
+        try {
+            // @ts-ignore
+            if (window.electron?.ipcRenderer?.invoke) {
+                // @ts-ignore
+                const result = await window.electron.ipcRenderer.invoke('delete-file', screenshotToDelete);
+                
+                if (result.success) {
+                    // Notify parent component
+                    onScreenshotDeleted?.(screenshotToDelete);
+                    
+                    // If this was the last screenshot, close the gallery
+                    if (screenshotPaths.length <= 1) {
+                        onClose();
+                    } else {
+                        // Adjust selection if needed
+                        if (selectedIndex >= screenshotPaths.length - 1) {
+                            setSelectedIndex(Math.max(0, screenshotPaths.length - 2));
+                        }
+                    }
+                } else {
+                    console.error('Failed to delete screenshot:', result.error);
+                }
+            }
+        } catch (error) {
+            console.error('Failed to delete screenshot:', error);
         }
     };
 
@@ -40,16 +137,51 @@ export function ScreenshotGallery({ screenshotPaths, onClose }: ScreenshotGaller
             onKeyDown={handleKeyDown}
             tabIndex={-1}
         >
-            {/* Close Button */}
-            <button
-                onClick={onClose}
-                className="absolute top-4 right-4 text-white hover:text-gray-300 transition-colors z-10"
-            >
-                <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <line x1="18" y1="6" x2="6" y2="18" />
-                    <line x1="6" y1="6" x2="18" y2="18" />
-                </svg>
-            </button>
+            {/* Simple Header */}
+            <div className="absolute top-4 left-4 right-4 flex justify-between items-center z-20">
+                <div className="flex items-center gap-4">
+                    {/* Info Toggle */}
+                    <button
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            setShowMetadata(!showMetadata);
+                        }}
+                        className="text-white hover:text-green-400 transition-colors bg-black/50 rounded-lg p-2"
+                        title="Toggle Info (I)"
+                    >
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <circle cx="12" cy="12" r="10"/>
+                            <line x1="12" y1="16" x2="12" y2="12"/>
+                            <line x1="12" y1="8" x2="12.01" y2="8"/>
+                        </svg>
+                    </button>
+                </div>
+                
+                <div className="flex items-center gap-2">
+                    {/* Delete Button */}
+                    <div className="bg-black/50 rounded-lg p-1">
+                        <DeleteButton
+                            onDelete={handleDeleteScreenshot}
+                            confirmMessage="Delete this screenshot?"
+                            size="md"
+                            variant="subtle"
+                            className="text-white hover:text-red-400"
+                        />
+                    </div>
+                    
+                    {/* Close Button */}
+                    <button
+                        onClick={onClose}
+                        className="text-white hover:text-gray-300 transition-colors bg-black/50 rounded-lg p-2"
+                        title="Close (Esc)"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <line x1="18" y1="6" x2="6" y2="18" />
+                            <line x1="6" y1="6" x2="18" y2="18" />
+                        </svg>
+                    </button>
+                </div>
+            </div>
 
             {/* Navigation Buttons */}
             {screenshotPaths.length > 1 && (
@@ -84,27 +216,80 @@ export function ScreenshotGallery({ screenshotPaths, onClose }: ScreenshotGaller
                 className="max-w-full max-h-full p-4"
                 onClick={(e) => e.stopPropagation()}
             >
-                <img
-                    src={`file://${currentScreenshot}`}
-                    alt={`Screenshot ${selectedIndex + 1}`}
-                    className="max-w-full max-h-[90vh] object-contain rounded-lg"
-                    onError={(e) => {
-                        // Fallback if image fails to load
-                        e.currentTarget.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgZmlsbD0iIzMzMzMzMyIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTgiIGZpbGw9IiM2NjY2NjYiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj5TY3JlZW5zaG90IG5vdCBmb3VuZDwvdGV4dD48L3N2Zz4=';
-                    }}
-                />
+                {loadedImages.get(currentScreenshot) ? (
+                    <img
+                        src={loadedImages.get(currentScreenshot)}
+                        alt={`Screenshot ${selectedIndex + 1}`}
+                        className="max-w-full max-h-[90vh] object-contain rounded-lg"
+                    />
+                ) : (
+                    <div className="max-w-full max-h-[90vh] flex items-center justify-center bg-gray-800 rounded-lg p-8">
+                        <div className="text-gray-400 text-center">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mx-auto mb-2">
+                                <circle cx="12" cy="12" r="3"/>
+                                <circle cx="12" cy="1" r="1"/>
+                                <circle cx="12" cy="23" r="1"/>
+                                <circle cx="4.22" cy="4.22" r="1"/>
+                                <circle cx="19.78" cy="19.78" r="1"/>
+                                <circle cx="1" cy="12" r="1"/>
+                                <circle cx="23" cy="12" r="1"/>
+                                <circle cx="4.22" cy="19.78" r="1"/>
+                                <circle cx="19.78" cy="4.22" r="1"/>
+                            </svg>
+                            <p>Loading screenshot...</p>
+                        </div>
+                    </div>
+                )}
             </div>
 
-            {/* Counter */}
-            {screenshotPaths.length > 1 && (
-                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-white bg-black/50 px-4 py-2 rounded-lg text-sm">
-                    {selectedIndex + 1} / {screenshotPaths.length}
+            {/* Metadata Panel */}
+            {showMetadata && currentMetadata && (
+                <div className="absolute top-20 left-4 bg-black/70 text-white rounded-lg p-4 max-w-md z-20">
+                    <h3 className="text-lg font-semibold mb-2">Screenshot Info</h3>
+                    <div className="space-y-2 text-sm">
+                        <div>
+                            <span className="text-gray-300">Time:</span>{' '}
+                            <span className="text-white">{formatTimestamp(currentMetadata.timestamp)}</span>
+                        </div>
+                        {currentMetadata.appName && (
+                            <div>
+                                <span className="text-gray-300">App:</span>{' '}
+                                <span className="text-white">{currentMetadata.appName}</span>
+                            </div>
+                        )}
+                        {currentMetadata.windowTitle && (
+                            <div>
+                                <span className="text-gray-300">Window:</span>{' '}
+                                <span className="text-white truncate block">{currentMetadata.windowTitle}</span>
+                            </div>
+                        )}
+                        <div>
+                            <span className="text-gray-300">File:</span>{' '}
+                            <span className="text-white text-xs">{currentScreenshot.split('/').pop()}</span>
+                        </div>
+                    </div>
                 </div>
             )}
 
+            {/* Counter and Help */}
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-4 text-white z-20">
+                {screenshotPaths.length > 1 && (
+                    <div className="bg-black/50 px-4 py-2 rounded-lg text-sm">
+                        {selectedIndex + 1} / {screenshotPaths.length}
+                    </div>
+                )}
+                <div className="bg-black/50 px-4 py-2 rounded-lg text-xs text-gray-300">
+                    <div className="flex items-center gap-4">
+                        <span>←→ Navigate</span>
+                        <span>I Info</span>
+                        <span>Esc Close</span>
+                    </div>
+                </div>
+            </div>
+
             {/* Thumbnail Strip */}
             {screenshotPaths.length > 1 && (
-                <div className="absolute bottom-16 left-1/2 -translate-x-1/2 flex gap-2 max-w-4xl overflow-x-auto px-4">
+                <div className="absolute bottom-20 left-1/2 -translate-x-1/2 flex gap-2 max-w-4xl overflow-x-auto px-4 z-20">
                     {screenshotPaths.map((path, index) => (
                         <button
                             key={index}
@@ -118,11 +303,21 @@ export function ScreenshotGallery({ screenshotPaths, onClose }: ScreenshotGaller
                                     : 'border-gray-600 opacity-60 hover:opacity-100'
                             }`}
                         >
-                            <img
-                                src={`file://${path}`}
-                                alt={`Thumbnail ${index + 1}`}
-                                className="w-full h-full object-cover"
-                            />
+                            {loadedImages.get(path) ? (
+                                <img
+                                    src={loadedImages.get(path)}
+                                    alt={`Thumbnail ${index + 1}`}
+                                    className="w-full h-full object-cover"
+                                />
+                            ) : (
+                                <div className="w-full h-full bg-gray-700 flex items-center justify-center">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-500">
+                                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                                        <circle cx="8.5" cy="8.5" r="1.5" />
+                                        <polyline points="21 15 16 10 5 21" />
+                                    </svg>
+                                </div>
+                            )}
                         </button>
                     ))}
                 </div>

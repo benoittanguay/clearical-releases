@@ -32,6 +32,10 @@ interface StorageContextType {
     removeBucket: (id: string) => void;
     addEntry: (entry: Omit<TimeEntry, 'id'>) => void;
     updateEntry: (id: string, updates: Partial<TimeEntry>) => void;
+    removeEntry: (id: string) => void;
+    removeActivityFromEntry: (entryId: string, activityIndex: number) => void;
+    removeAllActivitiesForApp: (entryId: string, appName: string) => void;
+    removeScreenshotFromEntry: (screenshotPath: string) => void;
 }
 
 const StorageContext = createContext<StorageContextType | undefined>(undefined);
@@ -88,8 +92,64 @@ export const StorageProvider: React.FC<{ children: React.ReactNode }> = ({ child
         ));
     };
 
+    const removeEntry = (id: string) => {
+        setEntries(entries.filter(entry => entry.id !== id));
+    };
+
+    const removeActivityFromEntry = (entryId: string, activityIndex: number) => {
+        setEntries(entries.map(entry => {
+            if (entry.id === entryId && entry.windowActivity) {
+                const updatedActivity = [...entry.windowActivity];
+                updatedActivity.splice(activityIndex, 1);
+                return { ...entry, windowActivity: updatedActivity };
+            }
+            return entry;
+        }));
+    };
+
+    const removeAllActivitiesForApp = (entryId: string, appName: string) => {
+        setEntries(entries.map(entry => {
+            if (entry.id === entryId && entry.windowActivity) {
+                const filteredActivity = entry.windowActivity.filter(
+                    activity => activity.appName !== appName
+                );
+                return { ...entry, windowActivity: filteredActivity };
+            }
+            return entry;
+        }));
+    };
+
+    const removeScreenshotFromEntry = (screenshotPath: string) => {
+        setEntries(entries.map(entry => {
+            if (entry.windowActivity) {
+                const updatedActivity = entry.windowActivity.map(activity => {
+                    if (activity.screenshotPaths) {
+                        return {
+                            ...activity,
+                            screenshotPaths: activity.screenshotPaths.filter(path => path !== screenshotPath)
+                        };
+                    }
+                    return activity;
+                });
+                return { ...entry, windowActivity: updatedActivity };
+            }
+            return entry;
+        }));
+    };
+
     return (
-        <StorageContext.Provider value={{ buckets, entries, addBucket, removeBucket, addEntry, updateEntry }}>
+        <StorageContext.Provider value={{ 
+            buckets, 
+            entries, 
+            addBucket, 
+            removeBucket, 
+            addEntry, 
+            updateEntry,
+            removeEntry,
+            removeActivityFromEntry,
+            removeAllActivitiesForApp,
+            removeScreenshotFromEntry
+        }}>
             {children}
         </StorageContext.Provider>
     );

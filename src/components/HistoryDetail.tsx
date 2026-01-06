@@ -1,10 +1,11 @@
 import { useState, useEffect, useMemo } from 'react';
 import type { TimeEntry, TimeBucket, WindowActivity } from '../context/StorageContext';
 import { ScreenshotGallery } from './ScreenshotGallery';
+import { DeleteButton } from './DeleteButton';
+import { useStorage } from '../context/StorageContext';
 
 interface HistoryDetailProps {
     entry: TimeEntry;
-    bucket: TimeBucket | undefined;
     buckets: TimeBucket[];
     onBack: () => void;
     onUpdate: (id: string, updates: Partial<TimeEntry>) => void;
@@ -18,7 +19,8 @@ interface AppGroup {
     icon?: string;
 }
 
-export function HistoryDetail({ entry, bucket, buckets, onBack, onUpdate, formatTime }: HistoryDetailProps) {
+export function HistoryDetail({ entry, buckets, onBack, onUpdate, formatTime }: HistoryDetailProps) {
+    const { removeActivityFromEntry, removeAllActivitiesForApp, removeScreenshotFromEntry } = useStorage();
     const [isEditing, setIsEditing] = useState(false);
     const [description, setDescription] = useState(entry.description || '');
     const [selectedBucketId, setSelectedBucketId] = useState(entry.bucketId || '');
@@ -52,6 +54,27 @@ export function HistoryDetail({ entry, bucket, buckets, onBack, onUpdate, format
         } else if (e.key === 's' && (e.metaKey || e.ctrlKey)) {
             e.preventDefault();
             handleSave();
+        }
+    };
+
+    const handleDeleteActivity = async (activityIndex: number) => {
+        removeActivityFromEntry(entry.id, activityIndex);
+    };
+
+    const handleDeleteApp = async (appName: string) => {
+        removeAllActivitiesForApp(entry.id, appName);
+    };
+
+    const handleScreenshotDeleted = (screenshotPath: string) => {
+        removeScreenshotFromEntry(screenshotPath);
+        // Update selected screenshots if needed
+        if (selectedScreenshots) {
+            const updatedScreenshots = selectedScreenshots.filter(path => path !== screenshotPath);
+            if (updatedScreenshots.length === 0) {
+                setSelectedScreenshots(null);
+            } else {
+                setSelectedScreenshots(updatedScreenshots);
+            }
         }
     };
 
@@ -136,52 +159,21 @@ export function HistoryDetail({ entry, bucket, buckets, onBack, onUpdate, format
 
     return (
         <div className="w-full h-full flex flex-col" onKeyDown={handleKeyDown}>
-            <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center gap-3">
-                    <button
-                        onClick={onBack}
-                        className="p-2 hover:bg-gray-800 rounded-lg transition-colors text-gray-400 hover:text-white"
-                    >
-                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M19 12H5M12 19l-7-7 7-7" />
-                        </svg>
-                    </button>
-                    <h2 className="text-2xl font-bold">Activity Details</h2>
-                </div>
-                {!isEditing ? (
-                    <button
-                        onClick={() => setIsEditing(true)}
-                        className="px-4 py-2 bg-green-600 hover:bg-green-500 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2"
-                    >
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                        </svg>
-                        Edit
-                    </button>
-                ) : (
-                    <div className="flex items-center gap-2">
-                        <button
-                            onClick={handleCancel}
-                            className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm font-medium rounded-lg transition-colors"
-                        >
-                            Cancel
-                        </button>
-                        <button
-                            onClick={handleSave}
-                            className="px-4 py-2 bg-green-600 hover:bg-green-500 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2"
-                        >
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <polyline points="20 6 9 17 4 12" />
-                            </svg>
-                            Save
-                        </button>
-                    </div>
-                )}
+            <div className="flex items-center gap-3 mb-6 flex-shrink-0">
+                <button
+                    onClick={onBack}
+                    className="p-2 hover:bg-gray-800 rounded-lg transition-colors text-gray-400 hover:text-white"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M19 12H5M12 19l-7-7 7-7" />
+                    </svg>
+                </button>
+                <h2 className="text-2xl font-bold">Activity Details</h2>
             </div>
 
-            {/* Entry Summary */}
-            <div className="bg-gray-800/50 rounded-lg p-4 mb-6 border border-gray-700">
+            <div className="flex-1 overflow-y-auto space-y-6 pb-6">
+                {/* Entry Summary */}
+                <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-700">
                 <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-3">
                         {isEditing ? (
@@ -212,7 +204,39 @@ export function HistoryDetail({ entry, bucket, buckets, onBack, onUpdate, format
                 </div>
                 {/* Description Field */}
                 <div>
-                    <label className="text-xs text-gray-400 uppercase font-semibold mb-2 block">Description</label>
+                    <div className="flex items-center justify-between mb-2">
+                        <label className="text-xs text-gray-400 uppercase font-semibold">Description</label>
+                        {!isEditing ? (
+                            <button
+                                onClick={() => setIsEditing(true)}
+                                className="px-3 py-1 bg-green-600 hover:bg-green-500 text-white text-xs font-medium rounded-lg transition-colors flex items-center gap-1"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                                </svg>
+                                Edit
+                            </button>
+                        ) : (
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={handleCancel}
+                                    className="px-3 py-1 bg-gray-700 hover:bg-gray-600 text-white text-xs font-medium rounded-lg transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={handleSave}
+                                    className="px-3 py-1 bg-green-600 hover:bg-green-500 text-white text-xs font-medium rounded-lg transition-colors flex items-center gap-1"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <polyline points="20 6 9 17 4 12" />
+                                    </svg>
+                                    Save
+                                </button>
+                            </div>
+                        )}
+                    </div>
                     {isEditing ? (
                         <textarea
                             value={description}
@@ -231,11 +255,11 @@ export function HistoryDetail({ entry, bucket, buckets, onBack, onUpdate, format
                         </div>
                     )}
                 </div>
-            </div>
+                </div>
 
-            {/* Window Activity - Grouped by App */}
-            <div className="flex-1 overflow-y-auto">
-                <h3 className="text-lg font-semibold mb-3 text-gray-300">Window Activity</h3>
+                {/* Window Activity - Grouped by App */}
+                <div>
+                    <h3 className="text-lg font-semibold mb-3 text-gray-300">Window Activity</h3>
                 {appGroups.length === 0 ? (
                     <div className="text-gray-500 text-sm">No window activity recorded for this session.</div>
                 ) : (
@@ -252,6 +276,20 @@ export function HistoryDetail({ entry, bucket, buckets, onBack, onUpdate, format
                                         className="w-full flex items-center justify-between p-3 hover:bg-gray-800/80 transition-colors"
                                     >
                                         <div className="flex items-center gap-3 flex-1 min-w-0">
+                                            <svg 
+                                                xmlns="http://www.w3.org/2000/svg" 
+                                                width="16" 
+                                                height="16" 
+                                                viewBox="0 0 24 24" 
+                                                fill="none" 
+                                                stroke="currentColor" 
+                                                strokeWidth="2" 
+                                                strokeLinecap="round" 
+                                                strokeLinejoin="round"
+                                                className={`text-gray-400 transition-transform flex-shrink-0 ${isExpanded ? 'rotate-180' : ''}`}
+                                            >
+                                                <polyline points="6 9 12 15 18 9" />
+                                            </svg>
                                             {icon ? (
                                                 <img 
                                                     src={icon} 
@@ -284,20 +322,12 @@ export function HistoryDetail({ entry, bucket, buckets, onBack, onUpdate, format
                                             <div className="font-mono text-green-400 font-bold">
                                                 {formatTime(group.totalDuration)}
                                             </div>
-                                            <svg 
-                                                xmlns="http://www.w3.org/2000/svg" 
-                                                width="18" 
-                                                height="18" 
-                                                viewBox="0 0 24 24" 
-                                                fill="none" 
-                                                stroke="currentColor" 
-                                                strokeWidth="2" 
-                                                strokeLinecap="round" 
-                                                strokeLinejoin="round"
-                                                className={`text-gray-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
-                                            >
-                                                <polyline points="6 9 12 15 18 9" />
-                                            </svg>
+                                            <DeleteButton
+                                                onDelete={() => handleDeleteApp(group.appName)}
+                                                confirmMessage={`Delete all ${group.appName} activities?`}
+                                                size="sm"
+                                                variant="subtle"
+                                            />
                                         </div>
                                     </button>
 
@@ -321,6 +351,7 @@ export function HistoryDetail({ entry, bucket, buckets, onBack, onUpdate, format
                                                                 <button
                                                                     onClick={(e) => {
                                                                         e.stopPropagation();
+                                                                        console.log('[HistoryDetail] Opening screenshots:', activity.screenshotPaths);
                                                                         setSelectedScreenshots(activity.screenshotPaths || []);
                                                                     }}
                                                                     className="text-xs text-green-400 hover:text-green-300 mt-1 flex items-center gap-1"
@@ -334,8 +365,20 @@ export function HistoryDetail({ entry, bucket, buckets, onBack, onUpdate, format
                                                                 </button>
                                                             )}
                                                         </div>
-                                                        <div className="font-mono text-green-400 font-semibold text-sm flex-shrink-0">
-                                                            {formatTime(activity.duration)}
+                                                        <div className="flex items-center gap-2">
+                                                            <div className="font-mono text-green-400 font-semibold text-sm">
+                                                                {formatTime(activity.duration)}
+                                                            </div>
+                                                            <DeleteButton
+                                                                onDelete={() => handleDeleteActivity(group.activities.findIndex(act => 
+                                                                    act.timestamp === activity.timestamp && 
+                                                                    act.appName === activity.appName && 
+                                                                    act.windowTitle === activity.windowTitle
+                                                                ))}
+                                                                confirmMessage="Delete this activity?"
+                                                                size="sm"
+                                                                variant="subtle"
+                                                            />
                                                         </div>
                                                     </div>
                                                 </div>
@@ -347,6 +390,7 @@ export function HistoryDetail({ entry, bucket, buckets, onBack, onUpdate, format
                         })}
                     </div>
                 )}
+                </div>
             </div>
 
             {/* Screenshot Gallery Modal */}
@@ -354,6 +398,7 @@ export function HistoryDetail({ entry, bucket, buckets, onBack, onUpdate, format
                 <ScreenshotGallery
                     screenshotPaths={selectedScreenshots}
                     onClose={() => setSelectedScreenshots(null)}
+                    onScreenshotDeleted={handleScreenshotDeleted}
                 />
             )}
         </div>

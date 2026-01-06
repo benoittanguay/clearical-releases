@@ -4,12 +4,13 @@ import { useStorage } from './context/StorageContext';
 import { Settings } from './components/Settings';
 import { HistoryDetail } from './components/HistoryDetail';
 import { ExportDialog } from './components/ExportDialog';
+import { DeleteButton } from './components/DeleteButton';
 import './App.css'
 
 type View = 'timer' | 'history' | 'buckets' | 'settings' | 'history-detail';
 
 function App() {
-  const { buckets, entries, addEntry, addBucket, removeBucket, updateEntry } = useStorage();
+  const { buckets, entries, addEntry, addBucket, removeBucket, updateEntry, removeEntry } = useStorage();
   const [selectedBucket, setSelectedBucket] = useState<string>('1');
   const [currentView, setCurrentView] = useState<View>('timer');
   const [newBucketName, setNewBucketName] = useState('');
@@ -18,18 +19,6 @@ function App() {
 
   const { isRunning, elapsed, start: startTimer, stop: stopTimer, formatTime } = useTimer();
 
-  const checkDailyPermission = async () => {
-    // @ts-ignore
-    if (window.electron) {
-      // @ts-ignore
-      const status = await window.electron.ipcRenderer.invoke('check-screen-permission');
-      if (status !== 'granted') {
-        setCurrentView('settings');
-        return false;
-      }
-    }
-    return true;
-  };
 
   const handleToggle = async () => {
     if (isRunning) {
@@ -212,7 +201,6 @@ function App() {
           {currentView === 'history-detail' && selectedEntry && (
             <HistoryDetail
               entry={entries.find(e => e.id === selectedEntry)!}
-              bucket={buckets.find(b => b.id === entries.find(e => e.id === selectedEntry)?.bucketId)}
               buckets={buckets}
               onBack={() => setCurrentView('history')}
               onUpdate={updateEntry}
@@ -269,6 +257,12 @@ function App() {
                           <div className="font-mono text-green-400 font-bold">
                             {formatTime(entry.duration)}
                           </div>
+                          <DeleteButton
+                            onDelete={() => removeEntry(entry.id)}
+                            confirmMessage="Delete this time entry?"
+                            size="sm"
+                            variant="subtle"
+                          />
                         </div>
                       </div>
                     );
