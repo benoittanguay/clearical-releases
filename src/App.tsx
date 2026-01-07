@@ -1,16 +1,19 @@
 import { useState, useEffect } from 'react';
 import { useTimer } from './hooks/useTimer';
 import { useStorage } from './context/StorageContext';
+import { useSettings } from './context/SettingsContext';
 import { Settings } from './components/Settings';
 import { HistoryDetail } from './components/HistoryDetail';
 import { ExportDialog } from './components/ExportDialog';
 import { DeleteButton } from './components/DeleteButton';
+import { JiraIssuesSection } from './components/JiraIssuesSection';
 import './App.css'
 
 type View = 'timer' | 'history' | 'buckets' | 'settings' | 'history-detail';
 
 function App() {
-  const { buckets, entries, addEntry, addBucket, removeBucket, updateEntry, removeEntry } = useStorage();
+  const { buckets, entries, addEntry, addBucket, removeBucket, updateEntry, removeEntry, linkJiraIssueToBucket, unlinkJiraIssueFromBucket } = useStorage();
+  const { settings } = useSettings();
   const [selectedBucket, setSelectedBucket] = useState<string>('1');
   const [currentView, setCurrentView] = useState<View>('timer');
   const [newBucketName, setNewBucketName] = useState('');
@@ -19,6 +22,54 @@ function App() {
 
   const { isRunning, isPaused, elapsed, start: startTimer, stop: stopTimer, pause: pauseTimer, resume: resumeTimer, reset: resetTimer, formatTime } = useTimer();
 
+  const handleBulkLogToTempo = async () => {
+    if (!settings.tempo?.enabled) {
+      setCurrentView('settings');
+      return;
+    }
+
+    // For simplicity, we'll implement a basic bulk log that logs all entries from today
+    const today = new Date().toISOString().split('T')[0];
+    const todayEntries = entries.filter(entry => {
+      const entryDate = new Date(entry.startTime).toISOString().split('T')[0];
+      return entryDate === today;
+    });
+
+    if (todayEntries.length === 0) {
+      alert('No entries found for today to bulk log.');
+      return;
+    }
+
+    const proceed = confirm(`Log ${todayEntries.length} entries from today to Tempo?`);
+    if (!proceed) return;
+
+    try {
+      const { TempoService } = await import('./services/tempoService');
+      const service = new TempoService(settings.tempo.baseUrl!, settings.tempo.apiToken!);
+      
+      let successCount = 0;
+      for (const entry of todayEntries) {
+        try {
+          const worklog = {
+            issueKey: settings.tempo.defaultIssueKey || 'DEFAULT-1',
+            timeSpentSeconds: TempoService.durationMsToSeconds(entry.duration),
+            startDate: TempoService.formatDate(entry.startTime),
+            startTime: TempoService.formatTime(entry.startTime),
+            description: entry.description || 'Time tracked via TimePortal',
+          };
+          
+          await service.createWorklog(worklog);
+          successCount++;
+        } catch (error) {
+          console.error(`Failed to log entry ${entry.id}:`, error);
+        }
+      }
+      
+      alert(`Successfully logged ${successCount} out of ${todayEntries.length} entries to Tempo.`);
+    } catch (error) {
+      alert(`Bulk logging failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  };
 
   const handleStartStop = async () => {
     if (!isRunning) {
@@ -188,7 +239,18 @@ function App() {
 
           {currentView === 'buckets' && (
             <div className="w-full h-full flex flex-col">
-              <h2 className="text-2xl font-bold mb-6">Manage Buckets</h2>
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-bold">Manage Buckets</h2>
+                {settings.tempo?.enabled && (
+                  <div className="text-sm text-green-400 flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                      <circle cx="12" cy="12" r="4"/>
+                    </svg>
+                    Tempo Connected
+                  </div>
+                )}
+              </div>
               <div className="flex gap-2 mb-6">
                 <input
                   type="text"
@@ -215,23 +277,65 @@ function App() {
                   Add
                 </button>
               </div>
+              <div className="text-white mb-4">DEBUG: Buckets count: {buckets.length}</div>
               <ul className="space-y-3">
                 {buckets.map(bucket => (
-                  <li key={bucket.id} className="flex justify-between items-center bg-gray-800/50 p-3 rounded-lg border border-gray-800 hover:border-gray-700 transition-colors">
-                    <div className="flex items-center gap-3">
-                      <div className="w-4 h-4 rounded-full shadow-sm" style={{ backgroundColor: bucket.color }}></div>
-                      <span className="font-medium">{bucket.name}</span>
+                  <li key={bucket.id} className="bg-gray-800/50 p-4 rounded-lg border border-gray-800 hover:border-gray-700 transition-colors group">
+                    <div className="flex justify-between items-start">
+                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                        <div className="w-4 h-4 rounded-full shadow-sm flex-shrink-0" style={{ backgroundColor: bucket.color }}></div>
+                        <div className="flex-1 min-w-0">
+                          <span className="font-medium text-white">{bucket.name}</span>
+                          {bucket.linkedIssue && (
+                            <div className="mt-2 bg-gray-900/50 rounded p-2 border border-gray-700">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="text-blue-400 font-mono text-xs">
+                                  {bucket.linkedIssue.key}
+                                </span>
+                                <span className="text-xs text-gray-500">
+                                  {bucket.linkedIssue.projectName}
+                                </span>
+                                <span className="text-xs px-2 py-0.5 bg-gray-700 text-gray-300 rounded">
+                                  {bucket.linkedIssue.issueType}
+                                </span>
+                              </div>
+                              <p className="text-sm text-gray-300 truncate">
+                                {bucket.linkedIssue.summary}
+                              </p>
+                              <div className="flex items-center justify-between mt-2">
+                                <span className="text-xs text-gray-400">
+                                  Status: {bucket.linkedIssue.status}
+                                </span>
+                                <button
+                                  onClick={() => unlinkJiraIssueFromBucket(bucket.id)}
+                                  className="text-xs text-red-400 hover:text-red-300 transition-colors"
+                                >
+                                  Unlink
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 ml-3">
+{/* Temporarily disabled until JiraIssueBrowser is fixed */}
+                        <button
+                          onClick={() => removeBucket(bucket.id)}
+                          className="text-gray-600 hover:text-red-500 p-1.5 rounded-md hover:bg-gray-800 transition-all opacity-0 group-hover:opacity-100"
+                          title="Delete Bucket"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /><line x1="10" y1="11" x2="10" y2="17" /><line x1="14" y1="11" x2="14" y2="17" /></svg>
+                        </button>
+                      </div>
                     </div>
-                    <button
-                      onClick={() => removeBucket(bucket.id)}
-                      className="text-gray-600 hover:text-red-500 p-2 rounded-md hover:bg-gray-800 transition-all opacity-0 group-hover:opacity-100"
-                      title="Delete Bucket"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /><line x1="10" y1="11" x2="10" y2="17" /><line x1="14" y1="11" x2="14" y2="17" /></svg>
-                    </button>
                   </li>
                 ))}
               </ul>
+
+              {/* Jira Issues Section */}
+              {(settings.jira?.enabled || settings.tempo?.enabled) && (
+                <JiraIssuesSection />
+              )}
             </div>
           )}
 
@@ -242,6 +346,7 @@ function App() {
               buckets={buckets}
               onBack={() => setCurrentView('history')}
               onUpdate={updateEntry}
+              onNavigateToSettings={() => setCurrentView('settings')}
               formatTime={formatTime}
             />
           )}
@@ -250,17 +355,33 @@ function App() {
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-2xl font-bold">History</h2>
                 {entries.length > 0 && (
-                  <button
-                    onClick={() => setShowExportDialog(true)}
-                    className="px-4 py-2 bg-green-600 hover:bg-green-500 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                      <polyline points="7 10 12 15 17 10" />
-                      <line x1="12" y1="15" x2="12" y2="3" />
-                    </svg>
-                    Export CSV
-                  </button>
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={handleBulkLogToTempo}
+                      className={`px-4 py-2 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2 ${
+                        settings.tempo?.enabled 
+                          ? 'bg-blue-600 hover:bg-blue-500' 
+                          : 'bg-gray-600 hover:bg-gray-500'
+                      }`}
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="12" cy="12" r="10" />
+                        <polyline points="12 6 12 12 16 14" />
+                      </svg>
+                      {settings.tempo?.enabled ? 'Bulk Log to Tempo' : 'Connect Tempo'}
+                    </button>
+                    <button
+                      onClick={() => setShowExportDialog(true)}
+                      className="px-4 py-2 bg-green-600 hover:bg-green-500 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                        <polyline points="7 10 12 15 17 10" />
+                        <line x1="12" y1="15" x2="12" y2="3" />
+                      </svg>
+                      Export CSV
+                    </button>
+                  </div>
                 )}
               </div>
               {entries.length === 0 ? (
@@ -324,6 +445,7 @@ function App() {
           }}
         />
       )}
+
     </div>
   )
 }

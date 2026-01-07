@@ -1,9 +1,19 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 
+export interface LinkedJiraIssue {
+    key: string;
+    summary: string;
+    issueType: string;
+    status: string;
+    projectKey: string;
+    projectName: string;
+}
+
 export interface TimeBucket {
     id: string;
     name: string;
     color: string;
+    linkedIssue?: LinkedJiraIssue;
 }
 
 export interface WindowActivity {
@@ -30,6 +40,8 @@ interface StorageContextType {
     entries: TimeEntry[];
     addBucket: (name: string, color: string) => void;
     removeBucket: (id: string) => void;
+    linkJiraIssueToBucket: (bucketId: string, issue: LinkedJiraIssue) => void;
+    unlinkJiraIssueFromBucket: (bucketId: string) => void;
     addEntry: (entry: Omit<TimeEntry, 'id'>) => void;
     updateEntry: (id: string, updates: Partial<TimeEntry>) => void;
     removeEntry: (id: string) => void;
@@ -45,22 +57,74 @@ export const StorageProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const [buckets, setBuckets] = useState<TimeBucket[]>([]);
     const [entries, setEntries] = useState<TimeEntry[]>([]);
 
+    // Migration function to handle old bucket format
+    const migrateBuckets = (buckets: any[]): TimeBucket[] => {
+        return buckets.map(bucket => {
+            // If bucket doesn't have linkedIssue property, add it as undefined
+            if (!bucket.hasOwnProperty('linkedIssue')) {
+                return { ...bucket, linkedIssue: undefined };
+            }
+            return bucket;
+        });
+    };
+
     // Load from local storage
     useEffect(() => {
+        console.log('[StorageContext] useEffect triggered - loading data');
         const loadedBuckets = localStorage.getItem('timeportal-buckets');
         const loadedEntries = localStorage.getItem('timeportal-entries');
 
-        if (loadedBuckets) setBuckets(JSON.parse(loadedBuckets));
-        else {
+        console.log('[StorageContext] Loading buckets from localStorage:', loadedBuckets);
+        
+        if (loadedBuckets && loadedBuckets !== 'undefined' && loadedBuckets !== 'null') {
+            try {
+                const parsed = JSON.parse(loadedBuckets);
+                console.log('[StorageContext] Parsed buckets:', parsed);
+                
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                    const migratedBuckets = migrateBuckets(parsed);
+                    console.log('[StorageContext] Migrated buckets:', migratedBuckets);
+                    setBuckets(migratedBuckets);
+                } else {
+                    console.log('[StorageContext] Empty or invalid buckets array, creating defaults');
+                    const defaultBuckets = [
+                        { id: '1', name: 'Work', color: '#3b82f6' },
+                        { id: '2', name: 'Meeting', color: '#eab308' },
+                        { id: '3', name: 'Break', color: '#22c55e' }
+                    ];
+                    setBuckets(defaultBuckets);
+                }
+            } catch (error) {
+                console.error('[StorageContext] Error parsing buckets, using defaults:', error);
+                const defaultBuckets = [
+                    { id: '1', name: 'Work', color: '#3b82f6' },
+                    { id: '2', name: 'Meeting', color: '#eab308' },
+                    { id: '3', name: 'Break', color: '#22c55e' }
+                ];
+                setBuckets(defaultBuckets);
+            }
+        } else {
             // Default buckets
-            setBuckets([
+            console.log('[StorageContext] No saved buckets, creating defaults');
+            const defaultBuckets = [
                 { id: '1', name: 'Work', color: '#3b82f6' },
                 { id: '2', name: 'Meeting', color: '#eab308' },
                 { id: '3', name: 'Break', color: '#22c55e' }
-            ]);
+            ];
+            setBuckets(defaultBuckets);
         }
 
-        if (loadedEntries) setEntries(JSON.parse(loadedEntries));
+        if (loadedEntries && loadedEntries !== 'undefined' && loadedEntries !== 'null') {
+            try {
+                const parsed = JSON.parse(loadedEntries);
+                if (Array.isArray(parsed)) {
+                    setEntries(parsed);
+                }
+            } catch (error) {
+                console.error('[StorageContext] Error parsing entries:', error);
+                setEntries([]);
+            }
+        }
     }, []);
 
     // Persist
@@ -78,6 +142,22 @@ export const StorageProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     const removeBucket = (id: string) => {
         setBuckets(buckets.filter(b => b.id !== id));
+    };
+
+    const linkJiraIssueToBucket = (bucketId: string, issue: LinkedJiraIssue) => {
+        setBuckets(buckets.map(bucket => 
+            bucket.id === bucketId 
+                ? { ...bucket, linkedIssue: issue }
+                : bucket
+        ));
+    };
+
+    const unlinkJiraIssueFromBucket = (bucketId: string) => {
+        setBuckets(buckets.map(bucket => 
+            bucket.id === bucketId 
+                ? { ...bucket, linkedIssue: undefined }
+                : bucket
+        ));
     };
 
     const addEntry = (entry: Omit<TimeEntry, 'id'>) => {
@@ -184,6 +264,8 @@ export const StorageProvider: React.FC<{ children: React.ReactNode }> = ({ child
             entries, 
             addBucket, 
             removeBucket, 
+            linkJiraIssueToBucket,
+            unlinkJiraIssueFromBucket,
             addEntry, 
             updateEntry,
             removeEntry,

@@ -25,5 +25,9 @@ contextBridge.exposeInMainWorld('electron', {
         getAppIcon: (appName: string) => ipcRenderer.invoke('get-app-icon', appName),
         getScreenshot: (filePath: string) => ipcRenderer.invoke('get-screenshot', filePath),
         showItemInFolder: (filePath: string) => ipcRenderer.invoke('show-item-in-folder', filePath),
+        tempoApiRequest: (requestParams: { url: string, method?: string, headers?: Record<string, string>, body?: any }) => 
+            ipcRenderer.invoke('tempo-api-request', requestParams),
+        jiraApiRequest: (requestParams: { url: string, method?: string, headers?: Record<string, string>, body?: any }) => 
+            ipcRenderer.invoke('jira-api-request', requestParams),
     },
 });

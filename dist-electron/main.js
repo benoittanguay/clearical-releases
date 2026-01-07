@@ -63,9 +63,8 @@ ipcMain.handle('capture-screenshot', async () => {
         const validSources = sources.filter(source => {
             const lowerName = source.name.toLowerCase();
             const size = source.thumbnail.getSize();
-            // Filter out TimePortal app itself (but not documents that mention TimePortal)
-            if ((lowerName === 'time-portal') || (lowerName === 'timeportal') ||
-                (source.name.startsWith('time-portal') && !source.name.includes('—') && !source.name.includes('-'))) {
+            // Only filter out the actual TimePortal app window (exact match)
+            if (lowerName === 'time-portal' || lowerName === 'timeportal') {
                 console.log('[Main] Filtering out TimePortal app window:', source.name);
                 return false;
             }
@@ -79,6 +78,8 @@ ipcMain.handle('capture-screenshot', async () => {
                 console.log('[Main] Filtering out unnamed window');
                 return false;
             }
+            // Log which windows pass the filter
+            console.log('[Main] Window passed filtering:', source.name, `(${size.width}x${size.height})`);
             return true;
         });
         console.log('[Main] Valid window sources after filtering:', validSources.length);
@@ -558,6 +559,106 @@ ipcMain.handle('show-item-in-folder', async (event, filePath) => {
         return {
             success: false,
             error: error instanceof Error ? error.message : 'Unknown error'
+        };
+    }
+});
+// Tempo API handlers - Proxy requests through main process to avoid CORS
+ipcMain.handle('tempo-api-request', async (event, { url, method = 'GET', headers = {}, body }) => {
+    console.log('[Main] Tempo API request:', method, url);
+    try {
+        const response = await fetch(url, {
+            method,
+            headers: {
+                'Content-Type': 'application/json',
+                ...headers,
+            },
+            body: body ? JSON.stringify(body) : undefined,
+        });
+        const responseHeaders = Object.fromEntries(response.headers.entries());
+        console.log('[Main] Tempo API response status:', response.status, response.statusText);
+        console.log('[Main] Tempo API response headers:', responseHeaders);
+        let responseData;
+        const contentType = responseHeaders['content-type'] || '';
+        if (contentType.includes('application/json')) {
+            responseData = await response.json();
+        }
+        else {
+            responseData = await response.text();
+        }
+        if (!response.ok) {
+            console.log('[Main] Tempo API error response:', responseData);
+            return {
+                success: false,
+                status: response.status,
+                statusText: response.statusText,
+                data: responseData,
+                headers: responseHeaders,
+            };
+        }
+        console.log('[Main] Tempo API success response:', typeof responseData === 'object' ? 'JSON data' : 'Text data');
+        return {
+            success: true,
+            status: response.status,
+            statusText: response.statusText,
+            data: responseData,
+            headers: responseHeaders,
+        };
+    }
+    catch (error) {
+        console.error('[Main] Tempo API request failed:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error',
+        };
+    }
+});
+// Jira API handlers - Proxy requests through main process to avoid CORS
+ipcMain.handle('jira-api-request', async (event, { url, method = 'GET', headers = {}, body }) => {
+    console.log('[Main] Jira API request:', method, url);
+    try {
+        const response = await fetch(url, {
+            method,
+            headers: {
+                'Content-Type': 'application/json',
+                ...headers,
+            },
+            body: body ? JSON.stringify(body) : undefined,
+        });
+        const responseHeaders = Object.fromEntries(response.headers.entries());
+        console.log('[Main] Jira API response status:', response.status, response.statusText);
+        console.log('[Main] Jira API response headers:', responseHeaders);
+        let responseData;
+        const contentType = responseHeaders['content-type'] || '';
+        if (contentType.includes('application/json')) {
+            responseData = await response.json();
+        }
+        else {
+            responseData = await response.text();
+        }
+        if (!response.ok) {
+            console.log('[Main] Jira API error response:', responseData);
+            return {
+                success: false,
+                status: response.status,
+                statusText: response.statusText,
+                data: responseData,
+                headers: responseHeaders,
+            };
+        }
+        console.log('[Main] Jira API success response:', typeof responseData === 'object' ? 'JSON data' : 'Text data');
+        return {
+            success: true,
+            status: response.status,
+            statusText: response.statusText,
+            data: responseData,
+            headers: responseHeaders,
+        };
+    }
+    catch (error) {
+        console.error('[Main] Jira API request failed:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error',
         };
     }
 });

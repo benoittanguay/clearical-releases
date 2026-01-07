@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useSettings } from '../context/SettingsContext';
+import { IntegrationConfigModal } from './IntegrationConfigModal';
 
 type PermissionStatus = 'not-determined' | 'granted' | 'denied' | 'restricted' | 'unknown';
 
@@ -8,6 +9,7 @@ export function Settings() {
     const [permissionStatus, setPermissionStatus] = useState<PermissionStatus>('unknown');
     const [tempSettings, setTempSettings] = useState(settings);
     const [saveTimeoutId, setSaveTimeoutId] = useState<NodeJS.Timeout | null>(null);
+    const [showIntegrationModal, setShowIntegrationModal] = useState(false);
 
     const checkPermission = async () => {
         // @ts-ignore - window.electron is defined in preload
@@ -180,6 +182,65 @@ export function Settings() {
                 </div>
             </div>
 
+            {/* Time Tracking Integration Settings */}
+            <div className="bg-gray-800 p-4 rounded-lg mb-4">
+                <h3 className="text-sm font-semibold text-gray-400 uppercase mb-3">Time Tracking Integration</h3>
+                
+                <div className="space-y-3">
+                    {/* Jira Status */}
+                    <div className="flex items-center justify-between bg-gray-900 p-3 rounded border border-gray-700">
+                        <div>
+                            <div className="text-sm font-medium text-white">
+                                Jira Status
+                            </div>
+                            <div className="text-xs text-gray-500">
+                                {tempSettings.jira?.enabled 
+                                    ? `Connected to ${tempSettings.jira.baseUrl?.replace('https://', '') || 'Jira instance'}`
+                                    : 'Integration disabled'
+                                }
+                            </div>
+                        </div>
+                        <span className={`text-xs px-2 py-1 rounded ${
+                            tempSettings.jira?.enabled && tempSettings.jira?.apiToken && tempSettings.jira?.baseUrl && tempSettings.jira?.email
+                                ? 'bg-green-900 text-green-400' 
+                                : 'bg-gray-900 text-gray-400'
+                        }`}>
+                            {tempSettings.jira?.enabled && tempSettings.jira?.apiToken && tempSettings.jira?.baseUrl && tempSettings.jira?.email ? 'CONNECTED' : 'DISABLED'}
+                        </span>
+                    </div>
+
+                    {/* Tempo Status */}
+                    <div className="flex items-center justify-between bg-gray-900 p-3 rounded border border-gray-700">
+                        <div>
+                            <div className="text-sm font-medium text-white">
+                                Tempo Status
+                            </div>
+                            <div className="text-xs text-gray-500">
+                                {tempSettings.tempo?.enabled 
+                                    ? `Connected to ${tempSettings.tempo.baseUrl?.includes('eu') ? 'EU' : 'Global'} region`
+                                    : 'Integration disabled'
+                                }
+                            </div>
+                        </div>
+                        <span className={`text-xs px-2 py-1 rounded ${
+                            tempSettings.tempo?.enabled && tempSettings.tempo?.apiToken 
+                                ? 'bg-green-900 text-green-400' 
+                                : 'bg-gray-900 text-gray-400'
+                        }`}>
+                            {tempSettings.tempo?.enabled && tempSettings.tempo?.apiToken ? 'CONNECTED' : 'DISABLED'}
+                        </span>
+                    </div>
+
+                    {/* Configure Button */}
+                    <button
+                        onClick={() => setShowIntegrationModal(true)}
+                        className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm rounded transition-colors"
+                    >
+                        Configure Integration
+                    </button>
+                </div>
+            </div>
+
             <div className="bg-gray-800 p-4 rounded-lg mb-4">
                 <h3 className="text-sm font-semibold text-gray-400 uppercase mb-3">Permissions</h3>
                 <div className="flex justify-between items-center bg-gray-900 p-3 rounded border border-gray-700">
@@ -224,6 +285,17 @@ export function Settings() {
                 <h3 className="text-sm font-semibold text-gray-400 uppercase mb-3">About</h3>
                 <p className="text-xs text-gray-500">TimePortal v0.1.0</p>
             </div>
+
+            {/* Integration Configuration Modal */}
+            <IntegrationConfigModal
+                isOpen={showIntegrationModal}
+                onClose={() => setShowIntegrationModal(false)}
+                currentTempoSettings={tempSettings.tempo || { enabled: false, apiToken: '', baseUrl: 'https://api.tempo.io' }}
+                currentJiraSettings={tempSettings.jira || { enabled: false, apiToken: '', baseUrl: '', email: '' }}
+                onSave={(tempoSettings, jiraSettings) => {
+                    setTempSettings(prev => ({ ...prev, tempo: tempoSettings, jira: jiraSettings }));
+                }}
+            />
         </div>
     );
 }

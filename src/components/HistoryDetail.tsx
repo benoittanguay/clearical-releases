@@ -3,12 +3,15 @@ import type { TimeEntry, TimeBucket, WindowActivity } from '../context/StorageCo
 import { ScreenshotGallery } from './ScreenshotGallery';
 import { DeleteButton } from './DeleteButton';
 import { useStorage } from '../context/StorageContext';
+import { useSettings } from '../context/SettingsContext';
+import { TempoService } from '../services/tempoService';
 
 interface HistoryDetailProps {
     entry: TimeEntry;
     buckets: TimeBucket[];
     onBack: () => void;
     onUpdate: (id: string, updates: Partial<TimeEntry>) => void;
+    onNavigateToSettings: () => void;
     formatTime: (ms: number) => string;
 }
 
@@ -19,8 +22,9 @@ interface AppGroup {
     icon?: string;
 }
 
-export function HistoryDetail({ entry, buckets, onBack, onUpdate, formatTime }: HistoryDetailProps) {
+export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSettings, formatTime }: HistoryDetailProps) {
     const { removeActivityFromEntry, removeAllActivitiesForApp, removeScreenshotFromEntry, addManualActivityToEntry } = useStorage();
+    const { settings } = useSettings();
     const [description, setDescription] = useState(entry.description || '');
     const [selectedBucketId, setSelectedBucketId] = useState(entry.bucketId || '');
     const [expandedApps, setExpandedApps] = useState<Set<string>>(new Set());
@@ -30,6 +34,10 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, formatTime }: 
     const [showManualEntryForm, setShowManualEntryForm] = useState(false);
     const [manualDescription, setManualDescription] = useState('');
     const [manualDuration, setManualDuration] = useState('');
+    const [showTempoForm, setShowTempoForm] = useState(false);
+    const [tempoIssueKey, setTempoIssueKey] = useState(settings.tempo?.defaultIssueKey || '');
+    const [tempoDescription, setTempoDescription] = useState(description || '');
+    const [isLoggingToTempo, setIsLoggingToTempo] = useState(false);
 
     // Update local state when entry changes
     useEffect(() => {
@@ -110,6 +118,40 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, formatTime }: 
         setManualDescription('');
         setManualDuration('');
         setShowManualEntryForm(false);
+    };
+
+    const handleLogToTempo = async () => {
+        if (!tempoIssueKey.trim() || !settings.tempo?.apiToken || !settings.tempo?.baseUrl) return;
+        
+        setIsLoggingToTempo(true);
+        
+        try {
+            const tempoService = new TempoService(settings.tempo.baseUrl, settings.tempo.apiToken);
+            
+            const worklog = {
+                issueKey: tempoIssueKey.trim(),
+                timeSpentSeconds: TempoService.durationMsToSeconds(entry.duration),
+                startDate: TempoService.formatDate(entry.startTime),
+                startTime: TempoService.formatTime(entry.startTime),
+                description: tempoDescription.trim() || description || `Time logged from TimePortal for ${formatTime(entry.duration)}`,
+            };
+            
+            const response = await tempoService.createWorklog(worklog);
+            
+            // Show success message
+            alert(`Successfully logged ${formatTime(entry.duration)} to Tempo!\nWorklog ID: ${response.tempoWorklogId}`);
+            
+            // Reset form and close
+            setShowTempoForm(false);
+            setTempoIssueKey(settings.tempo?.defaultIssueKey || '');
+            setTempoDescription(description || '');
+            
+        } catch (error) {
+            console.error('Failed to log time to Tempo:', error);
+            alert(`Failed to log time to Tempo: ${error instanceof Error ? error.message : 'Unknown error'}\n\nPlease check your Tempo configuration in settings.`);
+        } finally {
+            setIsLoggingToTempo(false);
+        }
     };
 
     const parseDuration = (input: string): number => {
@@ -281,7 +323,108 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, formatTime }: 
                         rows={3}
                     />
                 </div>
+
+                {/* Tempo Integration */}
+                <div className="pt-3 border-t border-gray-700">
+                    {settings.tempo?.enabled ? (
+                        <button
+                            onClick={() => setShowTempoForm(!showTempoForm)}
+                            disabled={isLoggingToTempo}
+                            className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white text-sm rounded-lg transition-colors flex items-center justify-center gap-2"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <circle cx="12" cy="12" r="10"/>
+                                <path d="M12 6v6l4 2"/>
+                            </svg>
+                            {isLoggingToTempo ? (
+                                <>
+                                    <div className="w-3 h-3 border border-white border-t-transparent rounded-full animate-spin"></div>
+                                    Logging to Tempo...
+                                </>
+                            ) : (
+                                'Log to Tempo'
+                            )}
+                        </button>
+                    ) : (
+                        <button
+                            onClick={onNavigateToSettings}
+                            className="w-full px-4 py-2 bg-gray-600 hover:bg-gray-500 text-white text-sm rounded-lg transition-colors flex items-center justify-center gap-2"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                                <circle cx="12" cy="12" r="4"/>
+                            </svg>
+                            Connect Tempo
+                        </button>
+                    )}
                 </div>
+                </div>
+
+                {/* Tempo Form */}
+                {showTempoForm && (
+                    <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-700">
+                        <h4 className="text-sm font-semibold text-gray-300 mb-3">Log Time to Tempo</h4>
+                        <div className="space-y-3">
+                            <div>
+                                <label className="block text-xs text-gray-400 mb-1">Jira Issue Key *</label>
+                                <input
+                                    type="text"
+                                    value={tempoIssueKey}
+                                    onChange={(e) => setTempoIssueKey(e.target.value)}
+                                    placeholder="e.g. PROJECT-123"
+                                    className="w-full bg-gray-700 border border-gray-600 text-white text-sm rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                />
+                                <div className="text-xs text-gray-500 mt-1">Enter the Jira issue key to log time against</div>
+                            </div>
+                            <div>
+                                <label className="block text-xs text-gray-400 mb-1">Description</label>
+                                <input
+                                    type="text"
+                                    value={tempoDescription}
+                                    onChange={(e) => setTempoDescription(e.target.value)}
+                                    placeholder="Work description..."
+                                    className="w-full bg-gray-700 border border-gray-600 text-white text-sm rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                />
+                            </div>
+                            <div className="bg-gray-700/50 rounded p-3">
+                                <div className="text-xs text-gray-400 mb-1">Time to Log</div>
+                                <div className="text-sm text-white">
+                                    <strong>{formatTime(entry.duration)}</strong> 
+                                    <span className="text-gray-400 ml-2">({TempoService.durationMsToSeconds(entry.duration)} seconds)</span>
+                                </div>
+                                <div className="text-xs text-gray-500 mt-1">
+                                    Date: {new Date(entry.startTime).toLocaleDateString()}
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-2 justify-end">
+                                <button
+                                    onClick={() => {
+                                        setShowTempoForm(false);
+                                        setTempoIssueKey(settings.tempo?.defaultIssueKey || '');
+                                        setTempoDescription(description || '');
+                                    }}
+                                    className="px-3 py-1 text-gray-400 hover:text-white text-sm transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={handleLogToTempo}
+                                    disabled={!tempoIssueKey.trim() || isLoggingToTempo}
+                                    className="px-3 py-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white text-sm rounded transition-colors flex items-center gap-1"
+                                >
+                                    {isLoggingToTempo ? (
+                                        <>
+                                            <div className="w-3 h-3 border border-white border-t-transparent rounded-full animate-spin"></div>
+                                            Logging...
+                                        </>
+                                    ) : (
+                                        'Log to Tempo'
+                                    )}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 {/* Window Activity - Grouped by App */}
                 <div>
@@ -345,6 +488,7 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, formatTime }: 
                         </div>
                     </div>
                 )}
+
 
                 {appGroups.length === 0 ? (
                     <div className="text-gray-500 text-sm">No window activity recorded for this session.</div>

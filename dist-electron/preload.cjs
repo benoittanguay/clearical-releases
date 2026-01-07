@@ -26,5 +26,7 @@ electron_1.contextBridge.exposeInMainWorld('electron', {
         getAppIcon: (appName) => electron_1.ipcRenderer.invoke('get-app-icon', appName),
         getScreenshot: (filePath) => electron_1.ipcRenderer.invoke('get-screenshot', filePath),
         showItemInFolder: (filePath) => electron_1.ipcRenderer.invoke('show-item-in-folder', filePath),
+        tempoApiRequest: (requestParams) => electron_1.ipcRenderer.invoke('tempo-api-request', requestParams),
+        jiraApiRequest: (requestParams) => electron_1.ipcRenderer.invoke('jira-api-request', requestParams),
     },
 });
