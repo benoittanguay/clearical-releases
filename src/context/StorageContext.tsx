@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 
 export interface LinkedJiraIssue {
     key: string;
@@ -7,6 +7,16 @@ export interface LinkedJiraIssue {
     status: string;
     projectKey: string;
     projectName: string;
+}
+
+export interface WorkAssignment {
+    type: 'bucket' | 'jira';
+    bucket?: {
+        id: string;
+        name: string;
+        color: string;
+    };
+    jiraIssue?: LinkedJiraIssue;
 }
 
 export interface TimeBucket {
@@ -29,11 +39,12 @@ export interface TimeEntry {
     startTime: number;
     endTime: number;
     duration: number; // ms
-    bucketId: string | null;
+    assignment?: WorkAssignment;
+    bucketId?: string | null; // Legacy field for migration
+    linkedJiraIssue?: LinkedJiraIssue; // Legacy field for migration
     description?: string;
     windowActivity?: WindowActivity[];
     screenshotPath?: string; // Future use
-    linkedJiraIssue?: LinkedJiraIssue; // Link to Jira issue
 }
 
 interface StorageContextType {
@@ -45,6 +56,7 @@ interface StorageContextType {
     unlinkJiraIssueFromBucket: (bucketId: string) => void;
     linkJiraIssueToEntry: (entryId: string, issue: LinkedJiraIssue) => void;
     unlinkJiraIssueFromEntry: (entryId: string) => void;
+    setEntryAssignment: (entryId: string, assignment: WorkAssignment | null) => void;
     addEntry: (entry: Omit<TimeEntry, 'id'>) => void;
     updateEntry: (id: string, updates: Partial<TimeEntry>) => void;
     removeEntry: (id: string) => void;
@@ -59,6 +71,7 @@ const StorageContext = createContext<StorageContextType | undefined>(undefined);
 export const StorageProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [buckets, setBuckets] = useState<TimeBucket[]>([]);
     const [entries, setEntries] = useState<TimeEntry[]>([]);
+    const migrationDoneRef = useRef(false);
 
     // Migration function to handle old bucket format
     const migrateBuckets = (buckets: any[]): TimeBucket[] => {
@@ -68,6 +81,48 @@ export const StorageProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 return { ...bucket, linkedIssue: undefined };
             }
             return bucket;
+        });
+    };
+
+    // Migration function to handle old entry format (dual-assignment to unified)
+    const migrateEntries = (entries: any[], availableBuckets: TimeBucket[]): TimeEntry[] => {
+        return entries.map(entry => {
+            // If entry has new assignment field, return as is
+            if (entry.assignment) {
+                return entry;
+            }
+
+            // Migrate from old dual-assignment system
+            let assignment: WorkAssignment | undefined = undefined;
+
+            // Priority: Jira issue over bucket (as specified in implementation plan)
+            if (entry.linkedJiraIssue) {
+                assignment = {
+                    type: 'jira',
+                    jiraIssue: entry.linkedJiraIssue
+                };
+            } else if (entry.bucketId) {
+                // Find the bucket to get its details
+                const bucket = availableBuckets.find(b => b.id === entry.bucketId);
+                if (bucket) {
+                    assignment = {
+                        type: 'bucket',
+                        bucket: {
+                            id: bucket.id,
+                            name: bucket.name,
+                            color: bucket.color
+                        }
+                    };
+                }
+            }
+
+            return {
+                ...entry,
+                assignment,
+                // Keep legacy fields for gradual migration
+                bucketId: entry.bucketId,
+                linkedJiraIssue: entry.linkedJiraIssue
+            };
         });
     };
 
@@ -121,6 +176,7 @@ export const StorageProvider: React.FC<{ children: React.ReactNode }> = ({ child
             try {
                 const parsed = JSON.parse(loadedEntries);
                 if (Array.isArray(parsed)) {
+                    // Defer entries migration until buckets are loaded
                     setEntries(parsed);
                 }
             } catch (error) {
@@ -129,6 +185,24 @@ export const StorageProvider: React.FC<{ children: React.ReactNode }> = ({ child
             }
         }
     }, []);
+
+    // Migrate entries when buckets are loaded (run only once)
+    useEffect(() => {
+        if (!migrationDoneRef.current && buckets.length > 0 && entries.length > 0) {
+            // Check if any entries need migration
+            const needsMigration = entries.some(entry => 
+                !entry.assignment && (entry.bucketId || entry.linkedJiraIssue)
+            );
+            
+            if (needsMigration) {
+                console.log('[StorageContext] Migrating entries from dual-assignment to unified model');
+                const migratedEntries = migrateEntries(entries, buckets);
+                setEntries(migratedEntries);
+            }
+            // Mark migration as done regardless of whether it was needed
+            migrationDoneRef.current = true;
+        }
+    }, [buckets, entries]);
 
     // Persist
     useEffect(() => {
@@ -277,6 +351,14 @@ export const StorageProvider: React.FC<{ children: React.ReactNode }> = ({ child
         ));
     };
 
+    const setEntryAssignment = (entryId: string, assignment: WorkAssignment | null) => {
+        setEntries(entries.map(entry => 
+            entry.id === entryId 
+                ? { ...entry, assignment: assignment || undefined }
+                : entry
+        ));
+    };
+
     return (
         <StorageContext.Provider value={{ 
             buckets, 
@@ -287,6 +369,7 @@ export const StorageProvider: React.FC<{ children: React.ReactNode }> = ({ child
             unlinkJiraIssueFromBucket,
             linkJiraIssueToEntry,
             unlinkJiraIssueFromEntry,
+            setEntryAssignment,
             addEntry, 
             updateEntry,
             removeEntry,

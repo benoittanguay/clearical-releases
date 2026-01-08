@@ -7,21 +7,21 @@ import { HistoryDetail } from './components/HistoryDetail';
 import { ExportDialog } from './components/ExportDialog';
 import { DeleteButton } from './components/DeleteButton';
 import { JiraIssuesSection } from './components/JiraIssuesSection';
+import { AssignmentPicker } from './components/AssignmentPicker';
 import type { JiraIssue } from './services/jiraService';
-import type { LinkedJiraIssue } from './context/StorageContext';
+import type { LinkedJiraIssue, WorkAssignment } from './context/StorageContext';
 import './App.css'
 
 type View = 'timer' | 'history' | 'buckets' | 'settings' | 'history-detail';
 
 function App() {
-  const { buckets, entries, addEntry, addBucket, removeBucket, updateEntry, removeEntry, linkJiraIssueToBucket, unlinkJiraIssueFromBucket, linkJiraIssueToEntry, unlinkJiraIssueFromEntry } = useStorage();
+  const { buckets, entries, addEntry, addBucket, removeBucket, updateEntry, removeEntry, linkJiraIssueToBucket, unlinkJiraIssueFromBucket, linkJiraIssueToEntry, unlinkJiraIssueFromEntry, setEntryAssignment } = useStorage();
   const { settings } = useSettings();
-  const [selectedBucket, setSelectedBucket] = useState<string>('1');
+  const [selectedAssignment, setSelectedAssignment] = useState<WorkAssignment | null>(null);
   const [currentView, setCurrentView] = useState<View>('timer');
   const [newBucketName, setNewBucketName] = useState('');
   const [selectedEntry, setSelectedEntry] = useState<string | null>(null);
   const [showExportDialog, setShowExportDialog] = useState(false);
-  const [selectedEntryForLinking, setSelectedEntryForLinking] = useState<string | null>(null);
 
   const { isRunning, isPaused, elapsed, start: startTimer, stop: stopTimer, pause: pauseTimer, resume: resumeTimer, reset: resetTimer, formatTime } = useTimer();
 
@@ -85,7 +85,7 @@ function App() {
         startTime: Date.now() - elapsed,
         endTime: Date.now(),
         duration: elapsed,
-        bucketId: selectedBucket,
+        assignment: selectedAssignment,
         windowActivity: finalActivity
       });
     }
@@ -107,21 +107,6 @@ function App() {
     }
   };
 
-  const handleLinkIssueToEntry = (issue: JiraIssue) => {
-    if (selectedEntryForLinking) {
-      const linkedIssue: LinkedJiraIssue = {
-        key: issue.key,
-        summary: issue.fields.summary,
-        issueType: issue.fields.issuetype.name,
-        status: issue.fields.status.name,
-        projectKey: issue.fields.project.key,
-        projectName: issue.fields.project.name
-      };
-      
-      linkJiraIssueToEntry(selectedEntryForLinking, linkedIssue);
-      setSelectedEntryForLinking(null);
-    }
-  };
 
   useEffect(() => {
     // Check if Electron bridge is available
@@ -134,11 +119,19 @@ function App() {
       console.error('[Renderer] window.electron is UNDEFINED');
     }
 
-    // If selectedBucket doesn't exist (e.g. was deleted), default to the first one
-    if (buckets.length > 0 && !buckets.find(b => b.id === selectedBucket)) {
-      setSelectedBucket(buckets[0].id);
+    // If selectedAssignment references a deleted bucket, reset to first available
+    if (selectedAssignment?.type === 'bucket' && selectedAssignment.bucket && 
+        buckets.length > 0 && !buckets.find(b => b.id === selectedAssignment.bucket!.id)) {
+      setSelectedAssignment({
+        type: 'bucket',
+        bucket: {
+          id: buckets[0].id,
+          name: buckets[0].name,
+          color: buckets[0].color
+        }
+      });
     }
-  }, [buckets, selectedBucket]);
+  }, [buckets, selectedAssignment]);
 
   return (
     <div className="flex h-screen bg-gray-900 text-white overflow-hidden font-sans w-full">
@@ -211,17 +204,13 @@ function App() {
               </div>
 
               <div className="w-full max-w-xs">
-                <label className="text-xs text-gray-500 uppercase font-bold mb-2 block tracking-wider">Project / Bucket</label>
-                <select
-                  value={selectedBucket}
-                  onChange={(e) => setSelectedBucket(e.target.value)}
-                  disabled={isRunning && !isPaused}
-                  className="w-full bg-gray-800/50 border border-gray-700 text-white text-sm rounded-lg focus:ring-green-500 focus:border-green-500 block p-3 mb-10 transition-colors hover:bg-gray-800"
-                >
-                  {buckets.map(bucket => (
-                    <option key={bucket.id} value={bucket.id}>{bucket.name}</option>
-                  ))}
-                </select>
+                <label className="text-xs text-gray-500 uppercase font-bold mb-2 block tracking-wider">Assignment</label>
+                <AssignmentPicker
+                  value={selectedAssignment}
+                  onChange={setSelectedAssignment}
+                  placeholder={isRunning && !isPaused ? "Assignment locked while running" : "Select assignment..."}
+                  className={`mb-10 ${isRunning && !isPaused ? 'pointer-events-none opacity-60' : ''}`}
+                />
               </div>
 
               <div className="w-full max-w-xs space-y-3">
@@ -411,7 +400,16 @@ function App() {
               ) : (
                 <div className="space-y-3 pb-8">
                   {entries.sort((a, b) => b.startTime - a.startTime).map(entry => {
-                    const bucket = buckets.find(b => b.id === entry.bucketId);
+                    // Get assignment info from unified model or fallback to legacy fields
+                    const assignment = entry.assignment || 
+                      (entry.linkedJiraIssue ? {
+                        type: 'jira' as const,
+                        jiraIssue: entry.linkedJiraIssue
+                      } : entry.bucketId ? {
+                        type: 'bucket' as const,
+                        bucket: buckets.find(b => b.id === entry.bucketId)
+                      } : null);
+                    
                     return (
                       <div
                         key={entry.id}
@@ -422,21 +420,39 @@ function App() {
                         className="flex justify-between items-center bg-gray-800/50 p-3 rounded-lg border border-gray-800 hover:bg-gray-800/80 transition-colors cursor-pointer"
                       >
                         <div className="flex flex-col flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
-                            {bucket && <div className="w-2 h-2 rounded-full" style={{ backgroundColor: bucket.color }}></div>}
-                            <span className="text-sm font-medium text-gray-200">{bucket?.name || 'Unknown'}</span>
-                          </div>
-                          {entry.linkedJiraIssue && (
+                          {/* Display assignment info */}
+                          {assignment && (
                             <div className="flex items-center gap-2 mb-1">
-                              <span className="text-blue-400 font-mono text-xs">
-                                {entry.linkedJiraIssue.key}
+                              <div 
+                                className="w-2 h-2 rounded-full" 
+                                style={{ 
+                                  backgroundColor: assignment.type === 'bucket' 
+                                    ? assignment.bucket?.color || '#6b7280'
+                                    : '#3b82f6' // Blue for Jira issues
+                                }}
+                              />
+                              <span className="text-sm font-medium text-gray-200">
+                                {assignment.type === 'bucket' 
+                                  ? assignment.bucket?.name || 'Unknown Bucket'
+                                  : assignment.jiraIssue?.key || 'Unknown Issue'
+                                }
                               </span>
-                              <span className="text-xs text-gray-500">
-                                {entry.linkedJiraIssue.projectName}
-                              </span>
-                              <span className="text-xs px-1 py-0.5 bg-gray-700 text-gray-300 rounded">
-                                {entry.linkedJiraIssue.issueType}
-                              </span>
+                              {assignment.type === 'jira' && assignment.jiraIssue && (
+                                <>
+                                  <span className="text-xs text-gray-500">
+                                    {assignment.jiraIssue.projectName}
+                                  </span>
+                                  <span className="text-xs px-1 py-0.5 bg-gray-700 text-gray-300 rounded">
+                                    {assignment.jiraIssue.issueType}
+                                  </span>
+                                </>
+                              )}
+                            </div>
+                          )}
+                          {/* Secondary info for Jira issues */}
+                          {assignment?.type === 'jira' && assignment.jiraIssue && (
+                            <div className="text-xs text-gray-400 mb-1 truncate">
+                              {assignment.jiraIssue.summary}
                             </div>
                           )}
                           {entry.description && (
@@ -451,35 +467,6 @@ function App() {
                           <div className="font-mono text-green-400 font-bold">
                             {formatTime(entry.duration)}
                           </div>
-                          {entry.linkedJiraIssue ? (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                unlinkJiraIssueFromEntry(entry.id);
-                              }}
-                              className="text-xs text-red-400 hover:text-red-300 transition-colors"
-                              title="Unlink Jira issue"
-                            >
-                              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
-                                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
-                              </svg>
-                            </button>
-                          ) : (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setSelectedEntryForLinking(entry.id);
-                              }}
-                              className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
-                              title="Link Jira issue"
-                            >
-                              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
-                                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
-                              </svg>
-                            </button>
-                          )}
                           <DeleteButton
                             onDelete={() => removeEntry(entry.id)}
                             confirmMessage="Delete this time entry?"
@@ -493,24 +480,6 @@ function App() {
                 </div>
               )}
 
-              {/* Jira Issue Selection for Linking */}
-              {selectedEntryForLinking && settings.jira?.enabled && (
-                <div className="mt-6 border-t border-gray-700 pt-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-semibold text-white">Select Jira Issue to Link</h3>
-                    <button
-                      onClick={() => setSelectedEntryForLinking(null)}
-                      className="text-gray-400 hover:text-white transition-colors"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <line x1="18" y1="6" x2="6" y2="18"></line>
-                        <line x1="6" y1="6" x2="18" y2="18"></line>
-                      </svg>
-                    </button>
-                  </div>
-                  <JiraIssuesSection onIssueClick={handleLinkIssueToEntry} />
-                </div>
-              )}
             </div>
           )}
         </div>

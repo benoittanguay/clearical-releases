@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo } from 'react';
-import type { TimeEntry, TimeBucket, WindowActivity } from '../context/StorageContext';
+import type { TimeEntry, TimeBucket, WindowActivity, WorkAssignment } from '../context/StorageContext';
 import { ScreenshotGallery } from './ScreenshotGallery';
 import { DeleteButton } from './DeleteButton';
+import { AssignmentPicker } from './AssignmentPicker';
 import { useStorage } from '../context/StorageContext';
 import { useSettings } from '../context/SettingsContext';
 import { TempoService } from '../services/tempoService';
@@ -23,10 +24,20 @@ interface AppGroup {
 }
 
 export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSettings, formatTime }: HistoryDetailProps) {
-    const { removeActivityFromEntry, removeAllActivitiesForApp, removeScreenshotFromEntry, addManualActivityToEntry } = useStorage();
+    const { removeActivityFromEntry, removeAllActivitiesForApp, removeScreenshotFromEntry, addManualActivityToEntry, setEntryAssignment } = useStorage();
     const { settings } = useSettings();
     const [description, setDescription] = useState(entry.description || '');
-    const [selectedBucketId, setSelectedBucketId] = useState(entry.bucketId || '');
+    const [selectedAssignment, setSelectedAssignment] = useState<WorkAssignment | null>(() => {
+        // Get assignment from unified model or fallback to legacy fields
+        return entry.assignment || 
+            (entry.linkedJiraIssue ? {
+                type: 'jira' as const,
+                jiraIssue: entry.linkedJiraIssue
+            } : entry.bucketId ? {
+                type: 'bucket' as const,
+                bucket: buckets.find(b => b.id === entry.bucketId)
+            } : null);
+    });
     const [expandedApps, setExpandedApps] = useState<Set<string>>(new Set());
     const [appIcons, setAppIcons] = useState<Map<string, string>>(new Map());
     const [selectedScreenshots, setSelectedScreenshots] = useState<string[] | null>(null);
@@ -42,8 +53,15 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
     // Update local state when entry changes
     useEffect(() => {
         setDescription(entry.description || '');
-        setSelectedBucketId(entry.bucketId || '');
-    }, [entry.id, entry.description, entry.bucketId]);
+        setSelectedAssignment(entry.assignment || 
+            (entry.linkedJiraIssue ? {
+                type: 'jira' as const,
+                jiraIssue: entry.linkedJiraIssue
+            } : entry.bucketId ? {
+                type: 'bucket' as const,
+                bucket: buckets.find(b => b.id === entry.bucketId)
+            } : null));
+    }, [entry.id, entry.description, entry.assignment, entry.bucketId, entry.linkedJiraIssue, buckets]);
 
     // Auto-save function with debouncing
     const autoSave = () => {
@@ -53,8 +71,7 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
         
         const timeoutId = setTimeout(() => {
             onUpdate(entry.id, {
-                description: description.trim() || undefined,
-                bucketId: selectedBucketId || null
+                description: description.trim() || undefined
             });
         }, 500); // 500ms debounce
         
@@ -63,8 +80,8 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
 
     // Auto-save when description or bucket changes
     useEffect(() => {
-        // Only auto-save if the values are different from the original entry
-        if (description !== (entry.description || '') || selectedBucketId !== entry.bucketId) {
+        // Only auto-save if description is different from the original entry
+        if (description !== (entry.description || '')) {
             autoSave();
         }
         
@@ -73,7 +90,13 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                 clearTimeout(saveTimeoutId);
             }
         };
-    }, [description, selectedBucketId]);
+    }, [description]);
+
+    // Handle assignment changes separately
+    const handleAssignmentChange = (assignment: WorkAssignment | null) => {
+        setSelectedAssignment(assignment);
+        setEntryAssignment(entry.id, assignment);
+    };
 
     // Cleanup timeout on unmount
     useEffect(() => {
@@ -180,7 +203,7 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
         return Math.round(totalMinutes * 60 * 1000); // Convert to milliseconds
     };
 
-    const currentBucket = buckets.find(b => b.id === selectedBucketId);
+    const currentAssignment = selectedAssignment;
 
     // Calculate total activity time for debugging
     const totalActivityTime = useMemo(() => {
@@ -285,18 +308,14 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                 {/* Entry Summary */}
                 <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-700">
                 <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-3">
-                        <select
-                            value={selectedBucketId}
-                            onChange={(e) => setSelectedBucketId(e.target.value)}
-                            className="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                        >
-                            <option value="">Select a bucket</option>
-                            {buckets.map(b => (
-                                <option key={b.id} value={b.id}>{b.name}</option>
-                            ))}
-                        </select>
-                        {currentBucket && <div className="w-3 h-3 rounded-full ml-2" style={{ backgroundColor: currentBucket.color }}></div>}
+                    <div className="flex-1 mr-4">
+                        <label className="text-xs text-gray-400 uppercase font-semibold mb-2 block">Assignment</label>
+                        <AssignmentPicker
+                            value={currentAssignment}
+                            onChange={handleAssignmentChange}
+                            placeholder="Select assignment..."
+                            className="w-full"
+                        />
                     </div>
                     <div className="flex flex-col items-end">
                         <div className="text-2xl font-mono font-bold text-green-400">

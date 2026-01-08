@@ -688,6 +688,81 @@ electron/
 
 ---
 
+## 🔧 Recent Implementation Requirements & UX Issues
+
+### Bucket vs Jira Issue Assignment UX Unification
+**Status**: ⚠️ **CRITICAL UX ISSUE - Requires Immediate Design Review**
+
+**Problem Identified**:
+The current implementation creates two separate assignment mechanisms for History items:
+1. **Bucket Assignment**: Traditional bucket selection via `bucketId` field
+2. **Jira Issue Linking**: New Jira issue association via `linkedJiraIssue` field
+
+This creates a **confusing dual-assignment system** where users can have both a bucket AND a Jira issue linked to the same time entry, leading to:
+- Unclear categorization (which takes precedence?)
+- Duplicated information in UI
+- Confusing user experience during time tracking
+
+**Required UX Design Changes**:
+
+1. **Unified Assignment Model**
+   - **Manual Buckets** (Work, Meeting, Break, etc.) and **Jira Issues/Epics** should be treated as the same concept
+   - Users should choose EITHER a manual bucket OR a Jira object, not both
+   - This unified concept should be called "Work Category" or "Assignment" in the UI
+
+2. **Data Model Restructuring** 
+   - Replace the current dual-field approach (`bucketId` + `linkedJiraIssue`)
+   - Implement a single assignment field that can hold either bucket or Jira issue data
+   - Suggested interface:
+     ```typescript
+     interface WorkAssignment {
+       type: 'bucket' | 'jira';
+       bucket?: {
+         id: string;
+         name: string;
+         color: string;
+       };
+       jiraIssue?: LinkedJiraIssue;
+     }
+     
+     interface TimeEntry {
+       // ... existing fields
+       assignment?: WorkAssignment; // Replaces bucketId + linkedJiraIssue
+     }
+     ```
+
+3. **UI/UX Changes Required**:
+   - **Timer View**: Single dropdown/selector showing both manual buckets and available Jira issues
+   - **History View**: Single assignment display (either bucket or Jira issue, not both)
+   - **Assignment Selection**: Unified picker showing:
+     - Manual buckets (with colors)
+     - Available Jira issues (with project/status info)
+     - Clear visual distinction between bucket types
+   - **Activity Details**: Single assignment field in description box
+
+4. **Assignment Flow Redesign**:
+   - During time tracking: User selects ONE assignment (bucket OR Jira issue)
+   - In History view: User can change assignment to ANY other option (bucket OR Jira issue)
+   - Visual consistency: Both bucket and Jira assignments should have similar visual treatment
+
+5. **Migration Strategy**:
+   - Handle existing data with both `bucketId` and `linkedJiraIssue`
+   - Migration priority: If both exist, prefer Jira issue over bucket
+   - Graceful fallback to bucket if Jira integration is disabled
+
+**Implementation Files to Modify**:
+- `src/context/StorageContext.tsx` - Update TimeEntry interface and data model
+- `src/App.tsx` - Unified assignment selection in Timer and History views  
+- `src/components/HistoryDetail.tsx` - Single assignment display and editing
+- `src/hooks/useTimer.ts` - Update timer to work with unified assignment model
+- All components that currently handle bucket selection
+
+**Priority**: **HIGH** - This affects core user experience and should be addressed before releasing the Jira integration feature.
+
+**Technical Scope**: **LARGE** - Requires significant refactoring of assignment-related components and data structures.
+
+---
+
 ## 🎯 Next Steps Recommendations
 
 ### Immediate (Week 1)
