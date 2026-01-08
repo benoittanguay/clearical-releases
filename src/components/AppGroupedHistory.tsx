@@ -24,6 +24,7 @@ export function AppGroupedHistory({ entries, buckets, formatTime, onEntryClick }
     const [expandedApps, setExpandedApps] = useState<Set<string>>(new Set());
     const [appIcons, setAppIcons] = useState<Map<string, string>>(new Map());
     const [selectedScreenshots, setSelectedScreenshots] = useState<string[] | null>(null);
+    const [selectedScreenshotMetadata, setSelectedScreenshotMetadata] = useState<Array<{ path: string; timestamp: number; appName?: string; windowTitle?: string; aiDescription?: string; }> | null>(null);
 
     // Group activities by app
     const appGroups = useMemo(() => {
@@ -104,8 +105,12 @@ export function AppGroupedHistory({ entries, buckets, formatTime, onEntryClick }
 
     if (appGroups.length === 0) {
         return (
-            <div className="text-gray-500 text-sm py-8 text-center">
-                No window activities recorded yet.
+            <div className="text-gray-500 text-sm py-12 text-center animate-fade-in">
+                <svg className="w-16 h-16 mx-auto mb-3 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                <p className="text-base mb-1">No window activities recorded yet</p>
+                <p className="text-xs text-gray-600">Start working and your activity will appear here</p>
             </div>
         );
     }
@@ -117,11 +122,12 @@ export function AppGroupedHistory({ entries, buckets, formatTime, onEntryClick }
                 const icon = appIcons.get(group.appName);
 
                 return (
-                    <div key={group.appName} className="bg-gray-800/50 rounded-lg border border-gray-700 overflow-hidden">
+                    <div key={group.appName} className="bg-gray-800/50 rounded-lg border border-gray-700 overflow-hidden hover:border-gray-600 transition-all animate-fade-in" style={{ transitionDuration: 'var(--duration-base)', transitionTimingFunction: 'var(--ease-out)', boxShadow: 'var(--shadow-sm)' }}>
                         {/* App Header */}
                         <button
                             onClick={() => toggleApp(group.appName)}
-                            className="w-full flex items-center justify-between p-4 hover:bg-gray-800/80 transition-colors"
+                            className="w-full flex items-center justify-between p-4 hover:bg-gray-800/80 active:bg-gray-800 transition-all"
+                            style={{ transitionDuration: 'var(--duration-fast)', transitionTimingFunction: 'var(--ease-out)' }}
                         >
                             <div className="flex items-center gap-3 flex-1 min-w-0">
                                 {icon ? (
@@ -153,17 +159,18 @@ export function AppGroupedHistory({ entries, buckets, formatTime, onEntryClick }
                                 <div className="font-mono text-green-400 font-bold text-lg">
                                     {formatTime(group.totalDuration)}
                                 </div>
-                                <svg 
-                                    xmlns="http://www.w3.org/2000/svg" 
-                                    width="20" 
-                                    height="20" 
-                                    viewBox="0 0 24 24" 
-                                    fill="none" 
-                                    stroke="currentColor" 
-                                    strokeWidth="2" 
-                                    strokeLinecap="round" 
+                                <svg
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    width="20"
+                                    height="20"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="2"
+                                    strokeLinecap="round"
                                     strokeLinejoin="round"
                                     className={`text-gray-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                                    style={{ transitionDuration: 'var(--duration-base)', transitionTimingFunction: 'var(--ease-out)' }}
                                 >
                                     <polyline points="6 9 12 15 18 9" />
                                 </svg>
@@ -172,11 +179,12 @@ export function AppGroupedHistory({ entries, buckets, formatTime, onEntryClick }
 
                         {/* Activities List */}
                         {isExpanded && (
-                            <div className="border-t border-gray-700">
+                            <div className="border-t border-gray-700 animate-slide-down">
                                 {group.activities.map((item, index) => (
                                     <div
                                         key={`${item.entry.id}-${item.activity.timestamp}-${index}`}
-                                        className="p-3 border-b border-gray-800/50 last:border-b-0 hover:bg-gray-800/30 transition-colors"
+                                        className="p-3 border-b border-gray-800/50 last:border-b-0 hover:bg-gray-800/30 transition-all"
+                                        style={{ transitionDuration: 'var(--duration-fast)', transitionTimingFunction: 'var(--ease-out)' }}
                                     >
                                         <div className="flex items-start justify-between gap-3">
                                             <div className="flex-1 min-w-0">
@@ -203,9 +211,21 @@ export function AppGroupedHistory({ entries, buckets, formatTime, onEntryClick }
                                                     <button
                                                         onClick={(e) => {
                                                             e.stopPropagation();
-                                                            setSelectedScreenshots(item.activity.screenshotPaths || []);
+
+                                                            const screenshots = item.activity.screenshotPaths || [];
+                                                            const metadata = screenshots.map(path => ({
+                                                                path,
+                                                                timestamp: item.activity.timestamp,
+                                                                appName: item.activity.appName,
+                                                                windowTitle: item.activity.windowTitle,
+                                                                aiDescription: item.activity.screenshotDescriptions?.[path]
+                                                            }));
+
+                                                            setSelectedScreenshots(screenshots);
+                                                            setSelectedScreenshotMetadata(metadata);
                                                         }}
-                                                        className="text-xs text-green-400 hover:text-green-300 mt-1 flex items-center gap-1"
+                                                        className="text-xs text-green-400 hover:text-green-300 active:text-green-200 mt-1 flex items-center gap-1 hover:bg-green-500/10 active:bg-green-500/20 px-1.5 py-0.5 rounded transition-all"
+                                                        style={{ transitionDuration: 'var(--duration-fast)', transitionTimingFunction: 'var(--ease-out)' }}
                                                     >
                                                         <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                                             <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
@@ -226,7 +246,8 @@ export function AppGroupedHistory({ entries, buckets, formatTime, onEntryClick }
                                                             e.stopPropagation();
                                                             onEntryClick(item.entry.id);
                                                         }}
-                                                        className="text-xs text-gray-400 hover:text-white px-2 py-1 rounded hover:bg-gray-700 transition-colors"
+                                                        className="text-xs text-gray-400 hover:text-white px-2 py-1 rounded hover:bg-gray-700 active:bg-gray-600 active:scale-95 transition-all"
+                                                        style={{ transitionDuration: 'var(--duration-fast)', transitionTimingFunction: 'var(--ease-out)' }}
                                                     >
                                                         View Entry
                                                     </button>
@@ -245,7 +266,11 @@ export function AppGroupedHistory({ entries, buckets, formatTime, onEntryClick }
             {selectedScreenshots && (
                 <ScreenshotGallery
                     screenshotPaths={selectedScreenshots}
-                    onClose={() => setSelectedScreenshots(null)}
+                    metadata={selectedScreenshotMetadata || undefined}
+                    onClose={() => {
+                        setSelectedScreenshots(null);
+                        setSelectedScreenshotMetadata(null);
+                    }}
                 />
             )}
         </div>

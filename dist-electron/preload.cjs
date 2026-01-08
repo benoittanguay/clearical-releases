@@ -21,6 +21,8 @@ electron_1.contextBridge.exposeInMainWorld('electron', {
         },
         invoke: (channel, ...args) => electron_1.ipcRenderer.invoke(channel, ...args),
         captureScreenshot: () => electron_1.ipcRenderer.invoke('capture-screenshot'),
+        analyzeScreenshot: (imagePath, requestId) => electron_1.ipcRenderer.invoke('analyze-screenshot', imagePath, requestId),
+        generateActivitySummary: (context) => electron_1.ipcRenderer.invoke('generate-activity-summary', context),
         getActiveWindow: () => electron_1.ipcRenderer.invoke('get-active-window'),
         checkAccessibilityPermission: () => electron_1.ipcRenderer.invoke('check-accessibility-permission'),
         getAppIcon: (appName) => electron_1.ipcRenderer.invoke('get-app-icon', appName),
@@ -28,5 +30,12 @@ electron_1.contextBridge.exposeInMainWorld('electron', {
         showItemInFolder: (filePath) => electron_1.ipcRenderer.invoke('show-item-in-folder', filePath),
         tempoApiRequest: (requestParams) => electron_1.ipcRenderer.invoke('tempo-api-request', requestParams),
         jiraApiRequest: (requestParams) => electron_1.ipcRenderer.invoke('jira-api-request', requestParams),
+        // Secure credential storage
+        secureStoreCredential: (key, value) => electron_1.ipcRenderer.invoke('secure-store-credential', key, value),
+        secureGetCredential: (key) => electron_1.ipcRenderer.invoke('secure-get-credential', key),
+        secureDeleteCredential: (key) => electron_1.ipcRenderer.invoke('secure-delete-credential', key),
+        secureHasCredential: (key) => electron_1.ipcRenderer.invoke('secure-has-credential', key),
+        secureListCredentials: () => electron_1.ipcRenderer.invoke('secure-list-credentials'),
+        secureIsAvailable: () => electron_1.ipcRenderer.invoke('secure-is-available'),
     },
 });

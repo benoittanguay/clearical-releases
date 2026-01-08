@@ -20,14 +20,36 @@ contextBridge.exposeInMainWorld('electron', {
         },
         invoke: (channel: string, ...args: any[]) => ipcRenderer.invoke(channel, ...args),
         captureScreenshot: () => ipcRenderer.invoke('capture-screenshot'),
+        analyzeScreenshot: (imagePath: string, requestId?: string) => ipcRenderer.invoke('analyze-screenshot', imagePath, requestId),
+        generateActivitySummary: (context: {
+            screenshotDescriptions: string[];
+            windowTitles: string[];
+            appNames: string[];
+            duration: number;
+            startTime: number;
+            endTime: number;
+        }) => ipcRenderer.invoke('generate-activity-summary', context),
         getActiveWindow: () => ipcRenderer.invoke('get-active-window'),
         checkAccessibilityPermission: () => ipcRenderer.invoke('check-accessibility-permission'),
         getAppIcon: (appName: string) => ipcRenderer.invoke('get-app-icon', appName),
         getScreenshot: (filePath: string) => ipcRenderer.invoke('get-screenshot', filePath),
         showItemInFolder: (filePath: string) => ipcRenderer.invoke('show-item-in-folder', filePath),
-        tempoApiRequest: (requestParams: { url: string, method?: string, headers?: Record<string, string>, body?: any }) => 
+        tempoApiRequest: (requestParams: { url: string, method?: string, headers?: Record<string, string>, body?: any }) =>
             ipcRenderer.invoke('tempo-api-request', requestParams),
-        jiraApiRequest: (requestParams: { url: string, method?: string, headers?: Record<string, string>, body?: any }) => 
+        jiraApiRequest: (requestParams: { url: string, method?: string, headers?: Record<string, string>, body?: any }) =>
             ipcRenderer.invoke('jira-api-request', requestParams),
+        // Secure credential storage
+        secureStoreCredential: (key: string, value: string) =>
+            ipcRenderer.invoke('secure-store-credential', key, value),
+        secureGetCredential: (key: string) =>
+            ipcRenderer.invoke('secure-get-credential', key),
+        secureDeleteCredential: (key: string) =>
+            ipcRenderer.invoke('secure-delete-credential', key),
+        secureHasCredential: (key: string) =>
+            ipcRenderer.invoke('secure-has-credential', key),
+        secureListCredentials: () =>
+            ipcRenderer.invoke('secure-list-credentials'),
+        secureIsAvailable: () =>
+            ipcRenderer.invoke('secure-is-available'),
     },
 });

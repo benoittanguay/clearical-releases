@@ -50,53 +50,215 @@ const SettingsContext = createContext<SettingsContextType | undefined>(undefined
 
 export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [settings, setSettings] = useState<AppSettings>(defaultSettings);
+    const [isSecureStorageAvailable, setIsSecureStorageAvailable] = useState<boolean>(false);
+    const [migrationComplete, setMigrationComplete] = useState<boolean>(false);
 
-    // Load settings from localStorage on mount
+    // Check if secure storage is available
     useEffect(() => {
-        const stored = localStorage.getItem('timeportal-settings');
-        if (stored) {
+        const checkSecureStorage = async () => {
             try {
-                const parsedSettings = JSON.parse(stored);
-                // Always ensure testing credentials are applied
+                const result = await window.electron.ipcRenderer.secureIsAvailable();
+                setIsSecureStorageAvailable(result.available);
+                console.log('[SettingsContext] Secure storage available:', result.available);
+            } catch (error) {
+                console.error('[SettingsContext] Failed to check secure storage:', error);
+                setIsSecureStorageAvailable(false);
+            }
+        };
+        checkSecureStorage();
+    }, []);
+
+    // Load settings and migrate credentials on mount
+    useEffect(() => {
+        const loadAndMigrateSettings = async () => {
+            const stored = localStorage.getItem('timeportal-settings');
+            let parsedSettings = defaultSettings;
+
+            if (stored) {
+                try {
+                    parsedSettings = JSON.parse(stored);
+                } catch (error) {
+                    console.error('[SettingsContext] Failed to parse settings from localStorage:', error);
+                    parsedSettings = defaultSettings;
+                }
+            }
+
+            // If secure storage is available, try to load credentials from secure storage
+            if (isSecureStorageAvailable) {
+                try {
+                    // Migrate credentials from localStorage to secure storage if they exist
+                    if (parsedSettings.tempo?.apiToken && parsedSettings.tempo.apiToken !== defaultSettings.tempo.apiToken) {
+                        console.log('[SettingsContext] Migrating Tempo API token to secure storage');
+                        await window.electron.ipcRenderer.secureStoreCredential('tempo-api-token', parsedSettings.tempo.apiToken);
+                        // Clear from localStorage
+                        parsedSettings.tempo.apiToken = '';
+                    }
+
+                    if (parsedSettings.jira?.apiToken && parsedSettings.jira.apiToken !== defaultSettings.jira.apiToken) {
+                        console.log('[SettingsContext] Migrating Jira API token to secure storage');
+                        await window.electron.ipcRenderer.secureStoreCredential('jira-api-token', parsedSettings.jira.apiToken);
+                        // Clear from localStorage
+                        parsedSettings.jira.apiToken = '';
+                    }
+
+                    if (parsedSettings.jira?.email && parsedSettings.jira.email !== defaultSettings.jira.email) {
+                        console.log('[SettingsContext] Migrating Jira email to secure storage');
+                        await window.electron.ipcRenderer.secureStoreCredential('jira-email', parsedSettings.jira.email);
+                        // Clear from localStorage
+                        parsedSettings.jira.email = '';
+                    }
+
+                    // NOTE: We load credentials from secure storage for migration purposes,
+                    // but continue using hardcoded defaults for testing until final release.
+                    // When ready for production, uncomment the lines below to use secure credentials.
+
+                    // const tempoTokenResult = await window.electron.ipcRenderer.secureGetCredential('tempo-api-token');
+                    // const jiraTokenResult = await window.electron.ipcRenderer.secureGetCredential('jira-api-token');
+                    // const jiraEmailResult = await window.electron.ipcRenderer.secureGetCredential('jira-email');
+
+                    // Build settings with hardcoded defaults for testing
+                    const mergedSettings: AppSettings = {
+                        ...defaultSettings,
+                        ...parsedSettings,
+                        tempo: {
+                            ...parsedSettings.tempo,
+                            // Use hardcoded default for testing, or secure storage value if available
+                            apiToken: defaultSettings.tempo.apiToken, // Keep hardcoded default
+                            baseUrl: parsedSettings.tempo?.baseUrl || defaultSettings.tempo.baseUrl,
+                            defaultIssueKey: parsedSettings.tempo?.defaultIssueKey || '',
+                            enabled: parsedSettings.tempo?.enabled ?? defaultSettings.tempo.enabled,
+                        },
+                        jira: {
+                            ...parsedSettings.jira,
+                            // Use hardcoded defaults for testing, or secure storage values if available
+                            baseUrl: parsedSettings.jira?.baseUrl || defaultSettings.jira.baseUrl,
+                            email: defaultSettings.jira.email, // Keep hardcoded default
+                            apiToken: defaultSettings.jira.apiToken, // Keep hardcoded default
+                            enabled: parsedSettings.jira?.enabled ?? defaultSettings.jira.enabled,
+                            selectedProjects: parsedSettings.jira?.selectedProjects || defaultSettings.jira.selectedProjects,
+                        },
+                    };
+
+                    setSettings(mergedSettings);
+                    setMigrationComplete(true);
+
+                    // Save cleaned settings back to localStorage (without credentials)
+                    localStorage.setItem('timeportal-settings', JSON.stringify(mergedSettings));
+
+                    console.log('[SettingsContext] Settings loaded and migration complete');
+                } catch (error) {
+                    console.error('[SettingsContext] Failed to load from secure storage:', error);
+                    // Fallback to localStorage values with hardcoded testing defaults
+                    const mergedSettings = {
+                        ...defaultSettings,
+                        ...parsedSettings,
+                        tempo: {
+                            ...parsedSettings.tempo,
+                            apiToken: defaultSettings.tempo.apiToken,
+                            baseUrl: defaultSettings.tempo.baseUrl,
+                            enabled: true,
+                        },
+                        jira: {
+                            ...parsedSettings.jira,
+                            baseUrl: defaultSettings.jira.baseUrl,
+                            email: defaultSettings.jira.email,
+                            apiToken: defaultSettings.jira.apiToken,
+                            enabled: true,
+                            selectedProjects: defaultSettings.jira.selectedProjects,
+                        },
+                    };
+                    setSettings(mergedSettings);
+                }
+            } else {
+                // Secure storage not available, use localStorage with hardcoded testing defaults
                 const mergedSettings = {
                     ...defaultSettings,
                     ...parsedSettings,
                     tempo: {
                         ...parsedSettings.tempo,
-                        apiToken: '6OpFKSmqq340DZ2vBYz4Adgb539JTr-us',
-                        baseUrl: 'https://api.tempo.io',
+                        apiToken: defaultSettings.tempo.apiToken,
+                        baseUrl: defaultSettings.tempo.baseUrl,
                         enabled: true,
                     },
                     jira: {
                         ...parsedSettings.jira,
-                        baseUrl: 'https://beemhq.atlassian.net/',
-                        email: 'benoit.tanguay@beemhq.com',
-                        apiToken: 'ATATT3xFfGF0wS3u2J49jdrAfKVKTH1y2NgLW9A115REFkp3PSA1PnhJ8np6gSCFDJuQ2iKOn19xPVKSmzaZR5_KZKMTth9iy9U17UOnKwqLKKDhwA6pSxvHeTvC-jfPSK7Pyyq6oTeZmxX2cg0xxkvlQ73zrqQPZYVJ24pPatmJ745pZDBHbKA=A8489265',
+                        baseUrl: defaultSettings.jira.baseUrl,
+                        email: defaultSettings.jira.email,
+                        apiToken: defaultSettings.jira.apiToken,
                         enabled: true,
-                        selectedProjects: ['DES', 'BEEM'],
+                        selectedProjects: defaultSettings.jira.selectedProjects,
                     },
                 };
                 setSettings(mergedSettings);
-            } catch (error) {
-                console.error('Failed to parse settings from localStorage:', error);
-                setSettings(defaultSettings);
             }
-        } else {
-            setSettings(defaultSettings);
+        };
+
+        if (isSecureStorageAvailable !== null) {
+            loadAndMigrateSettings();
         }
-    }, []);
+    }, [isSecureStorageAvailable]);
 
-    // Persist settings to localStorage
+    // Persist non-sensitive settings to localStorage
     useEffect(() => {
-        localStorage.setItem('timeportal-settings', JSON.stringify(settings));
-    }, [settings]);
+        if (migrationComplete) {
+            // Only save non-sensitive settings to localStorage
+            const settingsToSave = {
+                ...settings,
+                tempo: {
+                    ...settings.tempo,
+                    apiToken: '', // Don't save token to localStorage
+                },
+                jira: {
+                    ...settings.jira,
+                    email: '', // Don't save email to localStorage
+                    apiToken: '', // Don't save token to localStorage
+                },
+            };
+            localStorage.setItem('timeportal-settings', JSON.stringify(settingsToSave));
+        }
+    }, [settings, migrationComplete]);
 
-    const updateSettings = (updates: Partial<AppSettings>) => {
+    const updateSettings = async (updates: Partial<AppSettings>) => {
+        // If secure storage is available and we're updating credentials, store them securely
+        if (isSecureStorageAvailable) {
+            try {
+                if (updates.tempo?.apiToken && updates.tempo.apiToken !== defaultSettings.tempo.apiToken) {
+                    await window.electron.ipcRenderer.secureStoreCredential('tempo-api-token', updates.tempo.apiToken);
+                    console.log('[SettingsContext] Tempo API token stored securely');
+                }
+
+                if (updates.jira?.apiToken && updates.jira.apiToken !== defaultSettings.jira.apiToken) {
+                    await window.electron.ipcRenderer.secureStoreCredential('jira-api-token', updates.jira.apiToken);
+                    console.log('[SettingsContext] Jira API token stored securely');
+                }
+
+                if (updates.jira?.email && updates.jira.email !== defaultSettings.jira.email) {
+                    await window.electron.ipcRenderer.secureStoreCredential('jira-email', updates.jira.email);
+                    console.log('[SettingsContext] Jira email stored securely');
+                }
+            } catch (error) {
+                console.error('[SettingsContext] Failed to store credentials securely:', error);
+            }
+        }
+
         setSettings(prev => ({ ...prev, ...updates }));
     };
 
-    const resetSettings = () => {
+    const resetSettings = async () => {
+        // Delete stored credentials
+        if (isSecureStorageAvailable) {
+            try {
+                await window.electron.ipcRenderer.secureDeleteCredential('tempo-api-token');
+                await window.electron.ipcRenderer.secureDeleteCredential('jira-api-token');
+                await window.electron.ipcRenderer.secureDeleteCredential('jira-email');
+                console.log('[SettingsContext] Secure credentials deleted');
+            } catch (error) {
+                console.error('[SettingsContext] Failed to delete secure credentials:', error);
+            }
+        }
+
         setSettings(defaultSettings);
+        localStorage.removeItem('timeportal-settings');
     };
 
     return (

@@ -23,6 +23,8 @@ export interface TimeBucket {
     id: string;
     name: string;
     color: string;
+    parentId?: string | null;  // Parent folder ID (null/undefined = root level)
+    isFolder?: boolean;        // True if this is a folder, not a bucket
     linkedIssue?: LinkedJiraIssue;
 }
 
@@ -32,6 +34,7 @@ export interface WindowActivity {
     timestamp: number;
     duration: number;
     screenshotPaths?: string[]; // Array of screenshot file paths for this activity
+    screenshotDescriptions?: { [path: string]: string }; // AI-generated descriptions for each screenshot
 }
 
 export interface TimeEntry {
@@ -52,12 +55,17 @@ interface StorageContextType {
     entries: TimeEntry[];
     addBucket: (name: string, color: string) => void;
     removeBucket: (id: string) => void;
+    renameBucket: (id: string, newName: string) => void;
+    createFolder: (name: string, parentId?: string | null) => void;
+    moveBucket: (bucketId: string, newParentId: string | null) => void;
     linkJiraIssueToBucket: (bucketId: string, issue: LinkedJiraIssue) => void;
     unlinkJiraIssueFromBucket: (bucketId: string) => void;
     linkJiraIssueToEntry: (entryId: string, issue: LinkedJiraIssue) => void;
     unlinkJiraIssueFromEntry: (entryId: string) => void;
     setEntryAssignment: (entryId: string, assignment: WorkAssignment | null) => void;
-    addEntry: (entry: Omit<TimeEntry, 'id'>) => void;
+    addEntry: (entry: Omit<TimeEntry, 'id'>) => TimeEntry;
+    seedEntries: (newEntries: Omit<TimeEntry, 'id'>[]) => void;
+    clearAllEntries: () => void;
     updateEntry: (id: string, updates: Partial<TimeEntry>) => void;
     removeEntry: (id: string) => void;
     removeActivityFromEntry: (entryId: string, activityIndex: number) => void;
@@ -218,7 +226,57 @@ export const StorageProvider: React.FC<{ children: React.ReactNode }> = ({ child
     };
 
     const removeBucket = (id: string) => {
-        setBuckets(buckets.filter(b => b.id !== id));
+        // When deleting a folder, also delete all its children
+        const toDelete = new Set([id]);
+        const findChildren = (parentId: string) => {
+            buckets.forEach(bucket => {
+                if (bucket.parentId === parentId) {
+                    toDelete.add(bucket.id);
+                    findChildren(bucket.id);
+                }
+            });
+        };
+        findChildren(id);
+        setBuckets(buckets.filter(b => !toDelete.has(b.id)));
+    };
+
+    const renameBucket = (id: string, newName: string) => {
+        setBuckets(buckets.map(bucket =>
+            bucket.id === id
+                ? { ...bucket, name: newName }
+                : bucket
+        ));
+    };
+
+    const createFolder = (name: string, parentId?: string | null) => {
+        setBuckets([...buckets, {
+            id: crypto.randomUUID(),
+            name,
+            color: '#6b7280',  // Default gray color for folders
+            parentId: parentId || null,
+            isFolder: true
+        }]);
+    };
+
+    const moveBucket = (bucketId: string, newParentId: string | null) => {
+        // Prevent moving a folder into itself or its descendants
+        if (newParentId) {
+            let currentId: string | null = newParentId;
+            while (currentId) {
+                if (currentId === bucketId) {
+                    console.error('Cannot move folder into itself or its descendants');
+                    return;
+                }
+                const parent = buckets.find(b => b.id === currentId);
+                currentId = parent?.parentId || null;
+            }
+        }
+
+        setBuckets(buckets.map(bucket =>
+            bucket.id === bucketId
+                ? { ...bucket, parentId: newParentId }
+                : bucket
+        ));
     };
 
     const linkJiraIssueToBucket = (bucketId: string, issue: LinkedJiraIssue) => {
@@ -237,11 +295,25 @@ export const StorageProvider: React.FC<{ children: React.ReactNode }> = ({ child
         ));
     };
 
-    const addEntry = (entry: Omit<TimeEntry, 'id'>) => {
-        setEntries([
-            { ...entry, id: crypto.randomUUID() },
-            ...entries
-        ]);
+    const addEntry = (entry: Omit<TimeEntry, 'id'>): TimeEntry => {
+        const newEntry: TimeEntry = { ...entry, id: crypto.randomUUID() };
+        setEntries([newEntry, ...entries]);
+        return newEntry;
+    };
+
+    const seedEntries = (newEntries: Omit<TimeEntry, 'id'>[]) => {
+        // Add IDs to all new entries
+        const entriesWithIds: TimeEntry[] = newEntries.map(entry => ({
+            ...entry,
+            id: crypto.randomUUID()
+        }));
+
+        // Add all new entries to existing ones in a single state update
+        setEntries(prevEntries => [...entriesWithIds, ...prevEntries]);
+    };
+
+    const clearAllEntries = () => {
+        setEntries([]);
     };
 
     const updateEntry = (id: string, updates: Partial<TimeEntry>) => {
@@ -360,17 +432,22 @@ export const StorageProvider: React.FC<{ children: React.ReactNode }> = ({ child
     };
 
     return (
-        <StorageContext.Provider value={{ 
-            buckets, 
-            entries, 
-            addBucket, 
-            removeBucket, 
+        <StorageContext.Provider value={{
+            buckets,
+            entries,
+            addBucket,
+            removeBucket,
+            renameBucket,
+            createFolder,
+            moveBucket,
             linkJiraIssueToBucket,
             unlinkJiraIssueFromBucket,
             linkJiraIssueToEntry,
             unlinkJiraIssueFromEntry,
             setEntryAssignment,
-            addEntry, 
+            addEntry,
+            seedEntries,
+            clearAllEntries,
             updateEntry,
             removeEntry,
             removeActivityFromEntry,

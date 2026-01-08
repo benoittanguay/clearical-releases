@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { JiraSettings } from '../context/SettingsContext';
+import type { JiraSettings } from '../context/SettingsContext';
 
 interface JiraConfigModalProps {
     isOpen: boolean;

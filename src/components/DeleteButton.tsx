@@ -61,18 +61,28 @@ export function DeleteButton({
 
     if (showConfirm) {
         return (
-            <div className="flex items-center gap-2 bg-red-900/20 border border-red-500/30 rounded-lg px-3 py-1">
+            <div className="flex items-center gap-2 bg-red-900/20 border border-red-500/30 rounded-lg px-3 py-1 animate-scale-in shadow-md" style={{ boxShadow: 'var(--glow-red)' }}>
                 <span className="text-red-300 text-sm">{confirmMessage}</span>
                 <button
                     onClick={handleClick}
                     disabled={isDeleting}
-                    className="text-red-400 hover:text-red-300 disabled:opacity-50 px-2 py-1 text-xs bg-red-500/20 rounded"
+                    className="text-red-400 hover:text-red-300 disabled:opacity-50 px-2 py-1 text-xs bg-red-500/20 rounded hover:bg-red-500/30 active:scale-95 transition-all"
+                    style={{ transitionDuration: 'var(--duration-fast)', transitionTimingFunction: 'var(--ease-out)' }}
                 >
-                    {isDeleting ? 'Deleting...' : 'Delete'}
+                    {isDeleting ? (
+                        <span className="flex items-center gap-1">
+                            <svg className="w-3 h-3 spinner" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <circle cx="12" cy="12" r="10" strokeOpacity="0.25" />
+                                <path d="M12 2a10 10 0 0 1 10 10" strokeLinecap="round" />
+                            </svg>
+                            Deleting...
+                        </span>
+                    ) : 'Delete'}
                 </button>
                 <button
                     onClick={handleCancel}
-                    className="text-gray-400 hover:text-gray-300 px-2 py-1 text-xs bg-gray-500/20 rounded"
+                    className="text-gray-400 hover:text-gray-300 px-2 py-1 text-xs bg-gray-500/20 rounded hover:bg-gray-500/30 active:scale-95 transition-all"
+                    style={{ transitionDuration: 'var(--duration-fast)', transitionTimingFunction: 'var(--ease-out)' }}
                 >
                     Cancel
                 </button>
@@ -83,7 +93,8 @@ export function DeleteButton({
     return (
         <button
             onClick={handleClick}
-            className={`${variants[variant]} transition-colors ${buttonSizes[size]} rounded hover:bg-red-500/10 ${className}`}
+            className={`${variants[variant]} ${buttonSizes[size]} rounded hover:bg-red-500/10 active:bg-red-500/20 active:scale-95 transition-all ${className}`}
+            style={{ transitionDuration: 'var(--duration-base)', transitionTimingFunction: 'var(--ease-out)' }}
             title="Delete"
         >
             <svg className={sizes[size]} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

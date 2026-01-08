@@ -1,4 +1,5 @@
-import { JiraService, JiraIssue, JiraSearchResponse } from './jiraService';
+import { JiraService } from './jiraService';
+import type { JiraIssue } from './jiraService';
 
 interface CacheEntry {
     data: JiraIssue[];

@@ -3,9 +3,9 @@ import type { TimeEntry, TimeBucket, WindowActivity, WorkAssignment } from '../c
 import { ScreenshotGallery } from './ScreenshotGallery';
 import { DeleteButton } from './DeleteButton';
 import { AssignmentPicker } from './AssignmentPicker';
+import { TempoValidationModal } from './TempoValidationModal';
 import { useStorage } from '../context/StorageContext';
 import { useSettings } from '../context/SettingsContext';
-import { TempoService } from '../services/tempoService';
 
 interface HistoryDetailProps {
     entry: TimeEntry;
@@ -41,14 +41,13 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
     const [expandedApps, setExpandedApps] = useState<Set<string>>(new Set());
     const [appIcons, setAppIcons] = useState<Map<string, string>>(new Map());
     const [selectedScreenshots, setSelectedScreenshots] = useState<string[] | null>(null);
-    const [saveTimeoutId, setSaveTimeoutId] = useState<NodeJS.Timeout | null>(null);
+    const [selectedScreenshotMetadata, setSelectedScreenshotMetadata] = useState<Array<{ path: string; timestamp: number; appName?: string; windowTitle?: string; aiDescription?: string; }> | null>(null);
+    const [saveTimeoutId, setSaveTimeoutId] = useState<ReturnType<typeof setTimeout> | null>(null);
     const [showManualEntryForm, setShowManualEntryForm] = useState(false);
     const [manualDescription, setManualDescription] = useState('');
     const [manualDuration, setManualDuration] = useState('');
-    const [showTempoForm, setShowTempoForm] = useState(false);
-    const [tempoIssueKey, setTempoIssueKey] = useState(settings.tempo?.defaultIssueKey || '');
-    const [tempoDescription, setTempoDescription] = useState(description || '');
-    const [isLoggingToTempo, setIsLoggingToTempo] = useState(false);
+    const [showTempoValidationModal, setShowTempoValidationModal] = useState(false);
+    const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
 
     // Update local state when entry changes
     useEffect(() => {
@@ -107,6 +106,29 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
         };
     }, []);
 
+    // Update metadata when entry changes and gallery is open
+    useEffect(() => {
+        if (selectedScreenshots && entry.windowActivity) {
+            // Find activities that have the selected screenshots and rebuild metadata
+            const updatedMetadata = selectedScreenshots.map(path => {
+                // Find the activity that contains this screenshot
+                const activity = entry.windowActivity?.find(act =>
+                    act.screenshotPaths?.includes(path)
+                );
+
+                return {
+                    path,
+                    timestamp: activity?.timestamp || Date.now(),
+                    appName: activity?.appName,
+                    windowTitle: activity?.windowTitle,
+                    aiDescription: activity?.screenshotDescriptions?.[path]
+                };
+            });
+
+            setSelectedScreenshotMetadata(updatedMetadata);
+        }
+    }, [entry.windowActivity, selectedScreenshots]);
+
     const handleDeleteActivity = async (activityIndex: number) => {
         removeActivityFromEntry(entry.id, activityIndex);
     };
@@ -120,10 +142,14 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
         // Update selected screenshots if needed
         if (selectedScreenshots) {
             const updatedScreenshots = selectedScreenshots.filter(path => path !== screenshotPath);
+            const updatedMetadata = selectedScreenshotMetadata?.filter(meta => meta.path !== screenshotPath);
+            
             if (updatedScreenshots.length === 0) {
                 setSelectedScreenshots(null);
+                setSelectedScreenshotMetadata(null);
             } else {
                 setSelectedScreenshots(updatedScreenshots);
+                setSelectedScreenshotMetadata(updatedMetadata || null);
             }
         }
     };
@@ -143,55 +169,42 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
         setShowManualEntryForm(false);
     };
 
-    const handleLogToTempo = async () => {
-        if (!tempoIssueKey.trim() || !settings.tempo?.apiToken || !settings.tempo?.baseUrl) return;
-        
-        setIsLoggingToTempo(true);
-        
-        try {
-            const tempoService = new TempoService(settings.tempo.baseUrl, settings.tempo.apiToken);
-            
-            const worklog = {
-                issueKey: tempoIssueKey.trim(),
-                timeSpentSeconds: TempoService.durationMsToSeconds(entry.duration),
-                startDate: TempoService.formatDate(entry.startTime),
-                startTime: TempoService.formatTime(entry.startTime),
-                description: tempoDescription.trim() || description || `Time logged from TimePortal for ${formatTime(entry.duration)}`,
-            };
-            
-            const response = await tempoService.createWorklog(worklog);
-            
-            // Show success message
-            alert(`Successfully logged ${formatTime(entry.duration)} to Tempo!\nWorklog ID: ${response.tempoWorklogId}`);
-            
-            // Reset form and close
-            setShowTempoForm(false);
-            setTempoIssueKey(settings.tempo?.defaultIssueKey || '');
-            setTempoDescription(description || '');
-            
-        } catch (error) {
-            console.error('Failed to log time to Tempo:', error);
-            alert(`Failed to log time to Tempo: ${error instanceof Error ? error.message : 'Unknown error'}\n\nPlease check your Tempo configuration in settings.`);
-        } finally {
-            setIsLoggingToTempo(false);
+    const handleOpenTempoModal = () => {
+        // Check if Tempo is configured
+        if (!settings.tempo?.enabled || !settings.tempo?.apiToken || !settings.tempo?.baseUrl) {
+            onNavigateToSettings();
+            return;
         }
+
+        // Check if there's an assignment
+        if (!selectedAssignment) {
+            alert('Please select an assignment (bucket or Jira issue) before logging to Tempo.');
+            return;
+        }
+
+        // Open the validation modal
+        setShowTempoValidationModal(true);
+    };
+
+    const handleTempoSuccess = () => {
+        setShowTempoValidationModal(false);
     };
 
     const parseDuration = (input: string): number => {
         const str = input.toLowerCase().trim();
         let totalMinutes = 0;
-        
+
         // Parse "1h 30m" format
         const hoursMatch = str.match(/(\d+(?:\.\d+)?)\s*h/);
         const minutesMatch = str.match(/(\d+(?:\.\d+)?)\s*m/);
-        
+
         if (hoursMatch) {
             totalMinutes += parseFloat(hoursMatch[1]) * 60;
         }
         if (minutesMatch) {
             totalMinutes += parseFloat(minutesMatch[1]);
         }
-        
+
         // If no h/m found, treat as minutes
         if (!hoursMatch && !minutesMatch) {
             const numMatch = str.match(/^(\d+(?:\.\d+)?)$/);
@@ -199,19 +212,99 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                 totalMinutes = parseFloat(numMatch[1]);
             }
         }
-        
+
         return Math.round(totalMinutes * 60 * 1000); // Convert to milliseconds
     };
 
-    const currentAssignment = selectedAssignment;
-
-    // Calculate total activity time for debugging
-    const totalActivityTime = useMemo(() => {
+    // Calculate screenshot analysis statistics
+    const screenshotStats = useMemo(() => {
         if (!entry.windowActivity || entry.windowActivity.length === 0) {
-            return 0;
+            return { total: 0, analyzed: 0 };
         }
-        return entry.windowActivity.reduce((total, activity) => total + activity.duration, 0);
+
+        let totalScreenshots = 0;
+        let analyzedScreenshots = 0;
+
+        entry.windowActivity.forEach(activity => {
+            if (activity.screenshotPaths) {
+                totalScreenshots += activity.screenshotPaths.length;
+
+                // Count how many have AI descriptions
+                if (activity.screenshotDescriptions) {
+                    activity.screenshotPaths.forEach(path => {
+                        if (activity.screenshotDescriptions?.[path]) {
+                            analyzedScreenshots++;
+                        }
+                    });
+                }
+            }
+        });
+
+        return { total: totalScreenshots, analyzed: analyzedScreenshots };
     }, [entry.windowActivity]);
+
+    // Handler for generating AI summary
+    const handleGenerateSummary = async () => {
+        if (!entry.windowActivity || entry.windowActivity.length === 0) {
+            alert('No activity data available to generate summary.');
+            return;
+        }
+
+        setIsGeneratingSummary(true);
+
+        try {
+            // Collect all context data
+            const screenshotDescriptions: string[] = [];
+            const windowTitles: string[] = [];
+            const appNames: string[] = [];
+
+            entry.windowActivity.forEach(activity => {
+                // Collect app names and window titles
+                if (activity.appName && !appNames.includes(activity.appName)) {
+                    appNames.push(activity.appName);
+                }
+                if (activity.windowTitle && !windowTitles.includes(activity.windowTitle)) {
+                    windowTitles.push(activity.windowTitle);
+                }
+
+                // Collect screenshot descriptions
+                if (activity.screenshotDescriptions) {
+                    Object.values(activity.screenshotDescriptions).forEach(desc => {
+                        if (desc && desc.trim()) {
+                            screenshotDescriptions.push(desc);
+                        }
+                    });
+                }
+            });
+
+            // Call the IPC handler to generate summary
+            // @ts-ignore
+            const result = await window.electron?.ipcRenderer?.generateActivitySummary?.({
+                screenshotDescriptions,
+                windowTitles,
+                appNames,
+                duration: entry.duration,
+                startTime: entry.startTime,
+                endTime: entry.endTime
+            });
+
+            if (result?.success && result.summary) {
+                // Populate the description field with the generated summary
+                setDescription(result.summary);
+                // The auto-save mechanism will handle saving
+            } else {
+                throw new Error(result?.error || 'Failed to generate summary');
+            }
+
+        } catch (error) {
+            console.error('Failed to generate summary:', error);
+            alert(`Failed to generate summary: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        } finally {
+            setIsGeneratingSummary(false);
+        }
+    };
+
+    const currentAssignment = selectedAssignment;
 
     // Group activities by app
     const appGroups = useMemo(() => {
@@ -292,23 +385,57 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
 
     return (
         <div className="w-full h-full flex flex-col">
-            <div className="flex items-center gap-3 mb-6 flex-shrink-0">
-                <button
-                    onClick={onBack}
-                    className="p-2 hover:bg-gray-800 rounded-lg transition-colors text-gray-400 hover:text-white"
-                >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M19 12H5M12 19l-7-7 7-7" />
-                    </svg>
-                </button>
-                <h2 className="text-2xl font-bold">Activity Details</h2>
+            {/* Header with Back Button and Log to Tempo Button */}
+            <div className="flex items-center justify-between mb-6 flex-shrink-0">
+                <div className="flex items-center gap-3">
+                    <button
+                        onClick={onBack}
+                        className="p-2 hover:bg-gray-800 active:bg-gray-700 rounded-lg transition-all text-gray-400 hover:text-white active:scale-95"
+                        style={{ transitionDuration: 'var(--duration-fast)', transitionTimingFunction: 'var(--ease-out)' }}
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M19 12H5M12 19l-7-7 7-7" />
+                        </svg>
+                    </button>
+                    <h2 className="text-2xl font-bold">Activity Details</h2>
+                </div>
+
+                {/* Log to Tempo Button - moved to header */}
+                <div>
+                    <button
+                        onClick={handleOpenTempoModal}
+                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-sm rounded-lg transition-all active:scale-[0.99] flex items-center justify-center gap-2"
+                        style={{ transitionDuration: 'var(--duration-fast)', transitionTimingFunction: 'var(--ease-out)' }}
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <circle cx="12" cy="12" r="10"/>
+                            <path d="M12 6v6l4 2"/>
+                        </svg>
+                        Log to Tempo
+                    </button>
+                </div>
             </div>
 
             <div className="flex-1 overflow-y-auto space-y-6 pb-6">
-                {/* Entry Summary */}
-                <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-700">
-                <div className="flex items-center justify-between mb-3">
-                    <div className="flex-1 mr-4">
+                {/* Entry Summary - Reorganized */}
+                <div className="bg-gray-800/50 rounded-lg border border-gray-700">
+                    {/* Time Summary Section - Start/End times and Duration counter */}
+                    <div className="flex items-center justify-between p-4 border-b border-gray-700">
+                        <div className="flex flex-col gap-0.5">
+                            <div className="text-xs text-gray-400">
+                                <span className="font-semibold">Start:</span> {new Date(entry.startTime).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true })}
+                            </div>
+                            <div className="text-xs text-gray-400">
+                                <span className="font-semibold">End:</span> {new Date(entry.startTime + entry.duration).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true })}
+                            </div>
+                        </div>
+                        <div className="text-3xl font-mono font-bold text-green-400">
+                            {formatTime(entry.duration)}
+                        </div>
+                    </div>
+
+                    {/* Assignment Section */}
+                    <div className="p-4 border-b border-gray-700">
                         <label className="text-xs text-gray-400 uppercase font-semibold mb-2 block">Assignment</label>
                         <AssignmentPicker
                             value={currentAssignment}
@@ -317,133 +444,52 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                             className="w-full"
                         />
                     </div>
-                    <div className="flex flex-col items-end">
-                        <div className="text-2xl font-mono font-bold text-green-400">
-                            {formatTime(entry.duration)}
-                        </div>
-                    </div>
-                </div>
-                <div className="text-sm text-gray-500 mb-3">
-                    {new Date(entry.startTime).toLocaleString()}
-                </div>
-                {/* Description Field */}
-                <div>
-                    <div className="flex items-center justify-between mb-2">
-                        <label className="text-xs text-gray-400 uppercase font-semibold">Description</label>
-                        <div className="text-xs text-gray-500">
-                            Auto-saved
-                        </div>
-                    </div>
-                    <textarea
-                        value={description}
-                        onChange={(e) => setDescription(e.target.value)}
-                        placeholder="Add a description for this time entry..."
-                        className="w-full bg-gray-700 border border-gray-600 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 resize-none"
-                        rows={3}
-                    />
-                </div>
 
-                {/* Tempo Integration */}
-                <div className="pt-3 border-t border-gray-700">
-                    {settings.tempo?.enabled ? (
-                        <button
-                            onClick={() => setShowTempoForm(!showTempoForm)}
-                            disabled={isLoggingToTempo}
-                            className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white text-sm rounded-lg transition-colors flex items-center justify-center gap-2"
-                        >
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <circle cx="12" cy="12" r="10"/>
-                                <path d="M12 6v6l4 2"/>
-                            </svg>
-                            {isLoggingToTempo ? (
-                                <>
-                                    <div className="w-3 h-3 border border-white border-t-transparent rounded-full animate-spin"></div>
-                                    Logging to Tempo...
-                                </>
-                            ) : (
-                                'Log to Tempo'
-                            )}
-                        </button>
-                    ) : (
-                        <button
-                            onClick={onNavigateToSettings}
-                            className="w-full px-4 py-2 bg-gray-600 hover:bg-gray-500 text-white text-sm rounded-lg transition-colors flex items-center justify-center gap-2"
-                        >
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
-                                <circle cx="12" cy="12" r="4"/>
-                            </svg>
-                            Connect Tempo
-                        </button>
-                    )}
-                </div>
-                </div>
-
-                {/* Tempo Form */}
-                {showTempoForm && (
-                    <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-700">
-                        <h4 className="text-sm font-semibold text-gray-300 mb-3">Log Time to Tempo</h4>
-                        <div className="space-y-3">
-                            <div>
-                                <label className="block text-xs text-gray-400 mb-1">Jira Issue Key *</label>
-                                <input
-                                    type="text"
-                                    value={tempoIssueKey}
-                                    onChange={(e) => setTempoIssueKey(e.target.value)}
-                                    placeholder="e.g. PROJECT-123"
-                                    className="w-full bg-gray-700 border border-gray-600 text-white text-sm rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                />
-                                <div className="text-xs text-gray-500 mt-1">Enter the Jira issue key to log time against</div>
+                    {/* Description Section */}
+                    <div className="p-4">
+                        <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-3">
+                                <label className="text-xs text-gray-400 uppercase font-semibold">Description</label>
+                                {screenshotStats.total > 0 && (
+                                    <div className="text-xs text-gray-500">
+                                        {screenshotStats.analyzed}/{screenshotStats.total} screenshots analyzed
+                                    </div>
+                                )}
                             </div>
-                            <div>
-                                <label className="block text-xs text-gray-400 mb-1">Description</label>
-                                <input
-                                    type="text"
-                                    value={tempoDescription}
-                                    onChange={(e) => setTempoDescription(e.target.value)}
-                                    placeholder="Work description..."
-                                    className="w-full bg-gray-700 border border-gray-600 text-white text-sm rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                />
-                            </div>
-                            <div className="bg-gray-700/50 rounded p-3">
-                                <div className="text-xs text-gray-400 mb-1">Time to Log</div>
-                                <div className="text-sm text-white">
-                                    <strong>{formatTime(entry.duration)}</strong> 
-                                    <span className="text-gray-400 ml-2">({TempoService.durationMsToSeconds(entry.duration)} seconds)</span>
-                                </div>
-                                <div className="text-xs text-gray-500 mt-1">
-                                    Date: {new Date(entry.startTime).toLocaleDateString()}
-                                </div>
-                            </div>
-                            <div className="flex items-center gap-2 justify-end">
+                            {screenshotStats.analyzed > 0 && (
                                 <button
-                                    onClick={() => {
-                                        setShowTempoForm(false);
-                                        setTempoIssueKey(settings.tempo?.defaultIssueKey || '');
-                                        setTempoDescription(description || '');
-                                    }}
-                                    className="px-3 py-1 text-gray-400 hover:text-white text-sm transition-colors"
+                                    onClick={handleGenerateSummary}
+                                    disabled={isGeneratingSummary}
+                                    className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 active:bg-purple-800 disabled:bg-gray-600 disabled:cursor-not-allowed text-white text-xs rounded-md transition-all active:scale-[0.98] flex items-center gap-1.5"
+                                    style={{ transitionDuration: 'var(--duration-fast)', transitionTimingFunction: 'var(--ease-out)' }}
                                 >
-                                    Cancel
-                                </button>
-                                <button
-                                    onClick={handleLogToTempo}
-                                    disabled={!tempoIssueKey.trim() || isLoggingToTempo}
-                                    className="px-3 py-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white text-sm rounded transition-colors flex items-center gap-1"
-                                >
-                                    {isLoggingToTempo ? (
+                                    {isGeneratingSummary ? (
                                         <>
                                             <div className="w-3 h-3 border border-white border-t-transparent rounded-full animate-spin"></div>
-                                            Logging...
+                                            Generating...
                                         </>
                                     ) : (
-                                        'Log to Tempo'
+                                        <>
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                                                <path d="M2 17l10 5 10-5"/>
+                                                <path d="M2 12l10 5 10-5"/>
+                                            </svg>
+                                            Generate Summary
+                                        </>
                                     )}
                                 </button>
-                            </div>
+                            )}
                         </div>
+                        <textarea
+                            value={description}
+                            onChange={(e) => setDescription(e.target.value)}
+                            placeholder="Add a description for this time entry..."
+                            className="w-full bg-gray-700 border border-gray-600 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 resize-none"
+                            rows={3}
+                        />
                     </div>
-                )}
+                </div>
 
                 {/* Window Activity - Grouped by App */}
                 <div>
@@ -451,7 +497,8 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                         <h3 className="text-lg font-semibold text-gray-300">Window Activity</h3>
                         <button
                             onClick={() => setShowManualEntryForm(!showManualEntryForm)}
-                            className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-sm rounded-md transition-colors flex items-center gap-1"
+                            className="px-3 py-1 bg-green-600 hover:bg-green-700 active:bg-green-800 text-white text-sm rounded-md transition-all active:scale-95 flex items-center gap-1"
+                            style={{ transitionDuration: 'var(--duration-fast)', transitionTimingFunction: 'var(--ease-out)' }}
                         >
                             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                 <line x1="12" y1="5" x2="12" y2="19" />
@@ -510,7 +557,13 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
 
 
                 {appGroups.length === 0 ? (
-                    <div className="text-gray-500 text-sm">No window activity recorded for this session.</div>
+                    <div className="text-gray-500 text-sm py-8 text-center animate-fade-in">
+                        <svg className="w-12 h-12 mx-auto mb-2 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        <p>No window activity recorded for this session</p>
+                        <p className="text-xs text-gray-600 mt-1">Click "Add Manual Entry" to add time manually</p>
+                    </div>
                 ) : (
                     <div className="space-y-3">
                         {appGroups.map(group => {
@@ -522,7 +575,8 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                                     {/* App Header */}
                                     <button
                                         onClick={() => toggleApp(group.appName)}
-                                        className="w-full flex items-center justify-between p-3 hover:bg-gray-800/80 transition-colors"
+                                        className="w-full flex items-center justify-between p-3 hover:bg-gray-800/80 active:bg-gray-800 transition-all"
+                                        style={{ transitionDuration: 'var(--duration-fast)', transitionTimingFunction: 'var(--ease-out)' }}
                                     >
                                         <div className="flex items-center gap-3 flex-1 min-w-0">
                                             <svg 
@@ -607,9 +661,21 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                                                                     onClick={(e) => {
                                                                         e.stopPropagation();
                                                                         console.log('[HistoryDetail] Opening screenshots:', activity.screenshotPaths);
-                                                                        setSelectedScreenshots(activity.screenshotPaths || []);
+
+                                                                        const screenshots = activity.screenshotPaths || [];
+                                                                        const metadata = screenshots.map(path => ({
+                                                                            path,
+                                                                            timestamp: activity.timestamp,
+                                                                            appName: activity.appName,
+                                                                            windowTitle: activity.windowTitle,
+                                                                            aiDescription: activity.screenshotDescriptions?.[path]
+                                                                        }));
+
+                                                                        setSelectedScreenshots(screenshots);
+                                                                        setSelectedScreenshotMetadata(metadata);
                                                                     }}
-                                                                    className="text-xs text-green-400 hover:text-green-300 mt-1 flex items-center gap-1"
+                                                                    className="text-xs text-green-400 hover:text-green-300 active:text-green-200 mt-1 flex items-center gap-1 hover:bg-green-500/10 active:bg-green-500/20 px-1.5 py-0.5 rounded transition-all"
+                                                                    style={{ transitionDuration: 'var(--duration-fast)', transitionTimingFunction: 'var(--ease-out)' }}
                                                                 >
                                                                     <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                                                         <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
@@ -652,8 +718,27 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
             {selectedScreenshots && (
                 <ScreenshotGallery
                     screenshotPaths={selectedScreenshots}
-                    onClose={() => setSelectedScreenshots(null)}
+                    metadata={selectedScreenshotMetadata || undefined}
+                    onClose={() => {
+                        setSelectedScreenshots(null);
+                        setSelectedScreenshotMetadata(null);
+                    }}
                     onScreenshotDeleted={handleScreenshotDeleted}
+                />
+            )}
+
+            {/* Tempo Validation Modal */}
+            {showTempoValidationModal && settings.tempo?.enabled && settings.tempo?.apiToken && settings.tempo?.baseUrl && (
+                <TempoValidationModal
+                    entry={entry}
+                    assignment={selectedAssignment}
+                    buckets={buckets}
+                    onClose={() => setShowTempoValidationModal(false)}
+                    onSuccess={handleTempoSuccess}
+                    formatTime={formatTime}
+                    tempoBaseUrl={settings.tempo.baseUrl}
+                    tempoApiToken={settings.tempo.apiToken}
+                    defaultDescription={description}
                 />
             )}
         </div>

@@ -610,6 +610,67 @@
 - App usage statistics
 - Website tracking (if browser integration)
 
+### AI Features
+**Status**: ✅ **Apple Intelligence Vision Framework Integration - COMPLETED**
+
+**✅ Implemented**:
+- **Apple Vision Framework Screenshot Analysis** (January 2026)
+  - Native Swift helper using Apple's Vision Framework for on-device AI analysis
+  - Text recognition (OCR) to extract visible text from screenshots
+  - Object classification to identify UI elements and content types
+  - Natural language description generation for screenshot content
+  - Automatic integration with TimePortal's screenshot capture workflow
+  - Privacy-preserving on-device processing (no cloud AI services)
+
+**Technical Implementation**:
+1. **Native Swift Helper** (`/native/screenshot-analyzer/`)
+   - Standalone Swift executable leveraging Vision Framework APIs
+   - Text recognition using VNRecognizeTextRequest (macOS 10.15+)
+   - Image classification using VNClassifyImageRequest
+   - Smart categorization of detected objects into work-related categories
+   - JSON-based input/output for seamless IPC communication
+   - Error handling and graceful degradation
+
+2. **IPC Bridge Integration** (`electron/main.ts`)
+   - `analyze-screenshot` IPC handler for Electron ↔ Swift communication
+   - Automatic screenshot analysis pipeline during time tracking
+   - Fallback handling for non-macOS platforms and analysis failures
+   - Secure process spawning and JSON data exchange
+
+3. **Enhanced Data Model** (`src/context/StorageContext.tsx`)
+   - Added `screenshotDescriptions` field to `WindowActivity` interface
+   - Stores AI-generated descriptions alongside screenshot file paths
+   - Maintains backward compatibility with existing screenshot data
+
+4. **Automatic Analysis Integration** (`src/hooks/useTimer.ts`)
+   - Screenshots analyzed immediately after capture during time tracking
+   - AI descriptions stored with activity data for later retrieval
+   - Seamless integration with existing screenshot capture workflow
+   - Handles analysis errors gracefully with fallback descriptions
+
+**Generated Description Examples**:
+- "Screenshot from VS Code showing code/development containing work-related content about api, database"
+- "Screenshot from Figma showing design work with creative content"
+- "Screenshot from Slack showing communication content with meeting details"
+- "Screenshot from Safari showing web browsing with text content"
+
+**User Benefits**:
+- **Enhanced Activity Context**: AI-generated descriptions provide semantic understanding of work sessions
+- **Better Time Analysis**: Understand what type of work was performed during each activity
+- **Privacy-First**: All AI processing happens on-device using Apple's Vision Framework
+- **Automatic Operation**: No user intervention required - works transparently with existing workflow
+- **Intelligent Categorization**: Automatically identifies work patterns and content types
+
+**Platform Support**:
+- **macOS**: Full Apple Vision Framework integration
+- **Other Platforms**: Graceful fallback with basic descriptions
+
+**Future AI Enhancement Opportunities**:
+- Integration with other Apple Intelligence APIs (Natural Language processing, Core ML)
+- Custom model training for work-specific categorization
+- Advanced productivity insights based on AI-analyzed activities
+- Cross-referencing with Jira issue content for automatic work classification
+
 ### UI Enhancements
 - ~~Screenshot viewer/gallery~~ (Planned - see Planned Features section)
 - App-grouped history view with app icons (Planned - see Planned Features section)

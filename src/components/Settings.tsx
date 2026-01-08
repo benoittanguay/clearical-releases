@@ -8,7 +8,7 @@ export function Settings() {
     const { settings, updateSettings, resetSettings } = useSettings();
     const [permissionStatus, setPermissionStatus] = useState<PermissionStatus>('unknown');
     const [tempSettings, setTempSettings] = useState(settings);
-    const [saveTimeoutId, setSaveTimeoutId] = useState<NodeJS.Timeout | null>(null);
+    const [saveTimeoutId, setSaveTimeoutId] = useState<ReturnType<typeof setTimeout> | null>(null);
     const [showIntegrationModal, setShowIntegrationModal] = useState(false);
 
     const checkPermission = async () => {
@@ -124,9 +124,6 @@ export function Settings() {
                             <label className="block text-xs text-gray-400">
                                 Minimum Activity Duration
                             </label>
-                            <div className="text-xs text-gray-500">
-                                Auto-saved
-                            </div>
                         </div>
                         <div className="space-y-2">
                             <input
@@ -150,9 +147,6 @@ export function Settings() {
                             <label className="block text-xs text-gray-400">
                                 Activity Gap Threshold
                             </label>
-                            <div className="text-xs text-gray-500">
-                                Auto-saved
-                            </div>
                         </div>
                         <div className="space-y-2">
                             <input

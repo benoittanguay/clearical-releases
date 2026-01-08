@@ -6,6 +6,7 @@ interface ScreenshotMetadata {
     timestamp: number;
     appName?: string;
     windowTitle?: string;
+    aiDescription?: string;
 }
 
 interface ScreenshotGalleryProps {
@@ -24,6 +25,7 @@ export function ScreenshotGallery({ screenshotPaths, metadata, onClose, onScreen
     useEffect(() => {
         const loadImages = async () => {
             console.log('[ScreenshotGallery] Loading images for paths:', screenshotPaths);
+            // @ts-ignore - window.electron is defined in preload
             console.log('[ScreenshotGallery] Electron API available:', !!window.electron?.ipcRenderer?.getScreenshot);
 
             const imagePromises = screenshotPaths.map(async (path) => {
@@ -145,23 +147,45 @@ export function ScreenshotGallery({ screenshotPaths, metadata, onClose, onScreen
     };
 
     return (
-        <div 
-            className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center"
+        <div
+            className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center modal-backdrop"
             onClick={onClose}
             onKeyDown={handleKeyDown}
             tabIndex={-1}
         >
             {/* Simple Header */}
-            <div className="absolute top-4 left-4 right-4 flex justify-end items-center z-20">
-                
-                <div className="flex items-center gap-2">
+            <div className="absolute top-4 right-4 flex items-center gap-2 z-20">
+                    {/* Info Toggle Button */}
+                    {currentMetadata && (
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                setShowMetadata(!showMetadata);
+                            }}
+                            className={`transition-all bg-black/50 hover:bg-black/70 rounded-lg p-2 active:scale-95 ${
+                                showMetadata
+                                    ? 'text-green-400 hover:text-green-300'
+                                    : 'text-white hover:text-blue-400'
+                            }`}
+                            style={{ transitionDuration: 'var(--duration-fast)', transitionTimingFunction: 'var(--ease-out)' }}
+                            title={showMetadata ? "Hide screenshot info" : "Show screenshot info"}
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <circle cx="12" cy="12" r="10"/>
+                                <line x1="12" y1="16" x2="12" y2="12"/>
+                                <line x1="12" y1="8" x2="12.01" y2="8"/>
+                            </svg>
+                        </button>
+                    )}
+
                     {/* Open in Finder Button */}
                     <button
                         onClick={(e) => {
                             e.stopPropagation();
                             handleOpenInFinder();
                         }}
-                        className="text-white hover:text-blue-400 transition-colors bg-black/50 rounded-lg p-2"
+                        className="text-white hover:text-blue-400 transition-all bg-black/50 hover:bg-black/70 rounded-lg p-2 active:scale-95"
+                        style={{ transitionDuration: 'var(--duration-fast)', transitionTimingFunction: 'var(--ease-out)' }}
                         title="Open in Finder"
                     >
                         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -179,11 +203,12 @@ export function ScreenshotGallery({ screenshotPaths, metadata, onClose, onScreen
                             className="text-white hover:text-red-400"
                         />
                     </div>
-                    
+
                     {/* Close Button */}
                     <button
                         onClick={onClose}
-                        className="text-white hover:text-gray-300 transition-colors bg-black/50 rounded-lg p-2"
+                        className="text-white hover:text-gray-300 transition-all bg-black/50 hover:bg-black/70 rounded-lg p-2 active:scale-95"
+                        style={{ transitionDuration: 'var(--duration-fast)', transitionTimingFunction: 'var(--ease-out)' }}
                         title="Close (Esc)"
                     >
                         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -191,7 +216,6 @@ export function ScreenshotGallery({ screenshotPaths, metadata, onClose, onScreen
                             <line x1="6" y1="6" x2="18" y2="18" />
                         </svg>
                     </button>
-                </div>
             </div>
 
             {/* Navigation Buttons */}
@@ -202,7 +226,8 @@ export function ScreenshotGallery({ screenshotPaths, metadata, onClose, onScreen
                             e.stopPropagation();
                             prevScreenshot();
                         }}
-                        className="absolute left-4 top-1/2 -translate-y-1/2 text-white hover:text-gray-300 transition-colors z-10 bg-black/50 rounded-full p-2"
+                        className="absolute left-4 top-1/2 -translate-y-1/2 text-white hover:text-gray-300 hover:scale-110 active:scale-95 transition-all z-10 bg-black/50 hover:bg-black/70 rounded-full p-3"
+                        style={{ transitionDuration: 'var(--duration-fast)', transitionTimingFunction: 'var(--ease-out)' }}
                     >
                         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                             <polyline points="15 18 9 12 15 6" />
@@ -213,7 +238,8 @@ export function ScreenshotGallery({ screenshotPaths, metadata, onClose, onScreen
                             e.stopPropagation();
                             nextScreenshot();
                         }}
-                        className="absolute right-4 top-1/2 -translate-y-1/2 text-white hover:text-gray-300 transition-colors z-10 bg-black/50 rounded-full p-2"
+                        className="absolute right-4 top-1/2 -translate-y-1/2 text-white hover:text-gray-300 hover:scale-110 active:scale-95 transition-all z-10 bg-black/50 hover:bg-black/70 rounded-full p-3"
+                        style={{ transitionDuration: 'var(--duration-fast)', transitionTimingFunction: 'var(--ease-out)' }}
                     >
                         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                             <polyline points="9 18 15 12 9 6" />
@@ -223,8 +249,8 @@ export function ScreenshotGallery({ screenshotPaths, metadata, onClose, onScreen
             )}
 
             {/* Screenshot Display */}
-            <div 
-                className="max-w-full max-h-full p-4"
+            <div
+                className="max-w-full max-h-full p-4 modal-content"
                 onClick={(e) => e.stopPropagation()}
             >
                 {loadedImages.get(currentScreenshot) ? (
@@ -232,11 +258,12 @@ export function ScreenshotGallery({ screenshotPaths, metadata, onClose, onScreen
                         src={loadedImages.get(currentScreenshot)}
                         alt={`Screenshot ${selectedIndex + 1}`}
                         className="max-w-full max-h-[90vh] object-contain rounded-lg"
+                        style={{ boxShadow: 'var(--shadow-xl)' }}
                     />
                 ) : (
                     <div className="max-w-full max-h-[90vh] flex items-center justify-center bg-gray-800 rounded-lg p-8">
-                        <div className="text-gray-400 text-center">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mx-auto mb-2">
+                        <div className="text-gray-400 text-center animate-fade-in">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mx-auto mb-2 spinner">
                                 <circle cx="12" cy="12" r="3"/>
                                 <circle cx="12" cy="1" r="1"/>
                                 <circle cx="12" cy="23" r="1"/>
@@ -255,9 +282,25 @@ export function ScreenshotGallery({ screenshotPaths, metadata, onClose, onScreen
 
             {/* Metadata Panel */}
             {showMetadata && currentMetadata && (
-                <div className="absolute top-20 left-4 bg-black/70 text-white rounded-lg p-4 max-w-md z-20">
-                    <h3 className="text-lg font-semibold mb-2">Screenshot Info</h3>
-                    <div className="space-y-2 text-sm">
+                <div className="absolute top-20 left-4 bg-black/70 backdrop-blur-sm text-white rounded-lg p-4 max-w-lg z-20 animate-slide-in-right" style={{ boxShadow: 'var(--shadow-lg)' }}>
+                    <div className="flex items-center justify-between mb-3">
+                        <h3 className="text-lg font-semibold">Screenshot Info</h3>
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                setShowMetadata(false);
+                            }}
+                            className="text-gray-400 hover:text-white transition-all active:scale-95"
+                            style={{ transitionDuration: 'var(--duration-fast)', transitionTimingFunction: 'var(--ease-out)' }}
+                            title="Hide info panel"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <line x1="18" y1="6" x2="6" y2="18" />
+                                <line x1="6" y1="6" x2="18" y2="18" />
+                            </svg>
+                        </button>
+                    </div>
+                    <div className="space-y-3 text-sm">
                         <div>
                             <span className="text-gray-300">Time:</span>{' '}
                             <span className="text-white">{formatTimestamp(currentMetadata.timestamp)}</span>
@@ -271,12 +314,38 @@ export function ScreenshotGallery({ screenshotPaths, metadata, onClose, onScreen
                         {currentMetadata.windowTitle && (
                             <div>
                                 <span className="text-gray-300">Window:</span>{' '}
-                                <span className="text-white truncate block">{currentMetadata.windowTitle}</span>
+                                <span className="text-white break-words">{currentMetadata.windowTitle}</span>
                             </div>
                         )}
-                        <div>
+                        
+                        {/* AI Description Section */}
+                        <div className="border-t border-gray-600 pt-3">
+                            <div className="flex items-center gap-2 mb-2">
+                                <span className="text-green-400 font-medium">AI Description:</span>
+                                <span className="text-xs bg-green-900/30 text-green-300 px-2 py-1 rounded-full">
+                                    Vision Framework
+                                </span>
+                            </div>
+                            {currentMetadata.aiDescription ? (
+                                <div className="text-white text-sm leading-relaxed bg-gray-900/50 rounded p-3 border-l-2 border-green-500">
+                                    <p className="whitespace-pre-wrap break-words">
+                                        {currentMetadata.aiDescription}
+                                    </p>
+                                </div>
+                            ) : (
+                                <div className="flex items-center gap-2 text-gray-400 text-sm bg-gray-900/50 rounded p-2 border-l-2 border-gray-500">
+                                    <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                    </svg>
+                                    <span>Analyzing screenshot content...</span>
+                                </div>
+                            )}
+                        </div>
+                        
+                        <div className="border-t border-gray-600 pt-3">
                             <span className="text-gray-300">File:</span>{' '}
-                            <span className="text-white text-xs">{currentScreenshot.split('/').pop()}</span>
+                            <span className="text-white text-xs break-all">{currentScreenshot.split('/').pop()}</span>
                         </div>
                     </div>
                 </div>
@@ -296,8 +365,13 @@ export function ScreenshotGallery({ screenshotPaths, metadata, onClose, onScreen
                             className={`flex-shrink-0 w-20 h-20 rounded overflow-hidden border-2 transition-all ${
                                 index === selectedIndex
                                     ? 'border-green-500 scale-110'
-                                    : 'border-gray-600 opacity-60 hover:opacity-100'
+                                    : 'border-gray-600 opacity-60 hover:opacity-100 hover:border-gray-500'
                             }`}
+                            style={{
+                                transitionDuration: 'var(--duration-base)',
+                                transitionTimingFunction: 'var(--ease-out)',
+                                boxShadow: index === selectedIndex ? 'var(--glow-green)' : 'none'
+                            }}
                         >
                             {loadedImages.get(path) ? (
                                 <img

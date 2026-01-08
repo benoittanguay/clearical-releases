@@ -1,0 +1,59 @@
+{
+  "systemPrompt": "You are an AI assistant performing detailed visual analysis of desktop screenshots. Your goal is to create comprehensive descriptions that capture what the user is actually doing on their screen with enough detail that another AI could understand the workflow and context. Focus on visible UI elements, text content, specific actions, and work context.",
+  
+  "analysisPrompts": {
+    "documentType": {
+      "description": "Identify the type of document or content being worked on",
+      "keywords": {
+        "implementation": "Implementation documentation",
+        "readme": "README documentation", 
+        "documentation": "Technical documentation",
+        "plan": "Project planning document",
+        "config": "Configuration file",
+        "code": "Source code file",
+        "test": "Test file",
+        "api": "API documentation"
+      }
+    },
+    
+    "technicalContext": {
+      "description": "Detect programming languages, frameworks, and tools",
+      "keywords": {
+        "react": "React framework",
+        "typescript": "TypeScript development",
+        "javascript": "JavaScript development", 
+        "swift": "Swift programming",
+        "electron": "Electron application development",
+        "nodejs": "Node.js development",
+        "npm": "NPM package management",
+        "git": "Git version control",
+        "docker": "Docker containerization",
+        "api": "API development",
+        "database": "Database work",
+        "ai": "AI/ML development",
+        "python": "Python development",
+        "java": "Java development",
+        "css": "CSS styling",
+        "html": "HTML markup"
+      }
+    },
+    
+    "activityType": {
+      "description": "Understand what type of work activity is being performed",
+      "patterns": {
+        "coding": ["function", "class", "import", "export", "const", "var", "let", "return", "if", "else", "for", "while", "async", "await"],
+        "debugging": ["error", "exception", "debug", "console", "log", "breakpoint", "stack trace"],
+        "documentation": ["readme", "docs", "documentation", "guide", "tutorial", "example"],
+        "configuration": ["config", "settings", "preferences", "environment", "setup"],
+        "testing": ["test", "spec", "expect", "assert", "mock", "unit test"],
+        "deployment": ["deploy", "build", "production", "staging", "release"],
+        "planning": ["plan", "todo", "task", "milestone", "roadmap", "requirement"]
+      }
+    }
+  },
+  
+  "descriptionTemplate": {
+    "format": "Provide a detailed, comprehensive description of what is visible on the user's screen. Include: 1) The application being used and its current state/mode, 2) Specific text content, file names, and UI elements visible, 3) What the user appears to be working on or doing, 4) Any code, documentation, or content being viewed/edited, 5) Interface elements like toolbars, sidebars, tabs, buttons that provide context, 6) Any error messages, notifications, or status indicators, 7) The overall workflow or task context. Be verbose and detailed - capture everything visible that would help understand what work is being performed.",
+    "structure": []
+  }
+}

@@ -1,8 +1,11 @@
 import { app, BrowserWindow, Tray, Menu, screen, nativeImage, ipcMain, systemPreferences, shell, desktopCapturer, dialog } from 'electron';
+import { spawn } from 'child_process';
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
 import { fileURLToPath } from 'url';
+import { saveEncryptedFile, decryptFile, getEncryptionKey } from './encryption.js';
+import { storeCredential, getCredential, deleteCredential, hasCredential, listCredentialKeys, isSecureStorageAvailable } from './credentialStorage.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -54,6 +57,13 @@ ipcMain.handle('capture-screenshot', async () => {
 
                 currentWindow = { appName, windowTitle };
                 console.log('[Main] capture-screenshot - Active window:', currentWindow);
+
+                // Skip screenshot if the active window is the TimePortal app itself
+                const appNameLower = appName.toLowerCase();
+                if (appNameLower === 'electron' || appNameLower === 'time-portal' || appNameLower === 'timeportal') {
+                    console.log('[Main] Active window is TimePortal/Electron, skipping screenshot capture');
+                    return null;
+                }
             }
         } catch (error) {
             console.log('[Main] Could not get active window info for screenshot:', error);
@@ -79,12 +89,18 @@ ipcMain.handle('capture-screenshot', async () => {
             const lowerName = source.name.toLowerCase();
             const size = source.thumbnail.getSize();
             
-            // Only filter out the actual TimePortal app window (exact match)
+            // Filter out the actual TimePortal app window
             if (lowerName === 'time-portal' || lowerName === 'timeportal') {
                 console.log('[Main] Filtering out TimePortal app window:', source.name);
                 return false;
             }
-            
+
+            // Filter out Electron windows (these are usually the TimePortal app or dev tools)
+            if (lowerName === 'electron' || source.name === 'Electron') {
+                console.log('[Main] Filtering out Electron window:', source.name);
+                return false;
+            }
+
             // Filter out very small windows (likely toolbar or menu items)
             if (size.width < 200 || size.height < 100) {
                 console.log('[Main] Filtering out small window:', source.name, `(${size.width}x${size.height})`);
@@ -146,11 +162,37 @@ ipcMain.handle('capture-screenshot', async () => {
                         targetSource = titleMatch || appNameMatches[0];
                         console.log('[Main] Found app name match:', targetSource.name, 'from', appNameMatches.length, 'candidates');
                     } else {
-                        // Strategy 3: Partial title matching
-                        const partialMatch = validSources.find(source => 
-                            source.name.includes(currentWindow.windowTitle) || 
-                            currentWindow.windowTitle.includes(source.name)
-                        );
+                        // Strategy 3: Enhanced partial title matching for browsers
+                        let partialMatch = null;
+                        
+                        // Try matching by removing browser-specific suffixes
+                        const cleanTitle = currentWindow.windowTitle
+                            .replace(/ - Audio playing.*/i, '')  // Remove "- Audio playing - Browser"
+                            .replace(/ - Google Chrome$/i, '')   // Remove "- Google Chrome"
+                            .replace(/ - Safari$/i, '')          // Remove "- Safari"
+                            .replace(/ - Firefox$/i, '')         // Remove "- Firefox"
+                            .replace(/ - Brave$/i, '')           // Remove "- Brave"
+                            .replace(/ - Opera$/i, '')           // Remove "- Opera"
+                            .trim();
+                        
+                        console.log('[Main] Cleaned title for matching:', cleanTitle);
+                        
+                        partialMatch = validSources.find(source => {
+                            // Direct partial match
+                            if (source.name.includes(cleanTitle) || cleanTitle.includes(source.name)) {
+                                return true;
+                            }
+                            
+                            // Try matching the first significant part (before " - ")
+                            const sourceMainPart = source.name.split(' - ')[0];
+                            const titleMainPart = cleanTitle.split(' - ')[0];
+                            
+                            if (sourceMainPart.length > 10 && titleMainPart.length > 10) {
+                                return sourceMainPart.includes(titleMainPart) || titleMainPart.includes(sourceMainPart);
+                            }
+                            
+                            return false;
+                        });
                         
                         if (partialMatch) {
                             targetSource = partialMatch;
@@ -179,7 +221,7 @@ ipcMain.handle('capture-screenshot', async () => {
                        `(${targetSource.thumbnail.getSize().width}x${targetSource.thumbnail.getSize().height})`);
             
             const image = targetSource.thumbnail.toPNG();
-            
+
             // Create a more descriptive filename with app name and timestamp
             const timestamp = Date.now();
             const appNameSafe = (currentWindow?.appName || 'Unknown').replace(/[^a-zA-Z0-9]/g, '_');
@@ -187,8 +229,16 @@ ipcMain.handle('capture-screenshot', async () => {
             const filename = `${timestamp}_${appNameSafe}_${windowTitleSafe}.png`;
             const filePath = path.join(SCREENSHOTS_DIR, filename);
 
-            await fs.promises.writeFile(filePath, image);
-            console.log('[Main] Window screenshot saved:', filePath);
+            // Save screenshot with encryption
+            try {
+                await saveEncryptedFile(filePath, image);
+                console.log('[Main] Window screenshot saved (encrypted):', filePath);
+            } catch (encryptError) {
+                console.error('[Main] Failed to encrypt screenshot, saving unencrypted:', encryptError);
+                // Fallback to unencrypted if encryption fails
+                await fs.promises.writeFile(filePath, image);
+                console.log('[Main] Window screenshot saved (unencrypted fallback):', filePath);
+            }
             return filePath;
         } else {
             console.log('[Main] No valid window sources found for screenshot');
@@ -198,15 +248,23 @@ ipcMain.handle('capture-screenshot', async () => {
             if (screenSources.length > 0) {
                 console.log('[Main] Falling back to screen capture');
                 const image = screenSources[0].thumbnail.toPNG();
-                
+
                 // Use same naming convention for fallback
                 const timestamp = Date.now();
                 const appNameSafe = (currentWindow?.appName || 'Unknown').replace(/[^a-zA-Z0-9]/g, '_');
                 const filename = `${timestamp}_${appNameSafe}_SCREEN_FALLBACK.png`;
                 const filePath = path.join(SCREENSHOTS_DIR, filename);
 
-                await fs.promises.writeFile(filePath, image);
-                console.log('[Main] Screen screenshot saved (fallback):', filePath);
+                // Save screenshot with encryption
+                try {
+                    await saveEncryptedFile(filePath, image);
+                    console.log('[Main] Screen screenshot saved (encrypted, fallback):', filePath);
+                } catch (encryptError) {
+                    console.error('[Main] Failed to encrypt screenshot, saving unencrypted:', encryptError);
+                    // Fallback to unencrypted if encryption fails
+                    await fs.promises.writeFile(filePath, image);
+                    console.log('[Main] Screen screenshot saved (unencrypted fallback):', filePath);
+                }
                 return filePath;
             }
         }
@@ -214,6 +272,357 @@ ipcMain.handle('capture-screenshot', async () => {
         console.error('[Main] Failed to capture screenshot:', error);
     }
     return null;
+});
+
+// Activity Summary Generation with Apple Intelligence
+ipcMain.handle('generate-activity-summary', async (event, context: {
+    screenshotDescriptions: string[];
+    windowTitles: string[];
+    appNames: string[];
+    duration: number;
+    startTime: number;
+    endTime: number;
+}) => {
+    console.log('[Main] generate-activity-summary requested');
+    console.log('[Main] Context:', {
+        descriptionsCount: context.screenshotDescriptions.length,
+        windowTitlesCount: context.windowTitles.length,
+        appNamesCount: context.appNames.length,
+        duration: context.duration
+    });
+
+    if (process.platform !== 'darwin') {
+        console.log('[Main] generate-activity-summary: Not macOS, returning fallback');
+        return {
+            success: false,
+            error: 'AI summary generation only available on macOS',
+            summary: null
+        };
+    }
+
+    // Path to our Swift helper
+    const helperPath = '/Users/benoittanguay/Documents/Anti/TimePortal/native/screenshot-analyzer/build/screenshot-analyzer';
+
+    // Check if the helper exists
+    if (!fs.existsSync(helperPath)) {
+        console.log('[Main] generate-activity-summary: Swift helper not found at:', helperPath);
+        return {
+            success: false,
+            error: 'Vision Framework helper not built. Run: cd native/screenshot-analyzer && ./build.sh',
+            summary: null
+        };
+    }
+
+    try {
+        // Build a comprehensive context string for analysis
+        const durationMinutes = Math.round(context.duration / 1000 / 60);
+        const startDate = new Date(context.startTime);
+        const endDate = new Date(context.endTime);
+
+        // Create a text-based context that simulates what we'd extract from screenshots
+        const contextLines: string[] = [];
+
+        // Add temporal context
+        contextLines.push(`Time Session: ${startDate.toLocaleTimeString()} - ${endDate.toLocaleTimeString()}`);
+        contextLines.push(`Duration: ${durationMinutes} minutes`);
+        contextLines.push('');
+
+        // Add app context
+        if (context.appNames.length > 0) {
+            contextLines.push('Applications Used:');
+            context.appNames.forEach(app => contextLines.push(`- ${app}`));
+            contextLines.push('');
+        }
+
+        // Add window titles context
+        if (context.windowTitles.length > 0) {
+            contextLines.push('Window Titles:');
+            context.windowTitles.forEach(title => contextLines.push(`- ${title}`));
+            contextLines.push('');
+        }
+
+        // Add screenshot analysis context
+        if (context.screenshotDescriptions.length > 0) {
+            contextLines.push('Activity Analysis from Screenshots:');
+            context.screenshotDescriptions.forEach((desc, idx) => {
+                contextLines.push(`${idx + 1}. ${desc}`);
+            });
+        }
+
+        const fullContext = contextLines.join('\n');
+
+        // Create a summarization prompt
+        const summarizationRequest = {
+            mode: 'summarize',
+            context: fullContext,
+            appNames: context.appNames,
+            windowTitles: context.windowTitles,
+            screenshotDescriptions: context.screenshotDescriptions,
+            duration: context.duration
+        };
+
+        console.log('[Main] Generating summary with context length:', fullContext.length);
+
+        // For now, we'll create a simple heuristic-based summary since we're using text-only
+        // In a future iteration, this could call a local LLM or use more sophisticated analysis
+        const summary = generateTextBasedSummary(context);
+
+        console.log('[Main] generate-activity-summary success:', summary.substring(0, 100) + '...');
+
+        return {
+            success: true,
+            summary: summary,
+            error: null
+        };
+
+    } catch (error) {
+        console.error('[Main] generate-activity-summary failed:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error',
+            summary: null
+        };
+    }
+});
+
+// Helper function to generate a text-based summary from context
+function generateTextBasedSummary(context: {
+    screenshotDescriptions: string[];
+    windowTitles: string[];
+    appNames: string[];
+    duration: number;
+    startTime: number;
+    endTime: number;
+}): string {
+    const durationMinutes = Math.round(context.duration / 1000 / 60);
+    const durationHours = Math.floor(durationMinutes / 60);
+    const remainingMinutes = durationMinutes % 60;
+
+    let durationStr = '';
+    if (durationHours > 0) {
+        durationStr = remainingMinutes > 0
+            ? `${durationHours} hour${durationHours > 1 ? 's' : ''} and ${remainingMinutes} minutes`
+            : `${durationHours} hour${durationHours > 1 ? 's' : ''}`;
+    } else {
+        durationStr = `${durationMinutes} minutes`;
+    }
+
+    // Analyze the descriptions to extract common themes
+    const allText = context.screenshotDescriptions.join(' ').toLowerCase();
+
+    // Detect primary activities
+    const activities: string[] = [];
+    if (allText.includes('code') || allText.includes('programming') || allText.includes('development')) {
+        activities.push('software development');
+    }
+    if (allText.includes('debug') || allText.includes('error') || allText.includes('troubleshoot')) {
+        activities.push('debugging and troubleshooting');
+    }
+    if (allText.includes('documentation') || allText.includes('readme') || allText.includes('writing')) {
+        activities.push('documentation');
+    }
+    if (allText.includes('research') || allText.includes('browsing') || allText.includes('reading')) {
+        activities.push('research and reading');
+    }
+    if (allText.includes('design') || allText.includes('ui') || allText.includes('interface')) {
+        activities.push('design work');
+    }
+    if (allText.includes('testing') || allText.includes('test')) {
+        activities.push('testing');
+    }
+
+    // Detect technologies
+    const technologies: string[] = [];
+    const techPatterns = [
+        { pattern: /\b(react|reactjs)\b/i, name: 'React' },
+        { pattern: /\btypescript\b/i, name: 'TypeScript' },
+        { pattern: /\bjavascript\b/i, name: 'JavaScript' },
+        { pattern: /\belectron\b/i, name: 'Electron' },
+        { pattern: /\bswift\b/i, name: 'Swift' },
+        { pattern: /\bpython\b/i, name: 'Python' },
+        { pattern: /\bnode(\.js|js)?\b/i, name: 'Node.js' },
+        { pattern: /\bgit\b/i, name: 'Git' },
+        { pattern: /\bdocker\b/i, name: 'Docker' },
+        { pattern: /\bjira\b/i, name: 'Jira' },
+        { pattern: /\bapi\b/i, name: 'API' }
+    ];
+
+    techPatterns.forEach(({ pattern, name }) => {
+        if (pattern.test(allText) && technologies.length < 3) {
+            technologies.push(name);
+        }
+    });
+
+    // Build the summary
+    const parts: string[] = [];
+
+    // Opening: What was done
+    if (activities.length > 0) {
+        const activityList = activities.length > 2
+            ? activities.slice(0, -1).join(', ') + ', and ' + activities[activities.length - 1]
+            : activities.join(' and ');
+        parts.push(`Spent ${durationStr} on ${activityList}`);
+    } else {
+        parts.push(`Worked for ${durationStr}`);
+    }
+
+    // Apps used
+    if (context.appNames.length > 0) {
+        const uniqueApps = [...new Set(context.appNames)];
+        if (uniqueApps.length === 1) {
+            parts.push(`using ${uniqueApps[0]}`);
+        } else if (uniqueApps.length === 2) {
+            parts.push(`using ${uniqueApps[0]} and ${uniqueApps[1]}`);
+        } else {
+            parts.push(`across multiple applications including ${uniqueApps.slice(0, 3).join(', ')}`);
+        }
+    }
+
+    // Technologies
+    if (technologies.length > 0) {
+        const techList = technologies.length > 1
+            ? technologies.slice(0, -1).join(', ') + ' and ' + technologies[technologies.length - 1]
+            : technologies[0];
+        parts.push(`Technologies involved included ${techList}`);
+    }
+
+    // Extract key phrases from descriptions for specificity
+    const keyPhrases: string[] = [];
+    context.screenshotDescriptions.forEach(desc => {
+        // Look for phrases that indicate specific work
+        const lowerDesc = desc.toLowerCase();
+        if (lowerDesc.includes('implementation') && !keyPhrases.includes('implementation work')) {
+            keyPhrases.push('implementation work');
+        }
+        if (lowerDesc.includes('refactor') && !keyPhrases.includes('code refactoring')) {
+            keyPhrases.push('code refactoring');
+        }
+        if (lowerDesc.includes('feature') && !keyPhrases.includes('feature development')) {
+            keyPhrases.push('feature development');
+        }
+        if (lowerDesc.includes('bug') && !keyPhrases.includes('bug fixing')) {
+            keyPhrases.push('bug fixing');
+        }
+    });
+
+    if (keyPhrases.length > 0 && keyPhrases.length <= 2) {
+        parts.push(`The session focused on ${keyPhrases.join(' and ')}`);
+    }
+
+    // Join all parts into a coherent summary
+    return parts.join('. ') + '.';
+}
+
+// Screenshot Analysis with Apple Vision Framework
+ipcMain.handle('analyze-screenshot', async (event, imagePath: string, requestId?: string) => {
+    console.log('[Main] analyze-screenshot requested for:', imagePath);
+
+    if (process.platform !== 'darwin') {
+        console.log('[Main] analyze-screenshot: Not macOS, skipping Vision Framework analysis');
+        return {
+            success: false,
+            error: 'Vision Framework analysis only available on macOS',
+            description: 'Screenshot captured'  // Fallback description
+        };
+    }
+
+    // Path to our Swift helper - use absolute path based on current project location
+    const helperPath = '/Users/benoittanguay/Documents/Anti/TimePortal/native/screenshot-analyzer/build/screenshot-analyzer';
+    
+    console.log('[Main] Looking for Swift helper at:', helperPath);
+    
+    // Check if the helper exists
+    if (!fs.existsSync(helperPath)) {
+        console.log('[Main] analyze-screenshot: Swift helper not found at:', helperPath);
+        return {
+            success: false,
+            error: 'Vision Framework helper not built. Run: cd native/screenshot-analyzer && ./build.sh',
+            description: 'Screenshot captured'  // Fallback description
+        };
+    }
+
+    // Check if the image file exists
+    if (!fs.existsSync(imagePath)) {
+        console.log('[Main] analyze-screenshot: Image file not found:', imagePath);
+        return {
+            success: false,
+            error: 'Image file not found',
+            description: 'Screenshot captured'  // Fallback description
+        };
+    }
+
+    try {
+        const result = await new Promise<any>((resolve, reject) => {
+            const child = spawn(helperPath, [], {
+                stdio: ['pipe', 'pipe', 'pipe']
+            });
+
+            let stdout = '';
+            let stderr = '';
+
+            child.stdout.on('data', (data) => {
+                stdout += data.toString();
+            });
+
+            child.stderr.on('data', (data) => {
+                stderr += data.toString();
+            });
+
+            child.on('close', (code) => {
+                if (code === 0) {
+                    try {
+                        const response = JSON.parse(stdout.trim());
+                        resolve(response);
+                    } catch (parseError) {
+                        console.error('[Main] Failed to parse Swift helper response:', stdout);
+                        reject(new Error(`Failed to parse response: ${parseError}`));
+                    }
+                } else {
+                    console.error('[Main] Swift helper failed with code:', code);
+                    console.error('[Main] stderr:', stderr);
+                    reject(new Error(`Helper exited with code ${code}: ${stderr}`));
+                }
+            });
+
+            child.on('error', (error) => {
+                console.error('[Main] Failed to spawn Swift helper:', error);
+                reject(error);
+            });
+
+            // Send the request as JSON to stdin
+            const request = {
+                imagePath: imagePath,
+                requestId: requestId || null
+            };
+            child.stdin.write(JSON.stringify(request) + '\n');
+            child.stdin.end();
+        });
+
+        console.log('[Main] analyze-screenshot success:', {
+            path: imagePath,
+            description: result.description?.substring(0, 100) + '...',
+            confidence: result.confidence,
+            hasText: !!result.detectedText,
+            hasObjects: !!result.objects
+        });
+
+        return {
+            success: true,
+            description: result.description || 'Screenshot captured',
+            confidence: result.confidence,
+            detectedText: result.detectedText,
+            objects: result.objects,
+            requestId: result.requestId
+        };
+
+    } catch (error) {
+        console.error('[Main] analyze-screenshot failed:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error',
+            description: 'Screenshot captured'  // Fallback description
+        };
+    }
 });
 
 // Permission Handlers
@@ -280,22 +689,21 @@ ipcMain.handle('get-active-window', async () => {
             const { promisify } = await import('util');
             const execAsync = promisify(exec);
 
-            // Get active app name
-            const appResult = await execAsync(
-                `osascript -e 'tell application "System Events" to get name of first application process whose frontmost is true'`
-            );
-            const appName = appResult.stdout.trim();
-
-            // Get window title (may fail for some apps)
-            let windowTitle = '';
-            try {
-                const titleResult = await execAsync(
-                    `osascript -e 'tell application "System Events" to get title of front window of (first application process whose frontmost is true)'`
-                );
-                windowTitle = titleResult.stdout.trim();
-            } catch (e) {
-                windowTitle = '(No window title available)';
-            }
+            // Get both app name and window title in a single AppleScript call to avoid race conditions
+            const result = await execAsync(`osascript -e '
+                tell application "System Events"
+                    set frontApp to first application process whose frontmost is true
+                    set appName to name of frontApp
+                    try
+                        set windowTitle to title of front window of frontApp
+                    on error
+                        set windowTitle to "(No window title available)"
+                    end try
+                    return appName & "|||" & windowTitle
+                end tell
+            '`);
+            
+            const [appName, windowTitle] = result.stdout.trim().split('|||');
 
             console.log('[Main] get-active-window result:', { appName, windowTitle });
             return { appName, windowTitle };
@@ -615,12 +1023,20 @@ ipcMain.handle('get-screenshot', async (event, filePath: string) => {
             return null;
         }
 
-        // Read file and convert to base64
-        const fileBuffer = await fs.promises.readFile(filePath);
+        // Read and decrypt file (supports both encrypted and unencrypted)
+        let fileBuffer: Buffer;
+        try {
+            fileBuffer = await decryptFile(filePath);
+        } catch (decryptError) {
+            console.error('[Main] Failed to decrypt screenshot, trying raw read:', decryptError);
+            // Fallback to raw read if decryption fails
+            fileBuffer = await fs.promises.readFile(filePath);
+        }
+
         const base64Data = fileBuffer.toString('base64');
         const mimeType = 'image/png'; // Screenshots are PNG files
         const dataUrl = `data:${mimeType};base64,${base64Data}`;
-        
+
         console.log(`[Main] Screenshot loaded: ${filePath} (${Math.round(base64Data.length / 1024)}KB)`);
         return dataUrl;
     } catch (error) {
@@ -760,6 +1176,117 @@ ipcMain.handle('jira-api-request', async (event, { url, method = 'GET', headers 
     }
 });
 
+// Secure Credential Storage handlers
+ipcMain.handle('secure-store-credential', async (event, key: string, value: string) => {
+    console.log('[Main] secure-store-credential requested for key:', key);
+
+    try {
+        await storeCredential(key, value);
+        return {
+            success: true,
+        };
+    } catch (error) {
+        console.error('[Main] Failed to store credential:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error',
+        };
+    }
+});
+
+ipcMain.handle('secure-get-credential', async (event, key: string) => {
+    console.log('[Main] secure-get-credential requested for key:', key);
+
+    try {
+        const value = await getCredential(key);
+        return {
+            success: true,
+            value: value,
+        };
+    } catch (error) {
+        console.error('[Main] Failed to get credential:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error',
+            value: null,
+        };
+    }
+});
+
+ipcMain.handle('secure-delete-credential', async (event, key: string) => {
+    console.log('[Main] secure-delete-credential requested for key:', key);
+
+    try {
+        await deleteCredential(key);
+        return {
+            success: true,
+        };
+    } catch (error) {
+        console.error('[Main] Failed to delete credential:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error',
+        };
+    }
+});
+
+ipcMain.handle('secure-has-credential', async (event, key: string) => {
+    console.log('[Main] secure-has-credential requested for key:', key);
+
+    try {
+        const exists = await hasCredential(key);
+        return {
+            success: true,
+            exists: exists,
+        };
+    } catch (error) {
+        console.error('[Main] Failed to check credential:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error',
+            exists: false,
+        };
+    }
+});
+
+ipcMain.handle('secure-list-credentials', async () => {
+    console.log('[Main] secure-list-credentials requested');
+
+    try {
+        const keys = await listCredentialKeys();
+        return {
+            success: true,
+            keys: keys,
+        };
+    } catch (error) {
+        console.error('[Main] Failed to list credentials:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error',
+            keys: [],
+        };
+    }
+});
+
+ipcMain.handle('secure-is-available', async () => {
+    console.log('[Main] secure-is-available requested');
+
+    try {
+        const available = isSecureStorageAvailable();
+        return {
+            success: true,
+            available: available,
+        };
+    } catch (error) {
+        console.error('[Main] Failed to check secure storage availability:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error',
+            available: false,
+        };
+    }
+});
+
 function createTray() {
     const iconPath = path.join(process.env.VITE_PUBLIC || '', 'tray-icon.png');
     console.log('Tray Icon Path:', iconPath);
@@ -812,7 +1339,9 @@ function createWindow() {
         height: 450,
         show: true, // DEBUG
         frame: false,
-        resizable: false,
+        resizable: true,
+        minWidth: 400,
+        minHeight: 300,
         movable: true, // DEBUG
         minimizable: false,
         maximizable: false,
@@ -848,6 +1377,15 @@ app.on('window-all-closed', () => {
 });
 
 app.whenReady().then(() => {
+    // Initialize encryption key on app startup
+    try {
+        getEncryptionKey();
+        console.log('[Main] Encryption system initialized');
+    } catch (error) {
+        console.error('[Main] Failed to initialize encryption:', error);
+        console.warn('[Main] Screenshots will be saved unencrypted as fallback');
+    }
+
     createWindow();
     createTray();
 

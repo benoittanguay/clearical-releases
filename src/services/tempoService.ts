@@ -1,5 +1,5 @@
 export interface TempoWorklog {
-    issueKey: string;
+    issueId: number; // Numeric Jira issue ID (required in Tempo API v4)
     timeSpentSeconds: number;
     startDate: string; // YYYY-MM-DD format
     startTime?: string; // HH:mm:ss format
@@ -104,7 +104,6 @@ export interface JiraSearchResponse {
 export class TempoService {
     private baseUrl: string;
     private apiToken: string;
-    private jiraBaseUrl: string;
     private lastRequestTime: number = 0;
     private requestInterval: number = 1000; // 1 second between requests
     private recentIssueKeysCache: { keys: string[], timestamp: number } | null = null;
@@ -113,8 +112,6 @@ export class TempoService {
     constructor(baseUrl: string, apiToken: string) {
         this.baseUrl = baseUrl.replace(/\/$/, ''); // Remove trailing slash
         this.apiToken = apiToken;
-        // For Tempo, Jira API calls use the same base URL but different endpoints
-        this.jiraBaseUrl = this.baseUrl;
     }
 
     private async rateLimit(): Promise<void> {
@@ -259,20 +256,24 @@ export class TempoService {
     /**
      * Validate a Jira issue key by trying to log time to it
      * This is the most reliable way to check if an issue exists and is accessible
+     * Note: This requires a JiraService instance to convert the issue key to an ID
      */
-    async validateIssueKey(issueKey: string): Promise<{ valid: boolean; error?: string }> {
+    async validateIssueKey(issueKey: string, jiraService: any): Promise<{ valid: boolean; error?: string }> {
         try {
-            // Try to create a 0-second worklog as a validation (we'll delete it immediately)
+            // First get the numeric issue ID from Jira
+            const issueId = await jiraService.getIssueIdFromKey(issueKey);
+
+            // Try to create a 1-second worklog as a validation (we'll delete it immediately)
             const testWorklog = {
-                issueKey: issueKey,
+                issueId: parseInt(issueId, 10),
                 timeSpentSeconds: 1, // Minimum time
                 startDate: new Date().toISOString().split('T')[0],
                 startTime: '09:00:00',
                 description: 'TimePortal validation test - please ignore',
             };
-            
+
             const result = await this.createWorklog(testWorklog);
-            
+
             // If successful, delete the test worklog immediately
             if (result.tempoWorklogId) {
                 try {
@@ -281,7 +282,7 @@ export class TempoService {
                     console.warn('[TempoService] Could not delete validation worklog:', deleteError);
                 }
             }
-            
+
             return { valid: true };
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';

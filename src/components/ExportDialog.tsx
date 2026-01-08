@@ -72,9 +72,9 @@ export function ExportDialog({ entries, buckets, onClose, onExport }: ExportDial
         setError(null);
 
         try {
-            // Validate we have entries
+            // Validate we have activities
             if (entries.length === 0) {
-                throw new Error('No entries to export');
+                throw new Error('No activities to export');
             }
 
             // Create dates properly - date input gives YYYY-MM-DD string
@@ -268,7 +268,7 @@ export function ExportDialog({ entries, buckets, onClose, onExport }: ExportDial
                     <div className="bg-gray-900/50 rounded-lg p-3 border border-gray-700">
                         <div className="text-xs text-gray-400 mb-1">Export Preview</div>
                         <div className="text-sm text-gray-300">
-                            {filteredCount} {filteredCount === 1 ? 'entry' : 'entries'} will be exported
+                            {filteredCount} {filteredCount === 1 ? 'activity' : 'activities'} will be exported
                         </div>
                     </div>
                 </div>

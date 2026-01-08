@@ -8,22 +8,24 @@ import { ExportDialog } from './components/ExportDialog';
 import { DeleteButton } from './components/DeleteButton';
 import { JiraIssuesSection } from './components/JiraIssuesSection';
 import { AssignmentPicker } from './components/AssignmentPicker';
-import type { JiraIssue } from './services/jiraService';
-import type { LinkedJiraIssue, WorkAssignment } from './context/StorageContext';
+import { DevTools } from './components/DevTools';
+import { FolderTree } from './components/FolderTree';
+import type { WorkAssignment } from './context/StorageContext';
 import './App.css'
 
-type View = 'timer' | 'history' | 'buckets' | 'settings' | 'history-detail';
+type View = 'chrono' | 'worklog' | 'buckets' | 'settings' | 'worklog-detail';
 
 function App() {
-  const { buckets, entries, addEntry, addBucket, removeBucket, updateEntry, removeEntry, linkJiraIssueToBucket, unlinkJiraIssueFromBucket, linkJiraIssueToEntry, unlinkJiraIssueFromEntry, setEntryAssignment } = useStorage();
+  const { buckets, entries, addEntry, addBucket, removeBucket, renameBucket, createFolder, moveBucket, updateEntry, removeEntry, unlinkJiraIssueFromBucket } = useStorage();
   const { settings } = useSettings();
   const [selectedAssignment, setSelectedAssignment] = useState<WorkAssignment | null>(null);
-  const [currentView, setCurrentView] = useState<View>('timer');
+  const [currentView, setCurrentView] = useState<View>('chrono');
   const [newBucketName, setNewBucketName] = useState('');
+  const [newFolderName, setNewFolderName] = useState('');
   const [selectedEntry, setSelectedEntry] = useState<string | null>(null);
   const [showExportDialog, setShowExportDialog] = useState(false);
 
-  const { isRunning, isPaused, elapsed, start: startTimer, stop: stopTimer, pause: pauseTimer, resume: resumeTimer, reset: resetTimer, formatTime } = useTimer();
+  const { isRunning, isPaused, elapsed, start: startTimer, stop: stopTimer, pause: pauseTimer, resume: resumeTimer, formatTime } = useTimer();
 
   const handleBulkLogToTempo = async () => {
     if (!settings.tempo?.enabled) {
@@ -39,11 +41,11 @@ function App() {
     });
 
     if (todayEntries.length === 0) {
-      alert('No entries found for today to bulk log.');
+      alert('No activities found for today to bulk log.');
       return;
     }
 
-    const proceed = confirm(`Log ${todayEntries.length} entries from today to Tempo?`);
+    const proceed = confirm(`Log ${todayEntries.length} activities from today to Tempo?`);
     if (!proceed) return;
 
     try {
@@ -68,7 +70,7 @@ function App() {
         }
       }
       
-      alert(`Successfully logged ${successCount} out of ${todayEntries.length} entries to Tempo.`);
+      alert(`Successfully logged ${successCount} out of ${todayEntries.length} activities to Tempo.`);
     } catch (error) {
       alert(`Bulk logging failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
@@ -81,13 +83,17 @@ function App() {
     } else {
       // Stop timer and save entry
       const finalActivity = stopTimer();
-      addEntry({
+      const newEntry = addEntry({
         startTime: Date.now() - elapsed,
         endTime: Date.now(),
         duration: elapsed,
-        assignment: selectedAssignment,
+        assignment: selectedAssignment || undefined,
         windowActivity: finalActivity
       });
+
+      // Navigate to the Activity Details view for the new entry
+      setSelectedEntry(newEntry.id);
+      setCurrentView('worklog-detail');
     }
   };
 
@@ -140,23 +146,23 @@ function App() {
         <div className="mb-8 text-green-500 font-bold text-xl tracking-tighter">TP</div>
 
         <div className="flex flex-col gap-6 w-full items-center no-drag">
-          <button onClick={() => setCurrentView('timer')} className={`flex flex-col items-center gap-1 group w-full`}>
-            <div className={`p-2 rounded-lg transition-colors ${currentView === 'timer' ? 'bg-gray-800 text-green-400' : 'text-gray-500 group-hover:text-gray-300'}`}>
+          <button onClick={() => setCurrentView('chrono')} className={`flex flex-col items-center gap-1 group w-full`}>
+            <div className={`p-2 rounded-lg transition-colors ${currentView === 'chrono' ? 'bg-gray-800 text-green-400' : 'text-gray-500 group-hover:text-gray-300'}`}>
               <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>
             </div>
-            <span className={`text-[10px] font-medium ${currentView === 'timer' ? 'text-green-400' : 'text-gray-500'}`}>Timer</span>
+            <span className={`text-[10px] font-medium ${currentView === 'chrono' ? 'text-green-400' : 'text-gray-500'}`}>Chrono</span>
           </button>
 
-          <button onClick={() => setCurrentView('history')} className={`flex flex-col items-center gap-1 group w-full`}>
-            <div className={`p-2 rounded-lg transition-colors ${currentView === 'history' ? 'bg-gray-800 text-green-400' : 'text-gray-500 group-hover:text-gray-300'}`}>
-              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3v5h5" /><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8" /></svg>
+          <button onClick={() => setCurrentView('worklog')} className={`flex flex-col items-center gap-1 group w-full`}>
+            <div className={`p-2 rounded-lg transition-colors ${currentView === 'worklog' ? 'bg-gray-800 text-green-400' : 'text-gray-500 group-hover:text-gray-300'}`}>
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
             </div>
-            <span className={`text-[10px] font-medium ${currentView === 'history' ? 'text-green-400' : 'text-gray-500'}`}>History</span>
+            <span className={`text-[10px] font-medium ${currentView === 'worklog' ? 'text-green-400' : 'text-gray-500'}`}>Worklog</span>
           </button>
 
           <button onClick={() => setCurrentView('buckets')} className={`flex flex-col items-center gap-1 group w-full`}>
             <div className={`p-2 rounded-lg transition-colors ${currentView === 'buckets' ? 'bg-gray-800 text-green-400' : 'text-gray-500 group-hover:text-gray-300'}`}>
-              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20.2 7.8l-7.7 7.7a2 2 0 0 1-2.8 0l-4.7-4.7a2 2 0 0 1 0-2.8l7.7-7.7a2 2 0 0 1 2.8 0l4.7 4.7a2 2 0 0 1 0 2.8z" /><path d="M7.3 14.7l-2.3 2.3a2 2 0 0 0 0 2.8l4.7 4.7a2 2 0 0 0 2.8 0l2.3-2.3" /></svg>
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg>
             </div>
             <span className={`text-[10px] font-medium ${currentView === 'buckets' ? 'text-green-400' : 'text-gray-500'}`}>Buckets</span>
           </button>
@@ -185,11 +191,23 @@ function App() {
         </header>
 
         {/* content */}
-        <div className="flex-1 overflow-y-auto p-6 w-full relative">
-          {currentView === 'timer' && (
-            <div className="flex flex-col items-center justify-center h-full w-full">
-              <div className="relative">
-                <div className={`text-7xl font-mono mb-10 font-bold tabular-nums tracking-wider text-shadow-glow transition-colors ${
+        <div className="flex-1 flex flex-col w-full relative overflow-hidden">
+          {currentView === 'chrono' && (
+            <div className="flex flex-col items-center justify-center h-full w-full p-6">
+              {/* Assignment Picker - Above the counter */}
+              <div className="w-full max-w-xs mb-8">
+                <label className="text-xs text-gray-500 uppercase font-bold mb-2 block tracking-wider">Assignment</label>
+                <AssignmentPicker
+                  value={selectedAssignment}
+                  onChange={setSelectedAssignment}
+                  placeholder={isRunning && !isPaused ? "Assignment locked while running" : "Select assignment..."}
+                  className={isRunning && !isPaused ? 'pointer-events-none opacity-60' : ''}
+                />
+              </div>
+
+              {/* Timer Display */}
+              <div className="relative mb-10">
+                <div className={`text-7xl font-mono font-bold tabular-nums tracking-wider text-shadow-glow transition-colors ${
                   isPaused ? 'text-yellow-400' : 'text-green-400'
                 }`}>
                   {formatTime(elapsed)}
@@ -203,50 +221,43 @@ function App() {
                 )}
               </div>
 
-              <div className="w-full max-w-xs">
-                <label className="text-xs text-gray-500 uppercase font-bold mb-2 block tracking-wider">Assignment</label>
-                <AssignmentPicker
-                  value={selectedAssignment}
-                  onChange={setSelectedAssignment}
-                  placeholder={isRunning && !isPaused ? "Assignment locked while running" : "Select assignment..."}
-                  className={`mb-10 ${isRunning && !isPaused ? 'pointer-events-none opacity-60' : ''}`}
-                />
-              </div>
-
-              <div className="w-full max-w-xs space-y-3">
+              {/* Buttons - Side by side with stable layout */}
+              <div className="w-full max-w-md flex gap-3 min-h-[60px]">
                 <button
                   onClick={handleStartStop}
                   className={`
-                              w-full py-4 rounded-xl text-xl font-bold transition-all transform hover:-translate-y-1 active:scale-95 shadow-lg
-                              ${isRunning
+                    flex-1 py-4 rounded-xl text-xl font-bold transition-all transform hover:-translate-y-1 active:scale-95 shadow-lg
+                    ${isRunning
                       ? 'bg-red-500 hover:bg-red-600 shadow-red-500/30'
                       : 'bg-green-500 hover:bg-green-600 shadow-green-500/30'
                     }
-                          `}
+                  `}
                 >
-                  {isRunning ? 'STOP TRACKING' : 'START TRACKING'}
+                  {isRunning ? 'STOP' : 'START'}
                 </button>
 
-                {isRunning && (
-                  <button
-                    onClick={handlePauseResume}
-                    className={`
-                                w-full py-3 rounded-lg text-lg font-medium transition-all transform hover:-translate-y-0.5 active:scale-95 shadow-md
-                                ${isPaused
-                        ? 'bg-blue-500 hover:bg-blue-600 shadow-blue-500/30'
-                        : 'bg-yellow-500 hover:bg-yellow-600 shadow-yellow-500/30'
-                      }
-                            `}
-                  >
-                    {isPaused ? 'RESUME' : 'PAUSE'}
-                  </button>
-                )}
+                {/* Pause/Resume button - always takes up space to prevent layout shift */}
+                <button
+                  onClick={handlePauseResume}
+                  disabled={!isRunning}
+                  className={`
+                    flex-1 py-4 rounded-xl text-xl font-bold transition-all transform shadow-lg
+                    ${!isRunning
+                      ? 'bg-gray-700 text-gray-500 cursor-not-allowed opacity-50'
+                      : isPaused
+                        ? 'bg-blue-500 hover:bg-blue-600 shadow-blue-500/30 hover:-translate-y-1 active:scale-95'
+                        : 'bg-yellow-500 hover:bg-yellow-600 shadow-yellow-500/30 hover:-translate-y-1 active:scale-95'
+                    }
+                  `}
+                >
+                  {isPaused ? 'RESUME' : 'PAUSE'}
+                </button>
               </div>
             </div>
           )}
 
           {currentView === 'buckets' && (
-            <div className="w-full h-full flex flex-col">
+            <div className="w-full h-full flex flex-col overflow-y-auto p-6">
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-2xl font-bold">Manage Buckets</h2>
                 {settings.tempo?.enabled && (
@@ -259,6 +270,8 @@ function App() {
                   </div>
                 )}
               </div>
+
+              {/* Create Bucket and Folder inputs */}
               <div className="flex gap-2 mb-6">
                 <input
                   type="text"
@@ -282,205 +295,268 @@ function App() {
                   }}
                   className="bg-green-600 hover:bg-green-500 px-4 py-2 rounded-lg text-sm font-bold transition-colors"
                 >
-                  Add
+                  Add Bucket
                 </button>
               </div>
-              <div className="text-white mb-4">DEBUG: Buckets count: {buckets.length}</div>
-              <ul className="space-y-3">
-                {buckets.map(bucket => (
-                  <li key={bucket.id} className="bg-gray-800/50 p-4 rounded-lg border border-gray-800 hover:border-gray-700 transition-colors group">
-                    <div className="flex justify-between items-start">
-                      <div className="flex items-center gap-3 flex-1 min-w-0">
-                        <div className="w-4 h-4 rounded-full shadow-sm flex-shrink-0" style={{ backgroundColor: bucket.color }}></div>
-                        <div className="flex-1 min-w-0">
-                          <span className="font-medium text-white">{bucket.name}</span>
-                          {bucket.linkedIssue && (
-                            <div className="mt-2 bg-gray-900/50 rounded p-2 border border-gray-700">
-                              <div className="flex items-center gap-2 mb-1">
-                                <span className="text-blue-400 font-mono text-xs">
-                                  {bucket.linkedIssue.key}
-                                </span>
-                                <span className="text-xs text-gray-500">
-                                  {bucket.linkedIssue.projectName}
-                                </span>
-                                <span className="text-xs px-2 py-0.5 bg-gray-700 text-gray-300 rounded">
-                                  {bucket.linkedIssue.issueType}
-                                </span>
-                              </div>
-                              <p className="text-sm text-gray-300 truncate">
-                                {bucket.linkedIssue.summary}
-                              </p>
-                              <div className="flex items-center justify-between mt-2">
-                                <span className="text-xs text-gray-400">
-                                  Status: {bucket.linkedIssue.status}
-                                </span>
-                                <button
-                                  onClick={() => unlinkJiraIssueFromBucket(bucket.id)}
-                                  className="text-xs text-red-400 hover:text-red-300 transition-colors"
-                                >
-                                  Unlink
-                                </button>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2 ml-3">
-{/* Temporarily disabled until JiraIssueBrowser is fixed */}
-                        <button
-                          onClick={() => removeBucket(bucket.id)}
-                          className="text-gray-600 hover:text-red-500 p-1.5 rounded-md hover:bg-gray-800 transition-all opacity-0 group-hover:opacity-100"
-                          title="Delete Bucket"
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /><line x1="10" y1="11" x2="10" y2="17" /><line x1="14" y1="11" x2="14" y2="17" /></svg>
-                        </button>
-                      </div>
-                    </div>
-                  </li>
-                ))}
-              </ul>
+
+              <div className="flex gap-2 mb-6">
+                <input
+                  type="text"
+                  value={newFolderName}
+                  onChange={(e) => setNewFolderName(e.target.value)}
+                  placeholder="New Folder Name"
+                  className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-sm focus:outline-none focus:border-yellow-500 focus:ring-1 focus:ring-yellow-500"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && newFolderName.trim()) {
+                      createFolder(newFolderName);
+                      setNewFolderName('');
+                    }
+                  }}
+                />
+                <button
+                  onClick={() => {
+                    if (newFolderName.trim()) {
+                      createFolder(newFolderName);
+                      setNewFolderName('');
+                    }
+                  }}
+                  className="bg-yellow-600 hover:bg-yellow-500 px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center gap-2"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z" />
+                  </svg>
+                  Add Folder
+                </button>
+              </div>
+
+              {/* Hierarchical bucket/folder display */}
+              <FolderTree
+                buckets={buckets}
+                onRename={renameBucket}
+                onDelete={removeBucket}
+                onUnlinkJira={unlinkJiraIssueFromBucket}
+                onMove={moveBucket}
+              />
 
               {/* Jira Issues Section */}
               {(settings.jira?.enabled || settings.tempo?.enabled) && (
-                <>
-                  {console.log('[App] Rendering JiraIssuesSection')}
+                <div className="mt-8">
                   <JiraIssuesSection />
-                </>
+                </div>
               )}
             </div>
           )}
 
-          {currentView === 'settings' && <Settings />}
-          {currentView === 'history-detail' && selectedEntry && (
-            <HistoryDetail
-              entry={entries.find(e => e.id === selectedEntry)!}
-              buckets={buckets}
-              onBack={() => setCurrentView('history')}
-              onUpdate={updateEntry}
-              onNavigateToSettings={() => setCurrentView('settings')}
-              formatTime={formatTime}
-            />
+          {currentView === 'settings' && (
+            <div className="overflow-y-auto p-6">
+              <Settings />
+            </div>
           )}
-          {currentView === 'history' && (
-            <div className="w-full h-full flex flex-col">
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-2xl font-bold">History</h2>
-                {entries.length > 0 && (
-                  <div className="flex items-center gap-3">
-                    <button
-                      onClick={handleBulkLogToTempo}
-                      className={`px-4 py-2 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2 ${
-                        settings.tempo?.enabled 
-                          ? 'bg-blue-600 hover:bg-blue-500' 
-                          : 'bg-gray-600 hover:bg-gray-500'
-                      }`}
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <circle cx="12" cy="12" r="10" />
-                        <polyline points="12 6 12 12 16 14" />
-                      </svg>
-                      {settings.tempo?.enabled ? 'Bulk Log to Tempo' : 'Connect Tempo'}
-                    </button>
-                    <button
-                      onClick={() => setShowExportDialog(true)}
-                      className="px-4 py-2 bg-green-600 hover:bg-green-500 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                        <polyline points="7 10 12 15 17 10" />
-                        <line x1="12" y1="15" x2="12" y2="3" />
-                      </svg>
-                      Export CSV
-                    </button>
+
+          {currentView === 'worklog-detail' && selectedEntry && (
+            <div className="overflow-y-auto p-6">
+              <HistoryDetail
+                entry={entries.find(e => e.id === selectedEntry)!}
+                buckets={buckets}
+                onBack={() => setCurrentView('worklog')}
+                onUpdate={updateEntry}
+                onNavigateToSettings={() => setCurrentView('settings')}
+                formatTime={formatTime}
+              />
+            </div>
+          )}
+
+          {currentView === 'worklog' && (
+            <>
+              {/* Fixed Header */}
+              <div className="flex-shrink-0 bg-gray-900 border-b border-gray-800 px-6 py-4 z-20">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-2xl font-bold">Worklog</h2>
+                  {entries.length > 0 && (
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={handleBulkLogToTempo}
+                        className={`px-4 py-2 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2 ${
+                          settings.tempo?.enabled
+                            ? 'bg-blue-600 hover:bg-blue-500'
+                            : 'bg-gray-600 hover:bg-gray-500'
+                        }`}
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <circle cx="12" cy="12" r="10" />
+                          <polyline points="12 6 12 12 16 14" />
+                        </svg>
+                        {settings.tempo?.enabled ? 'Bulk Log to Tempo' : 'Connect Tempo'}
+                      </button>
+                      <button
+                        onClick={() => setShowExportDialog(true)}
+                        className="px-4 py-2 bg-green-600 hover:bg-green-500 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                          <polyline points="7 10 12 15 17 10" />
+                          <line x1="12" y1="15" x2="12" y2="3" />
+                        </svg>
+                        Export CSV
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Scrollable Content Area */}
+              <div className="flex-1 overflow-y-auto px-6 pb-8">
+                {entries.length === 0 ? (
+                  <div className="text-gray-500 text-sm pt-6">No activities recorded yet.</div>
+                ) : (
+                  <div className="pt-6">
+                    {(() => {
+                      // Group entries by date
+                      const sortedEntries = entries.sort((a, b) => b.startTime - a.startTime);
+                      const groupedByDate = new Map<string, typeof sortedEntries>();
+
+                      sortedEntries.forEach(entry => {
+                        const date = new Date(entry.startTime);
+                        date.setHours(0, 0, 0, 0);
+                        const dateKey = date.getTime().toString();
+
+                        if (!groupedByDate.has(dateKey)) {
+                          groupedByDate.set(dateKey, []);
+                        }
+                        groupedByDate.get(dateKey)!.push(entry);
+                      });
+
+                      // Format date labels
+                      const formatDateLabel = (timestamp: number): string => {
+                        const date = new Date(timestamp);
+                        const today = new Date();
+                        today.setHours(0, 0, 0, 0);
+                        const yesterday = new Date(today);
+                        yesterday.setDate(yesterday.getDate() - 1);
+
+                        if (date.getTime() === today.getTime()) {
+                          return 'Today';
+                        } else if (date.getTime() === yesterday.getTime()) {
+                          return 'Yesterday';
+                        } else {
+                          return date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+                        }
+                      };
+
+                      return Array.from(groupedByDate.entries()).map(([dateKey, dateEntries]) => {
+                        const totalDuration = dateEntries.reduce((sum, entry) => sum + entry.duration, 0);
+
+                        return (
+                          <div key={dateKey} className="mb-6 last:mb-0">
+                            {/* Date Separator Header - Sticky with solid background */}
+                            <div className="sticky top-0 z-10 bg-gray-900 border-b border-gray-700 px-4 py-3 mb-3 -mx-6 flex items-center justify-between shadow-sm">
+                              <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400">
+                                {formatDateLabel(parseInt(dateKey))}
+                              </h3>
+                              <span className="text-xs font-mono text-gray-500">
+                                {formatTime(totalDuration)}
+                              </span>
+                            </div>
+
+                            {/* Activities for this date */}
+                            <div className="space-y-3">
+                              {dateEntries.map(entry => {
+                                // Get assignment info from unified model or fallback to legacy fields
+                                const assignment = entry.assignment ||
+                                  (entry.linkedJiraIssue ? {
+                                    type: 'jira' as const,
+                                    jiraIssue: entry.linkedJiraIssue
+                                  } : entry.bucketId ? {
+                                    type: 'bucket' as const,
+                                    bucket: buckets.find(b => b.id === entry.bucketId)
+                                  } : null);
+
+                                return (
+                                  <div
+                                    key={entry.id}
+                                    onClick={() => {
+                                      setSelectedEntry(entry.id);
+                                      setCurrentView('worklog-detail');
+                                    }}
+                                    className="flex justify-between items-center bg-gray-800/50 p-3 rounded-lg border border-gray-800 hover:bg-gray-800/80 transition-colors cursor-pointer"
+                                  >
+                                    <div className="flex flex-col flex-1 min-w-0">
+                                      {/* Display assignment info */}
+                                      {assignment && (
+                                        <div className="flex items-center gap-2 mb-1">
+                                          <div
+                                            className="w-2 h-2 rounded-full"
+                                            style={{
+                                              backgroundColor: assignment.type === 'bucket'
+                                                ? assignment.bucket?.color || '#6b7280'
+                                                : '#3b82f6' // Blue for Jira issues
+                                            }}
+                                          />
+                                          <span className="text-sm font-medium text-gray-200">
+                                            {assignment.type === 'bucket'
+                                              ? assignment.bucket?.name || 'Unknown Bucket'
+                                              : assignment.jiraIssue?.key || 'Unknown Issue'
+                                            }
+                                          </span>
+                                          {assignment.type === 'jira' && assignment.jiraIssue && (
+                                            <>
+                                              <span className="text-xs text-gray-500">
+                                                {assignment.jiraIssue.projectName}
+                                              </span>
+                                              <span className="text-xs px-1 py-0.5 bg-gray-700 text-gray-300 rounded">
+                                                {assignment.jiraIssue.issueType}
+                                              </span>
+                                            </>
+                                          )}
+                                        </div>
+                                      )}
+                                      {/* Secondary info for Jira issues */}
+                                      {assignment?.type === 'jira' && assignment.jiraIssue && (
+                                        <div className="text-xs text-gray-400 mb-1 truncate">
+                                          {assignment.jiraIssue.summary}
+                                        </div>
+                                      )}
+                                      {entry.description && (
+                                        <p className="text-xs text-gray-400 mb-1 truncate">{entry.description}</p>
+                                      )}
+                                      <span className="text-xs text-gray-500">{new Date(entry.startTime).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true })} - {new Date(entry.startTime + entry.duration).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true })}</span>
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                      {entry.windowActivity && entry.windowActivity.length > 0 && (
+                                        <span className="text-xs text-gray-500">{entry.windowActivity.length} activities</span>
+                                      )}
+                                      <div className="font-mono text-green-400 font-bold">
+                                        {formatTime(entry.duration)}
+                                      </div>
+                                      <DeleteButton
+                                        onDelete={() => removeEntry(entry.id)}
+                                        confirmMessage="Delete this activity?"
+                                        size="sm"
+                                        variant="subtle"
+                                      />
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      });
+                    })()}
                   </div>
                 )}
               </div>
-              {entries.length === 0 ? (
-                <div className="text-gray-500 text-sm">No time entries recorded yet.</div>
-              ) : (
-                <div className="space-y-3 pb-8">
-                  {entries.sort((a, b) => b.startTime - a.startTime).map(entry => {
-                    // Get assignment info from unified model or fallback to legacy fields
-                    const assignment = entry.assignment || 
-                      (entry.linkedJiraIssue ? {
-                        type: 'jira' as const,
-                        jiraIssue: entry.linkedJiraIssue
-                      } : entry.bucketId ? {
-                        type: 'bucket' as const,
-                        bucket: buckets.find(b => b.id === entry.bucketId)
-                      } : null);
-                    
-                    return (
-                      <div
-                        key={entry.id}
-                        onClick={() => {
-                          setSelectedEntry(entry.id);
-                          setCurrentView('history-detail');
-                        }}
-                        className="flex justify-between items-center bg-gray-800/50 p-3 rounded-lg border border-gray-800 hover:bg-gray-800/80 transition-colors cursor-pointer"
-                      >
-                        <div className="flex flex-col flex-1 min-w-0">
-                          {/* Display assignment info */}
-                          {assignment && (
-                            <div className="flex items-center gap-2 mb-1">
-                              <div 
-                                className="w-2 h-2 rounded-full" 
-                                style={{ 
-                                  backgroundColor: assignment.type === 'bucket' 
-                                    ? assignment.bucket?.color || '#6b7280'
-                                    : '#3b82f6' // Blue for Jira issues
-                                }}
-                              />
-                              <span className="text-sm font-medium text-gray-200">
-                                {assignment.type === 'bucket' 
-                                  ? assignment.bucket?.name || 'Unknown Bucket'
-                                  : assignment.jiraIssue?.key || 'Unknown Issue'
-                                }
-                              </span>
-                              {assignment.type === 'jira' && assignment.jiraIssue && (
-                                <>
-                                  <span className="text-xs text-gray-500">
-                                    {assignment.jiraIssue.projectName}
-                                  </span>
-                                  <span className="text-xs px-1 py-0.5 bg-gray-700 text-gray-300 rounded">
-                                    {assignment.jiraIssue.issueType}
-                                  </span>
-                                </>
-                              )}
-                            </div>
-                          )}
-                          {/* Secondary info for Jira issues */}
-                          {assignment?.type === 'jira' && assignment.jiraIssue && (
-                            <div className="text-xs text-gray-400 mb-1 truncate">
-                              {assignment.jiraIssue.summary}
-                            </div>
-                          )}
-                          {entry.description && (
-                            <p className="text-xs text-gray-400 mb-1 truncate">{entry.description}</p>
-                          )}
-                          <span className="text-xs text-gray-500">{new Date(entry.startTime).toLocaleString()}</span>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          {entry.windowActivity && entry.windowActivity.length > 0 && (
-                            <span className="text-xs text-gray-500">{entry.windowActivity.length} activities</span>
-                          )}
-                          <div className="font-mono text-green-400 font-bold">
-                            {formatTime(entry.duration)}
-                          </div>
-                          <DeleteButton
-                            onDelete={() => removeEntry(entry.id)}
-                            confirmMessage="Delete this time entry?"
-                            size="sm"
-                            variant="subtle"
-                          />
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-
-            </div>
+            </>
           )}
         </div>
       </div>
@@ -497,6 +573,9 @@ function App() {
           }}
         />
       )}
+
+      {/* DevTools - Only in development */}
+      {import.meta.env.DEV && <DevTools />}
 
     </div>
   )

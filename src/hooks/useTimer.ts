@@ -13,6 +13,8 @@ interface WindowActivity {
     windowTitle: string;
     timestamp: number;
     duration: number;
+    screenshotPaths?: string[];
+    screenshotDescriptions?: { [path: string]: string };
 }
 
 export function useTimer() {
@@ -27,8 +29,9 @@ export function useTimer() {
     const screenshotIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const lastWindowRef = useRef<{ appName: string, windowTitle: string, timestamp: number } | null>(null);
     const currentActivityScreenshots = useRef<string[]>([]);
+    const currentActivityScreenshotDescriptions = useRef<{ [path: string]: string }>({});
     const lastScreenshotTime = useRef<number>(0);
-    const lastCaptureRequestRef = useRef<{ appName: string; windowTitle: string; timestamp: number } | null>(null);
+    const pollingActiveRef = useRef<boolean>(false);
 
     // Load state from local storage on mount
     useEffect(() => {
@@ -56,132 +59,214 @@ export function useTimer() {
     }, [isRunning, isPaused, startTime, elapsed]);
 
     useEffect(() => {
-        const CAPTURE_INTERVAL = 5 * 60 * 1000; // 5 minutes
-        const WINDOW_POLL_INTERVAL = 2 * 1000; // 2 seconds (increased from 10s for better tracking)
+        const INTERVAL_SCREENSHOT_TIME = 2 * 60 * 1000; // 2 minutes - screenshot if no window change
+        const WINDOW_POLL_INTERVAL = 1 * 1000; // 1 second for better window change detection
+        const MIN_SCREENSHOT_INTERVAL = 5 * 1000; // Minimum 5 seconds between screenshots
 
-        const capture = async (reason = 'periodic') => {
+        const captureScreenshotForCurrentWindow = async (reason: string) => {
             const now = Date.now();
-            
-            // Get current window info for deduplication
             const currentWindow = lastWindowRef.current;
-            if (!currentWindow) {
-                console.log('[Renderer] No current window info, skipping screenshot capture');
-                return;
-            }
-
-            // Prevent duplicate captures within 1 second for the same window
-            if (lastCaptureRequestRef.current && 
-                lastCaptureRequestRef.current.appName === currentWindow.appName &&
-                lastCaptureRequestRef.current.windowTitle === currentWindow.windowTitle &&
-                (now - lastCaptureRequestRef.current.timestamp) < 1000) {
-                console.log('[Renderer] Skipping duplicate capture request for same window within 1 second');
-                return;
-            }
             
-            console.log('[Renderer] Screenshot capture triggered:', reason, 'for', currentWindow.appName, '/', currentWindow.windowTitle);
+            if (!currentWindow) {
+                console.log('[Renderer] ❌ No current window info, skipping screenshot capture');
+                return null;
+            }
 
-            // Update last capture request
-            lastCaptureRequestRef.current = {
-                appName: currentWindow.appName,
-                windowTitle: currentWindow.windowTitle,
-                timestamp: now
-            };
+            // Prevent too frequent screenshots (minimum interval)
+            if (lastScreenshotTime.current > 0 && (now - lastScreenshotTime.current) < MIN_SCREENSHOT_INTERVAL) {
+                console.log(`[Renderer] ⏱️ Too soon since last screenshot (${now - lastScreenshotTime.current}ms ago), skipping ${reason}`);
+                return null;
+            }
 
-            // @ts-ignore
-            if (window.electron && window.electron.ipcRenderer && window.electron.ipcRenderer.captureScreenshot) {
-                try {
-                    // @ts-ignore
-                    const path = await window.electron.ipcRenderer.captureScreenshot();
-                    if (path) {
-                        console.log('[Renderer] Screenshot captured:', path);
-                        // Check for duplicates before adding
-                        if (!currentActivityScreenshots.current.includes(path)) {
-                            currentActivityScreenshots.current.push(path);
-                            lastScreenshotTime.current = now;
-                            console.log('[Renderer] Screenshot added to current activity. Total screenshots:', currentActivityScreenshots.current.length);
-                        } else {
-                            console.log('[Renderer] Screenshot path already exists, skipping duplicate');
-                        }
-                    } else {
-                        console.log('[Renderer] Screenshot capture returned null - no matching window found or capture failed');
-                    }
-                } catch (error) {
-                    console.error('[Renderer] Failed to capture screenshot:', error);
+            console.log(`[Renderer] 📸 Taking screenshot: ${reason} for ${currentWindow.appName}/${currentWindow.windowTitle}`);
+
+            try {
+                // @ts-ignore
+                const path = await window.electron.ipcRenderer.captureScreenshot();
+                if (!path) {
+                    console.log('[Renderer] ❌ Screenshot capture failed - no path returned');
+                    return null;
                 }
+
+                console.log('[Renderer] ✅ Screenshot captured:', path.split('/').pop());
+                
+                // Add to current activity screenshots
+                if (!currentActivityScreenshots.current.includes(path)) {
+                    currentActivityScreenshots.current.push(path);
+                    lastScreenshotTime.current = now;
+                    console.log('[Renderer] 📁 Screenshot added. Total:', currentActivityScreenshots.current.length);
+                    
+                    // Start AI analysis
+                    analyzeScreenshotAsync(path, now);
+                } else {
+                    console.log('[Renderer] ⚠️ Duplicate screenshot path, skipping');
+                }
+
+                return path;
+            } catch (error) {
+                console.error('[Renderer] ❌ Screenshot capture error:', error);
+                return null;
+            }
+        };
+
+        const analyzeScreenshotAsync = async (path: string, timestamp: number) => {
+            console.log('[Renderer] 🔍 Starting AI analysis for:', path.split('/').pop());
+
+            try {
+                // @ts-ignore
+                const analysisResult = await window.electron.ipcRenderer.analyzeScreenshot(path, `${timestamp}`);
+
+                if (analysisResult?.success && analysisResult.description) {
+                    currentActivityScreenshotDescriptions.current[path] = analysisResult.description;
+                    console.log('[Renderer] ✅ AI analysis completed:', {
+                        file: path.split('/').pop(),
+                        confidence: analysisResult.confidence,
+                        descriptionLength: analysisResult.description.length
+                    });
+
+                    // Update windowActivity state to trigger re-render with new description
+                    setWindowActivity(prev => {
+                        // Find if this screenshot belongs to any existing activity
+                        return prev.map(activity => {
+                            if (activity.screenshotPaths?.includes(path)) {
+                                return {
+                                    ...activity,
+                                    screenshotDescriptions: {
+                                        ...(activity.screenshotDescriptions || {}),
+                                        [path]: analysisResult.description
+                                    }
+                                };
+                            }
+                            return activity;
+                        });
+                    });
+                } else {
+                    console.log('[Renderer] ⚠️ AI analysis failed, using fallback', analysisResult);
+                    const fallbackDescription = 'Screenshot captured during work session';
+                    currentActivityScreenshotDescriptions.current[path] = fallbackDescription;
+
+                    // Update state with fallback description
+                    setWindowActivity(prev => {
+                        return prev.map(activity => {
+                            if (activity.screenshotPaths?.includes(path)) {
+                                return {
+                                    ...activity,
+                                    screenshotDescriptions: {
+                                        ...(activity.screenshotDescriptions || {}),
+                                        [path]: fallbackDescription
+                                    }
+                                };
+                            }
+                            return activity;
+                        });
+                    });
+                }
+            } catch (error) {
+                console.error('[Renderer] ❌ AI analysis error:', error);
+                const fallbackDescription = 'Screenshot captured during work session';
+                currentActivityScreenshotDescriptions.current[path] = fallbackDescription;
+
+                // Update state with fallback description
+                setWindowActivity(prev => {
+                    return prev.map(activity => {
+                        if (activity.screenshotPaths?.includes(path)) {
+                            return {
+                                ...activity,
+                                screenshotDescriptions: {
+                                    ...(activity.screenshotDescriptions || {}),
+                                    [path]: fallbackDescription
+                                }
+                            };
+                        }
+                        return activity;
+                    });
+                });
             }
         };
 
         const pollWindow = async () => {
-            // @ts-ignore
-            if (window.electron && window.electron.ipcRenderer && window.electron.ipcRenderer.getActiveWindow) {
+            // Prevent concurrent polling
+            if (pollingActiveRef.current) {
+                console.log('[Renderer] 🔄 Polling already active, skipping');
+                return;
+            }
+            pollingActiveRef.current = true;
+
+            try {
+                // @ts-ignore
+                if (window.electron && window.electron.ipcRenderer && window.electron.ipcRenderer.getActiveWindow) {
                 // @ts-ignore
                 const result = await window.electron.ipcRenderer.getActiveWindow();
                 const now = Date.now();
                 console.log('[Renderer] pollWindow result:', result);
 
-                if (lastWindowRef.current) {
-                    // If window changed, save the previous window info (duration calculated later)
-                    if (lastWindowRef.current.appName !== result.appName || lastWindowRef.current.windowTitle !== result.windowTitle) {
-                        console.log('[Renderer] Window changed! Saving activity:', {
-                            from: lastWindowRef.current,
-                            to: result,
-                            timestamp: lastWindowRef.current.timestamp
-                        });
+                // Check if window changed
+                const windowChanged = !lastWindowRef.current || 
+                    lastWindowRef.current.appName !== result.appName || 
+                    lastWindowRef.current.windowTitle !== result.windowTitle;
 
+                if (windowChanged) {
+                    console.log('[Renderer] Window change detected:', {
+                        from: lastWindowRef.current,
+                        to: result
+                    });
+
+                    // Save previous activity if it existed
+                    if (lastWindowRef.current) {
                         const newActivity = {
                             appName: lastWindowRef.current.appName,
                             windowTitle: lastWindowRef.current.windowTitle,
                             timestamp: lastWindowRef.current.timestamp,
                             duration: 0, // Will be calculated properly on stop
-                            screenshotPaths: currentActivityScreenshots.current.length > 0 ? [...currentActivityScreenshots.current] : undefined
+                            screenshotPaths: currentActivityScreenshots.current.length > 0 ? [...currentActivityScreenshots.current] : undefined,
+                            screenshotDescriptions: Object.keys(currentActivityScreenshotDescriptions.current).length > 0 ? { ...currentActivityScreenshotDescriptions.current } : undefined
                         };
 
-                        console.log('[Renderer] Creating new activity with screenshots:', {
+                        console.log('[Renderer] Saving previous activity with screenshots:', {
                             app: newActivity.appName,
-                            screenshotCount: currentActivityScreenshots.current.length,
-                            screenshotPaths: currentActivityScreenshots.current
+                            screenshotCount: currentActivityScreenshots.current.length
                         });
 
                         setWindowActivity(prev => [...prev, newActivity]);
-
-                        // Reset screenshot array for new activity
-                        console.log('[Renderer] Resetting screenshot array for new activity');
-                        currentActivityScreenshots.current = [];
-
-                        // Reset screenshot timer on app switch
-                        console.log('[Renderer] Resetting screenshot timer due to app switch');
-                        if (screenshotIntervalRef.current) {
-                            clearInterval(screenshotIntervalRef.current);
-                            screenshotIntervalRef.current = null;
-                        }
                     }
-                }
 
-                // Update to current window AFTER processing the previous window
-                lastWindowRef.current = { ...result, timestamp: now };
-                
-                // Take screenshot for the NEW window (after updating lastWindowRef)
-                if (lastWindowRef.current) {
-                    capture('window-poll');
+                    // Reset for new activity
+                    currentActivityScreenshots.current = [];
+                    currentActivityScreenshotDescriptions.current = {};
+                    lastScreenshotTime.current = 0;
+
+                    // Update to new window
+                    lastWindowRef.current = { ...result, timestamp: now };
                     
-                    // Restart screenshot interval if it was cleared
-                    if (!screenshotIntervalRef.current) {
-                        screenshotIntervalRef.current = setInterval(capture, CAPTURE_INTERVAL);
+                    // Take screenshot for window change (immediate)
+                    await captureScreenshotForCurrentWindow('window-change');
+
+                    // Reset the interval timer for this new window (every 2 minutes)
+                    if (screenshotIntervalRef.current) {
+                        clearInterval(screenshotIntervalRef.current);
+                    }
+                    screenshotIntervalRef.current = setInterval(async () => {
+                        await captureScreenshotForCurrentWindow('interval-2min');
+                    }, INTERVAL_SCREENSHOT_TIME);
+
+                } else {
+                    // Same window - just update timestamp
+                    if (lastWindowRef.current) {
+                        lastWindowRef.current.timestamp = now;
                     }
                 }
+            }
+            } finally {
+                pollingActiveRef.current = false;
             }
         };
 
         if (isRunning && !isPaused && startTime) {
-            // Trigger immediately on start/resume
-            capture('timer-start');
-            pollWindow();
-
             intervalRef.current = setInterval(() => {
                 setElapsed(Date.now() - startTime);
             }, 100);
 
-            screenshotIntervalRef.current = setInterval(capture, CAPTURE_INTERVAL);
+            // Start window polling (which handles initial screenshot)
             windowPollRef.current = setInterval(pollWindow, WINDOW_POLL_INTERVAL);
         } else {
             if (intervalRef.current) {
@@ -216,6 +301,7 @@ export function useTimer() {
         setWindowActivity([]); // Clear previous activity
         lastWindowRef.current = null;
         currentActivityScreenshots.current = []; // Reset screenshots
+        currentActivityScreenshotDescriptions.current = {}; // Reset descriptions
         lastScreenshotTime.current = 0; // Reset screenshot timing
     };
 
@@ -306,7 +392,8 @@ export function useTimer() {
                 windowTitle: lastWindowRef.current.windowTitle,
                 timestamp: lastWindowRef.current.timestamp,
                 duration: 0, // Will be calculated below
-                screenshotPaths: currentActivityScreenshots.current.length > 0 ? [...currentActivityScreenshots.current] : undefined
+                screenshotPaths: currentActivityScreenshots.current.length > 0 ? [...currentActivityScreenshots.current] : undefined,
+                screenshotDescriptions: Object.keys(currentActivityScreenshotDescriptions.current).length > 0 ? { ...currentActivityScreenshotDescriptions.current } : undefined
             });
         }
         
@@ -374,6 +461,7 @@ export function useTimer() {
         setWindowActivity(filteredActivity);
         lastWindowRef.current = null;
         currentActivityScreenshots.current = [];
+        currentActivityScreenshotDescriptions.current = {};
         return filteredActivity;
     };
 
@@ -385,6 +473,7 @@ export function useTimer() {
         setWindowActivity([]);
         lastWindowRef.current = null;
         currentActivityScreenshots.current = []; // Reset screenshots
+        currentActivityScreenshotDescriptions.current = {}; // Reset descriptions
         lastScreenshotTime.current = 0; // Reset screenshot timing
     };
 

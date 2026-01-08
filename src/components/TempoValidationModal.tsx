@@ -1,0 +1,304 @@
+import { useState, useEffect } from 'react';
+import type { TimeEntry, WorkAssignment, TimeBucket } from '../context/StorageContext';
+import { TempoService } from '../services/tempoService';
+
+interface TempoValidationModalProps {
+    entry: TimeEntry;
+    assignment: WorkAssignment | null;
+    buckets: TimeBucket[];
+    onClose: () => void;
+    onSuccess: () => void;
+    formatTime: (ms: number) => string;
+    tempoBaseUrl: string;
+    tempoApiToken: string;
+    defaultDescription?: string;
+}
+
+export function TempoValidationModal({
+    entry,
+    assignment,
+    buckets,
+    onClose,
+    onSuccess,
+    formatTime,
+    tempoBaseUrl,
+    tempoApiToken,
+    defaultDescription
+}: TempoValidationModalProps) {
+    const [description, setDescription] = useState(defaultDescription || entry.description || '');
+    const [isLogging, setIsLogging] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    // Extract Jira key from assignment
+    const getJiraKey = (): string | null => {
+        if (!assignment) return null;
+
+        // Direct Jira assignment
+        if (assignment.type === 'jira' && assignment.jiraIssue) {
+            return assignment.jiraIssue.key;
+        }
+
+        // Bucket with linked Jira issue
+        if (assignment.type === 'bucket' && assignment.bucket) {
+            // Find the full bucket object to get its linkedIssue
+            const fullBucket = buckets.find(b => b.id === assignment.bucket?.id);
+            if (fullBucket?.linkedIssue) {
+                return fullBucket.linkedIssue.key;
+            }
+        }
+
+        return null;
+    };
+
+    const jiraKey = getJiraKey();
+
+    // Check if we can get Jira key from bucket's linked issue
+    useEffect(() => {
+        if (!jiraKey && assignment?.type === 'bucket') {
+            setError('This bucket is not linked to a Jira issue. Please link a Jira issue to this bucket or select a Jira issue directly.');
+        }
+    }, [assignment, jiraKey]);
+
+    const handleConfirm = async () => {
+        if (!jiraKey) {
+            setError('No Jira issue key available for logging.');
+            return;
+        }
+
+        setIsLogging(true);
+        setError(null);
+
+        try {
+            const tempoService = new TempoService(tempoBaseUrl, tempoApiToken);
+
+            const worklog = {
+                issueKey: jiraKey,
+                timeSpentSeconds: TempoService.durationMsToSeconds(entry.duration),
+                startDate: TempoService.formatDate(entry.startTime),
+                startTime: TempoService.formatTime(entry.startTime),
+                description: description.trim() || `Time logged from TimePortal for ${formatTime(entry.duration)}`,
+            };
+
+            const response = await tempoService.createWorklog(worklog);
+
+            // Show success message
+            alert(`Successfully logged ${formatTime(entry.duration)} to Tempo!\nWorklog ID: ${response.tempoWorklogId}`);
+
+            onSuccess();
+        } catch (error) {
+            console.error('Failed to log time to Tempo:', error);
+            setError(error instanceof Error ? error.message : 'Unknown error occurred');
+        } finally {
+            setIsLogging(false);
+        }
+    };
+
+    // Get assignment display information
+    const getAssignmentDisplay = () => {
+        if (!assignment) {
+            return {
+                label: 'No assignment',
+                color: '#6b7280',
+                details: null,
+                issueDetails: null
+            };
+        }
+
+        if (assignment.type === 'jira' && assignment.jiraIssue) {
+            return {
+                label: assignment.jiraIssue.key,
+                color: '#3b82f6',
+                details: assignment.jiraIssue.summary,
+                issueDetails: `${assignment.jiraIssue.projectName} - ${assignment.jiraIssue.issueType}`
+            };
+        }
+
+        if (assignment.type === 'bucket' && assignment.bucket) {
+            const fullBucket = buckets.find(b => b.id === assignment.bucket?.id);
+            const linkedIssue = fullBucket?.linkedIssue;
+
+            return {
+                label: assignment.bucket.name,
+                color: assignment.bucket.color,
+                details: linkedIssue
+                    ? linkedIssue.summary
+                    : 'Not linked to Jira issue',
+                issueDetails: linkedIssue
+                    ? `${linkedIssue.projectName} - ${linkedIssue.issueType}`
+                    : null
+            };
+        }
+
+        return {
+            label: 'Unknown assignment',
+            color: '#6b7280',
+            details: null,
+            issueDetails: null
+        };
+    };
+
+    const assignmentDisplay = getAssignmentDisplay();
+    const canLog = jiraKey && !isLogging;
+
+    return (
+        <>
+            {/* Backdrop */}
+            <div
+                className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in"
+                onClick={onClose}
+            >
+                {/* Modal */}
+                <div
+                    className="bg-gray-800 rounded-lg border border-gray-700 max-w-lg w-full shadow-2xl animate-scale-in"
+                    onClick={(e) => e.stopPropagation()}
+                    style={{ boxShadow: 'var(--shadow-xl)' }}
+                >
+                    {/* Header */}
+                    <div className="flex items-center justify-between p-4 border-b border-gray-700">
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-blue-600/20 rounded-lg flex items-center justify-center">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-400">
+                                    <circle cx="12" cy="12" r="10"/>
+                                    <path d="M12 6v6l4 2"/>
+                                </svg>
+                            </div>
+                            <h3 className="text-lg font-semibold text-white">Confirm Log to Tempo</h3>
+                        </div>
+                        <button
+                            onClick={onClose}
+                            className="p-1 hover:bg-gray-700 rounded transition-colors text-gray-400 hover:text-white"
+                            disabled={isLogging}
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <line x1="18" y1="6" x2="6" y2="18" />
+                                <line x1="6" y1="6" x2="18" y2="18" />
+                            </svg>
+                        </button>
+                    </div>
+
+                    {/* Content */}
+                    <div className="p-4 space-y-4">
+                        {/* Error message */}
+                        {error && (
+                            <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 flex items-start gap-2 animate-fade-in">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-red-400 flex-shrink-0 mt-0.5">
+                                    <circle cx="12" cy="12" r="10"/>
+                                    <line x1="12" y1="8" x2="12" y2="12"/>
+                                    <line x1="12" y1="16" x2="12.01" y2="16"/>
+                                </svg>
+                                <div className="flex-1">
+                                    <div className="text-red-400 text-sm font-medium">Unable to log time</div>
+                                    <div className="text-red-300 text-xs mt-1">{error}</div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Assignment info */}
+                        <div className="bg-gray-750 rounded-lg p-3 border border-gray-700">
+                            <div className="text-xs text-gray-400 uppercase font-semibold mb-2">Assignment</div>
+                            <div className="flex items-start gap-3">
+                                <div
+                                    className="w-4 h-4 rounded-full flex-shrink-0 shadow-sm mt-0.5"
+                                    style={{
+                                        backgroundColor: assignmentDisplay.color,
+                                        boxShadow: `0 0 8px ${assignmentDisplay.color}40`
+                                    }}
+                                />
+                                <div className="flex-1 min-w-0">
+                                    <div className="text-white font-medium">{assignmentDisplay.label}</div>
+                                    {assignmentDisplay.details && (
+                                        <div className="text-gray-400 text-sm mt-0.5">{assignmentDisplay.details}</div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Jira issue key */}
+                        {jiraKey && (
+                            <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
+                                <div className="text-xs text-gray-400 uppercase font-semibold mb-2">Jira Issue</div>
+                                <div className="flex items-center gap-2 mb-1">
+                                    <div className="w-3 h-3 rounded-full bg-blue-500 flex-shrink-0 shadow-sm" style={{ boxShadow: '0 0 6px rgba(59, 130, 246, 0.4)' }} />
+                                    <span className="text-blue-400 font-mono text-lg font-semibold">{jiraKey}</span>
+                                </div>
+                                {assignmentDisplay.issueDetails && (
+                                    <div className="text-gray-400 text-xs ml-5">{assignmentDisplay.issueDetails}</div>
+                                )}
+                            </div>
+                        )}
+
+                        {/* Duration info */}
+                        <div className="bg-gray-750 rounded-lg p-3 border border-gray-700">
+                            <div className="text-xs text-gray-400 uppercase font-semibold mb-2">Time to Log</div>
+                            <div className="flex items-baseline gap-2">
+                                <span className="text-green-400 font-mono text-2xl font-bold">{formatTime(entry.duration)}</span>
+                                <span className="text-gray-500 text-sm">({TempoService.durationMsToSeconds(entry.duration)} seconds)</span>
+                            </div>
+                            <div className="text-gray-400 text-sm mt-2">
+                                <span className="font-semibold">Date:</span> {new Date(entry.startTime).toLocaleDateString(undefined, {
+                                    weekday: 'short',
+                                    year: 'numeric',
+                                    month: 'short',
+                                    day: 'numeric'
+                                })}
+                            </div>
+                            <div className="text-gray-400 text-sm">
+                                <span className="font-semibold">Time:</span> {new Date(entry.startTime).toLocaleTimeString([], {
+                                    hour: 'numeric',
+                                    minute: '2-digit',
+                                    hour12: true
+                                })}
+                            </div>
+                        </div>
+
+                        {/* Description */}
+                        <div>
+                            <label className="block text-xs text-gray-400 uppercase font-semibold mb-2">Description</label>
+                            <textarea
+                                value={description}
+                                onChange={(e) => setDescription(e.target.value)}
+                                placeholder="Add a description for this worklog..."
+                                className="w-full bg-gray-700 border border-gray-600 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none transition-all"
+                                style={{ transitionDuration: 'var(--duration-base)', transitionTimingFunction: 'var(--ease-out)' }}
+                                rows={3}
+                                disabled={isLogging}
+                            />
+                        </div>
+                    </div>
+
+                    {/* Footer */}
+                    <div className="flex items-center justify-end gap-3 p-4 border-t border-gray-700">
+                        <button
+                            onClick={onClose}
+                            disabled={isLogging}
+                            className="px-4 py-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                            style={{ transitionDuration: 'var(--duration-fast)', transitionTimingFunction: 'var(--ease-out)' }}
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            onClick={handleConfirm}
+                            disabled={!canLog}
+                            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded-lg transition-all active:scale-[0.99] flex items-center gap-2 min-w-[120px] justify-center"
+                            style={{ transitionDuration: 'var(--duration-fast)', transitionTimingFunction: 'var(--ease-out)' }}
+                        >
+                            {isLogging ? (
+                                <>
+                                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                    <span>Logging...</span>
+                                </>
+                            ) : (
+                                <>
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <polyline points="20 6 9 17 4 12" />
+                                    </svg>
+                                    <span>Confirm & Log</span>
+                                </>
+                            )}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </>
+    );
+}

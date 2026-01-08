@@ -5,6 +5,11 @@ import App from './App.tsx'
 import { StorageProvider } from './context/StorageContext.tsx'
 import { SettingsProvider } from './context/SettingsContext.tsx'
 
+// Import seed script to expose console commands in development
+if (import.meta.env.DEV) {
+  import('./utils/seedScript');
+}
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <SettingsProvider>

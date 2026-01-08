@@ -1,4 +1,4 @@
-import { JiraMetadataCacheService } from './jiraMetadataCache';
+// JiraMetadataCacheService import removed - not currently used
 
 export interface JiraUser {
     accountId: string;
@@ -89,13 +89,10 @@ export class JiraService {
     private apiToken: string;
     private lastRequest = 0;
     private readonly REQUEST_DELAY = 100;
-    private metadataCache: JiraMetadataCacheService;
-
     constructor(baseUrl: string, email: string, apiToken: string) {
         this.baseUrl = baseUrl.replace(/\/+$/, '');
         this.email = email;
         this.apiToken = apiToken;
-        this.metadataCache = new JiraMetadataCacheService();
     }
 
     private async rateLimit(): Promise<void> {
@@ -207,5 +204,17 @@ export class JiraService {
 
     async getIssueTypes(): Promise<JiraIssueType[]> {
         return this.makeRequest<JiraIssueType[]>('/rest/api/3/issuetype');
+    }
+
+    async getIssue(issueKeyOrId: string): Promise<JiraIssue> {
+        const fields = 'summary,status,issuetype,project,assignee,reporter,priority,parent,created,updated,resolutiondate,description';
+        return this.makeRequest<JiraIssue>(
+            `/rest/api/3/issue/${issueKeyOrId}?fields=${fields}`
+        );
+    }
+
+    async getIssueIdFromKey(issueKey: string): Promise<string> {
+        const issue = await this.getIssue(issueKey);
+        return issue.id;
     }
 }

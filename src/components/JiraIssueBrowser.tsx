@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useSettings } from '../context/SettingsContext';
-import { TempoService, JiraIssue, JiraSearchResponse } from '../services/tempoService';
-import { LinkedJiraIssue } from '../context/StorageContext';
+import { TempoService } from '../services/tempoService';
+import type { JiraIssue, JiraSearchResponse } from '../services/tempoService';
+import type { LinkedJiraIssue } from '../context/StorageContext';
 
 interface JiraIssueBrowserProps {
     isOpen: boolean;
@@ -35,13 +36,13 @@ export function JiraIssueBrowser({ isOpen, onClose, onSelectIssue }: JiraIssueBr
                     response = await tempoService.getMyRecentIssues(20);
                     break;
                 case 'epics':
-                    response = await tempoService.getEpics(30);
+                    response = await tempoService.getAvailableEpics(30);
                     break;
                 case 'search':
                     if (query && query.trim()) {
                         response = await tempoService.searchIssuesByText(query.trim());
                     } else {
-                        response = await tempoService.searchIssues('ORDER BY updated DESC', 0, 30);
+                        response = await tempoService.getMyRecentIssues(30);
                     }
                     break;
                 default:
