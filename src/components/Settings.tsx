@@ -291,7 +291,7 @@ export function Settings() {
                 isOpen={showIntegrationModal}
                 onClose={() => setShowIntegrationModal(false)}
                 currentTempoSettings={tempSettings.tempo || { enabled: false, apiToken: '', baseUrl: 'https://api.tempo.io' }}
-                currentJiraSettings={tempSettings.jira || { enabled: false, apiToken: '', baseUrl: '', email: '' }}
+                currentJiraSettings={tempSettings.jira || { enabled: false, apiToken: '', baseUrl: '', email: '', selectedProjects: [] }}
                 onSave={(tempoSettings, jiraSettings) => {
                     setTempSettings(prev => ({ ...prev, tempo: tempoSettings, jira: jiraSettings }));
                 }}

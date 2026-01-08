@@ -33,6 +33,7 @@ export interface TimeEntry {
     description?: string;
     windowActivity?: WindowActivity[];
     screenshotPath?: string; // Future use
+    linkedJiraIssue?: LinkedJiraIssue; // Link to Jira issue
 }
 
 interface StorageContextType {
@@ -42,6 +43,8 @@ interface StorageContextType {
     removeBucket: (id: string) => void;
     linkJiraIssueToBucket: (bucketId: string, issue: LinkedJiraIssue) => void;
     unlinkJiraIssueFromBucket: (bucketId: string) => void;
+    linkJiraIssueToEntry: (entryId: string, issue: LinkedJiraIssue) => void;
+    unlinkJiraIssueFromEntry: (entryId: string) => void;
     addEntry: (entry: Omit<TimeEntry, 'id'>) => void;
     updateEntry: (id: string, updates: Partial<TimeEntry>) => void;
     removeEntry: (id: string) => void;
@@ -258,6 +261,22 @@ export const StorageProvider: React.FC<{ children: React.ReactNode }> = ({ child
         }));
     };
 
+    const linkJiraIssueToEntry = (entryId: string, issue: LinkedJiraIssue) => {
+        setEntries(entries.map(entry => 
+            entry.id === entryId 
+                ? { ...entry, linkedJiraIssue: issue }
+                : entry
+        ));
+    };
+
+    const unlinkJiraIssueFromEntry = (entryId: string) => {
+        setEntries(entries.map(entry => 
+            entry.id === entryId 
+                ? { ...entry, linkedJiraIssue: undefined }
+                : entry
+        ));
+    };
+
     return (
         <StorageContext.Provider value={{ 
             buckets, 
@@ -266,6 +285,8 @@ export const StorageProvider: React.FC<{ children: React.ReactNode }> = ({ child
             removeBucket, 
             linkJiraIssueToBucket,
             unlinkJiraIssueFromBucket,
+            linkJiraIssueToEntry,
+            unlinkJiraIssueFromEntry,
             addEntry, 
             updateEntry,
             removeEntry,

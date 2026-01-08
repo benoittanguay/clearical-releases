@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { TempoSettings, JiraSettings } from '../context/SettingsContext';
+import type { TempoSettings, JiraSettings } from '../context/SettingsContext';
+import type { JiraProject } from '../services/jiraService';
 
 interface IntegrationConfigModalProps {
     isOpen: boolean;
@@ -21,6 +22,8 @@ export function IntegrationConfigModal({
     const [isTestingTempo, setIsTestingTempo] = useState(false);
     const [isTestingJira, setIsTestingJira] = useState(false);
     const [activeTab, setActiveTab] = useState<'jira' | 'tempo'>('jira');
+    const [availableProjects, setAvailableProjects] = useState<JiraProject[]>([]);
+    const [loadingProjects, setLoadingProjects] = useState(false);
 
     useEffect(() => {
         if (isOpen) {
@@ -64,12 +67,65 @@ export function IntegrationConfigModal({
             const { JiraService } = await import('../services/jiraService');
             const service = new JiraService(tempJiraSettings.baseUrl, tempJiraSettings.email, tempJiraSettings.apiToken);
             const isConnected = await service.testConnection();
-            alert(isConnected ? 'Jira connection successful!' : 'Jira connection failed. Please check your credentials and URL.');
+            
+            if (isConnected) {
+                alert('Jira connection successful!');
+                // Load available projects after successful connection
+                loadAvailableProjects();
+            } else {
+                alert('Jira connection failed. Please check your credentials and URL.');
+            }
         } catch (error) {
             alert(`Jira connection failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
         } finally {
             setIsTestingJira(false);
         }
+    };
+
+    const loadAvailableProjects = async () => {
+        if (!tempJiraSettings.apiToken || !tempJiraSettings.baseUrl || !tempJiraSettings.email) {
+            return;
+        }
+
+        setLoadingProjects(true);
+        try {
+            const { JiraService } = await import('../services/jiraService');
+            const service = new JiraService(tempJiraSettings.baseUrl, tempJiraSettings.email, tempJiraSettings.apiToken);
+            const projects = await service.getProjects();
+            setAvailableProjects(projects);
+        } catch (error) {
+            console.error('Failed to load projects:', error);
+            setAvailableProjects([]);
+        } finally {
+            setLoadingProjects(false);
+        }
+    };
+
+    const handleProjectToggle = (projectKey: string) => {
+        setTempJiraSettings(prev => {
+            const currentSelected = prev.selectedProjects || [];
+            const isSelected = currentSelected.includes(projectKey);
+            
+            const newSelected = isSelected
+                ? currentSelected.filter(key => key !== projectKey)
+                : [...currentSelected, projectKey];
+                
+            return { ...prev, selectedProjects: newSelected };
+        });
+    };
+
+    const selectAllProjects = () => {
+        setTempJiraSettings(prev => ({
+            ...prev,
+            selectedProjects: availableProjects.map(p => p.key)
+        }));
+    };
+
+    const clearAllProjects = () => {
+        setTempJiraSettings(prev => ({
+            ...prev,
+            selectedProjects: []
+        }));
     };
 
     if (!isOpen) return null;
@@ -88,6 +144,21 @@ export function IntegrationConfigModal({
                             <line x1="6" y1="6" x2="18" y2="18"></line>
                         </svg>
                     </button>
+                </div>
+
+                {/* Testing Credentials Banner */}
+                <div className="bg-orange-900/50 border border-orange-700 rounded-lg p-3 mb-4">
+                    <div className="flex items-center gap-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-orange-400">
+                            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                            <line x1="12" y1="9" x2="12" y2="13"/>
+                            <line x1="12" y1="17" x2="12.01" y2="17"/>
+                        </svg>
+                        <span className="text-orange-300 text-sm font-medium">Testing Mode</span>
+                    </div>
+                    <p className="text-orange-200 text-xs mt-1">
+                        Development credentials are automatically loaded for testing purposes.
+                    </p>
                 </div>
 
                 <div className="mb-4 text-sm text-gray-400">
@@ -200,6 +271,65 @@ export function IntegrationConfigModal({
                                         'Test Jira Connection'
                                     )}
                                 </button>
+
+                                {/* Project Selection */}
+                                {availableProjects.length > 0 && (
+                                    <div className="mt-6">
+                                        <label className="block text-sm text-gray-400 mb-2">
+                                            Select Projects to Fetch Data From
+                                        </label>
+                                        <div className="text-xs text-gray-500 mb-3">
+                                            Choose which projects to include in issue fetching. This improves performance and focuses on relevant data for AI features.
+                                        </div>
+                                        
+                                        <div className="flex items-center gap-2 mb-3">
+                                            <button
+                                                onClick={selectAllProjects}
+                                                className="text-xs text-blue-400 hover:text-blue-300 underline"
+                                            >
+                                                Select All
+                                            </button>
+                                            <span className="text-xs text-gray-500">|</span>
+                                            <button
+                                                onClick={clearAllProjects}
+                                                className="text-xs text-blue-400 hover:text-blue-300 underline"
+                                            >
+                                                Clear All
+                                            </button>
+                                            <span className="text-xs text-gray-500 ml-2">
+                                                {tempJiraSettings.selectedProjects?.length || 0} of {availableProjects.length} selected
+                                            </span>
+                                        </div>
+
+                                        <div className="max-h-48 overflow-y-auto bg-gray-900 border border-gray-700 rounded px-3 py-2">
+                                            {availableProjects.map((project) => (
+                                                <div key={project.key} className="flex items-center gap-2 py-2 border-b border-gray-800 last:border-b-0">
+                                                    <input
+                                                        type="checkbox"
+                                                        id={`project-${project.key}`}
+                                                        checked={tempJiraSettings.selectedProjects?.includes(project.key) || false}
+                                                        onChange={() => handleProjectToggle(project.key)}
+                                                        className="w-4 h-4 text-blue-600 bg-gray-900 border border-gray-700 rounded focus:ring-blue-500 focus:ring-1"
+                                                    />
+                                                    <label
+                                                        htmlFor={`project-${project.key}`}
+                                                        className="flex-1 text-sm text-gray-300 cursor-pointer"
+                                                    >
+                                                        <span className="font-medium text-blue-400">{project.key}</span>
+                                                        <span className="text-gray-500 ml-2">- {project.name}</span>
+                                                    </label>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {loadingProjects && (
+                                    <div className="mt-4 flex items-center justify-center py-4 text-sm text-gray-400">
+                                        <div className="w-4 h-4 border border-gray-400 border-t-transparent rounded-full animate-spin mr-2"></div>
+                                        Loading available projects...
+                                    </div>
+                                )}
                             </>
                         )}
                     </div>

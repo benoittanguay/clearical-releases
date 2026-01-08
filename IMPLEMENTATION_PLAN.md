@@ -166,9 +166,55 @@
    - Responsive layout for different screen sizes
 
 ### Jira Tempo Integration
-**Status**: Planned for Development
+**Status**: ✅ Partially Complete - Direct Jira API Integration Implemented
 
-**Requirements**:
+**✅ Completed**:
+- Direct Jira API v3 integration with comprehensive issue discovery
+- Unified Jira and Tempo configuration modal
+- Pagination support for fetching all Jira objects (not limited to 20 items)
+- Fixed deprecated API endpoints (/search → /search/jql)
+- Rate limiting and error handling
+- Connection testing for both Jira and Tempo APIs
+
+**🚧 In Progress - Enhanced Jira Integration Requirements**:
+
+1. **Comprehensive Jira Object Fetching**
+   - **Priority**: High - Required for future AI features
+   - Implement comprehensive fetching of ALL Jira objects, not just assigned/recent/epics
+   - Fetch all projects, issue types, statuses, priorities, components, versions
+   - Create comprehensive data context for AI features to use
+   - Store complete Jira schema/metadata locally for AI processing
+   - Technical areas:
+     - Extend JiraService with methods for all object types
+     - Add getAllProjects(), getAllIssueTypes(), getAllStatuses(), etc.
+     - Create comprehensive data caching system
+     - Store Jira schema metadata for AI context
+
+2. **Project/Space Selection in Configuration**
+   - **Priority**: High - User control over data scope
+   - Add project/space selector in Jira configuration process
+   - Allow users to select which Jira projects to fetch data from
+   - Improve performance by limiting scope to relevant projects
+   - Provide UI for multi-select project configuration
+   - Technical areas:
+     - Add project selection UI in IntegrationConfigModal
+     - Store selected projects in settings context
+     - Filter all API calls by selected projects
+     - Add project management in configuration flow
+
+3. **Debug UI Cleanup**
+   - **Priority**: Medium - Code quality and user experience
+   - Remove all console.log statements from production code
+   - Clean up debug UI elements (red debug bars, etc.)
+   - Keep only essential logging for error tracking
+   - Improve user-facing error messages
+   - Technical areas:
+     - Remove debug console.log statements throughout codebase
+     - Remove debug UI elements (red debug sections in JiraIssuesSection)
+     - Replace console.log with proper logging framework if needed
+     - Clean up development-only UI components
+
+**Remaining Original Requirements**:
 1. **Tempo API Authentication**
    - Personal API token configuration in settings
    - Secure storage of API token (encrypted or keychain)
@@ -665,9 +711,14 @@ electron/
    - Add app icon retrieval and display
    - Build screenshot gallery component
    - Link screenshots to activities
-4. ✅ **Jira Tempo Integration**
-   - Implement Tempo API client
-   - Add Tempo settings and configuration UI
+4. ✅ **Jira Tempo Integration** (Partially Complete)
+   - ✅ Implement direct Jira API client with pagination
+   - ✅ Add unified Jira/Tempo settings and configuration UI
+   - ✅ Fix deprecated API endpoints
+   - 🚧 **Enhanced Jira Integration** (NEW REQUIREMENTS):
+     - **Comprehensive Jira Object Fetching** for AI features
+     - **Project/Space Selection** in configuration process
+     - **Debug UI Cleanup** - remove console.log and debug elements
    - Build bucket mapping interface
    - Implement worklog sync functionality
 5. ✅ Improve UI for screenshot management

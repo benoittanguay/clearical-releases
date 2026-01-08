@@ -7,18 +7,21 @@ import { HistoryDetail } from './components/HistoryDetail';
 import { ExportDialog } from './components/ExportDialog';
 import { DeleteButton } from './components/DeleteButton';
 import { JiraIssuesSection } from './components/JiraIssuesSection';
+import type { JiraIssue } from './services/jiraService';
+import type { LinkedJiraIssue } from './context/StorageContext';
 import './App.css'
 
 type View = 'timer' | 'history' | 'buckets' | 'settings' | 'history-detail';
 
 function App() {
-  const { buckets, entries, addEntry, addBucket, removeBucket, updateEntry, removeEntry, linkJiraIssueToBucket, unlinkJiraIssueFromBucket } = useStorage();
+  const { buckets, entries, addEntry, addBucket, removeBucket, updateEntry, removeEntry, linkJiraIssueToBucket, unlinkJiraIssueFromBucket, linkJiraIssueToEntry, unlinkJiraIssueFromEntry } = useStorage();
   const { settings } = useSettings();
   const [selectedBucket, setSelectedBucket] = useState<string>('1');
   const [currentView, setCurrentView] = useState<View>('timer');
   const [newBucketName, setNewBucketName] = useState('');
   const [selectedEntry, setSelectedEntry] = useState<string | null>(null);
   const [showExportDialog, setShowExportDialog] = useState(false);
+  const [selectedEntryForLinking, setSelectedEntryForLinking] = useState<string | null>(null);
 
   const { isRunning, isPaused, elapsed, start: startTimer, stop: stopTimer, pause: pauseTimer, resume: resumeTimer, reset: resetTimer, formatTime } = useTimer();
 
@@ -101,6 +104,22 @@ function App() {
     if (window.electron) {
       // @ts-ignore
       window.electron.ipcRenderer.send('hide-window', null);
+    }
+  };
+
+  const handleLinkIssueToEntry = (issue: JiraIssue) => {
+    if (selectedEntryForLinking) {
+      const linkedIssue: LinkedJiraIssue = {
+        key: issue.key,
+        summary: issue.fields.summary,
+        issueType: issue.fields.issuetype.name,
+        status: issue.fields.status.name,
+        projectKey: issue.fields.project.key,
+        projectName: issue.fields.project.name
+      };
+      
+      linkJiraIssueToEntry(selectedEntryForLinking, linkedIssue);
+      setSelectedEntryForLinking(null);
     }
   };
 
@@ -334,7 +353,10 @@ function App() {
 
               {/* Jira Issues Section */}
               {(settings.jira?.enabled || settings.tempo?.enabled) && (
-                <JiraIssuesSection />
+                <>
+                  {console.log('[App] Rendering JiraIssuesSection')}
+                  <JiraIssuesSection />
+                </>
               )}
             </div>
           )}
@@ -404,6 +426,19 @@ function App() {
                             {bucket && <div className="w-2 h-2 rounded-full" style={{ backgroundColor: bucket.color }}></div>}
                             <span className="text-sm font-medium text-gray-200">{bucket?.name || 'Unknown'}</span>
                           </div>
+                          {entry.linkedJiraIssue && (
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="text-blue-400 font-mono text-xs">
+                                {entry.linkedJiraIssue.key}
+                              </span>
+                              <span className="text-xs text-gray-500">
+                                {entry.linkedJiraIssue.projectName}
+                              </span>
+                              <span className="text-xs px-1 py-0.5 bg-gray-700 text-gray-300 rounded">
+                                {entry.linkedJiraIssue.issueType}
+                              </span>
+                            </div>
+                          )}
                           {entry.description && (
                             <p className="text-xs text-gray-400 mb-1 truncate">{entry.description}</p>
                           )}
@@ -416,6 +451,35 @@ function App() {
                           <div className="font-mono text-green-400 font-bold">
                             {formatTime(entry.duration)}
                           </div>
+                          {entry.linkedJiraIssue ? (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                unlinkJiraIssueFromEntry(entry.id);
+                              }}
+                              className="text-xs text-red-400 hover:text-red-300 transition-colors"
+                              title="Unlink Jira issue"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+                                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+                              </svg>
+                            </button>
+                          ) : (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedEntryForLinking(entry.id);
+                              }}
+                              className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
+                              title="Link Jira issue"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+                                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+                              </svg>
+                            </button>
+                          )}
                           <DeleteButton
                             onDelete={() => removeEntry(entry.id)}
                             confirmMessage="Delete this time entry?"
@@ -426,6 +490,25 @@ function App() {
                       </div>
                     );
                   })}
+                </div>
+              )}
+
+              {/* Jira Issue Selection for Linking */}
+              {selectedEntryForLinking && settings.jira?.enabled && (
+                <div className="mt-6 border-t border-gray-700 pt-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-semibold text-white">Select Jira Issue to Link</h3>
+                    <button
+                      onClick={() => setSelectedEntryForLinking(null)}
+                      className="text-gray-400 hover:text-white transition-colors"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                      </svg>
+                    </button>
+                  </div>
+                  <JiraIssuesSection onIssueClick={handleLinkIssueToEntry} />
                 </div>
               )}
             </div>
