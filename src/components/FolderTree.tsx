@@ -114,7 +114,7 @@ export const FolderTree: React.FC<FolderTreeProps> = ({
                     />
                     {/* Render children if folder is expanded */}
                     {node.bucket.isFolder && isExpanded && hasChildren && (
-                        <div className="mt-3">
+                        <div className="mt-2">
                             {renderTree(node.children, level + 1)}
                         </div>
                     )}
@@ -126,7 +126,7 @@ export const FolderTree: React.FC<FolderTreeProps> = ({
     const tree = buildTree();
 
     return (
-        <ul className="space-y-3">
+        <ul className="space-y-2">
             {tree.length === 0 ? (
                 <li className="text-gray-500 text-sm text-center py-8">
                     No buckets or folders yet. Create one to get started.

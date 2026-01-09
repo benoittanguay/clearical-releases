@@ -169,9 +169,9 @@ export function JiraIssuesSection({ onIssueClick }: JiraIssuesSectionProps = {})
     const currentTabData = tabData[activeTab] || { issues: [], loading: false, error: null };
 
     return (
-        <div className="mt-8">
-            <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-white">Jira Issues</h3>
+        <div className="mt-6">
+            <div className="flex items-center justify-between mb-3">
+                <h3 className="text-base font-semibold text-white">Jira Issues</h3>
                 <button
                     onClick={() => {
                         if (activeTab === 'assigned') {
@@ -191,7 +191,7 @@ export function JiraIssuesSection({ onIssueClick }: JiraIssuesSectionProps = {})
                             });
                         }
                     }}
-                    className="px-3 py-1 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded transition-colors"
+                    className="px-2.5 py-1 bg-gray-700 hover:bg-gray-600 text-white text-xs rounded transition-colors"
                     disabled={currentTabData.loading}
                 >
                     Refresh
@@ -199,12 +199,12 @@ export function JiraIssuesSection({ onIssueClick }: JiraIssuesSectionProps = {})
             </div>
 
             {/* Tab Navigation */}
-            <div className="flex space-x-1 mb-4 overflow-x-auto">
+            <div className="flex space-x-1 mb-3 overflow-x-auto">
                 {tabs.map((tab) => (
                     <button
                         key={tab.key}
                         onClick={() => setActiveTab(tab.key)}
-                        className={`px-3 py-2 text-sm font-medium rounded-lg transition-colors flex items-center gap-2 whitespace-nowrap ${
+                        className={`px-2.5 py-1.5 text-xs font-medium rounded-lg transition-colors flex items-center gap-1.5 whitespace-nowrap ${
                             activeTab === tab.key
                                 ? 'bg-blue-600 text-white'
                                 : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
@@ -224,7 +224,7 @@ export function JiraIssuesSection({ onIssueClick }: JiraIssuesSectionProps = {})
 
             {/* Search Input */}
             {activeTab === 'search' && (
-                <div className="flex gap-2 mb-4">
+                <div className="flex gap-2 mb-3">
                     <input
                         type="text"
                         value={searchQuery}
@@ -236,7 +236,7 @@ export function JiraIssuesSection({ onIssueClick }: JiraIssuesSectionProps = {})
                     <button
                         onClick={handleSearch}
                         disabled={currentTabData.loading || !searchQuery.trim()}
-                        className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-600 disabled:cursor-not-allowed text-white text-sm rounded transition-colors"
+                        className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-600 disabled:cursor-not-allowed text-white text-sm rounded transition-colors"
                     >
                         {currentTabData.loading ? 'Searching...' : 'Search'}
                     </button>
@@ -245,7 +245,7 @@ export function JiraIssuesSection({ onIssueClick }: JiraIssuesSectionProps = {})
 
             {/* Error State */}
             {currentTabData.error && (
-                <div className="bg-red-900/50 border border-red-700 rounded-lg p-3 mb-4">
+                <div className="bg-red-900/50 border border-red-700 rounded-lg p-2.5 mb-3">
                     <p className="text-red-300 text-sm">{currentTabData.error}</p>
                     <button
                         onClick={() => loadTabData(activeTab)}
@@ -257,9 +257,9 @@ export function JiraIssuesSection({ onIssueClick }: JiraIssuesSectionProps = {})
             )}
 
             {/* Issues List */}
-            <div className="bg-gray-800/30 rounded-lg p-4 border border-gray-700">
+            <div className="bg-gray-800/30 rounded-lg p-3 border border-gray-700">
                 {currentTabData.loading ? (
-                    <div className="flex items-center justify-center py-8">
+                    <div className="flex items-center justify-center py-6">
                         <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                         <span className="ml-2 text-gray-300">Loading issues...</span>
                     </div>
@@ -278,12 +278,12 @@ export function JiraIssuesSection({ onIssueClick }: JiraIssuesSectionProps = {})
                         </p>
                     </div>
                 ) : (
-                    <div className="space-y-2">
+                    <div className="space-y-1.5">
                         {currentTabData.issues.map((issue) => (
                             <div
                                 key={issue.id}
                                 onClick={() => onIssueClick?.(issue)}
-                                className="bg-gray-900/50 border border-gray-600 rounded-lg p-3 hover:bg-gray-800/50 transition-colors cursor-pointer"
+                                className="bg-gray-900/50 border border-gray-600 rounded-lg p-2.5 hover:bg-gray-800/50 transition-colors cursor-pointer"
                             >
                                 <div className="flex items-start justify-between">
                                     <div className="flex-1 min-w-0">

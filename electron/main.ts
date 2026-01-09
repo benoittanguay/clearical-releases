@@ -6,11 +6,71 @@ import os from 'os';
 import { fileURLToPath } from 'url';
 import { saveEncryptedFile, decryptFile, getEncryptionKey } from './encryption.js';
 import { storeCredential, getCredential, deleteCredential, hasCredential, listCredentialKeys, isSecureStorageAvailable } from './credentialStorage.js';
+import { initializeLicensing } from './licensing/ipcHandlers.js';
+import { AIAssignmentService, ActivityContext, AssignmentSuggestion } from './aiAssignmentService.js';
+import { AIAccountService, TempoAccount, AccountSelection, HistoricalAccountUsage } from './aiAccountService.js';
+import { LinkedJiraIssue } from '../src/types/shared.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 process.env.DIST = path.join(__dirname, '../dist');
 process.env.VITE_PUBLIC = app.isPackaged ? process.env.DIST : path.join(process.env.DIST, '../public');
+
+// Handle EPIPE errors gracefully to prevent crash dialogs
+// EPIPE occurs when console.log tries to write to a closed stdout pipe
+// This is common in Electron apps and should not crash the application
+process.on('uncaughtException', (error: Error) => {
+    // Check if this is an EPIPE error
+    if ('code' in error && (error as any).code === 'EPIPE') {
+        // EPIPE errors are non-fatal - the console output destination is unavailable
+        // This commonly happens when stdout is redirected to a closed pipe
+        // Silently ignore these errors to prevent crash dialogs
+        return;
+    }
+
+    // For all other uncaught exceptions, log them and show error dialog
+    console.error('[Main] Uncaught Exception:', error);
+
+    // In production, we might want to show an error dialog
+    if (app.isReady()) {
+        dialog.showErrorBox(
+            'Unexpected Error',
+            `An unexpected error occurred: ${error.message}\n\nThe application will continue running.`
+        );
+    }
+});
+
+// Handle unhandled promise rejections
+process.on('unhandledRejection', (reason: any) => {
+    console.error('[Main] Unhandled Promise Rejection:', reason);
+});
+
+// Wrap console methods to handle EPIPE errors gracefully
+const originalConsoleLog = console.log;
+const originalConsoleError = console.error;
+const originalConsoleWarn = console.warn;
+
+const safeConsoleWrapper = (originalMethod: typeof console.log) => {
+    return (...args: any[]) => {
+        try {
+            originalMethod.apply(console, args);
+        } catch (error: any) {
+            // Silently ignore EPIPE errors in console output
+            if (error.code !== 'EPIPE') {
+                // If it's not an EPIPE error, try to report it via stderr
+                try {
+                    process.stderr.write(`Console output error: ${error.message}\n`);
+                } catch {
+                    // If even stderr fails, there's nothing we can do
+                }
+            }
+        }
+    };
+};
+
+console.log = safeConsoleWrapper(originalConsoleLog);
+console.error = safeConsoleWrapper(originalConsoleError);
+console.warn = safeConsoleWrapper(originalConsoleWarn);
 
 let win: BrowserWindow | null;
 let tray: Tray | null;
@@ -58,12 +118,9 @@ ipcMain.handle('capture-screenshot', async () => {
                 currentWindow = { appName, windowTitle };
                 console.log('[Main] capture-screenshot - Active window:', currentWindow);
 
-                // Skip screenshot if the active window is the TimePortal app itself
-                const appNameLower = appName.toLowerCase();
-                if (appNameLower === 'electron' || appNameLower === 'time-portal' || appNameLower === 'timeportal') {
-                    console.log('[Main] Active window is TimePortal/Electron, skipping screenshot capture');
-                    return null;
-                }
+                // NOTE: We don't skip here based on active window - we'll filter TimePortal
+                // from the window sources later. This allows screenshots to be taken even
+                // when TimePortal is in focus (we'll capture other windows).
             }
         } catch (error) {
             console.log('[Main] Could not get active window info for screenshot:', error);
@@ -207,14 +264,46 @@ ipcMain.handle('capture-screenshot', async () => {
                 console.log('[Main] No active window info available');
             }
             
-            // If we still don't have a target, we could either skip or fallback to screen capture
+            // If we still don't have a target, use a heuristic fallback
             if (!targetSource) {
                 console.log('[Main] No matching window found for app:', currentWindow?.appName || 'unknown');
                 console.log('[Main] Available windows:', validSources.map(s => `"${s.name}"`).join(', '));
-                
-                // For now, return null to skip capturing unmatched windows
-                // This prevents capturing random windows when we can't match properly
-                return null;
+
+                // Fallback strategy: If there's only one valid window, use it
+                // This handles cases where the window title doesn't match but there's clearly
+                // only one active work window
+                if (validSources.length === 1) {
+                    targetSource = validSources[0];
+                    console.log('[Main] Using single available window as fallback:', targetSource.name);
+                } else if (validSources.length > 1 && currentWindow?.appName) {
+                    // Try a more lenient matching: find any window containing part of the app name
+                    const appNameWords = currentWindow.appName.toLowerCase().split(/\s+/);
+                    const possibleMatches = validSources.filter(source => {
+                        const sourceLower = source.name.toLowerCase();
+                        return appNameWords.some(word => word.length > 3 && sourceLower.includes(word));
+                    });
+
+                    if (possibleMatches.length > 0) {
+                        targetSource = possibleMatches[0];
+                        console.log('[Main] Using lenient app name match:', targetSource.name);
+                    } else {
+                        // Last resort: use the largest window by area (most likely the active work window)
+                        targetSource = validSources.reduce((largest, current) => {
+                            const currentSize = current.thumbnail.getSize();
+                            const largestSize = largest.thumbnail.getSize();
+                            const currentArea = currentSize.width * currentSize.height;
+                            const largestArea = largestSize.width * largestSize.height;
+                            return currentArea > largestArea ? current : largest;
+                        });
+                        console.log('[Main] Using largest window as last resort fallback:', targetSource.name);
+                    }
+                }
+
+                // If still no target after all fallbacks, give up
+                if (!targetSource) {
+                    console.log('[Main] No suitable window found after all fallback strategies');
+                    return null;
+                }
             }
             
             console.log('[Main] Capturing window:', targetSource.name, 
@@ -365,13 +454,16 @@ ipcMain.handle('generate-activity-summary', async (event, context: {
 
         // For now, we'll create a simple heuristic-based summary since we're using text-only
         // In a future iteration, this could call a local LLM or use more sophisticated analysis
-        const summary = generateTextBasedSummary(context);
+        const result = generateTextBasedSummary(context);
 
-        console.log('[Main] generate-activity-summary success:', summary.substring(0, 100) + '...');
+        console.log('[Main] generate-activity-summary success:', result.summary.substring(0, 100) + '...');
+        console.log('[Main] Detected activities:', result.metadata.detectedActivities);
+        console.log('[Main] Detected technologies:', result.metadata.detectedTechnologies);
 
         return {
             success: true,
-            summary: summary,
+            summary: result.summary,
+            metadata: result.metadata,
             error: null
         };
 
@@ -393,7 +485,7 @@ function generateTextBasedSummary(context: {
     duration: number;
     startTime: number;
     endTime: number;
-}): string {
+}): { summary: string; metadata: { detectedActivities: string[]; detectedTechnologies: string[]; confidence: number } } {
     const durationMinutes = Math.round(context.duration / 1000 / 60);
     const durationHours = Math.floor(durationMinutes / 60);
     const remainingMinutes = durationMinutes % 60;
@@ -509,8 +601,21 @@ function generateTextBasedSummary(context: {
         parts.push(`The session focused on ${keyPhrases.join(' and ')}`);
     }
 
+    // Calculate confidence based on how much information we have
+    let confidence = 0.5;  // Base confidence
+    if (context.screenshotDescriptions.length > 0) confidence += 0.2;
+    if (activities.length > 0) confidence += 0.15;
+    if (technologies.length > 0) confidence += 0.15;
+
     // Join all parts into a coherent summary
-    return parts.join('. ') + '.';
+    return {
+        summary: parts.join('. ') + '.',
+        metadata: {
+            detectedActivities: activities,
+            detectedTechnologies: technologies,
+            confidence: Math.min(confidence, 1.0)
+        }
+    };
 }
 
 // Screenshot Analysis with Apple Vision Framework
@@ -1067,24 +1172,35 @@ ipcMain.handle('show-item-in-folder', async (event, filePath: string) => {
 // Tempo API handlers - Proxy requests through main process to avoid CORS
 ipcMain.handle('tempo-api-request', async (event, { url, method = 'GET', headers = {}, body }) => {
     console.log('[Main] Tempo API request:', method, url);
-    
+    if (body) {
+        console.log('[Main] Tempo API request body type:', typeof body);
+        console.log('[Main] Tempo API request body preview:', JSON.stringify(body).substring(0, 200));
+    }
+
     try {
+        const requestBody = body && (method === 'POST' || method === 'PUT')
+            ? (typeof body === 'string' ? body : JSON.stringify(body))
+            : undefined;
+
+        if (requestBody) {
+            console.log('[Main] Tempo API final request body length:', requestBody.length);
+        }
+
         const response = await fetch(url, {
             method,
             headers: {
                 'Content-Type': 'application/json',
                 ...headers,
             },
-            body: body ? JSON.stringify(body) : undefined,
+            body: requestBody,
         });
 
         const responseHeaders = Object.fromEntries(response.headers.entries());
         console.log('[Main] Tempo API response status:', response.status, response.statusText);
-        console.log('[Main] Tempo API response headers:', responseHeaders);
 
         let responseData;
         const contentType = responseHeaders['content-type'] || '';
-        
+
         if (contentType.includes('application/json')) {
             responseData = await response.json();
         } else {
@@ -1092,7 +1208,7 @@ ipcMain.handle('tempo-api-request', async (event, { url, method = 'GET', headers
         }
 
         if (!response.ok) {
-            console.log('[Main] Tempo API error response:', responseData);
+            console.error('[Main] Tempo API error response:', responseData);
             return {
                 success: false,
                 status: response.status,
@@ -1102,7 +1218,7 @@ ipcMain.handle('tempo-api-request', async (event, { url, method = 'GET', headers
             };
         }
 
-        console.log('[Main] Tempo API success response:', typeof responseData === 'object' ? 'JSON data' : 'Text data');
+        console.log('[Main] Tempo API success response');
         return {
             success: true,
             status: response.status,
@@ -1123,24 +1239,35 @@ ipcMain.handle('tempo-api-request', async (event, { url, method = 'GET', headers
 // Jira API handlers - Proxy requests through main process to avoid CORS
 ipcMain.handle('jira-api-request', async (event, { url, method = 'GET', headers = {}, body }) => {
     console.log('[Main] Jira API request:', method, url);
-    
+    if (body) {
+        console.log('[Main] Jira API request body type:', typeof body);
+        console.log('[Main] Jira API request body preview:', JSON.stringify(body).substring(0, 200));
+    }
+
     try {
+        const requestBody = body && (method === 'POST' || method === 'PUT')
+            ? (typeof body === 'string' ? body : JSON.stringify(body))
+            : undefined;
+
+        if (requestBody) {
+            console.log('[Main] Jira API final request body length:', requestBody.length);
+        }
+
         const response = await fetch(url, {
             method,
             headers: {
                 'Content-Type': 'application/json',
                 ...headers,
             },
-            body: body ? JSON.stringify(body) : undefined,
+            body: requestBody,
         });
 
         const responseHeaders = Object.fromEntries(response.headers.entries());
         console.log('[Main] Jira API response status:', response.status, response.statusText);
-        console.log('[Main] Jira API response headers:', responseHeaders);
 
         let responseData;
         const contentType = responseHeaders['content-type'] || '';
-        
+
         if (contentType.includes('application/json')) {
             responseData = await response.json();
         } else {
@@ -1148,7 +1275,7 @@ ipcMain.handle('jira-api-request', async (event, { url, method = 'GET', headers 
         }
 
         if (!response.ok) {
-            console.log('[Main] Jira API error response:', responseData);
+            console.error('[Main] Jira API error response:', responseData);
             return {
                 success: false,
                 status: response.status,
@@ -1158,7 +1285,7 @@ ipcMain.handle('jira-api-request', async (event, { url, method = 'GET', headers 
             };
         }
 
-        console.log('[Main] Jira API success response:', typeof responseData === 'object' ? 'JSON data' : 'Text data');
+        console.log('[Main] Jira API success response');
         return {
             success: true,
             status: response.status,
@@ -1287,6 +1414,98 @@ ipcMain.handle('secure-is-available', async () => {
     }
 });
 
+// AI Assignment Suggestion Handler
+ipcMain.handle('suggest-assignment', async (event, request: {
+    context: ActivityContext;
+    buckets: any[];
+    jiraIssues: LinkedJiraIssue[];
+    historicalEntries: any[];
+}) => {
+    console.log('[Main] suggest-assignment requested');
+    console.log('[Main] Context:', {
+        description: request.context.description?.substring(0, 50) + '...',
+        appNames: request.context.appNames,
+        technologies: request.context.detectedTechnologies
+    });
+
+    try {
+        // Create AI service with provided data
+        const service = new AIAssignmentService(
+            request.buckets,
+            request.jiraIssues,
+            request.historicalEntries
+        );
+
+        // Get suggestion
+        const suggestion = await service.suggestAssignment(request.context);
+
+        console.log('[Main] Assignment suggestion result:', {
+            hasAssignment: !!suggestion.assignment,
+            confidence: (suggestion.confidence * 100).toFixed(1) + '%',
+            reason: suggestion.reason
+        });
+
+        return {
+            success: true,
+            suggestion: suggestion
+        };
+    } catch (error) {
+        console.error('[Main] suggest-assignment failed:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error',
+            suggestion: null
+        };
+    }
+});
+
+// AI Tempo Account Selection Handler
+ipcMain.handle('select-tempo-account', async (event, request: {
+    issue: LinkedJiraIssue;
+    accounts: TempoAccount[];
+    description?: string;
+    historicalAccounts: HistoricalAccountUsage[];
+}) => {
+    console.log('[Main] select-tempo-account requested');
+    console.log('[Main] Issue:', request.issue.key);
+    console.log('[Main] Available accounts:', request.accounts.length);
+    console.log('[Main] Historical records:', request.historicalAccounts.length);
+
+    try {
+        // Create AI service
+        const service = new AIAccountService();
+
+        // Get account selection
+        const selection = await service.selectAccount(
+            request.issue,
+            request.accounts,
+            {
+                description: request.description,
+                historicalAccounts: request.historicalAccounts
+            }
+        );
+
+        console.log('[Main] Account selection result:', {
+            hasAccount: !!selection.account,
+            accountName: selection.account?.name,
+            confidence: (selection.confidence * 100).toFixed(1) + '%',
+            reason: selection.reason
+        });
+
+        return {
+            success: true,
+            selection: selection
+        };
+    } catch (error) {
+        console.error('[Main] select-tempo-account failed:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error',
+            selection: null
+        };
+    }
+});
+
 function createTray() {
     const iconPath = path.join(process.env.VITE_PUBLIC || '', 'tray-icon.png');
     console.log('Tray Icon Path:', iconPath);
@@ -1384,6 +1603,15 @@ app.whenReady().then(() => {
     } catch (error) {
         console.error('[Main] Failed to initialize encryption:', error);
         console.warn('[Main] Screenshots will be saved unencrypted as fallback');
+    }
+
+    // Initialize licensing system
+    try {
+        initializeLicensing();
+        console.log('[Main] Licensing system initialized');
+    } catch (error) {
+        console.error('[Main] Failed to initialize licensing:', error);
+        console.warn('[Main] App will run without licensing (development mode)');
     }
 
     createWindow();

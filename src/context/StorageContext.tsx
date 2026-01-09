@@ -1,59 +1,25 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import type {
+    LinkedJiraIssue,
+    WorkAssignment,
+    TimeBucket,
+    WindowActivity,
+    TimeEntry
+} from '../types/shared';
 
-export interface LinkedJiraIssue {
-    key: string;
-    summary: string;
-    issueType: string;
-    status: string;
-    projectKey: string;
-    projectName: string;
-}
-
-export interface WorkAssignment {
-    type: 'bucket' | 'jira';
-    bucket?: {
-        id: string;
-        name: string;
-        color: string;
-    };
-    jiraIssue?: LinkedJiraIssue;
-}
-
-export interface TimeBucket {
-    id: string;
-    name: string;
-    color: string;
-    parentId?: string | null;  // Parent folder ID (null/undefined = root level)
-    isFolder?: boolean;        // True if this is a folder, not a bucket
-    linkedIssue?: LinkedJiraIssue;
-}
-
-export interface WindowActivity {
-    appName: string;
-    windowTitle: string;
-    timestamp: number;
-    duration: number;
-    screenshotPaths?: string[]; // Array of screenshot file paths for this activity
-    screenshotDescriptions?: { [path: string]: string }; // AI-generated descriptions for each screenshot
-}
-
-export interface TimeEntry {
-    id: string;
-    startTime: number;
-    endTime: number;
-    duration: number; // ms
-    assignment?: WorkAssignment;
-    bucketId?: string | null; // Legacy field for migration
-    linkedJiraIssue?: LinkedJiraIssue; // Legacy field for migration
-    description?: string;
-    windowActivity?: WindowActivity[];
-    screenshotPath?: string; // Future use
-}
+// Re-export shared types for backward compatibility
+export type {
+    LinkedJiraIssue,
+    WorkAssignment,
+    TimeBucket,
+    WindowActivity,
+    TimeEntry
+};
 
 interface StorageContextType {
     buckets: TimeBucket[];
     entries: TimeEntry[];
-    addBucket: (name: string, color: string) => void;
+    addBucket: (name: string, color: string, parentId?: string | null) => void;
     removeBucket: (id: string) => void;
     renameBucket: (id: string, newName: string) => void;
     createFolder: (name: string, parentId?: string | null) => void;
@@ -63,6 +29,7 @@ interface StorageContextType {
     linkJiraIssueToEntry: (entryId: string, issue: LinkedJiraIssue) => void;
     unlinkJiraIssueFromEntry: (entryId: string) => void;
     setEntryAssignment: (entryId: string, assignment: WorkAssignment | null) => void;
+    setEntryTempoAccount: (entryId: string, account: { key: string; name: string; id: string } | null, autoSelected?: boolean) => void;
     addEntry: (entry: Omit<TimeEntry, 'id'>) => TimeEntry;
     seedEntries: (newEntries: Omit<TimeEntry, 'id'>[]) => void;
     clearAllEntries: () => void;
@@ -221,8 +188,13 @@ export const StorageProvider: React.FC<{ children: React.ReactNode }> = ({ child
         localStorage.setItem('timeportal-entries', JSON.stringify(entries));
     }, [entries]);
 
-    const addBucket = (name: string, color: string) => {
-        setBuckets([...buckets, { id: crypto.randomUUID(), name, color }]);
+    const addBucket = (name: string, color: string, parentId?: string | null) => {
+        setBuckets([...buckets, {
+            id: crypto.randomUUID(),
+            name,
+            color,
+            parentId: parentId || null
+        }]);
     };
 
     const removeBucket = (id: string) => {
@@ -424,9 +396,25 @@ export const StorageProvider: React.FC<{ children: React.ReactNode }> = ({ child
     };
 
     const setEntryAssignment = (entryId: string, assignment: WorkAssignment | null) => {
-        setEntries(entries.map(entry => 
-            entry.id === entryId 
+        setEntries(entries.map(entry =>
+            entry.id === entryId
                 ? { ...entry, assignment: assignment || undefined }
+                : entry
+        ));
+    };
+
+    const setEntryTempoAccount = (
+        entryId: string,
+        account: { key: string; name: string; id: string } | null,
+        autoSelected?: boolean
+    ) => {
+        setEntries(entries.map(entry =>
+            entry.id === entryId
+                ? {
+                    ...entry,
+                    tempoAccount: account || undefined,
+                    tempoAccountAutoSelected: account ? (autoSelected || false) : undefined
+                }
                 : entry
         ));
     };
@@ -445,6 +433,7 @@ export const StorageProvider: React.FC<{ children: React.ReactNode }> = ({ child
             linkJiraIssueToEntry,
             unlinkJiraIssueFromEntry,
             setEntryAssignment,
+            setEntryTempoAccount,
             addEntry,
             seedEntries,
             clearAllEntries,

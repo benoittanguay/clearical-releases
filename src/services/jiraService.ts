@@ -1,5 +1,3 @@
-// JiraMetadataCacheService import removed - not currently used
-
 export interface JiraUser {
     accountId: string;
     displayName: string;
@@ -134,7 +132,7 @@ export class JiraService {
                 url,
                 method,
                 headers,
-                body: body && (method === 'POST' || method === 'PUT') ? JSON.stringify(body) : undefined,
+                body: body, // Send raw body object - IPC handler will stringify it
             });
             
             console.log('[JiraService] IPC response received:', { success: result.success, status: result.status });

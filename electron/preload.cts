@@ -51,5 +51,45 @@ contextBridge.exposeInMainWorld('electron', {
             ipcRenderer.invoke('secure-list-credentials'),
         secureIsAvailable: () =>
             ipcRenderer.invoke('secure-is-available'),
+        // Licensing
+        licenseValidate: () =>
+            ipcRenderer.invoke('license-validate'),
+        licenseGetInfo: () =>
+            ipcRenderer.invoke('license-get-info'),
+        licenseActivate: (licenseKey: string, email?: string) =>
+            ipcRenderer.invoke('license-activate', licenseKey, email),
+        licenseDeactivate: () =>
+            ipcRenderer.invoke('license-deactivate'),
+        licenseGetDevices: () =>
+            ipcRenderer.invoke('license-get-devices'),
+        licenseDeactivateDevice: (deviceId: string) =>
+            ipcRenderer.invoke('license-deactivate-device', deviceId),
+        licenseGetTrialInfo: () =>
+            ipcRenderer.invoke('license-get-trial-info'),
+        licenseIsValid: () =>
+            ipcRenderer.invoke('license-is-valid'),
+        licenseHasFeature: (featureName: string) =>
+            ipcRenderer.invoke('license-has-feature', featureName),
+        // AI features
+        suggestAssignment: (request: {
+            context: {
+                description: string;
+                appNames: string[];
+                windowTitles: string[];
+                detectedTechnologies: string[];
+                detectedActivities: string[];
+                duration: number;
+                startTime: number;
+            };
+            buckets: any[];
+            jiraIssues: any[];
+            historicalEntries: any[];
+        }) => ipcRenderer.invoke('suggest-assignment', request),
+        selectTempoAccount: (request: {
+            issue: any;
+            accounts: any[];
+            description?: string;
+            historicalAccounts: any[];
+        }) => ipcRenderer.invoke('select-tempo-account', request),
     },
 });

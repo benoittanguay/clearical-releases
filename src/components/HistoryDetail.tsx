@@ -1,11 +1,16 @@
-import { useState, useEffect, useMemo } from 'react';
-import type { TimeEntry, TimeBucket, WindowActivity, WorkAssignment } from '../context/StorageContext';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import type { TimeEntry, TimeBucket, WindowActivity, WorkAssignment, LinkedJiraIssue } from '../context/StorageContext';
 import { ScreenshotGallery } from './ScreenshotGallery';
 import { DeleteButton } from './DeleteButton';
 import { AssignmentPicker } from './AssignmentPicker';
 import { TempoValidationModal } from './TempoValidationModal';
+import { TempoAccountPicker } from './TempoAccountPicker';
 import { useStorage } from '../context/StorageContext';
 import { useSettings } from '../context/SettingsContext';
+import { useToast } from '../context/ToastContext';
+import { JiraCache } from '../services/jiraCache';
+import { TempoService, type TempoAccount } from '../services/tempoService';
+import { JiraService } from '../services/jiraService';
 
 interface HistoryDetailProps {
     entry: TimeEntry;
@@ -24,12 +29,13 @@ interface AppGroup {
 }
 
 export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSettings, formatTime }: HistoryDetailProps) {
-    const { removeActivityFromEntry, removeAllActivitiesForApp, removeScreenshotFromEntry, addManualActivityToEntry, setEntryAssignment } = useStorage();
+    const { removeActivityFromEntry, removeAllActivitiesForApp, removeScreenshotFromEntry, addManualActivityToEntry, setEntryAssignment, entries } = useStorage();
     const { settings } = useSettings();
+    const { showToast } = useToast();
     const [description, setDescription] = useState(entry.description || '');
     const [selectedAssignment, setSelectedAssignment] = useState<WorkAssignment | null>(() => {
         // Get assignment from unified model or fallback to legacy fields
-        return entry.assignment || 
+        return entry.assignment ||
             (entry.linkedJiraIssue ? {
                 type: 'jira' as const,
                 jiraIssue: entry.linkedJiraIssue
@@ -48,11 +54,81 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
     const [manualDuration, setManualDuration] = useState('');
     const [showTempoValidationModal, setShowTempoValidationModal] = useState(false);
     const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
+    const [jiraCache] = useState(() => new JiraCache());
+    const [availableAccounts, setAvailableAccounts] = useState<TempoAccount[]>([]);
+    const [isLoadingAccounts, setIsLoadingAccounts] = useState(false);
+    const [showAccountPicker, setShowAccountPicker] = useState(false);
+    const previousAssignmentRef = useRef<WorkAssignment | null>(null);
+
+    // Initialize Jira cache when settings change
+    useEffect(() => {
+        const { jira } = settings;
+        if (jira?.enabled && jira?.apiToken && jira?.baseUrl && jira?.email) {
+            jiraCache.initializeService(jira.baseUrl, jira.email, jira.apiToken);
+            if (jira.selectedProjects?.length) {
+                jiraCache.setSelectedProjects(jira.selectedProjects);
+            }
+        }
+    }, [settings.jira, jiraCache]);
+
+    // Fetch Tempo accounts when Jira assignment changes
+    useEffect(() => {
+        const fetchAccountsForAssignment = async (jiraIssue: LinkedJiraIssue) => {
+            if (!settings.tempo?.enabled || !settings.tempo?.apiToken || !settings.tempo?.baseUrl) {
+                setAvailableAccounts([]);
+                return;
+            }
+
+            if (!settings.jira?.enabled || !settings.jira?.apiToken || !settings.jira?.baseUrl || !settings.jira?.email) {
+                setAvailableAccounts([]);
+                return;
+            }
+
+            setIsLoadingAccounts(true);
+
+            try {
+                // Initialize services
+                const tempoService = new TempoService(settings.tempo.baseUrl, settings.tempo.apiToken);
+                const jiraService = new JiraService(settings.jira.baseUrl, settings.jira.email, settings.jira.apiToken);
+
+                // Fetch issue details to get project ID
+                console.log('[HistoryDetail] Fetching issue details for accounts lookup:', jiraIssue.key);
+                const issue = await jiraService.getIssue(jiraIssue.key);
+                const projectId = issue.fields.project.id;
+                const issueId = issue.id;
+                console.log('[HistoryDetail] Got project ID:', projectId, 'and issue ID:', issueId);
+
+                // Fetch accounts for the project/issue
+                console.log('[HistoryDetail] Fetching accounts for project/issue:', projectId, issueId);
+                const accounts = await tempoService.getAccountsForIssueOrProject(projectId, issueId);
+                console.log('[HistoryDetail] Fetched accounts:', accounts);
+
+                setAvailableAccounts(accounts);
+
+                // Auto-select account if we have accounts
+                if (accounts.length > 0) {
+                    autoSelectTempoAccount(jiraIssue, accounts);
+                }
+            } catch (error) {
+                console.error('[HistoryDetail] Failed to fetch accounts:', error);
+                setAvailableAccounts([]);
+            } finally {
+                setIsLoadingAccounts(false);
+            }
+        };
+
+        // Only fetch if we have a Jira assignment and Tempo is enabled
+        if (selectedAssignment?.type === 'jira' && selectedAssignment.jiraIssue) {
+            fetchAccountsForAssignment(selectedAssignment.jiraIssue);
+        } else {
+            setAvailableAccounts([]);
+        }
+    }, [selectedAssignment, settings.tempo, settings.jira]);
 
     // Update local state when entry changes
     useEffect(() => {
         setDescription(entry.description || '');
-        setSelectedAssignment(entry.assignment || 
+        setSelectedAssignment(entry.assignment ||
             (entry.linkedJiraIssue ? {
                 type: 'jira' as const,
                 jiraIssue: entry.linkedJiraIssue
@@ -92,9 +168,187 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
     }, [description]);
 
     // Handle assignment changes separately
-    const handleAssignmentChange = (assignment: WorkAssignment | null) => {
+    const handleAssignmentChange = (assignment: WorkAssignment | null, autoSelected: boolean = false) => {
         setSelectedAssignment(assignment);
         setEntryAssignment(entry.id, assignment);
+
+        // Update auto-selected flag
+        if (autoSelected && assignment) {
+            onUpdate(entry.id, { assignmentAutoSelected: true });
+        } else if (!autoSelected) {
+            // Clear auto-selected flag when user manually changes assignment
+            onUpdate(entry.id, { assignmentAutoSelected: false });
+        }
+    };
+
+    // Auto-assign work based on AI suggestion
+    const autoAssignWork = async (description: string, metadata: any) => {
+        // Check if auto-assignment is enabled in settings
+        const autoAssignEnabled = settings.ai?.autoAssignWork !== false;
+        if (!autoAssignEnabled) {
+            console.log('[HistoryDetail] Auto-assignment disabled in settings');
+            return;
+        }
+
+        // Don't override existing assignment
+        if (selectedAssignment) return;
+
+        try {
+            console.log('[HistoryDetail] Requesting AI assignment suggestion');
+
+            // Get Jira issues for suggestion
+            let jiraIssues: LinkedJiraIssue[] = [];
+            if (settings.jira?.enabled && jiraCache) {
+                try {
+                    const issues = await jiraCache.getAssignedIssues();
+                    jiraIssues = issues.map(issue => ({
+                        key: issue.key,
+                        summary: issue.fields.summary,
+                        issueType: issue.fields.issuetype.name,
+                        status: issue.fields.status.name,
+                        projectKey: issue.fields.project.key,
+                        projectName: issue.fields.project.name
+                    }));
+                } catch (error) {
+                    console.error('[HistoryDetail] Failed to fetch Jira issues:', error);
+                }
+            }
+
+            // Call the suggest-assignment IPC handler
+            const result = await window.electron?.ipcRenderer?.suggestAssignment({
+                context: {
+                    description,
+                    appNames: Array.from(new Set(entry.windowActivity?.map(a => a.appName) || [])),
+                    windowTitles: Array.from(new Set(entry.windowActivity?.map(a => a.windowTitle) || [])),
+                    detectedTechnologies: metadata?.technologies || [],
+                    detectedActivities: metadata?.activities || [],
+                    duration: entry.duration,
+                    startTime: entry.startTime
+                },
+                buckets: buckets,
+                jiraIssues: jiraIssues,
+                historicalEntries: entries.slice(0, 50) // Last 50 entries for pattern learning
+            });
+
+            console.log('[HistoryDetail] AI suggestion result:', result);
+
+            // Use confidence threshold from settings
+            const confidenceThreshold = settings.ai?.assignmentConfidenceThreshold ?? 0.7;
+
+            if (result?.success && result.suggestion?.assignment && result.suggestion.confidence >= confidenceThreshold) {
+                // Store previous assignment for undo
+                previousAssignmentRef.current = selectedAssignment;
+
+                // Auto-assign with notification
+                console.log('[HistoryDetail] Auto-assigning with confidence:', result.suggestion.confidence);
+                handleAssignmentChange(result.suggestion.assignment, true);
+
+                // Show success toast with undo action
+                const assignmentName = result.suggestion.assignment.type === 'bucket'
+                    ? result.suggestion.assignment.bucket?.name
+                    : result.suggestion.assignment.jiraIssue?.key;
+
+                showToast({
+                    type: 'success',
+                    title: 'Auto-assigned',
+                    message: `Assigned to ${assignmentName} (${Math.round(result.suggestion.confidence * 100)}% confidence)`,
+                    duration: 7000,
+                    action: {
+                        label: 'Undo',
+                        onClick: () => {
+                            handleAssignmentChange(previousAssignmentRef.current, false);
+                        }
+                    }
+                });
+
+                // Log the reason
+                console.log('[HistoryDetail] Assignment reason:', result.suggestion.reason);
+            } else if (result?.suggestion?.confidence !== undefined && result.suggestion.confidence < confidenceThreshold) {
+                // Low confidence warning
+                showToast({
+                    type: 'warning',
+                    title: 'Low Confidence',
+                    message: `Could not confidently suggest an assignment (${Math.round(result.suggestion.confidence * 100)}% confidence)`,
+                    duration: 5000
+                });
+                console.log('[HistoryDetail] No confident assignment found');
+            } else {
+                console.log('[HistoryDetail] No assignment suggestion available');
+            }
+        } catch (error) {
+            console.error('[HistoryDetail] Auto-assignment failed:', error);
+        }
+    };
+
+    // Auto-select Tempo account based on AI suggestion
+    const autoSelectTempoAccount = async (issue: LinkedJiraIssue, accounts: TempoAccount[]) => {
+        // Check if auto-selection is enabled in settings
+        const autoSelectEnabled = settings.ai?.autoSelectAccount !== false;
+        if (!autoSelectEnabled) {
+            console.log('[HistoryDetail] Auto-account selection disabled in settings');
+            return;
+        }
+
+        if (!settings.tempo?.enabled || accounts.length === 0) return;
+
+        // Don't override existing tempo account selection
+        if (entry.tempoAccount) return;
+
+        try {
+            console.log('[HistoryDetail] Requesting AI tempo account selection');
+
+            // Get historical account usage
+            const historicalAccounts = entries
+                .filter(e => e.assignment?.type === 'jira' && e.tempoAccount)
+                .map(e => ({
+                    issueKey: e.assignment!.jiraIssue!.key,
+                    accountKey: e.tempoAccount!.key
+                }));
+
+            // Call the select-tempo-account IPC handler
+            const result = await window.electron?.ipcRenderer?.selectTempoAccount?.({
+                issue,
+                accounts,
+                description: entry.description || '',
+                historicalAccounts
+            });
+
+            console.log('[HistoryDetail] AI tempo account selection result:', result);
+
+            // Use confidence threshold from settings
+            const accountConfidenceThreshold = settings.ai?.accountConfidenceThreshold ?? 0.8;
+
+            if (result?.success && result.selection?.account && result.selection.confidence >= accountConfidenceThreshold) {
+                // Auto-select account
+                console.log('[HistoryDetail] Auto-selecting tempo account with confidence:', result.selection.confidence);
+                onUpdate(entry.id, {
+                    tempoAccount: {
+                        key: result.selection.account.key,
+                        name: result.selection.account.name,
+                        id: result.selection.account.id
+                    },
+                    tempoAccountAutoSelected: true
+                });
+
+                // Show success toast
+                showToast({
+                    type: 'success',
+                    title: 'Account Selected',
+                    message: `Selected account: ${result.selection.account.name}`,
+                    duration: 5000
+                });
+
+                // Log the reason
+                console.log('[HistoryDetail] Account selection reason:', result.selection.reason);
+            } else if (result?.selection?.confidence !== undefined && result.selection.confidence < accountConfidenceThreshold) {
+                // Low confidence - no notification, just log
+                console.log('[HistoryDetail] No confident account selection found');
+            } else {
+                console.log('[HistoryDetail] No account selection available');
+            }
+        } catch (error) {
+            console.error('[HistoryDetail] Auto-account selection failed:', error);
+        }
     };
 
     // Cleanup timeout on unmount
@@ -176,6 +430,13 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
             return;
         }
 
+        // Check if Jira is configured (required for Tempo to get issue IDs)
+        if (!settings.jira?.enabled || !settings.jira?.apiToken || !settings.jira?.baseUrl || !settings.jira?.email) {
+            alert('Please configure Jira settings first. Jira credentials are required to log time to Tempo.');
+            onNavigateToSettings();
+            return;
+        }
+
         // Check if there's an assignment
         if (!selectedAssignment) {
             alert('Please select an assignment (bucket or Jira issue) before logging to Tempo.');
@@ -188,6 +449,17 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
 
     const handleTempoSuccess = () => {
         setShowTempoValidationModal(false);
+    };
+
+    const handleAccountSelect = (account: TempoAccount) => {
+        onUpdate(entry.id, {
+            tempoAccount: {
+                key: account.key,
+                name: account.name,
+                id: account.id
+            },
+            tempoAccountAutoSelected: false // Clear auto-selected flag when user manually selects
+        });
     };
 
     const parseDuration = (input: string): number => {
@@ -243,8 +515,22 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
         return { total: totalScreenshots, analyzed: analyzedScreenshots };
     }, [entry.windowActivity]);
 
+    // Auto-generate description when all screenshots are analyzed
+    useEffect(() => {
+        // Check if auto-generation is enabled in settings
+        const autoGenerateEnabled = settings.ai?.autoGenerateDescription !== false;
+
+        if (autoGenerateEnabled &&
+            !entry.description &&
+            screenshotStats.total > 0 &&
+            screenshotStats.analyzed === screenshotStats.total &&
+            !isGeneratingSummary) {
+            handleGenerateSummary(true);
+        }
+    }, [screenshotStats, entry.description, isGeneratingSummary, settings.ai]);
+
     // Handler for generating AI summary
-    const handleGenerateSummary = async () => {
+    const handleGenerateSummary = async (isAutoGenerated: boolean = false) => {
         if (!entry.windowActivity || entry.windowActivity.length === 0) {
             alert('No activity data available to generate summary.');
             return;
@@ -291,14 +577,31 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
             if (result?.success && result.summary) {
                 // Populate the description field with the generated summary
                 setDescription(result.summary);
-                // The auto-save mechanism will handle saving
+
+                // Update the entry with metadata and auto-generated flag
+                onUpdate(entry.id, {
+                    description: result.summary,
+                    descriptionAutoGenerated: isAutoGenerated,
+                    detectedTechnologies: result.metadata?.technologies || [],
+                    detectedActivities: result.metadata?.activities || []
+                });
+
+                // Auto-assign if no assignment yet
+                if (!selectedAssignment) {
+                    await autoAssignWork(result.summary, result.metadata);
+                }
             } else {
                 throw new Error(result?.error || 'Failed to generate summary');
             }
 
         } catch (error) {
             console.error('Failed to generate summary:', error);
-            alert(`Failed to generate summary: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            showToast({
+                type: 'error',
+                title: 'Generation Failed',
+                message: `Failed to generate description: ${error instanceof Error ? error.message : 'Unknown error'}`,
+                duration: 7000
+            });
         } finally {
             setIsGeneratingSummary(false);
         }
@@ -385,42 +688,44 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
 
     return (
         <div className="w-full h-full flex flex-col">
-            {/* Header with Back Button and Log to Tempo Button */}
-            <div className="flex items-center justify-between mb-6 flex-shrink-0">
-                <div className="flex items-center gap-3">
-                    <button
-                        onClick={onBack}
-                        className="p-2 hover:bg-gray-800 active:bg-gray-700 rounded-lg transition-all text-gray-400 hover:text-white active:scale-95"
-                        style={{ transitionDuration: 'var(--duration-fast)', transitionTimingFunction: 'var(--ease-out)' }}
-                    >
-                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M19 12H5M12 19l-7-7 7-7" />
-                        </svg>
-                    </button>
-                    <h2 className="text-2xl font-bold">Activity Details</h2>
-                </div>
+            {/* Sticky Header with Back Button and Log to Tempo Button */}
+            <div className="flex-shrink-0 bg-gray-900 border-b border-gray-800 px-4 py-3 z-20">
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={onBack}
+                            className="p-1.5 hover:bg-gray-800 active:bg-gray-700 rounded-lg transition-all text-gray-400 hover:text-white active:scale-95"
+                            style={{ transitionDuration: 'var(--duration-fast)', transitionTimingFunction: 'var(--ease-out)' }}
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M19 12H5M12 19l-7-7 7-7" />
+                            </svg>
+                        </button>
+                        <h2 className="text-xl font-bold">Activity Details</h2>
+                    </div>
 
-                {/* Log to Tempo Button - moved to header */}
-                <div>
-                    <button
-                        onClick={handleOpenTempoModal}
-                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-sm rounded-lg transition-all active:scale-[0.99] flex items-center justify-center gap-2"
-                        style={{ transitionDuration: 'var(--duration-fast)', transitionTimingFunction: 'var(--ease-out)' }}
-                    >
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <circle cx="12" cy="12" r="10"/>
-                            <path d="M12 6v6l4 2"/>
-                        </svg>
-                        Log to Tempo
-                    </button>
+                    {/* Log to Tempo Button - moved to header */}
+                    <div>
+                        <button
+                            onClick={handleOpenTempoModal}
+                            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-sm rounded-lg transition-all active:scale-[0.99] flex items-center justify-center gap-1.5"
+                            style={{ transitionDuration: 'var(--duration-fast)', transitionTimingFunction: 'var(--ease-out)' }}
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <circle cx="12" cy="12" r="10"/>
+                                <path d="M12 6v6l4 2"/>
+                            </svg>
+                            Log to Tempo
+                        </button>
+                    </div>
                 </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto space-y-6 pb-6">
+            <div className="flex-1 overflow-y-auto space-y-4 px-4 pb-4 pt-4">
                 {/* Entry Summary - Reorganized */}
                 <div className="bg-gray-800/50 rounded-lg border border-gray-700">
                     {/* Time Summary Section - Start/End times and Duration counter */}
-                    <div className="flex items-center justify-between p-4 border-b border-gray-700">
+                    <div className="flex items-center justify-between p-3 border-b border-gray-700">
                         <div className="flex flex-col gap-0.5">
                             <div className="text-xs text-gray-400">
                                 <span className="font-semibold">Start:</span> {new Date(entry.startTime).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true })}
@@ -429,27 +734,109 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                                 <span className="font-semibold">End:</span> {new Date(entry.startTime + entry.duration).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true })}
                             </div>
                         </div>
-                        <div className="text-3xl font-mono font-bold text-green-400">
+                        <div className="text-2xl font-mono font-bold text-green-400">
                             {formatTime(entry.duration)}
                         </div>
                     </div>
 
                     {/* Assignment Section */}
-                    <div className="p-4 border-b border-gray-700">
-                        <label className="text-xs text-gray-400 uppercase font-semibold mb-2 block">Assignment</label>
+                    <div className="p-3 border-b border-gray-700">
+                        <div className="flex items-center justify-between mb-1.5">
+                            <label className="text-xs text-gray-400 uppercase font-semibold">Assignment</label>
+                            {entry.assignmentAutoSelected && currentAssignment && (
+                                <span className="text-xs text-purple-400 flex items-center gap-1">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                                        <path d="M2 17l10 5 10-5"/>
+                                        <path d="M2 12l10 5 10-5"/>
+                                    </svg>
+                                    AI Selected
+                                </span>
+                            )}
+                        </div>
                         <AssignmentPicker
                             value={currentAssignment}
-                            onChange={handleAssignmentChange}
+                            onChange={(assignment) => handleAssignmentChange(assignment, false)}
                             placeholder="Select assignment..."
                             className="w-full"
                         />
                     </div>
 
+                    {/* Tempo Account Section - Only visible when Jira assignment + Tempo enabled */}
+                    {currentAssignment?.type === 'jira' && settings.tempo?.enabled && (
+                        <div className="p-3 border-b border-gray-700">
+                            <div className="flex items-center justify-between mb-1.5">
+                                <label className="text-xs text-gray-400 uppercase font-semibold">
+                                    Tempo Account
+                                </label>
+                                {entry.tempoAccountAutoSelected && entry.tempoAccount && (
+                                    <span className="text-xs text-purple-400 flex items-center gap-1">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                            <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                                            <path d="M2 17l10 5 10-5"/>
+                                            <path d="M2 12l10 5 10-5"/>
+                                        </svg>
+                                        AI Selected
+                                    </span>
+                                )}
+                            </div>
+
+                            {isLoadingAccounts ? (
+                                <div className="flex items-center gap-2 text-sm text-gray-400 py-2">
+                                    <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
+                                    <span>Loading accounts...</span>
+                                </div>
+                            ) : availableAccounts.length === 0 ? (
+                                <div className="text-sm text-gray-500 py-2">
+                                    No accounts available for this issue
+                                </div>
+                            ) : entry.tempoAccount ? (
+                                <div className="flex items-center justify-between">
+                                    <div className="flex-1 min-w-0">
+                                        <div className="bg-gray-700 border border-gray-600 rounded-lg px-3 py-2">
+                                            <div className="text-sm text-white font-medium">
+                                                {entry.tempoAccount.name}
+                                            </div>
+                                            <div className="text-xs text-gray-400 font-mono">
+                                                {entry.tempoAccount.key}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={() => setShowAccountPicker(true)}
+                                        className="ml-2 px-2.5 py-1.5 text-xs bg-gray-700 hover:bg-gray-600 active:bg-gray-500 text-gray-300 hover:text-white rounded-md transition-all active:scale-95"
+                                        style={{ transitionDuration: 'var(--duration-fast)', transitionTimingFunction: 'var(--ease-out)' }}
+                                    >
+                                        Change
+                                    </button>
+                                </div>
+                            ) : (
+                                <button
+                                    onClick={() => setShowAccountPicker(true)}
+                                    className="w-full bg-gray-700 border border-gray-600 hover:border-gray-500 active:border-gray-400 text-gray-400 hover:text-gray-300 active:text-gray-200 text-sm rounded-lg px-3 py-2 text-left transition-all"
+                                    style={{ transitionDuration: 'var(--duration-fast)', transitionTimingFunction: 'var(--ease-out)' }}
+                                >
+                                    Select account...
+                                </button>
+                            )}
+                        </div>
+                    )}
+
                     {/* Description Section */}
-                    <div className="p-4">
-                        <div className="flex items-center justify-between mb-2">
-                            <div className="flex items-center gap-3">
+                    <div className="p-3">
+                        <div className="flex items-center justify-between mb-1.5">
+                            <div className="flex items-center gap-2">
                                 <label className="text-xs text-gray-400 uppercase font-semibold">Description</label>
+                                {entry.description && entry.descriptionAutoGenerated && (
+                                    <span className="text-xs text-purple-400 flex items-center gap-1">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                            <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                                            <path d="M2 17l10 5 10-5"/>
+                                            <path d="M2 12l10 5 10-5"/>
+                                        </svg>
+                                        AI Generated
+                                    </span>
+                                )}
                                 {screenshotStats.total > 0 && (
                                     <div className="text-xs text-gray-500">
                                         {screenshotStats.analyzed}/{screenshotStats.total} screenshots analyzed
@@ -458,9 +845,9 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                             </div>
                             {screenshotStats.analyzed > 0 && (
                                 <button
-                                    onClick={handleGenerateSummary}
+                                    onClick={() => handleGenerateSummary(false)}
                                     disabled={isGeneratingSummary}
-                                    className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 active:bg-purple-800 disabled:bg-gray-600 disabled:cursor-not-allowed text-white text-xs rounded-md transition-all active:scale-[0.98] flex items-center gap-1.5"
+                                    className="px-2.5 py-1 bg-purple-600 hover:bg-purple-700 active:bg-purple-800 disabled:bg-gray-600 disabled:cursor-not-allowed text-white text-xs rounded-md transition-all active:scale-[0.98] flex items-center gap-1"
                                     style={{ transitionDuration: 'var(--duration-fast)', transitionTimingFunction: 'var(--ease-out)' }}
                                 >
                                     {isGeneratingSummary ? (
@@ -493,11 +880,11 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
 
                 {/* Window Activity - Grouped by App */}
                 <div>
-                    <div className="flex items-center justify-between mb-3">
-                        <h3 className="text-lg font-semibold text-gray-300">Window Activity</h3>
+                    <div className="flex items-center justify-between mb-2">
+                        <h3 className="text-base font-semibold text-gray-300">Window Activity</h3>
                         <button
                             onClick={() => setShowManualEntryForm(!showManualEntryForm)}
-                            className="px-3 py-1 bg-green-600 hover:bg-green-700 active:bg-green-800 text-white text-sm rounded-md transition-all active:scale-95 flex items-center gap-1"
+                            className="px-2.5 py-1 bg-green-600 hover:bg-green-700 active:bg-green-800 text-white text-xs rounded-md transition-all active:scale-95 flex items-center gap-1"
                             style={{ transitionDuration: 'var(--duration-fast)', transitionTimingFunction: 'var(--ease-out)' }}
                         >
                             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -509,9 +896,9 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                     </div>
                 {/* Manual Entry Form */}
                 {showManualEntryForm && (
-                    <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-700 mb-4">
-                        <h4 className="text-sm font-semibold text-gray-300 mb-3">Add Manual Entry</h4>
-                        <div className="space-y-3">
+                    <div className="bg-gray-800/50 rounded-lg p-3 border border-gray-700 mb-3">
+                        <h4 className="text-sm font-semibold text-gray-300 mb-2">Add Manual Entry</h4>
+                        <div className="space-y-2">
                             <div>
                                 <label className="block text-xs text-gray-400 mb-1">Description</label>
                                 <input
@@ -557,7 +944,7 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
 
 
                 {appGroups.length === 0 ? (
-                    <div className="text-gray-500 text-sm py-8 text-center animate-fade-in">
+                    <div className="text-gray-500 text-sm py-6 text-center animate-fade-in">
                         <svg className="w-12 h-12 mx-auto mb-2 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                         </svg>
@@ -565,7 +952,7 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                         <p className="text-xs text-gray-600 mt-1">Click "Add Manual Entry" to add time manually</p>
                     </div>
                 ) : (
-                    <div className="space-y-3">
+                    <div className="space-y-2">
                         {appGroups.map(group => {
                             const isExpanded = expandedApps.has(group.appName);
                             const icon = appIcons.get(group.appName);
@@ -575,7 +962,7 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                                     {/* App Header */}
                                     <button
                                         onClick={() => toggleApp(group.appName)}
-                                        className="w-full flex items-center justify-between p-3 hover:bg-gray-800/80 active:bg-gray-800 transition-all"
+                                        className="w-full flex items-center justify-between p-2.5 hover:bg-gray-800/80 active:bg-gray-800 transition-all"
                                         style={{ transitionDuration: 'var(--duration-fast)', transitionTimingFunction: 'var(--ease-out)' }}
                                     >
                                         <div className="flex items-center gap-3 flex-1 min-w-0">
@@ -646,7 +1033,7 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                                             {group.activities.map((activity, index) => (
                                                 <div
                                                     key={`${activity.timestamp}-${index}`}
-                                                    className="p-3 border-b border-gray-800/50 last:border-b-0 hover:bg-gray-800/30 transition-colors"
+                                                    className="p-2.5 border-b border-gray-800/50 last:border-b-0 hover:bg-gray-800/30 transition-colors"
                                                 >
                                                     <div className="flex items-start justify-between gap-3">
                                                         <div className="flex-1 min-w-0">
@@ -728,7 +1115,7 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
             )}
 
             {/* Tempo Validation Modal */}
-            {showTempoValidationModal && settings.tempo?.enabled && settings.tempo?.apiToken && settings.tempo?.baseUrl && (
+            {showTempoValidationModal && settings.tempo?.enabled && settings.tempo?.apiToken && settings.tempo?.baseUrl && settings.jira?.enabled && settings.jira?.baseUrl && settings.jira?.email && settings.jira?.apiToken && (
                 <TempoValidationModal
                     entry={entry}
                     assignment={selectedAssignment}
@@ -738,7 +1125,20 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                     formatTime={formatTime}
                     tempoBaseUrl={settings.tempo.baseUrl}
                     tempoApiToken={settings.tempo.apiToken}
+                    jiraBaseUrl={settings.jira.baseUrl}
+                    jiraEmail={settings.jira.email}
+                    jiraApiToken={settings.jira.apiToken}
                     defaultDescription={description}
+                />
+            )}
+
+            {/* Tempo Account Picker Modal */}
+            {showAccountPicker && (
+                <TempoAccountPicker
+                    accounts={availableAccounts}
+                    selectedAccountKey={entry.tempoAccount?.key}
+                    onSelect={handleAccountSelect}
+                    onClose={() => setShowAccountPicker(false)}
                 />
             )}
         </div>

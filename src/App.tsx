@@ -10,6 +10,8 @@ import { JiraIssuesSection } from './components/JiraIssuesSection';
 import { AssignmentPicker } from './components/AssignmentPicker';
 import { DevTools } from './components/DevTools';
 import { FolderTree } from './components/FolderTree';
+import { CreateBucketModal } from './components/CreateBucketModal';
+import { CreateFolderModal } from './components/CreateFolderModal';
 import type { WorkAssignment } from './context/StorageContext';
 import './App.css'
 
@@ -20,10 +22,10 @@ function App() {
   const { settings } = useSettings();
   const [selectedAssignment, setSelectedAssignment] = useState<WorkAssignment | null>(null);
   const [currentView, setCurrentView] = useState<View>('chrono');
-  const [newBucketName, setNewBucketName] = useState('');
-  const [newFolderName, setNewFolderName] = useState('');
   const [selectedEntry, setSelectedEntry] = useState<string | null>(null);
   const [showExportDialog, setShowExportDialog] = useState(false);
+  const [showCreateBucketModal, setShowCreateBucketModal] = useState(false);
+  const [showCreateFolderModal, setShowCreateFolderModal] = useState(false);
 
   const { isRunning, isPaused, elapsed, start: startTimer, stop: stopTimer, pause: pauseTimer, resume: resumeTimer, formatTime } = useTimer();
 
@@ -33,47 +35,21 @@ function App() {
       return;
     }
 
-    // For simplicity, we'll implement a basic bulk log that logs all entries from today
-    const today = new Date().toISOString().split('T')[0];
-    const todayEntries = entries.filter(entry => {
-      const entryDate = new Date(entry.startTime).toISOString().split('T')[0];
-      return entryDate === today;
-    });
+    // Show a warning that bulk logging is not recommended without account selection
+    alert(
+      'Bulk Logging Limitation:\n\n' +
+      'Due to Tempo\'s requirement for account selection per issue, bulk logging is not recommended. ' +
+      'Please use the "Log to Tempo" button on individual activities to select the appropriate account for each entry.\n\n' +
+      'This ensures accurate time tracking with the correct Tempo accounts.'
+    );
+  };
 
-    if (todayEntries.length === 0) {
-      alert('No activities found for today to bulk log.');
-      return;
-    }
+  const handleCreateBucket = (name: string, color: string, parentId?: string | null) => {
+    addBucket(name, color, parentId || null);
+  };
 
-    const proceed = confirm(`Log ${todayEntries.length} activities from today to Tempo?`);
-    if (!proceed) return;
-
-    try {
-      const { TempoService } = await import('./services/tempoService');
-      const service = new TempoService(settings.tempo.baseUrl!, settings.tempo.apiToken!);
-      
-      let successCount = 0;
-      for (const entry of todayEntries) {
-        try {
-          const worklog = {
-            issueKey: settings.tempo.defaultIssueKey || 'DEFAULT-1',
-            timeSpentSeconds: TempoService.durationMsToSeconds(entry.duration),
-            startDate: TempoService.formatDate(entry.startTime),
-            startTime: TempoService.formatTime(entry.startTime),
-            description: entry.description || 'Time tracked via TimePortal',
-          };
-          
-          await service.createWorklog(worklog);
-          successCount++;
-        } catch (error) {
-          console.error(`Failed to log entry ${entry.id}:`, error);
-        }
-      }
-      
-      alert(`Successfully logged ${successCount} out of ${todayEntries.length} activities to Tempo.`);
-    } catch (error) {
-      alert(`Bulk logging failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
+  const handleCreateFolder = (name: string, parentId?: string | null) => {
+    createFolder(name, parentId || null);
   };
 
   const handleStartStop = async () => {
@@ -81,8 +57,8 @@ function App() {
       // Start timer fresh (elapsed should be 0)
       startTimer();
     } else {
-      // Stop timer and save entry
-      const finalActivity = stopTimer();
+      // Stop timer and save entry - await to ensure AI analyses complete
+      const finalActivity = await stopTimer();
       const newEntry = addEntry({
         startTime: Date.now() - elapsed,
         endTime: Date.now(),
@@ -193,10 +169,10 @@ function App() {
         {/* content */}
         <div className="flex-1 flex flex-col w-full relative overflow-hidden">
           {currentView === 'chrono' && (
-            <div className="flex flex-col items-center justify-center h-full w-full p-6">
+            <div className="flex flex-col items-center justify-center h-full w-full p-4">
               {/* Assignment Picker - Above the counter */}
-              <div className="w-full max-w-xs mb-8">
-                <label className="text-xs text-gray-500 uppercase font-bold mb-2 block tracking-wider">Assignment</label>
+              <div className="w-full max-w-xs mb-6">
+                <label className="text-xs text-gray-500 uppercase font-bold mb-1.5 block tracking-wider">Assignment</label>
                 <AssignmentPicker
                   value={selectedAssignment}
                   onChange={setSelectedAssignment}
@@ -206,15 +182,15 @@ function App() {
               </div>
 
               {/* Timer Display */}
-              <div className="relative mb-10">
-                <div className={`text-7xl font-mono font-bold tabular-nums tracking-wider text-shadow-glow transition-colors ${
+              <div className="relative mb-6">
+                <div className={`text-6xl font-mono font-bold tabular-nums tracking-wider text-shadow-glow transition-colors ${
                   isPaused ? 'text-yellow-400' : 'text-green-400'
                 }`}>
                   {formatTime(elapsed)}
                 </div>
                 {isPaused && (
-                  <div className="absolute -top-8 left-1/2 transform -translate-x-1/2">
-                    <div className="bg-yellow-500/20 text-yellow-400 text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full border border-yellow-500/30">
+                  <div className="absolute -top-7 left-1/2 transform -translate-x-1/2">
+                    <div className="bg-yellow-500/20 text-yellow-400 text-xs font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full border border-yellow-500/30">
                       Paused
                     </div>
                   </div>
@@ -222,11 +198,11 @@ function App() {
               </div>
 
               {/* Buttons - Side by side with stable layout */}
-              <div className="w-full max-w-md flex gap-3 min-h-[60px]">
+              <div className="w-full max-w-md flex gap-2.5 min-h-[52px]">
                 <button
                   onClick={handleStartStop}
                   className={`
-                    flex-1 py-4 rounded-xl text-xl font-bold transition-all transform hover:-translate-y-1 active:scale-95 shadow-lg
+                    flex-1 py-3 rounded-lg text-lg font-bold transition-all transform hover:-translate-y-0.5 active:scale-95 shadow-lg
                     ${isRunning
                       ? 'bg-red-500 hover:bg-red-600 shadow-red-500/30'
                       : 'bg-green-500 hover:bg-green-600 shadow-green-500/30'
@@ -241,12 +217,12 @@ function App() {
                   onClick={handlePauseResume}
                   disabled={!isRunning}
                   className={`
-                    flex-1 py-4 rounded-xl text-xl font-bold transition-all transform shadow-lg
+                    flex-1 py-3 rounded-lg text-lg font-bold transition-all transform shadow-lg
                     ${!isRunning
                       ? 'bg-gray-700 text-gray-500 cursor-not-allowed opacity-50'
                       : isPaused
-                        ? 'bg-blue-500 hover:bg-blue-600 shadow-blue-500/30 hover:-translate-y-1 active:scale-95'
-                        : 'bg-yellow-500 hover:bg-yellow-600 shadow-yellow-500/30 hover:-translate-y-1 active:scale-95'
+                        ? 'bg-blue-500 hover:bg-blue-600 shadow-blue-500/30 hover:-translate-y-0.5 active:scale-95'
+                        : 'bg-yellow-500 hover:bg-yellow-600 shadow-yellow-500/30 hover:-translate-y-0.5 active:scale-95'
                     }
                   `}
                 >
@@ -257,114 +233,85 @@ function App() {
           )}
 
           {currentView === 'buckets' && (
-            <div className="w-full h-full flex flex-col overflow-y-auto p-6">
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-bold">Manage Buckets</h2>
-                {settings.tempo?.enabled && (
-                  <div className="text-sm text-green-400 flex items-center gap-2">
+            <>
+              {/* Sticky Header */}
+              <div className="flex-shrink-0 bg-gray-900 border-b border-gray-800 px-4 py-3 z-20">
+                <div className="flex justify-between items-center">
+                  <h2 className="text-xl font-bold">Manage Buckets</h2>
+                  <div className="flex items-center gap-3">
+                    {settings.tempo?.enabled && (
+                      <div className="text-xs text-green-400 flex items-center gap-1.5">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                          <circle cx="12" cy="12" r="4"/>
+                        </svg>
+                        Tempo Connected
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Scrollable Content */}
+              <div className="flex-1 overflow-y-auto px-4 pb-4">
+                {/* Action Buttons */}
+                <div className="flex gap-2 mb-4 mt-3">
+                  <button
+                    onClick={() => setShowCreateBucketModal(true)}
+                    className="flex items-center gap-2 bg-green-600 hover:bg-green-500 px-4 py-2 rounded-lg text-sm font-medium transition-all hover:shadow-lg hover:shadow-green-500/20"
+                  >
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
-                      <circle cx="12" cy="12" r="4"/>
+                      <line x1="12" y1="5" x2="12" y2="19" />
+                      <line x1="5" y1="12" x2="19" y2="12" />
                     </svg>
-                    Tempo Connected
+                    New Bucket
+                  </button>
+
+                  <button
+                    onClick={() => setShowCreateFolderModal(true)}
+                    className="flex items-center gap-2 bg-yellow-600 hover:bg-yellow-500 px-4 py-2 rounded-lg text-sm font-medium transition-all hover:shadow-lg hover:shadow-yellow-500/20"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z" />
+                    </svg>
+                    New Folder
+                  </button>
+                </div>
+
+                {/* Hierarchical bucket/folder display */}
+                <FolderTree
+                  buckets={buckets}
+                  onRename={renameBucket}
+                  onDelete={removeBucket}
+                  onUnlinkJira={unlinkJiraIssueFromBucket}
+                  onMove={moveBucket}
+                />
+
+                {/* Jira Issues Section */}
+                {(settings.jira?.enabled || settings.tempo?.enabled) && (
+                  <div className="mt-6">
+                    <JiraIssuesSection />
                   </div>
                 )}
               </div>
-
-              {/* Create Bucket and Folder inputs */}
-              <div className="flex gap-2 mb-6">
-                <input
-                  type="text"
-                  value={newBucketName}
-                  onChange={(e) => setNewBucketName(e.target.value)}
-                  placeholder="New Bucket Name"
-                  className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-sm focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500"
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && newBucketName.trim()) {
-                      addBucket(newBucketName, '#3b82f6');
-                      setNewBucketName('');
-                    }
-                  }}
-                />
-                <button
-                  onClick={() => {
-                    if (newBucketName.trim()) {
-                      addBucket(newBucketName, '#3b82f6');
-                      setNewBucketName('');
-                    }
-                  }}
-                  className="bg-green-600 hover:bg-green-500 px-4 py-2 rounded-lg text-sm font-bold transition-colors"
-                >
-                  Add Bucket
-                </button>
-              </div>
-
-              <div className="flex gap-2 mb-6">
-                <input
-                  type="text"
-                  value={newFolderName}
-                  onChange={(e) => setNewFolderName(e.target.value)}
-                  placeholder="New Folder Name"
-                  className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-sm focus:outline-none focus:border-yellow-500 focus:ring-1 focus:ring-yellow-500"
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && newFolderName.trim()) {
-                      createFolder(newFolderName);
-                      setNewFolderName('');
-                    }
-                  }}
-                />
-                <button
-                  onClick={() => {
-                    if (newFolderName.trim()) {
-                      createFolder(newFolderName);
-                      setNewFolderName('');
-                    }
-                  }}
-                  className="bg-yellow-600 hover:bg-yellow-500 px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center gap-2"
-                >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z" />
-                  </svg>
-                  Add Folder
-                </button>
-              </div>
-
-              {/* Hierarchical bucket/folder display */}
-              <FolderTree
-                buckets={buckets}
-                onRename={renameBucket}
-                onDelete={removeBucket}
-                onUnlinkJira={unlinkJiraIssueFromBucket}
-                onMove={moveBucket}
-              />
-
-              {/* Jira Issues Section */}
-              {(settings.jira?.enabled || settings.tempo?.enabled) && (
-                <div className="mt-8">
-                  <JiraIssuesSection />
-                </div>
-              )}
-            </div>
+            </>
           )}
 
           {currentView === 'settings' && (
-            <div className="overflow-y-auto p-6">
-              <Settings />
-            </div>
+            <>
+              {/* Sticky Header */}
+              <div className="flex-shrink-0 bg-gray-900 border-b border-gray-800 px-4 py-3 z-20">
+                <h2 className="text-xl font-bold">Settings</h2>
+              </div>
+              {/* Scrollable Content */}
+              <div className="flex-1 overflow-y-auto">
+                <Settings />
+              </div>
+            </>
           )}
 
           {currentView === 'worklog-detail' && selectedEntry && (
-            <div className="overflow-y-auto p-6">
+            <>
               <HistoryDetail
                 entry={entries.find(e => e.id === selectedEntry)!}
                 buckets={buckets}
@@ -373,7 +320,7 @@ function App() {
                 onNavigateToSettings={() => setCurrentView('settings')}
                 formatTime={formatTime}
               />
-            </div>
+            </>
           )}
 
           {currentView === 'worklog' && (
@@ -415,11 +362,11 @@ function App() {
               </div>
 
               {/* Scrollable Content Area */}
-              <div className="flex-1 overflow-y-auto px-6 pb-8">
+              <div className="flex-1 overflow-y-auto px-4 pb-4">
                 {entries.length === 0 ? (
-                  <div className="text-gray-500 text-sm pt-6">No activities recorded yet.</div>
+                  <div className="text-gray-500 text-sm pt-4">No activities recorded yet.</div>
                 ) : (
-                  <div className="pt-6">
+                  <div className="pt-4">
                     {(() => {
                       // Group entries by date
                       const sortedEntries = entries.sort((a, b) => b.startTime - a.startTime);
@@ -457,9 +404,9 @@ function App() {
                         const totalDuration = dateEntries.reduce((sum, entry) => sum + entry.duration, 0);
 
                         return (
-                          <div key={dateKey} className="mb-6 last:mb-0">
+                          <div key={dateKey} className="mb-4 last:mb-0">
                             {/* Date Separator Header - Sticky with solid background */}
-                            <div className="sticky top-0 z-10 bg-gray-900 border-b border-gray-700 px-4 py-3 mb-3 -mx-6 flex items-center justify-between shadow-sm">
+                            <div className="sticky top-0 z-10 bg-gray-900 border-b border-gray-700 px-3 py-2 mb-2 -mx-4 flex items-center justify-between shadow-sm">
                               <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400">
                                 {formatDateLabel(parseInt(dateKey))}
                               </h3>
@@ -469,7 +416,7 @@ function App() {
                             </div>
 
                             {/* Activities for this date */}
-                            <div className="space-y-3">
+                            <div className="space-y-2">
                               {dateEntries.map(entry => {
                                 // Get assignment info from unified model or fallback to legacy fields
                                 const assignment = entry.assignment ||
@@ -488,7 +435,7 @@ function App() {
                                       setSelectedEntry(entry.id);
                                       setCurrentView('worklog-detail');
                                     }}
-                                    className="flex justify-between items-center bg-gray-800/50 p-3 rounded-lg border border-gray-800 hover:bg-gray-800/80 transition-colors cursor-pointer"
+                                    className="flex justify-between items-center bg-gray-800/50 p-2.5 rounded-lg border border-gray-800 hover:bg-gray-800/80 transition-colors cursor-pointer"
                                   >
                                     <div className="flex flex-col flex-1 min-w-0">
                                       {/* Display assignment info */}
@@ -573,6 +520,22 @@ function App() {
           }}
         />
       )}
+
+      {/* Create Bucket Modal */}
+      <CreateBucketModal
+        isOpen={showCreateBucketModal}
+        onClose={() => setShowCreateBucketModal(false)}
+        onCreateBucket={handleCreateBucket}
+        availableFolders={buckets.filter(b => b.isFolder)}
+      />
+
+      {/* Create Folder Modal */}
+      <CreateFolderModal
+        isOpen={showCreateFolderModal}
+        onClose={() => setShowCreateFolderModal(false)}
+        onCreateFolder={handleCreateFolder}
+        availableFolders={buckets.filter(b => b.isFolder)}
+      />
 
       {/* DevTools - Only in development */}
       {import.meta.env.DEV && <DevTools />}

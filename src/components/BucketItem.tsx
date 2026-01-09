@@ -80,16 +80,16 @@ export const BucketItem: React.FC<BucketItemProps> = ({
         setShowMoveMenu(false);
     };
 
-    const paddingLeft = level * 24; // 24px per level
+    const paddingLeft = level * 20; // 20px per level
 
     return (
         <li
             className="bg-gray-800/50 rounded-lg border border-gray-800 hover:border-gray-700 transition-colors group"
             style={{ marginLeft: `${paddingLeft}px` }}
         >
-            <div className="p-4">
+            <div className="p-3">
                 <div className="flex justify-between items-start">
-                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
                         {/* Expand/Collapse chevron for folders */}
                         {bucket.isFolder && onToggleExpand && (
                             <button
@@ -98,8 +98,8 @@ export const BucketItem: React.FC<BucketItemProps> = ({
                             >
                                 <svg
                                     xmlns="http://www.w3.org/2000/svg"
-                                    width="16"
-                                    height="16"
+                                    width="14"
+                                    height="14"
                                     viewBox="0 0 24 24"
                                     fill="none"
                                     stroke="currentColor"
@@ -117,8 +117,8 @@ export const BucketItem: React.FC<BucketItemProps> = ({
                         {bucket.isFolder ? (
                             <svg
                                 xmlns="http://www.w3.org/2000/svg"
-                                width="20"
-                                height="20"
+                                width="18"
+                                height="18"
                                 viewBox="0 0 24 24"
                                 fill="none"
                                 stroke="currentColor"
@@ -154,7 +154,7 @@ export const BucketItem: React.FC<BucketItemProps> = ({
 
                             {/* Linked Jira Issue (only for buckets, not folders) */}
                             {!bucket.isFolder && bucket.linkedIssue && (
-                                <div className="mt-2 bg-gray-900/50 rounded p-2 border border-gray-700">
+                                <div className="mt-1.5 bg-gray-900/50 rounded p-2 border border-gray-700">
                                     <div className="flex items-center gap-2 mb-1">
                                         <span className="text-blue-400 font-mono text-xs">
                                             {bucket.linkedIssue.key}
@@ -188,7 +188,7 @@ export const BucketItem: React.FC<BucketItemProps> = ({
                     </div>
 
                     {/* Action buttons */}
-                    <div className="flex items-center gap-2 ml-3">
+                    <div className="flex items-center gap-1.5 ml-2">
                         {/* Move to folder button */}
                         {onMove && availableFolders.length > 0 && (
                             <div className="relative" ref={moveMenuRef}>

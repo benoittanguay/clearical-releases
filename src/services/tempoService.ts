@@ -1,3 +1,8 @@
+export interface TempoWorklogAttribute {
+    key: string;
+    value: string;
+}
+
 export interface TempoWorklog {
     issueId: number; // Numeric Jira issue ID (required in Tempo API v4)
     timeSpentSeconds: number;
@@ -6,6 +11,7 @@ export interface TempoWorklog {
     description?: string;
     authorAccountId?: string;
     billableSeconds?: number;
+    attributes?: TempoWorklogAttribute[];
 }
 
 export interface TempoWorklogResponse {
@@ -35,6 +41,51 @@ export interface TempoApiError {
     message: string;
     statusCode: number;
     details?: any;
+}
+
+export interface TempoWorkAttribute {
+    key: string;
+    name: string;
+    type: string;
+    required: boolean;
+    values?: string[];
+}
+
+export interface TempoWorkAttributesResponse {
+    self: string;
+    metadata: {
+        count: number;
+        offset: number;
+        limit: number;
+    };
+    results: TempoWorkAttribute[];
+}
+
+export interface TempoAccount {
+    id: string;
+    key: string;
+    name: string;
+    status: string;
+    global: boolean;
+    self: string;
+}
+
+export interface TempoAccountsResponse {
+    self: string;
+    metadata: {
+        count: number;
+        offset: number;
+        limit: number;
+    };
+    results: TempoAccount[];
+}
+
+export interface TempoAccountLink {
+    account: TempoAccount;
+    scope: {
+        type: string;
+        id: string;
+    };
 }
 
 export interface JiraIssue {
@@ -166,7 +217,7 @@ export class TempoService {
                 url,
                 method,
                 headers,
-                body,
+                body, // Send raw body object - IPC handler will stringify it
             });
             
             console.log('[TempoService] Proxy response:', result);
@@ -595,6 +646,149 @@ export class TempoService {
             total: filteredIssues.length,
             issues: filteredIssues
         };
+    }
+
+    /**
+     * Get available work attributes from Tempo
+     */
+    async getWorkAttributes(): Promise<TempoWorkAttribute[]> {
+        try {
+            console.log('[TempoService] Fetching work attributes');
+            const response = await this.makeRequest<TempoWorkAttributesResponse>('/4/work-attributes');
+            console.log('[TempoService] Work attributes response:', JSON.stringify(response, null, 2));
+            return response.results || [];
+        } catch (error) {
+            console.error('[TempoService] Failed to get work attributes:', error);
+            return [];
+        }
+    }
+
+    /**
+     * Get all accounts from Tempo
+     */
+    async getAllAccounts(): Promise<TempoAccount[]> {
+        try {
+            console.log('[TempoService] Fetching all accounts');
+            const response = await this.makeRequest<TempoAccountsResponse>('/4/accounts');
+            console.log('[TempoService] All accounts response:', JSON.stringify(response, null, 2));
+            return response.results || [];
+        } catch (error) {
+            console.error('[TempoService] Failed to get all accounts:', error);
+            return [];
+        }
+    }
+
+    /**
+     * Get accounts linked to a specific Jira issue
+     */
+    async getAccountsForIssue(issueId: number | string): Promise<TempoAccount[]> {
+        try {
+            console.log('[TempoService] Fetching accounts for issue:', issueId);
+            const response = await this.makeRequest<{ results: TempoAccountLink[] }>(`/4/account-links/issue/${issueId}`);
+            console.log('[TempoService] Account links response:', JSON.stringify(response, null, 2));
+
+            // Extract accounts from account links
+            const accounts = response.results?.map(link => link.account) || [];
+            console.log('[TempoService] Extracted accounts:', accounts.length);
+            return accounts;
+        } catch (error) {
+            console.error('[TempoService] Failed to get accounts for issue:', error);
+            // Return empty array on error - issue may not have any linked accounts
+            return [];
+        }
+    }
+
+    /**
+     * Get accounts linked to a specific Jira project
+     * This is the preferred method as accounts are often linked at the project level
+     * Note: Tempo API v4 requires numeric project ID, not project key
+     * @param projectId - The numeric Jira project ID
+     * @param includeGlobalAccounts - Whether to include global accounts (default: true)
+     */
+    async getAccountsForProject(projectId: number | string, includeGlobalAccounts: boolean = true): Promise<TempoAccount[]> {
+        try {
+            console.log('[TempoService] Fetching accounts for project ID:', projectId, 'includeGlobal:', includeGlobalAccounts);
+            const queryParam = includeGlobalAccounts ? '?includeGlobalAccounts=true' : '';
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const response = await this.makeRequest<any>(`/4/account-links/project/${projectId}${queryParam}`);
+
+            const results = response.results || [];
+            console.log('[TempoService] Account links count:', results.length);
+
+            if (results.length === 0) {
+                return [];
+            }
+
+            // The account-links endpoint only returns account references (self URLs)
+            // We need to fetch full account details for each one
+            const accountPromises = results.map(async (item: any) => {
+                const accountSelf = item.account?.self;
+                if (!accountSelf) {
+                    console.warn('[TempoService] Account link missing self URL:', item);
+                    return null;
+                }
+
+                try {
+                    // Extract account ID from self URL (e.g., "https://api.tempo.io/4/accounts/14" -> "14")
+                    const accountId = accountSelf.split('/').pop();
+                    console.log('[TempoService] Fetching account details for ID:', accountId);
+
+                    const accountDetails = await this.makeRequest<TempoAccount>(`/4/accounts/${accountId}`);
+                    return accountDetails;
+                } catch (err) {
+                    console.error('[TempoService] Failed to fetch account details:', err);
+                    return null;
+                }
+            });
+
+            const accountResults = await Promise.all(accountPromises);
+            const accounts = accountResults.filter((acc): acc is TempoAccount => acc !== null);
+
+            console.log('[TempoService] Fetched full account details:', accounts.length);
+            if (accounts.length > 0) {
+                console.log('[TempoService] First account:', JSON.stringify(accounts[0], null, 2));
+            }
+            return accounts;
+        } catch (error) {
+            console.error('[TempoService] Failed to get accounts for project:', error);
+            return [];
+        }
+    }
+
+    /**
+     * Get accounts for a Jira issue, trying both project-level and issue-level links
+     * This method tries project-level first (most common), then falls back to issue-level
+     * @param projectId - The numeric Jira project ID (required for Tempo API v4)
+     * @param issueId - Optional issue ID for issue-level fallback
+     */
+    async getAccountsForIssueOrProject(projectId: number | string, issueId?: number | string): Promise<TempoAccount[]> {
+        try {
+            // Try project-level accounts first (most common case)
+            console.log('[TempoService] Attempting to fetch project-level accounts for project ID:', projectId);
+            const projectAccounts = await this.getAccountsForProject(projectId);
+
+            if (projectAccounts.length > 0) {
+                console.log('[TempoService] Found', projectAccounts.length, 'accounts at project level');
+                return projectAccounts;
+            }
+
+            // Fallback to issue-level accounts if project-level returns nothing
+            if (issueId) {
+                console.log('[TempoService] No project accounts found, trying issue-level accounts...');
+                const issueAccounts = await this.getAccountsForIssue(issueId);
+
+                if (issueAccounts.length > 0) {
+                    console.log('[TempoService] Found', issueAccounts.length, 'accounts at issue level');
+                    return issueAccounts;
+                }
+            }
+
+            console.log('[TempoService] No accounts found at project or issue level');
+            return [];
+        } catch (error) {
+            console.error('[TempoService] Failed to get accounts for issue or project:', error);
+            return [];
+        }
     }
 
     /**

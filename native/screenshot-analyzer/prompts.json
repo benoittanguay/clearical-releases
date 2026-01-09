@@ -1,59 +1,147 @@
 {
-  "systemPrompt": "You are an AI assistant performing detailed visual analysis of desktop screenshots. Your goal is to create comprehensive descriptions that capture what the user is actually doing on their screen with enough detail that another AI could understand the workflow and context. Focus on visible UI elements, text content, specific actions, and work context.",
-  
+  "systemPrompt": "You are a visual data extraction AI analyzing desktop screenshots. Your primary goal is to extract STRUCTURED, DETAILED information that will be used to understand the user's work context, identify projects, and categorize activities. Focus on extracting specific, concrete details rather than subjective descriptions.",
+
   "analysisPrompts": {
     "documentType": {
-      "description": "Identify the type of document or content being worked on",
+      "description": "Identify the type of document or content visible in the screenshot",
       "keywords": {
-        "implementation": "Implementation documentation",
-        "readme": "README documentation", 
-        "documentation": "Technical documentation",
-        "plan": "Project planning document",
-        "config": "Configuration file",
-        "code": "Source code file",
-        "test": "Test file",
-        "api": "API documentation"
+        "code": "Source Code",
+        "terminal": "Terminal/Console",
+        "browser": "Web Browser",
+        "documentation": "Documentation",
+        "design": "Design Tool",
+        "spreadsheet": "Spreadsheet",
+        "email": "Email Client",
+        "chat": "Chat/Messaging",
+        "ide": "IDE/Code Editor",
+        "debugger": "Debug Mode",
+        "git": "Version Control",
+        "database": "Database Tool",
+        "api": "API Testing",
+        "config": "Configuration",
+        "markdown": "Markdown/Notes",
+        "pdf": "PDF Document",
+        "video": "Video Content",
+        "calendar": "Calendar",
+        "project": "Project Management"
       }
     },
-    
     "technicalContext": {
-      "description": "Detect programming languages, frameworks, and tools",
+      "description": "Identify specific technologies, languages, frameworks, and tools",
       "keywords": {
-        "react": "React framework",
-        "typescript": "TypeScript development",
-        "javascript": "JavaScript development", 
-        "swift": "Swift programming",
-        "electron": "Electron application development",
-        "nodejs": "Node.js development",
-        "npm": "NPM package management",
-        "git": "Git version control",
-        "docker": "Docker containerization",
-        "api": "API development",
-        "database": "Database work",
-        "ai": "AI/ML development",
-        "python": "Python development",
-        "java": "Java development",
-        "css": "CSS styling",
-        "html": "HTML markup"
+        "react": "React",
+        "typescript": "TypeScript",
+        "javascript": "JavaScript",
+        "swift": "Swift",
+        "python": "Python",
+        "electron": "Electron",
+        "node": "Node.js",
+        "npm": "npm",
+        "git": "Git",
+        "github": "GitHub",
+        "jira": "Jira",
+        "tempo": "Tempo",
+        "docker": "Docker",
+        "vscode": "VS Code",
+        "cursor": "Cursor",
+        "xcode": "Xcode",
+        "chrome": "Chrome",
+        "safari": "Safari",
+        "slack": "Slack",
+        "figma": "Figma",
+        "notion": "Notion",
+        "postgresql": "PostgreSQL",
+        "mongodb": "MongoDB",
+        "redis": "Redis",
+        "aws": "AWS",
+        "azure": "Azure",
+        "tailwind": "Tailwind CSS",
+        "nextjs": "Next.js",
+        "vite": "Vite",
+        "webpack": "Webpack",
+        "jest": "Jest",
+        "pytest": "pytest",
+        "graphql": "GraphQL",
+        "rest": "REST API",
+        "json": "JSON",
+        "yaml": "YAML",
+        "html": "HTML",
+        "css": "CSS",
+        "scss": "SCSS",
+        "vue": "Vue.js",
+        "angular": "Angular",
+        "svelte": "Svelte"
       }
     },
-    
     "activityType": {
-      "description": "Understand what type of work activity is being performed",
+      "description": "Determine what specific task or activity is being performed",
       "patterns": {
-        "coding": ["function", "class", "import", "export", "const", "var", "let", "return", "if", "else", "for", "while", "async", "await"],
-        "debugging": ["error", "exception", "debug", "console", "log", "breakpoint", "stack trace"],
-        "documentation": ["readme", "docs", "documentation", "guide", "tutorial", "example"],
-        "configuration": ["config", "settings", "preferences", "environment", "setup"],
-        "testing": ["test", "spec", "expect", "assert", "mock", "unit test"],
-        "deployment": ["deploy", "build", "production", "staging", "release"],
-        "planning": ["plan", "todo", "task", "milestone", "roadmap", "requirement"]
+        "coding": ["function", "const", "import", "export", "class", "interface", "return", "async", "await"],
+        "debugging": ["error", "exception", "console", "debugger", "breakpoint", "stack", "trace", "bug", "fix"],
+        "testing": ["test", "spec", "expect", "assert", "mock", "describe", "it(", "should"],
+        "documentation": ["readme", "docs", "documentation", "wiki", "guide", "tutorial", "comment"],
+        "configuration": ["config", "settings", "env", "environment", "setup", "install", "package.json"],
+        "versionControl": ["commit", "push", "pull", "merge", "branch", "checkout", "rebase", "stash"],
+        "research": ["stackoverflow", "google", "search", "documentation", "api docs", "reference"],
+        "design": ["figma", "sketch", "design", "mockup", "prototype", "wireframe", "ui", "ux"],
+        "communication": ["slack", "email", "message", "chat", "meeting", "call", "teams"],
+        "projectManagement": ["jira", "ticket", "issue", "sprint", "backlog", "kanban", "board"]
       }
     }
   },
-  
+
   "descriptionTemplate": {
-    "format": "Provide a detailed, comprehensive description of what is visible on the user's screen. Include: 1) The application being used and its current state/mode, 2) Specific text content, file names, and UI elements visible, 3) What the user appears to be working on or doing, 4) Any code, documentation, or content being viewed/edited, 5) Interface elements like toolbars, sidebars, tabs, buttons that provide context, 6) Any error messages, notifications, or status indicators, 7) The overall workflow or task context. Be verbose and detailed - capture everything visible that would help understand what work is being performed.",
-    "structure": []
+    "format": "{activity} ({context}) in the {project} project, working on {file} using {app} in {mode}. Technologies: {technologies}. Visible files: {files}",
+    "structure": [
+      "activity",
+      "context",
+      "project",
+      "file",
+      "app",
+      "mode",
+      "technologies",
+      "files"
+    ]
+  },
+
+  "extractionPrompts": {
+    "textExtraction": {
+      "description": "Extract ALL visible text from the screenshot, categorized by type",
+      "categories": {
+        "filenames": "File names, paths, and extensions visible anywhere on screen",
+        "code": "Code snippets, function names, variable names, class names, code keywords",
+        "urls": "URLs, domain names, localhost addresses, API endpoints",
+        "commands": "Terminal commands, CLI output, shell prompts, npm/git commands",
+        "uiLabels": "Button text, menu items, tab names, window titles, dialog labels",
+        "documentText": "Regular text content from documents, editors, or web pages",
+        "errors": "Error messages, warnings, debug output, stack traces",
+        "projectIdentifiers": "Project names, repository names, branch names, organization names"
+      },
+      "instructions": "Extract text verbatim. Preserve exact capitalization, spacing, and special characters. Group similar text items together. If a file path is visible, capture the entire path."
+    },
+
+    "visualContext": {
+      "description": "Identify visual elements that provide context about the work being done",
+      "elements": {
+        "application": "Specific application name and version if visible (e.g., 'VS Code', 'Cursor', 'Xcode', 'Chrome', 'Terminal')",
+        "applicationMode": "Current mode or view (e.g., 'Editor view', 'Debug mode', 'Git panel', 'Terminal tab', 'Browser DevTools')",
+        "layout": "Layout structure (e.g., 'Split view with code on left and preview on right', 'Single full-width editor', 'Terminal with multiple tabs')",
+        "activeTab": "Currently active tab or file if visible",
+        "sidebar": "Sidebar content if visible (e.g., 'File explorer showing src/ directory', 'Git changes panel', 'Extensions panel')",
+        "visiblePanels": "Any additional panels or panes visible (e.g., 'Problems panel showing 3 errors', 'Terminal output', 'Debug console')"
+      },
+      "instructions": "Be specific and concrete. Instead of 'code editor', say 'VS Code editor in TypeScript file'. Instead of 'browser', say 'Chrome DevTools Console tab'."
+    }
+  },
+
+  "narrativeGeneration": {
+    "description": "After extraction, generate a coherent narrative that synthesizes the structured data",
+    "format": "Create a 2-4 sentence narrative that answers: 1) What specific task/work is being performed? 2) Which project/codebase is this for? 3) What technologies/tools are being used? 4) Any important context (errors, specific features, etc.)?",
+    "style": "Be concise but specific. Use concrete terms from the extracted data. Prioritize information that helps identify the project and task.",
+    "examples": [
+      "Working on the HistoryDetail component in the TimePortal Electron app, specifically implementing AI-powered activity summary generation. The code uses React hooks and TypeScript, with visible imports for the useEffect and useState hooks. The developer is editing the handleGenerateSummary function.",
+      "Debugging an API integration issue in the screenshot-analyzer Swift module. The Xcode console shows Vision Framework errors related to text recognition. The active file is main.swift with the analyzeImage function visible, and the project structure indicates this is part of a larger Electron application.",
+      "Configuring Jira and Tempo API integration in an Electron app. The Settings panel shows API token configuration fields, and the browser has the Tempo API documentation open at /rest/api/3/worklog. File explorer shows electron/main.ts and src/components/TempoValidationModal.tsx."
+    ]
   }
 }

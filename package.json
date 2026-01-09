@@ -6,8 +6,9 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "dev:electron": "tsc -p electron/tsconfig.json && concurrently \"vite\" \"tsc -p electron/tsconfig.json -w\" \"wait-on tcp:5173 && electron .\"",
-    "build:electron": "tsc -b && vite build && tsc -p electron/tsconfig.json && electron-builder",
+    "build:electron-main": "tsc -p electron/tsconfig.json && cp dist-electron/electron/main.js dist-electron/main.js",
+    "dev:electron": "npm run build:electron-main && concurrently \"vite\" \"tsc -p electron/tsconfig.json -w\" \"wait-on tcp:5173 && electron .\"",
+    "build:electron": "tsc -b && vite build && npm run build:electron-main && electron-builder",
     "lint": "eslint .",
     "preview": "vite preview"
   },

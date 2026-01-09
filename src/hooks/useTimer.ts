@@ -32,6 +32,7 @@ export function useTimer() {
     const currentActivityScreenshotDescriptions = useRef<{ [path: string]: string }>({});
     const lastScreenshotTime = useRef<number>(0);
     const pollingActiveRef = useRef<boolean>(false);
+    const pendingAnalyses = useRef<Map<string, Promise<void>>>(new Map());
 
     // Load state from local storage on mount
     useEffect(() => {
@@ -112,36 +113,65 @@ export function useTimer() {
         const analyzeScreenshotAsync = async (path: string, timestamp: number) => {
             console.log('[Renderer] 🔍 Starting AI analysis for:', path.split('/').pop());
 
-            try {
-                // @ts-ignore
-                const analysisResult = await window.electron.ipcRenderer.analyzeScreenshot(path, `${timestamp}`);
+            // Create and track the promise
+            const analysisPromise = (async () => {
+                try {
+                    // @ts-ignore
+                    const analysisResult = await window.electron.ipcRenderer.analyzeScreenshot(path, `${timestamp}`);
 
-                if (analysisResult?.success && analysisResult.description) {
-                    currentActivityScreenshotDescriptions.current[path] = analysisResult.description;
-                    console.log('[Renderer] ✅ AI analysis completed:', {
-                        file: path.split('/').pop(),
-                        confidence: analysisResult.confidence,
-                        descriptionLength: analysisResult.description.length
-                    });
-
-                    // Update windowActivity state to trigger re-render with new description
-                    setWindowActivity(prev => {
-                        // Find if this screenshot belongs to any existing activity
-                        return prev.map(activity => {
-                            if (activity.screenshotPaths?.includes(path)) {
-                                return {
-                                    ...activity,
-                                    screenshotDescriptions: {
-                                        ...(activity.screenshotDescriptions || {}),
-                                        [path]: analysisResult.description
-                                    }
-                                };
-                            }
-                            return activity;
+                    if (analysisResult?.success && analysisResult.description) {
+                        currentActivityScreenshotDescriptions.current[path] = analysisResult.description;
+                        console.log('[Renderer] ✅ AI analysis completed:', {
+                            file: path.split('/').pop(),
+                            confidence: analysisResult.confidence,
+                            descriptionLength: analysisResult.description.length
                         });
-                    });
-                } else {
-                    console.log('[Renderer] ⚠️ AI analysis failed, using fallback', analysisResult);
+
+                        // Update windowActivity state to trigger re-render with new description
+                        setWindowActivity(prev => {
+                            // Find if this screenshot belongs to any existing activity
+                            return prev.map(activity => {
+                                if (activity.screenshotPaths?.includes(path)) {
+                                    const existingDescriptions = activity.screenshotDescriptions || {};
+                                    const newDescriptions: { [path: string]: string } = Object.assign(
+                                        {},
+                                        existingDescriptions,
+                                        { [path]: analysisResult.description }
+                                    );
+                                    return {
+                                        ...activity,
+                                        screenshotDescriptions: newDescriptions
+                                    };
+                                }
+                                return activity;
+                            });
+                        });
+                    } else {
+                        console.log('[Renderer] ⚠️ AI analysis failed, using fallback', analysisResult);
+                        const fallbackDescription = 'Screenshot captured during work session';
+                        currentActivityScreenshotDescriptions.current[path] = fallbackDescription;
+
+                        // Update state with fallback description
+                        setWindowActivity(prev => {
+                            return prev.map(activity => {
+                                if (activity.screenshotPaths?.includes(path)) {
+                                    const existingDescriptions = activity.screenshotDescriptions || {};
+                                    const newDescriptions: { [path: string]: string } = Object.assign(
+                                        {},
+                                        existingDescriptions,
+                                        { [path]: fallbackDescription }
+                                    );
+                                    return {
+                                        ...activity,
+                                        screenshotDescriptions: newDescriptions
+                                    };
+                                }
+                                return activity;
+                            });
+                        });
+                    }
+                } catch (error) {
+                    console.error('[Renderer] ❌ AI analysis error:', error);
                     const fallbackDescription = 'Screenshot captured during work session';
                     currentActivityScreenshotDescriptions.current[path] = fallbackDescription;
 
@@ -149,39 +179,28 @@ export function useTimer() {
                     setWindowActivity(prev => {
                         return prev.map(activity => {
                             if (activity.screenshotPaths?.includes(path)) {
+                                const existingDescriptions = activity.screenshotDescriptions || {};
+                                const newDescriptions: { [path: string]: string } = Object.assign(
+                                    {},
+                                    existingDescriptions,
+                                    { [path]: fallbackDescription }
+                                );
                                 return {
                                     ...activity,
-                                    screenshotDescriptions: {
-                                        ...(activity.screenshotDescriptions || {}),
-                                        [path]: fallbackDescription
-                                    }
+                                    screenshotDescriptions: newDescriptions
                                 };
                             }
                             return activity;
                         });
                     });
+                } finally {
+                    // Remove from pending analyses when complete
+                    pendingAnalyses.current.delete(path);
                 }
-            } catch (error) {
-                console.error('[Renderer] ❌ AI analysis error:', error);
-                const fallbackDescription = 'Screenshot captured during work session';
-                currentActivityScreenshotDescriptions.current[path] = fallbackDescription;
+            })();
 
-                // Update state with fallback description
-                setWindowActivity(prev => {
-                    return prev.map(activity => {
-                        if (activity.screenshotPaths?.includes(path)) {
-                            return {
-                                ...activity,
-                                screenshotDescriptions: {
-                                    ...(activity.screenshotDescriptions || {}),
-                                    [path]: fallbackDescription
-                                }
-                            };
-                        }
-                        return activity;
-                    });
-                });
-            }
+            // Store the promise
+            pendingAnalyses.current.set(path, analysisPromise);
         };
 
         const pollWindow = async () => {
@@ -250,10 +269,11 @@ export function useTimer() {
                     }, INTERVAL_SCREENSHOT_TIME);
 
                 } else {
-                    // Same window - just update timestamp
-                    if (lastWindowRef.current) {
-                        lastWindowRef.current.timestamp = now;
-                    }
+                    // Same window - don't update timestamp!
+                    // The timestamp represents when this activity STARTED, not the current poll time.
+                    // Updating it would make all activities artificially short.
+                    // We just continue tracking the same window without any action needed.
+                    console.log('[Renderer] Same window, continuing activity tracking');
                 }
             }
             } finally {
@@ -303,6 +323,7 @@ export function useTimer() {
         currentActivityScreenshots.current = []; // Reset screenshots
         currentActivityScreenshotDescriptions.current = {}; // Reset descriptions
         lastScreenshotTime.current = 0; // Reset screenshot timing
+        pendingAnalyses.current.clear(); // Clear any pending analyses from previous session
     };
 
     const pause = () => {
@@ -323,16 +344,25 @@ export function useTimer() {
         }
     };
 
-    const stop = () => {
+    const stop = async () => {
         setIsRunning(false);
         setIsPaused(false);
         const now = Date.now();
+
+        // Wait for all pending AI analyses to complete before finalizing
+        const pendingCount = pendingAnalyses.current.size;
+        if (pendingCount > 0) {
+            console.log(`[Renderer] ⏳ Waiting for ${pendingCount} pending AI analyses to complete before stopping...`);
+            await Promise.all(Array.from(pendingAnalyses.current.values()));
+            console.log('[Renderer] ✅ All AI analyses completed');
+        }
+
         const finalActivity = calculateFinalActivities(now);
-        
+
         // Reset elapsed time to zero after stopping
         setElapsed(0);
         setStartTime(null);
-        
+
         return finalActivity;
     };
 
@@ -381,20 +411,68 @@ export function useTimer() {
             console.log('[Renderer] No start time available for activity calculation');
             return windowActivity;
         }
-        
+
         // Build complete timeline of activities
         let activities: WindowActivity[] = [...windowActivity];
-        
+
         // Add the current/final activity if it exists
         if (lastWindowRef.current) {
-            activities.push({
-                appName: lastWindowRef.current.appName,
-                windowTitle: lastWindowRef.current.windowTitle,
-                timestamp: lastWindowRef.current.timestamp,
-                duration: 0, // Will be calculated below
-                screenshotPaths: currentActivityScreenshots.current.length > 0 ? [...currentActivityScreenshots.current] : undefined,
-                screenshotDescriptions: Object.keys(currentActivityScreenshotDescriptions.current).length > 0 ? { ...currentActivityScreenshotDescriptions.current } : undefined
-            });
+            // Check if we already have this activity in windowActivity state
+            // (it would have been added with descriptions via setWindowActivity updates)
+            const existingActivityIndex = activities.findIndex(act =>
+                act.appName === lastWindowRef.current!.appName &&
+                act.windowTitle === lastWindowRef.current!.windowTitle &&
+                act.timestamp === lastWindowRef.current!.timestamp
+            );
+
+            if (existingActivityIndex >= 0) {
+                // Activity already exists in state with potential AI descriptions
+                // Merge in any additional screenshots from the ref that might not be in state yet
+                const existingActivity = activities[existingActivityIndex];
+                const allScreenshotPaths = [
+                    ...(existingActivity.screenshotPaths || []),
+                    ...currentActivityScreenshots.current.filter(path =>
+                        !existingActivity.screenshotPaths?.includes(path)
+                    )
+                ];
+
+                // Merge descriptions - state descriptions take precedence (they're from completed AI analysis)
+                const allDescriptions = {
+                    ...currentActivityScreenshotDescriptions.current,
+                    ...(existingActivity.screenshotDescriptions || {})
+                };
+
+                console.log('[Renderer] Merging final activity with state:', {
+                    app: existingActivity.appName,
+                    screenshotsInState: existingActivity.screenshotPaths?.length || 0,
+                    screenshotsInRef: currentActivityScreenshots.current.length,
+                    descriptionsInState: Object.keys(existingActivity.screenshotDescriptions || {}).length,
+                    descriptionsInRef: Object.keys(currentActivityScreenshotDescriptions.current).length,
+                    totalDescriptions: Object.keys(allDescriptions).length
+                });
+
+                activities[existingActivityIndex] = {
+                    ...existingActivity,
+                    screenshotPaths: allScreenshotPaths.length > 0 ? allScreenshotPaths : undefined,
+                    screenshotDescriptions: Object.keys(allDescriptions).length > 0 ? allDescriptions : undefined
+                };
+            } else {
+                // Activity not in state yet, add it
+                console.log('[Renderer] Adding final activity from ref:', {
+                    app: lastWindowRef.current.appName,
+                    screenshots: currentActivityScreenshots.current.length,
+                    descriptions: Object.keys(currentActivityScreenshotDescriptions.current).length
+                });
+
+                activities.push({
+                    appName: lastWindowRef.current.appName,
+                    windowTitle: lastWindowRef.current.windowTitle,
+                    timestamp: lastWindowRef.current.timestamp,
+                    duration: 0, // Will be calculated below
+                    screenshotPaths: currentActivityScreenshots.current.length > 0 ? [...currentActivityScreenshots.current] : undefined,
+                    screenshotDescriptions: Object.keys(currentActivityScreenshotDescriptions.current).length > 0 ? { ...currentActivityScreenshotDescriptions.current } : undefined
+                });
+            }
         }
         
         // Calculate durations based on complete timeline
@@ -475,6 +553,7 @@ export function useTimer() {
         currentActivityScreenshots.current = []; // Reset screenshots
         currentActivityScreenshotDescriptions.current = {}; // Reset descriptions
         lastScreenshotTime.current = 0; // Reset screenshot timing
+        pendingAnalyses.current.clear(); // Clear pending analyses
     };
 
     const formatTime = (ms: number) => {

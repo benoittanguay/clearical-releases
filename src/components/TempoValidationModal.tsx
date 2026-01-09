@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import type { TimeEntry, WorkAssignment, TimeBucket } from '../context/StorageContext';
-import { TempoService } from '../services/tempoService';
+import { TempoService, type TempoAccount } from '../services/tempoService';
+import { JiraService } from '../services/jiraService';
 
 interface TempoValidationModalProps {
     entry: TimeEntry;
@@ -11,6 +12,9 @@ interface TempoValidationModalProps {
     formatTime: (ms: number) => string;
     tempoBaseUrl: string;
     tempoApiToken: string;
+    jiraBaseUrl: string;
+    jiraEmail: string;
+    jiraApiToken: string;
     defaultDescription?: string;
 }
 
@@ -23,11 +27,17 @@ export function TempoValidationModal({
     formatTime,
     tempoBaseUrl,
     tempoApiToken,
+    jiraBaseUrl,
+    jiraEmail,
+    jiraApiToken,
     defaultDescription
 }: TempoValidationModalProps) {
     const [description, setDescription] = useState(defaultDescription || entry.description || '');
     const [isLogging, setIsLogging] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [availableAccounts, setAvailableAccounts] = useState<TempoAccount[]>([]);
+    const [selectedAccount, setSelectedAccount] = useState<string>('');
+    const [isLoadingAccounts, setIsLoadingAccounts] = useState(false);
 
     // Extract Jira key from assignment
     const getJiraKey = (): string | null => {
@@ -59,9 +69,62 @@ export function TempoValidationModal({
         }
     }, [assignment, jiraKey]);
 
+    // Fetch accounts when modal opens and we have a Jira issue
+    useEffect(() => {
+        const fetchAccounts = async () => {
+            if (!jiraKey) {
+                return;
+            }
+
+            setIsLoadingAccounts(true);
+            setError(null);
+
+            try {
+                // Initialize services
+                const tempoService = new TempoService(tempoBaseUrl, tempoApiToken);
+                const jiraService = new JiraService(jiraBaseUrl, jiraEmail, jiraApiToken);
+
+                // Fetch issue details to get project ID and issue ID
+                console.log('[TempoValidationModal] Fetching issue details for accounts lookup:', jiraKey);
+                const issue = await jiraService.getIssue(jiraKey);
+                const projectId = issue.fields.project.id;
+                const issueId = issue.id;
+                console.log('[TempoValidationModal] Got project ID:', projectId, 'and issue ID:', issueId);
+
+                // Fetch accounts - try project first, then issue-level as fallback
+                console.log('[TempoValidationModal] Fetching accounts for project/issue:', projectId, issueId);
+                const accounts = await tempoService.getAccountsForIssueOrProject(projectId, issueId);
+                console.log('[TempoValidationModal] Fetched accounts:', accounts);
+
+                setAvailableAccounts(accounts);
+
+                // Pre-select if entry already has a tempo account
+                if (entry.tempoAccount?.key) {
+                    setSelectedAccount(entry.tempoAccount.key);
+                } else if (accounts.length === 1) {
+                    // Auto-select if only one account
+                    setSelectedAccount(accounts[0].key);
+                }
+            } catch (error) {
+                console.error('[TempoValidationModal] Failed to fetch accounts:', error);
+                setError(`Failed to fetch accounts: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            } finally {
+                setIsLoadingAccounts(false);
+            }
+        };
+
+        fetchAccounts();
+    }, [jiraKey, tempoBaseUrl, tempoApiToken, jiraBaseUrl, jiraEmail, jiraApiToken, entry.tempoAccount]);
+
     const handleConfirm = async () => {
         if (!jiraKey) {
             setError('No Jira issue key available for logging.');
+            return;
+        }
+
+        // Validate account is selected
+        if (!selectedAccount) {
+            setError('Please select an account before logging time.');
             return;
         }
 
@@ -69,16 +132,43 @@ export function TempoValidationModal({
         setError(null);
 
         try {
+            // Initialize services
             const tempoService = new TempoService(tempoBaseUrl, tempoApiToken);
+            const jiraService = new JiraService(jiraBaseUrl, jiraEmail, jiraApiToken);
 
+            // Fetch the numeric issue ID from Jira API
+            console.log('[TempoValidationModal] Fetching issue ID for key:', jiraKey);
+            const issueId = await jiraService.getIssueIdFromKey(jiraKey);
+            console.log('[TempoValidationModal] Got issue ID:', issueId);
+
+            // Validate and convert issue ID to number
+            const numericIssueId = parseInt(issueId, 10);
+            if (isNaN(numericIssueId) || numericIssueId <= 0) {
+                throw new Error(`Invalid issue ID received from Jira: ${issueId}`);
+            }
+
+            // Get current user's account ID (required by Tempo API)
+            console.log('[TempoValidationModal] Fetching current user account ID');
+            const currentUser = await jiraService.getCurrentUser();
+            console.log('[TempoValidationModal] Got user account ID:', currentUser.accountId);
+
+            // Create worklog with numeric issue ID, author account ID, and account attribute
             const worklog = {
-                issueKey: jiraKey,
+                issueId: numericIssueId,
                 timeSpentSeconds: TempoService.durationMsToSeconds(entry.duration),
                 startDate: TempoService.formatDate(entry.startTime),
                 startTime: TempoService.formatTime(entry.startTime),
                 description: description.trim() || `Time logged from TimePortal for ${formatTime(entry.duration)}`,
+                authorAccountId: currentUser.accountId,
+                attributes: [
+                    {
+                        key: '_Account_',
+                        value: selectedAccount
+                    }
+                ],
             };
 
+            console.log('[TempoValidationModal] Creating worklog:', worklog);
             const response = await tempoService.createWorklog(worklog);
 
             // Show success message
@@ -138,7 +228,7 @@ export function TempoValidationModal({
     };
 
     const assignmentDisplay = getAssignmentDisplay();
-    const canLog = jiraKey && !isLogging;
+    const canLog = jiraKey && !isLogging && selectedAccount && !isLoadingAccounts;
 
     return (
         <>
@@ -224,6 +314,42 @@ export function TempoValidationModal({
                                 {assignmentDisplay.issueDetails && (
                                     <div className="text-gray-400 text-xs ml-5">{assignmentDisplay.issueDetails}</div>
                                 )}
+                            </div>
+                        )}
+
+                        {/* Account Selection */}
+                        {jiraKey && (
+                            <div className="bg-gray-750 rounded-lg p-3 border border-gray-700">
+                                <label className="block text-xs text-gray-400 uppercase font-semibold mb-2">
+                                    Account <span className="text-red-400">*</span>
+                                </label>
+                                {isLoadingAccounts ? (
+                                    <div className="flex items-center gap-2 text-sm text-gray-400">
+                                        <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
+                                        <span>Loading accounts...</span>
+                                    </div>
+                                ) : availableAccounts.length === 0 ? (
+                                    <div className="text-sm text-yellow-400 bg-yellow-500/10 border border-yellow-500/30 rounded px-3 py-2">
+                                        No accounts linked to this issue. Please configure accounts in Tempo or contact your Tempo administrator.
+                                    </div>
+                                ) : (
+                                    <select
+                                        value={selectedAccount}
+                                        onChange={(e) => setSelectedAccount(e.target.value)}
+                                        disabled={isLogging}
+                                        className="w-full bg-gray-700 border border-gray-600 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        <option value="">Select an account...</option>
+                                        {availableAccounts.map((account) => (
+                                            <option key={account.id} value={account.key}>
+                                                {account.name} ({account.key})
+                                            </option>
+                                        ))}
+                                    </select>
+                                )}
+                                <div className="text-xs text-gray-500 mt-1">
+                                    Required for logging time to Tempo
+                                </div>
                             </div>
                         )}
 

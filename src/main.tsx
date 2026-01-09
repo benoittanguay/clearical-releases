@@ -4,6 +4,7 @@ import './index.css'
 import App from './App.tsx'
 import { StorageProvider } from './context/StorageContext.tsx'
 import { SettingsProvider } from './context/SettingsContext.tsx'
+import { ToastProvider } from './context/ToastContext.tsx'
 
 // Import seed script to expose console commands in development
 if (import.meta.env.DEV) {
@@ -14,7 +15,9 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <SettingsProvider>
       <StorageProvider>
-        <App />
+        <ToastProvider>
+          <App />
+        </ToastProvider>
       </StorageProvider>
     </SettingsProvider>
   </StrictMode>,

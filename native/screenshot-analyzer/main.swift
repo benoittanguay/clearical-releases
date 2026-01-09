@@ -38,6 +38,52 @@ struct AnalysisRequest: Codable {
     let requestId: String?
 }
 
+// Structured extraction data
+struct ExtractedText: Codable {
+    let filenames: [String]
+    let code: [String]
+    let urls: [String]
+    let commands: [String]
+    let uiLabels: [String]
+    let documentText: [String]
+    let errors: [String]
+    let projectIdentifiers: [String]
+}
+
+struct VisualContext: Codable {
+    let application: String
+    let applicationMode: String?
+    let layout: String?
+    let activeTab: String?
+    let sidebar: String?
+    let visiblePanels: [String]
+}
+
+struct FileContext: Codable {
+    let filename: String?
+    let path: String?
+    let language: String?
+    let `extension`: String?
+}
+
+struct ProjectContext: Codable {
+    let projectName: String?
+    let directoryStructure: [String]
+    let branchName: String?
+    let issueReferences: [String]
+    let featureName: String?
+    let configFiles: [String]
+}
+
+struct StructuredExtraction: Codable {
+    let extractedText: ExtractedText
+    let visualContext: VisualContext
+    let fileContext: FileContext?
+    let projectContext: ProjectContext
+    let detectedTechnologies: [String]
+    let detectedActivities: [String]
+}
+
 struct AnalysisResponse: Codable {
     let success: Bool
     let requestId: String?
@@ -46,6 +92,7 @@ struct AnalysisResponse: Codable {
     let error: String?
     let detectedText: [String]?
     let objects: [String]?
+    let extraction: StructuredExtraction?
 }
 
 // MARK: - Screenshot Analyzer
@@ -57,16 +104,33 @@ class ScreenshotAnalyzer {
     }
 
     private func loadPromptConfig() {
-        let promptPath = URL(fileURLWithPath: #file).deletingLastPathComponent().appendingPathComponent("prompts.json").path
+        // Try multiple locations for prompts.json
+        let possiblePaths = [
+            // 1. Same directory as the executable (when running compiled binary)
+            URL(fileURLWithPath: CommandLine.arguments[0]).deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("prompts.json").path,
+            // 2. Parent of build directory (native/screenshot-analyzer/prompts.json)
+            URL(fileURLWithPath: CommandLine.arguments[0]).deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("prompts.json").path,
+            // 3. Source file directory (when running with swift directly)
+            URL(fileURLWithPath: #file).deletingLastPathComponent().appendingPathComponent("prompts.json").path,
+            // 4. Hardcoded fallback path
+            "/Users/benoittanguay/Documents/Anti/TimePortal/native/screenshot-analyzer/prompts.json"
+        ]
 
-        do {
-            let data = try Data(contentsOf: URL(fileURLWithPath: promptPath))
-            promptConfig = try JSONDecoder().decode(PromptConfig.self, from: data)
-        } catch {
-            print("Failed to load prompt config: \(error)")
-            // Use default config as fallback
-            promptConfig = createDefaultPromptConfig()
+        for promptPath in possiblePaths {
+            if FileManager.default.fileExists(atPath: promptPath) {
+                do {
+                    let data = try Data(contentsOf: URL(fileURLWithPath: promptPath))
+                    promptConfig = try JSONDecoder().decode(PromptConfig.self, from: data)
+                    return
+                } catch {
+                    print("Failed to parse prompt config at \(promptPath): \(error)")
+                }
+            }
         }
+
+        print("Failed to load prompt config from any location, using defaults")
+        // Use default config as fallback
+        promptConfig = createDefaultPromptConfig()
     }
 
     private func createDefaultPromptConfig() -> PromptConfig {
@@ -90,7 +154,8 @@ class ScreenshotAnalyzer {
                 confidence: nil,
                 error: "Could not load image from path: \(path)",
                 detectedText: nil,
-                objects: nil
+                objects: nil,
+                extraction: nil
             ))
             return
         }
@@ -176,10 +241,16 @@ class ScreenshotAnalyzer {
         // Wait for all Vision tasks to complete
         _ = semaphore.wait(timeout: .now() + 10)
 
-        // Generate natural language description
-        analysisDescription = self.generateDescription(
+        // Generate structured extraction from detected text and objects
+        let extraction = self.generateStructuredExtraction(
             detectedText: detectedText,
             detectedObjects: detectedObjects,
+            imagePath: path
+        )
+
+        // Generate natural language description from structured data
+        analysisDescription = self.generateNarrativeFromExtraction(
+            extraction: extraction,
             imagePath: path
         )
 
@@ -190,8 +261,429 @@ class ScreenshotAnalyzer {
             confidence: confidenceScore > 0 ? confidenceScore : 0.8,
             error: nil,
             detectedText: detectedText.isEmpty ? nil : detectedText,
-            objects: detectedObjects.isEmpty ? nil : detectedObjects
+            objects: detectedObjects.isEmpty ? nil : detectedObjects,
+            extraction: extraction
         ))
+    }
+
+    // MARK: - Structured Extraction (Step 1)
+    private func generateStructuredExtraction(detectedText: [String], detectedObjects: [String], imagePath: String) -> StructuredExtraction {
+        let allText = detectedText.joined(separator: " ")
+        let allTextLower = allText.lowercased()
+
+        // Extract app info from filename
+        let filename = URL(fileURLWithPath: imagePath).lastPathComponent
+        let appInfo = extractAppInfoFromFilename(filename)
+
+        // === TEXT EXTRACTION ===
+        var filenames: [String] = []
+        var code: [String] = []
+        var urls: [String] = []
+        var commands: [String] = []
+        var uiLabels: [String] = []
+        var documentText: [String] = []
+        var errors: [String] = []
+        var projectIdentifiers: [String] = []
+
+        // File extensions to look for
+        let fileExtensions = [".tsx", ".ts", ".jsx", ".js", ".swift", ".py", ".java", ".go", ".rs", ".cpp", ".c", ".h", ".json", ".yaml", ".yml", ".toml", ".md", ".txt", ".css", ".html", ".xml"]
+
+        for text in detectedText {
+            let textLower = text.lowercased()
+
+            // Categorize filenames and paths
+            if fileExtensions.contains(where: { text.hasSuffix($0) }) || text.contains("/") || text.contains("\\") {
+                filenames.append(text)
+            }
+
+            // Categorize code patterns
+            if textLower.contains("function") || textLower.contains("const ") || textLower.contains("let ") ||
+               textLower.contains("var ") || textLower.contains("import ") || textLower.contains("export ") ||
+               textLower.contains("class ") || textLower.contains("interface ") || textLower.contains("type ") ||
+               textLower.contains("func ") || textLower.contains("def ") || textLower.contains("async ") {
+                code.append(text)
+            }
+
+            // Categorize URLs
+            if textLower.contains("http://") || textLower.contains("https://") || textLower.contains("localhost") ||
+               textLower.contains("://") || textLower.contains(".com") || textLower.contains(".org") {
+                urls.append(text)
+            }
+
+            // Categorize commands
+            if textLower.starts(with: "npm ") || textLower.starts(with: "git ") || textLower.starts(with: "$") ||
+               textLower.starts(with: "yarn ") || textLower.starts(with: "docker ") || textLower.contains("cargo ") {
+                commands.append(text)
+            }
+
+            // Categorize errors
+            if textLower.contains("error") || textLower.contains("exception") || textLower.contains("failed") ||
+               textLower.contains("warning") || textLower.contains("stack trace") || textLower.contains("cannot") {
+                errors.append(text)
+            }
+
+            // Categorize project identifiers
+            if textLower.contains("project") || text.contains("PROJ-") || text.contains("JIRA-") ||
+               (text.count > 3 && text.count < 30 && text.first?.isUppercase == true && !text.contains(" ")) {
+                projectIdentifiers.append(text)
+            }
+        }
+
+        // === VISUAL CONTEXT ===
+        let application = appInfo.appName ?? "Unknown"
+        var applicationMode: String? = nil
+        var layout: String? = nil
+        var activeTab: String? = nil
+        var sidebar: String? = nil
+        var visiblePanels: [String] = []
+
+        // Detect application mode from text content
+        if allTextLower.contains("debug") || allTextLower.contains("debugger") {
+            applicationMode = "Debug mode"
+        } else if allTextLower.contains("terminal") || allTextLower.contains("console") {
+            applicationMode = "Terminal/Console"
+        } else if allTextLower.contains("git") {
+            applicationMode = "Version control"
+        }
+
+        // Detect panels from common UI elements
+        if allTextLower.contains("problems") {
+            visiblePanels.append("Problems panel")
+        }
+        if allTextLower.contains("output") {
+            visiblePanels.append("Output panel")
+        }
+        if allTextLower.contains("terminal") {
+            visiblePanels.append("Terminal panel")
+        }
+
+        let visualContext = VisualContext(
+            application: application,
+            applicationMode: applicationMode,
+            layout: layout,
+            activeTab: appInfo.windowTitle,
+            sidebar: sidebar,
+            visiblePanels: visiblePanels
+        )
+
+        // === FILE CONTEXT ===
+        var fileContext: FileContext? = nil
+        if let windowTitle = appInfo.windowTitle, !windowTitle.isEmpty {
+            let ext = (windowTitle as NSString).pathExtension
+            var language: String? = nil
+
+            // Map extensions to languages
+            switch ext.lowercased() {
+            case "tsx": language = "TypeScript React"
+            case "ts": language = "TypeScript"
+            case "jsx": language = "JavaScript React"
+            case "js": language = "JavaScript"
+            case "swift": language = "Swift"
+            case "py": language = "Python"
+            case "java": language = "Java"
+            case "go": language = "Go"
+            case "rs": language = "Rust"
+            default: break
+            }
+
+            fileContext = FileContext(
+                filename: windowTitle,
+                path: nil,
+                language: language,
+                `extension`: ext.isEmpty ? nil : ext
+            )
+        }
+
+        // === PROJECT CONTEXT ===
+        var directoryStructure: [String] = []
+        var issueRefs: [String] = []
+        var configFiles: [String] = []
+
+        // Extract directory paths from filenames
+        for filename in filenames {
+            if filename.contains("/") {
+                let parts = filename.components(separatedBy: "/")
+                if parts.count > 1 {
+                    directoryStructure.append(contentsOf: parts.dropLast())
+                }
+            }
+        }
+        directoryStructure = Array(Set(directoryStructure)).sorted()
+
+        // Extract issue references (JIRA-style)
+        for text in detectedText {
+            let pattern = "[A-Z]{2,10}-[0-9]+"
+            if let regex = try? NSRegularExpression(pattern: pattern) {
+                let range = NSRange(text.startIndex..., in: text)
+                let matches = regex.matches(in: text, range: range)
+                for match in matches {
+                    if let range = Range(match.range, in: text) {
+                        issueRefs.append(String(text[range]))
+                    }
+                }
+            }
+        }
+
+        // Detect config files
+        let commonConfigFiles = ["package.json", "tsconfig.json", "Cargo.toml", "Podfile", "requirements.txt", "docker-compose.yml"]
+        for configFile in commonConfigFiles {
+            if allTextLower.contains(configFile.lowercased()) {
+                configFiles.append(configFile)
+            }
+        }
+
+        // Try to extract project name from paths or identifiers
+        var projectName: String? = nil
+
+        // Look for "timeportal", "TimePortal" or other project-specific names
+        // Check filenames first as they often contain full paths
+        for filename in filenames {
+            let filenameLower = filename.lowercased()
+            if filenameLower.contains("timeportal") {
+                projectName = "TimePortal"
+                break
+            }
+            // Look for other common project name patterns in paths
+            let components = filename.components(separatedBy: "/")
+            for component in components {
+                let componentLower = component.lowercased()
+                if !["src", "lib", "components", "utils", "node_modules", "build", "dist", "tests", "test", "public", "assets", "styles", "electron", "native", "landing"].contains(componentLower) && component.count > 3 {
+                    // Capitalize first letter
+                    projectName = component.prefix(1).uppercased() + component.dropFirst()
+                    break
+                }
+            }
+            if projectName != nil { break }
+        }
+
+        // Fallback to directory structure
+        if projectName == nil {
+            for path in directoryStructure {
+                if !["src", "lib", "components", "utils", "node_modules", "build", "dist", "tests", "test", "public", "assets", "styles", "electron", "native"].contains(path.lowercased()) && path.count > 2 {
+                    projectName = path
+                    break
+                }
+            }
+        }
+
+        // Last resort: check project identifiers
+        if projectName == nil && !projectIdentifiers.isEmpty {
+            projectName = projectIdentifiers.first
+        }
+
+        let projectContext = ProjectContext(
+            projectName: projectName,
+            directoryStructure: directoryStructure,
+            branchName: nil,
+            issueReferences: issueRefs,
+            featureName: nil,
+            configFiles: configFiles
+        )
+
+        // === DETECT TECHNOLOGIES ===
+        var technologies: [String] = []
+        let techKeywords: [(String, [String])] = [
+            ("React", ["react", "jsx", "tsx", "usestate", "useeffect", "component"]),
+            ("TypeScript", ["typescript", "interface", "type", ".ts", ".tsx"]),
+            ("JavaScript", ["javascript", ".js", "node", "npm"]),
+            ("Swift", ["swift", "func", "import foundation", ".swift"]),
+            ("Python", ["python", "def", "import", ".py"]),
+            ("Electron", ["electron", "ipcmain", "ipcrenderer", "browserwindow"]),
+            ("Git", ["git", "commit", "branch", "merge", "push"]),
+            ("Jira", ["jira", "issue", "ticket", "sprint"]),
+            ("Tempo", ["tempo", "timesheet", "worklog"]),
+            ("Docker", ["docker", "container", "dockerfile"])
+        ]
+
+        for (tech, keywords) in techKeywords {
+            if keywords.contains(where: { allTextLower.contains($0) }) {
+                technologies.append(tech)
+            }
+        }
+
+        // === DETECT ACTIVITIES ===
+        var activities: [String] = []
+        if !code.isEmpty {
+            activities.append("Coding")
+        }
+        if !errors.isEmpty {
+            activities.append("Debugging")
+        }
+        if allTextLower.contains("test") || allTextLower.contains("spec") {
+            activities.append("Testing")
+        }
+        if allTextLower.contains("documentation") || allTextLower.contains("readme") {
+            activities.append("Documentation")
+        }
+        if !commands.isEmpty {
+            activities.append("Command-line operations")
+        }
+
+        let extractedText = ExtractedText(
+            filenames: filenames,
+            code: code,
+            urls: urls,
+            commands: commands,
+            uiLabels: uiLabels,
+            documentText: documentText,
+            errors: errors,
+            projectIdentifiers: projectIdentifiers
+        )
+
+        return StructuredExtraction(
+            extractedText: extractedText,
+            visualContext: visualContext,
+            fileContext: fileContext,
+            projectContext: projectContext,
+            detectedTechnologies: technologies,
+            detectedActivities: activities
+        )
+    }
+
+    // MARK: - Narrative Generation (Step 2)
+    private func generateNarrativeFromExtraction(extraction: StructuredExtraction, imagePath: String) -> String {
+        // Part 1: Determine the primary activity (without raw error text)
+        let activities = extraction.detectedActivities
+        let hasErrors = !extraction.extractedText.errors.isEmpty
+        let code = extraction.extractedText.code
+
+        var taskDescription = ""
+        if hasErrors {
+            // Just say "Debugging" without including the actual error message
+            taskDescription = "Debugging"
+        } else if !code.isEmpty && activities.contains("Coding") {
+            // Be specific about what kind of coding
+            if let firstCode = code.first {
+                let codeLower = firstCode.lowercased()
+                if codeLower.contains("function") || codeLower.contains("func") {
+                    taskDescription = "Implementing functions"
+                } else if codeLower.contains("interface") || codeLower.contains("type") {
+                    taskDescription = "Defining types"
+                } else if codeLower.contains("import") || codeLower.contains("export") {
+                    taskDescription = "Organizing imports"
+                } else {
+                    taskDescription = "Writing code"
+                }
+            } else {
+                taskDescription = "Writing code"
+            }
+        } else if !activities.isEmpty {
+            taskDescription = activities.first ?? "Working"
+        } else {
+            taskDescription = "Working"
+        }
+
+        // Part 2: Identify project name from various sources
+        var projectName: String? = nil
+
+        // Try to extract project name from directory structure
+        let directories = extraction.projectContext.directoryStructure
+        let commonGenericDirs = ["src", "lib", "components", "utils", "node_modules", "build", "dist", "tests", "test", "public", "assets", "styles", "electron", "native"]
+
+        for dir in directories {
+            let dirLower = dir.lowercased()
+            if !commonGenericDirs.contains(dirLower) && dir.count > 2 {
+                // Capitalize properly (TimePortal instead of timeportal)
+                projectName = dir.prefix(1).uppercased() + dir.dropFirst()
+                break
+            }
+        }
+
+        // Fallback to extraction.projectContext.projectName if available
+        if projectName == nil {
+            projectName = extraction.projectContext.projectName
+        }
+
+        var projectInfo = ""
+        if let project = projectName {
+            projectInfo = " on the \(project) project"
+        }
+
+        // Part 3: Identify what specific file/module is being worked on
+        var fileInfo = ""
+        if let fileContext = extraction.fileContext, let filename = fileContext.filename {
+            // Clean up the filename - remove git status indicators and truncation artifacts
+            let cleanFilename = cleanupFilename(filename)
+
+            // Extract just the directory/module path for context, not the full filename
+            if let language = fileContext.language {
+                // If we have a path structure, extract the relevant module
+                if cleanFilename.contains("/") {
+                    let pathComponents = cleanFilename.components(separatedBy: "/")
+                    if pathComponents.count > 1 {
+                        // Get the module folder (e.g., "electron/licensing" from a full path)
+                        let moduleComponents = pathComponents.dropLast().suffix(2)
+                        let module = moduleComponents.joined(separator: "/")
+                        fileInfo = ", editing \(language) files in the \(module) module"
+                    } else {
+                        fileInfo = ", editing \(cleanFilename)"
+                    }
+                } else {
+                    // Just a filename, include it
+                    fileInfo = ", editing \(cleanFilename)"
+                }
+            } else if !cleanFilename.isEmpty {
+                fileInfo = ", working on \(cleanFilename)"
+            }
+        }
+
+        // Part 4: Application and mode
+        let appContext = extraction.visualContext.application
+        var appDetail = "Using \(appContext)"
+        if let mode = extraction.visualContext.applicationMode {
+            // Clean up mode description
+            if mode == "Debug mode" {
+                appDetail += " with debugger"
+            } else if mode.contains("Terminal") {
+                appDetail += " with integrated terminal"
+            } else {
+                appDetail += " in \(mode)"
+            }
+        }
+
+        // Part 5: Technologies (limit to 3 most relevant)
+        var techContext = ""
+        if !extraction.detectedTechnologies.isEmpty {
+            let techs = Array(extraction.detectedTechnologies.prefix(3))
+            techContext = " with \(techs.joined(separator: ", "))"
+        }
+
+        // Assemble the final narrative (2-3 sentences max)
+        var parts: [String] = []
+
+        // Sentence 1: Activity + Project + File context
+        parts.append(taskDescription + projectInfo + fileInfo + ".")
+
+        // Sentence 2: Application + Technologies
+        parts.append(appDetail + techContext + ".")
+
+        return parts.joined(separator: " ")
+    }
+
+    // Helper function to clean up filenames
+    private func cleanupFilename(_ filename: String) -> String {
+        var cleaned = filename
+
+        // Remove git status indicators (U, M, A, D, etc.) that appear as suffixes
+        let gitStatusPattern = "\\s+[UMADRC]$"
+        if let regex = try? NSRegularExpression(pattern: gitStatusPattern) {
+            let range = NSRange(cleaned.startIndex..., in: cleaned)
+            cleaned = regex.stringByReplacingMatches(in: cleaned, range: range, withTemplate: "")
+        }
+
+        // Remove ellipsis and truncation artifacts
+        cleaned = cleaned.replacingOccurrences(of: "...", with: "")
+        cleaned = cleaned.replacingOccurrences(of: "…", with: "")
+
+        // Remove trailing whitespace
+        cleaned = cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // If the filename looks truncated (ends with incomplete path), try to extract meaningful part
+        if cleaned.hasSuffix("/") || cleaned.hasSuffix("\\") {
+            cleaned = String(cleaned.dropLast())
+        }
+
+        return cleaned
     }
 
     private func generateDescription(detectedText: [String], detectedObjects: [String], imagePath: String) -> String {
@@ -675,7 +1167,8 @@ if arguments.count < 2 {
             confidence: nil,
             error: "Invalid JSON input. Expected {\"imagePath\": \"path/to/image.png\", \"requestId\": \"optional-id\"}",
             detectedText: nil,
-            objects: nil
+            objects: nil,
+            extraction: nil
         )
         print(jsonString(from: errorResponse))
         exit(1)
@@ -692,7 +1185,8 @@ if arguments.count < 2 {
             confidence: result.confidence,
             error: result.error,
             detectedText: result.detectedText,
-            objects: result.objects
+            objects: result.objects,
+            extraction: result.extraction
         )
         semaphore.signal()
     }

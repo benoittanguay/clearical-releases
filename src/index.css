@@ -62,6 +62,14 @@
   /* Focus Ring */
   --focus-ring: 0 0 0 3px rgb(59 130 246 / 0.5);
   --focus-ring-offset: 0 0 0 2px #111827, 0 0 0 5px rgb(59 130 246 / 0.5);
+
+  /* Compact Spacing System for Dense UI */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 16px;
+  --space-xl: 20px;
+  --space-2xl: 24px;
 }
 
 /* Enhanced Focus States for Accessibility */
@@ -156,7 +164,7 @@ a:focus-visible {
 
 @keyframes slideInRight {
   from {
-    transform: translateX(-10px);
+    transform: translateX(20px);
     opacity: 0;
   }
   to {
