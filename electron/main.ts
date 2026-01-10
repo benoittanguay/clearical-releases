@@ -3,7 +3,7 @@ import { spawn } from 'child_process';
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 import { config as dotenvConfig } from 'dotenv';
 
 // Load environment variables from .env.local
@@ -2572,7 +2572,10 @@ function createWindow() {
         win.loadURL('http://127.0.0.1:5173');
         // win.webContents.openDevTools({ mode: 'detach' });
     } else {
-        win.loadFile(path.join(process.env.DIST || '', 'index.html'));
+        // Use loadURL with proper URL formatting for asar compatibility
+        // pathToFileURL ensures correct encoding and path resolution on all platforms
+        const indexPath = path.join(process.env.DIST || '', 'index.html');
+        win.loadURL(pathToFileURL(indexPath).toString());
     }
 
     // Handle dock icon click on macOS
