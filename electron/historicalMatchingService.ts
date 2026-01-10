@@ -60,9 +60,6 @@ export class HistoricalMatchingService {
     // Cache for extracted keywords to avoid recomputation
     private keywordCache = new Map<string, string[]>();
 
-    // Minimum similarity score to consider a match
-    private readonly SIMILARITY_THRESHOLD = 0.3;
-
     // Maximum number of historical entries to consider (for performance)
     private readonly MAX_HISTORICAL_ENTRIES = 50;
 
@@ -84,7 +81,7 @@ export class HistoricalMatchingService {
             requireAssignment?: boolean;
         } = {}
     ): SimilarityMatch[] {
-        const minScore = options.minScore ?? this.SIMILARITY_THRESHOLD;
+        const minScore = options.minScore ?? 0.1;
         const maxResults = options.maxResults ?? 10;
 
         // Take only recent entries for performance

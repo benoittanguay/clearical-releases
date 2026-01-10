@@ -68,6 +68,7 @@ export interface ScreenshotAnalysisResult {
 export interface WindowActivity {
     appName: string;
     windowTitle: string;
+    bundleId?: string; // App bundle identifier (e.g., com.google.Chrome) - used for blacklist filtering
     timestamp: number;
     duration: number;
     screenshotPaths?: string[];

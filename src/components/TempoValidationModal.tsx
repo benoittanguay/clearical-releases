@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import type { TimeEntry, WorkAssignment, TimeBucket } from '../context/StorageContext';
 import { TempoService, type TempoAccount } from '../services/tempoService';
 import { JiraService } from '../services/jiraService';
+import { useTimeRounding } from '../hooks/useTimeRounding';
 
 interface TempoValidationModalProps {
     entry: TimeEntry;
@@ -38,6 +39,10 @@ export function TempoValidationModal({
     const [availableAccounts, setAvailableAccounts] = useState<TempoAccount[]>([]);
     const [selectedAccount, setSelectedAccount] = useState<string>('');
     const [isLoadingAccounts, setIsLoadingAccounts] = useState(false);
+    const { roundTime, isRoundingEnabled } = useTimeRounding();
+
+    // Calculate the duration to use (rounded if rounding is enabled)
+    const durationToLog = isRoundingEnabled ? roundTime(entry.duration).rounded : entry.duration;
 
     // Extract Jira key from assignment
     const getJiraKey = (): string | null => {
@@ -155,10 +160,10 @@ export function TempoValidationModal({
             // Create worklog with numeric issue ID, author account ID, and account attribute
             const worklog = {
                 issueId: numericIssueId,
-                timeSpentSeconds: TempoService.durationMsToSeconds(entry.duration),
+                timeSpentSeconds: TempoService.durationMsToSeconds(durationToLog),
                 startDate: TempoService.formatDate(entry.startTime),
                 startTime: TempoService.formatTime(entry.startTime),
-                description: description.trim() || `Time logged from Clearical for ${formatTime(entry.duration)}`,
+                description: description.trim() || `Time logged from Clearical for ${formatTime(durationToLog)}`,
                 authorAccountId: currentUser.accountId,
                 attributes: [
                     {
@@ -172,7 +177,7 @@ export function TempoValidationModal({
             const response = await tempoService.createWorklog(worklog);
 
             // Show success message
-            alert(`Successfully logged ${formatTime(entry.duration)} to Tempo!\nWorklog ID: ${response.tempoWorklogId}`);
+            alert(`Successfully logged ${formatTime(durationToLog)} to Tempo!\nWorklog ID: ${response.tempoWorklogId}`);
 
             onSuccess();
         } catch (error) {
@@ -356,9 +361,20 @@ export function TempoValidationModal({
                         {/* Duration info */}
                         <div className="bg-gray-750 rounded-lg p-3 border border-gray-700">
                             <div className="text-xs text-gray-400 uppercase font-semibold mb-2">Time to Log</div>
-                            <div className="flex items-baseline gap-2">
-                                <span className="text-green-400 font-mono text-2xl font-bold">{formatTime(entry.duration)}</span>
-                                <span className="text-gray-500 text-sm">({TempoService.durationMsToSeconds(entry.duration)} seconds)</span>
+                            <div className="flex flex-col gap-1">
+                                <div className="flex items-baseline gap-2">
+                                    <span className="text-green-400 font-mono text-2xl font-bold">{formatTime(durationToLog)}</span>
+                                    <span className="text-gray-500 text-sm">({TempoService.durationMsToSeconds(durationToLog)} seconds)</span>
+                                </div>
+                                {isRoundingEnabled && roundTime(entry.duration).isRounded && (
+                                    <div className="flex items-center gap-1.5 text-xs">
+                                        <span className="text-gray-500">Original: {formatTime(entry.duration)}</span>
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-500">
+                                            <polyline points="9 18 15 12 9 6" />
+                                        </svg>
+                                        <span className="text-purple-400">Rounded {roundTime(entry.duration).formattedDifference}</span>
+                                    </div>
+                                )}
                             </div>
                             <div className="text-gray-400 text-sm mt-2">
                                 <span className="font-semibold">Date:</span> {new Date(entry.startTime).toLocaleDateString(undefined, {

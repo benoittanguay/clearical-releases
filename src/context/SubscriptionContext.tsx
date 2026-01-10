@@ -7,6 +7,10 @@ export interface SubscriptionStatus {
     isActive: boolean;
     expiresAt?: number;
     features: string[];
+    // Trial information
+    isTrial: boolean;
+    trialDaysRemaining: number;
+    trialEndsAt?: number;
 }
 
 interface SubscriptionContextType {
@@ -21,7 +25,9 @@ interface SubscriptionContextType {
 const defaultSubscription: SubscriptionStatus = {
     tier: 'free',
     isActive: false,
-    features: []
+    features: [],
+    isTrial: false,
+    trialDaysRemaining: 0,
 };
 
 const SubscriptionContext = createContext<SubscriptionContextType | undefined>(undefined);
@@ -33,15 +39,22 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
     const fetchSubscriptionStatus = useCallback(async () => {
         try {
             setIsLoading(true);
+
             // Call IPC handler to get subscription status from main process
             const status = await window.electron.ipcRenderer.invoke('subscription:get-status');
+
+            // Get trial info separately
+            const trialInfo = await window.electron.ipcRenderer.invoke('subscription:get-trial-info');
 
             if (status && typeof status === 'object') {
                 setSubscription({
                     tier: status.tier || 'free',
                     isActive: status.isActive || false,
                     expiresAt: status.expiresAt,
-                    features: status.features || []
+                    features: status.features || [],
+                    isTrial: trialInfo?.isTrial || false,
+                    trialDaysRemaining: trialInfo?.daysRemaining || 0,
+                    trialEndsAt: trialInfo?.trialEndsAt,
                 });
             } else {
                 // Fallback to free tier if response is invalid
@@ -64,6 +77,11 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
     // Helper to check if a feature is available
     const hasFeature = useCallback((featureName: string): boolean => {
+        // During trial, all premium features are available
+        if (subscription.isTrial && subscription.trialDaysRemaining > 0) {
+            return true;
+        }
+
         // If not active or free tier, no premium features
         if (!subscription.isActive || subscription.tier === 'free') {
             return false;

@@ -27,14 +27,80 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
     const { addBucket } = useStorage();
     const { settings } = useSettings();
 
+    // Permission states
+    const [accessibilityGranted, setAccessibilityGranted] = useState<boolean | null>(null);
+    const [screenRecordingGranted, setScreenRecordingGranted] = useState<boolean | null>(null);
+    const [checkingPermissions, setCheckingPermissions] = useState(false);
+
     // Reset when modal opens
     useEffect(() => {
         if (isOpen) {
             setCurrentStep(0);
             setBucketName('');
             setSelectedColor(BUCKET_COLORS[0].value);
+            checkPermissions();
         }
     }, [isOpen]);
+
+    // Periodically recheck permissions when on the permissions step
+    useEffect(() => {
+        if (isOpen && currentStep === 0) {
+            const interval = setInterval(checkPermissions, 2000);
+            return () => clearInterval(interval);
+        }
+    }, [isOpen, currentStep]);
+
+    // Check permissions status
+    const checkPermissions = async () => {
+        try {
+            const screenStatus = await window.electron.ipcRenderer.checkScreenPermission();
+            setScreenRecordingGranted(screenStatus === 'granted');
+
+            // Accessibility can't be checked programmatically on macOS, so we test it
+            try {
+                await window.electron.ipcRenderer.getActiveWindow();
+                setAccessibilityGranted(true);
+            } catch {
+                setAccessibilityGranted(false);
+            }
+        } catch (error) {
+            console.error('Error checking permissions:', error);
+        }
+    };
+
+    // Request Screen Recording permission
+    const requestScreenRecording = async () => {
+        setCheckingPermissions(true);
+        try {
+            const status = await window.electron.ipcRenderer.requestScreenPermission();
+            setScreenRecordingGranted(status === 'granted');
+
+            if (status !== 'granted') {
+                // Open System Settings if not granted
+                await window.electron.ipcRenderer.openScreenPermissionSettings();
+            }
+        } catch (error) {
+            console.error('Error requesting screen recording permission:', error);
+        } finally {
+            setCheckingPermissions(false);
+            // Recheck after a delay
+            setTimeout(checkPermissions, 1000);
+        }
+    };
+
+    // Request Accessibility permission
+    const requestAccessibility = async () => {
+        setCheckingPermissions(true);
+        try {
+            await window.electron.ipcRenderer.openAccessibilitySettings();
+            // Recheck after delay
+            setTimeout(checkPermissions, 1000);
+        } catch (error) {
+            console.error('Error requesting accessibility permission:', error);
+        } finally {
+            setCheckingPermissions(false);
+        }
+    };
 
     if (!isOpen) return null;
 
@@ -85,7 +151,7 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
         onClose();
     };
 
-    const totalSteps = 3;
+    const totalSteps = 4;
     const progressPercentage = ((currentStep + 1) / totalSteps) * 100;
 
     return (
@@ -111,8 +177,165 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                             isTransitioning ? 'opacity-0 scale-95' : 'opacity-100 scale-100'
                         }`}
                     >
-                        {/* Step 1: Create First Bucket */}
+                        {/* Step 0: System Permissions */}
                         {currentStep === 0 && (
+                            <div className="p-8">
+                                {/* Header */}
+                                <div className="text-center mb-8">
+                                    <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-amber-500 to-amber-600 rounded-2xl mb-4 shadow-lg shadow-amber-500/30">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                                            <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                                        </svg>
+                                    </div>
+                                    <h2 className="text-3xl font-bold text-white mb-2">System Permissions</h2>
+                                    <p className="text-gray-400 text-lg">Clearical needs access to track your activity</p>
+                                </div>
+
+                                {/* Info Box */}
+                                <div className="bg-blue-900/20 border border-blue-700/50 rounded-xl p-4 mb-6">
+                                    <div className="flex gap-3">
+                                        <div className="flex-shrink-0 mt-0.5">
+                                            <svg className="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                            </svg>
+                                        </div>
+                                        <div>
+                                            <h4 className="text-sm font-semibold text-blue-300 mb-1">Why these permissions?</h4>
+                                            <p className="text-sm text-blue-200/80">
+                                                These permissions allow Clearical to automatically track your work and capture screenshots. All data stays on your device.
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Permissions List */}
+                                <div className="space-y-4 mb-6">
+                                    {/* Accessibility Permission */}
+                                    <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-5">
+                                        <div className="flex items-start gap-4">
+                                            <div className="flex-shrink-0">
+                                                <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                                                    accessibilityGranted
+                                                        ? 'bg-gradient-to-br from-green-500 to-green-600'
+                                                        : 'bg-gradient-to-br from-gray-600 to-gray-700'
+                                                }`}>
+                                                    {accessibilityGranted ? (
+                                                        <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                                        </svg>
+                                                    ) : (
+                                                        <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                                        </svg>
+                                                    )}
+                                                </div>
+                                            </div>
+                                            <div className="flex-1">
+                                                <div className="flex items-center justify-between mb-2">
+                                                    <h3 className="text-lg font-semibold text-white">Accessibility</h3>
+                                                    {accessibilityGranted && (
+                                                        <span className="text-xs px-2.5 py-1 rounded-full font-medium bg-green-900 text-green-400">
+                                                            Granted
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <p className="text-sm text-gray-400 mb-3">
+                                                    Required to detect which app and window you're currently using
+                                                </p>
+                                                {!accessibilityGranted && (
+                                                    <button
+                                                        onClick={requestAccessibility}
+                                                        disabled={checkingPermissions}
+                                                        className="px-4 py-2 bg-amber-600 hover:bg-amber-500 disabled:bg-gray-700 disabled:text-gray-500 text-white text-sm font-semibold rounded-lg transition-all"
+                                                    >
+                                                        {checkingPermissions ? 'Opening Settings...' : 'Grant Permission'}
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Screen Recording Permission */}
+                                    <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-5">
+                                        <div className="flex items-start gap-4">
+                                            <div className="flex-shrink-0">
+                                                <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                                                    screenRecordingGranted
+                                                        ? 'bg-gradient-to-br from-green-500 to-green-600'
+                                                        : 'bg-gradient-to-br from-gray-600 to-gray-700'
+                                                }`}>
+                                                    {screenRecordingGranted ? (
+                                                        <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                                        </svg>
+                                                    ) : (
+                                                        <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                                        </svg>
+                                                    )}
+                                                </div>
+                                            </div>
+                                            <div className="flex-1">
+                                                <div className="flex items-center justify-between mb-2">
+                                                    <h3 className="text-lg font-semibold text-white">Screen Recording</h3>
+                                                    {screenRecordingGranted && (
+                                                        <span className="text-xs px-2.5 py-1 rounded-full font-medium bg-green-900 text-green-400">
+                                                            Granted
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <p className="text-sm text-gray-400 mb-3">
+                                                    Required to capture screenshots of your work for AI-powered summaries
+                                                </p>
+                                                {!screenRecordingGranted && (
+                                                    <button
+                                                        onClick={requestScreenRecording}
+                                                        disabled={checkingPermissions}
+                                                        className="px-4 py-2 bg-amber-600 hover:bg-amber-500 disabled:bg-gray-700 disabled:text-gray-500 text-white text-sm font-semibold rounded-lg transition-all"
+                                                    >
+                                                        {checkingPermissions ? 'Opening Settings...' : 'Grant Permission'}
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Warning if permissions not granted */}
+                                {(!accessibilityGranted || !screenRecordingGranted) && (
+                                    <div className="bg-yellow-900/20 border border-yellow-700/50 rounded-lg px-4 py-3 mb-6">
+                                        <div className="flex items-start gap-2 text-sm text-yellow-300">
+                                            <svg className="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                            </svg>
+                                            <span>
+                                                You can skip this step, but Clearical won't be able to automatically track your activity without these permissions.
+                                            </span>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Actions */}
+                                <div className="flex justify-between gap-3 pt-6 border-t border-gray-700">
+                                    <button
+                                        onClick={handleSkipAll}
+                                        className="px-5 py-2.5 text-gray-400 hover:text-white text-sm font-medium transition-colors"
+                                    >
+                                        Skip Setup
+                                    </button>
+                                    <button
+                                        onClick={handleNext}
+                                        className="px-6 py-2.5 bg-gradient-to-r from-green-600 to-green-500 hover:from-green-500 hover:to-green-400 text-white text-sm font-semibold rounded-lg transition-all transform hover:scale-105 active:scale-95 shadow-lg shadow-green-600/30"
+                                    >
+                                        Continue
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Step 1: Create First Bucket */}
+                        {currentStep === 1 && (
                             <div className="p-8">
                                 {/* Header */}
                                 <div className="text-center mb-8">
@@ -218,7 +441,7 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                         )}
 
                         {/* Step 2: AI-Powered Features */}
-                        {currentStep === 1 && (
+                        {currentStep === 2 && (
                             <div className="p-8">
                                 {/* Header */}
                                 <div className="text-center mb-8">
@@ -323,7 +546,7 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                         )}
 
                         {/* Step 3: Jira Integration */}
-                        {currentStep === 2 && (
+                        {currentStep === 3 && (
                             <div className="p-8">
                                 {/* Header */}
                                 <div className="text-center mb-8">

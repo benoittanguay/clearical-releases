@@ -18,7 +18,7 @@ if (fs.existsSync(envPath)) {
 import { saveEncryptedFile, decryptFile, getEncryptionKey } from './encryption.js';
 import { storeCredential, getCredential, deleteCredential, hasCredential, listCredentialKeys, isSecureStorageAvailable } from './credentialStorage.js';
 import { initializeLicensing } from './licensing/ipcHandlers.js';
-import { initializeSubscription } from './subscription/ipcHandlers.js';
+import { initializeSubscription, cleanupSubscription } from './subscription/ipcHandlers.js';
 import { initializeAuth } from './auth/ipcHandlers.js';
 import { AIAssignmentService, ActivityContext, AssignmentSuggestion } from './aiAssignmentService.js';
 import { AIAccountService, TempoAccount, AccountSelection, HistoricalAccountUsage } from './aiAccountService.js';
@@ -26,6 +26,8 @@ import { LinkedJiraIssue } from '../src/types/shared.js';
 import { DatabaseService } from './databaseService.js';
 import { MigrationService } from './migration.js';
 import { updater } from './autoUpdater.js';
+import { AppDiscoveryService } from './appDiscoveryService.js';
+import { BlacklistService } from './blacklistService.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -131,7 +133,7 @@ ipcMain.handle('capture-screenshot', async () => {
 
     try {
         // Get current active window info first
-        let currentWindow = null;
+        let currentWindow: { appName: string; windowTitle: string; bundleId: string } | null = null;
         try {
             // Get the active window using our existing handler
             if (process.platform === 'darwin') {
@@ -139,24 +141,35 @@ ipcMain.handle('capture-screenshot', async () => {
                 const { promisify } = await import('util');
                 const execAsync = promisify(exec);
 
-                // Get active app name and window title
-                const appResult = await execAsync(
-                    `osascript -e 'tell application "System Events" to get name of first application process whose frontmost is true'`
-                );
-                const appName = appResult.stdout.trim();
+                // Get active app name, window title, and bundle ID
+                const result = await execAsync(`osascript -e '
+                    tell application "System Events"
+                        set frontApp to first application process whose frontmost is true
+                        set appName to name of frontApp
+                        set bundleId to bundle identifier of frontApp
+                        try
+                            set windowTitle to title of front window of frontApp
+                        on error
+                            set windowTitle to "(No window title available)"
+                        end try
+                        return appName & "|||" & windowTitle & "|||" & bundleId
+                    end tell
+                '`);
 
-                let windowTitle = '';
-                try {
-                    const titleResult = await execAsync(
-                        `osascript -e 'tell application "System Events" to get title of front window of (first application process whose frontmost is true)'`
-                    );
-                    windowTitle = titleResult.stdout.trim();
-                } catch (e) {
-                    windowTitle = '(No window title available)';
-                }
+                const parts = result.stdout.trim().split('|||');
+                const appName = parts[0] || 'Unknown';
+                const windowTitle = parts[1] || 'Unknown';
+                const bundleId = parts[2] || '';
 
-                currentWindow = { appName, windowTitle };
+                currentWindow = { appName, windowTitle, bundleId };
                 console.log('[Main] capture-screenshot - Active window:', currentWindow);
+
+                // Check if the active app is blacklisted
+                const blacklistService = BlacklistService.getInstance();
+                if (bundleId && blacklistService.isAppBlacklisted(bundleId)) {
+                    console.log(`[Main] capture-screenshot - App is blacklisted (${appName}, ${bundleId}), skipping screenshot`);
+                    return null;
+                }
 
                 // NOTE: We don't skip here based on active window - we'll filter Clearical
                 // from the window sources later. This allows screenshots to be taken even
@@ -919,6 +932,23 @@ ipcMain.handle('check-screen-permission', async () => {
     return 'granted';
 });
 
+ipcMain.handle('request-screen-permission', async () => {
+    console.log('[Main] request-screen-permission requested');
+    if (process.platform === 'darwin') {
+        try {
+            // Trigger the macOS permission prompt by requesting screen sources
+            await desktopCapturer.getSources({ types: ['screen'] });
+            const status = systemPreferences.getMediaAccessStatus('screen');
+            console.log('[Main] Screen permission after request:', status);
+            return status;
+        } catch (e) {
+            console.warn('[Main] request-screen-permission error:', e);
+            return 'denied';
+        }
+    }
+    return 'granted';
+});
+
 ipcMain.handle('open-screen-permission-settings', async () => {
     console.log('[Main] open-screen-permission-settings requested');
     if (process.platform === 'darwin') {
@@ -939,6 +969,33 @@ ipcMain.handle('open-screen-permission-settings', async () => {
         }
 
         // Final fallback: just open System Settings app
+        try {
+            await shell.openExternal('x-apple.systempreferences:');
+        } catch (e) {
+            console.error('[Main] All attempts to open settings failed.', e);
+        }
+    }
+});
+
+ipcMain.handle('open-accessibility-settings', async () => {
+    console.log('[Main] open-accessibility-settings requested');
+    if (process.platform === 'darwin') {
+        const paths = [
+            'x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility',
+            'x-apple.systempreferences:com.apple.SystemSettings.PrivacySecurity.extension?Privacy_Accessibility',
+        ];
+
+        for (const p of paths) {
+            try {
+                console.log(`[Main] Trying to open: ${p}`);
+                await shell.openExternal(p);
+                return;
+            } catch (e) {
+                console.warn(`[Main] Failed to open ${p}`, e);
+            }
+        }
+
+        // Final fallback
         try {
             await shell.openExternal('x-apple.systempreferences:');
         } catch (e) {
@@ -1004,30 +1061,34 @@ ipcMain.handle('get-active-window', async () => {
             const { promisify } = await import('util');
             const execAsync = promisify(exec);
 
-            // Get both app name and window title in a single AppleScript call to avoid race conditions
+            // Get app name, window title, and bundle ID in a single AppleScript call to avoid race conditions
             const result = await execAsync(`osascript -e '
                 tell application "System Events"
                     set frontApp to first application process whose frontmost is true
                     set appName to name of frontApp
+                    set bundleId to bundle identifier of frontApp
                     try
                         set windowTitle to title of front window of frontApp
                     on error
                         set windowTitle to "(No window title available)"
                     end try
-                    return appName & "|||" & windowTitle
+                    return appName & "|||" & windowTitle & "|||" & bundleId
                 end tell
             '`);
-            
-            const [appName, windowTitle] = result.stdout.trim().split('|||');
 
-            console.log('[Main] get-active-window result:', { appName, windowTitle });
-            return { appName, windowTitle };
+            const parts = result.stdout.trim().split('|||');
+            const appName = parts[0] || 'Unknown';
+            const windowTitle = parts[1] || 'Unknown';
+            const bundleId = parts[2] || '';
+
+            console.log('[Main] get-active-window result:', { appName, windowTitle, bundleId });
+            return { appName, windowTitle, bundleId };
         } catch (error) {
             console.error('[Main] Failed to get active window:', error);
-            return { appName: 'Unknown', windowTitle: 'Unknown' };
+            return { appName: 'Unknown', windowTitle: 'Unknown', bundleId: '' };
         }
     }
-    return { appName: 'Not supported', windowTitle: 'Not supported' };
+    return { appName: 'Not supported', windowTitle: 'Not supported', bundleId: '' };
 });
 
 ipcMain.handle('check-accessibility-permission', () => {
@@ -2117,6 +2178,169 @@ ipcMain.handle('db:migrate-from-localstorage', async (event, localStorageData: R
     }
 });
 
+// ========================================================================
+// APP BLACKLIST IPC HANDLERS
+// ========================================================================
+
+// Get all blacklisted apps
+ipcMain.handle('get-blacklisted-apps', async () => {
+    console.log('[Main] get-blacklisted-apps requested');
+    try {
+        const blacklistService = BlacklistService.getInstance();
+        const apps = blacklistService.getAllBlacklistedApps();
+        return { success: true, data: apps };
+    } catch (error) {
+        console.error('[Main] get-blacklisted-apps failed:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error',
+            data: []
+        };
+    }
+});
+
+// Add app to blacklist
+ipcMain.handle('add-blacklisted-app', async (event, bundleId: string, name: string, category?: string) => {
+    console.log('[Main] add-blacklisted-app requested:', { bundleId, name, category });
+    try {
+        const blacklistService = BlacklistService.getInstance();
+        blacklistService.addApp(bundleId, name, category);
+        return { success: true };
+    } catch (error) {
+        console.error('[Main] add-blacklisted-app failed:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error'
+        };
+    }
+});
+
+// Remove app from blacklist
+ipcMain.handle('remove-blacklisted-app', async (event, bundleId: string) => {
+    console.log('[Main] remove-blacklisted-app requested:', bundleId);
+    try {
+        const blacklistService = BlacklistService.getInstance();
+        blacklistService.removeApp(bundleId);
+        return { success: true };
+    } catch (error) {
+        console.error('[Main] remove-blacklisted-app failed:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error'
+        };
+    }
+});
+
+// Check if app is blacklisted
+ipcMain.handle('is-app-blacklisted', async (event, bundleId: string) => {
+    console.log('[Main] is-app-blacklisted requested:', bundleId);
+    try {
+        const blacklistService = BlacklistService.getInstance();
+        const isBlacklisted = blacklistService.isAppBlacklisted(bundleId);
+        return { success: true, isBlacklisted };
+    } catch (error) {
+        console.error('[Main] is-app-blacklisted failed:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error',
+            isBlacklisted: false
+        };
+    }
+});
+
+// Refresh blacklist cache
+ipcMain.handle('refresh-blacklist', async () => {
+    console.log('[Main] refresh-blacklist requested');
+    try {
+        const blacklistService = BlacklistService.getInstance();
+        blacklistService.refreshBlacklist();
+        return { success: true };
+    } catch (error) {
+        console.error('[Main] refresh-blacklist failed:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error'
+        };
+    }
+});
+
+// Get list of installed apps (macOS only)
+ipcMain.handle('get-installed-apps', async () => {
+    console.log('[Main] get-installed-apps requested');
+
+    if (process.platform !== 'darwin') {
+        console.log('[Main] get-installed-apps: Not macOS, returning empty list');
+        return {
+            success: false,
+            error: 'App discovery is only available on macOS',
+            data: []
+        };
+    }
+
+    try {
+        const apps = await AppDiscoveryService.getInstalledApps();
+        console.log(`[Main] Found ${apps.length} installed apps`);
+
+        // Convert to serializable format (remove iconPath as it's not needed for the list)
+        const serializedApps = apps.map(app => ({
+            bundleId: app.bundleId,
+            name: app.name,
+            path: app.path,
+            category: app.category,
+            categoryName: AppDiscoveryService.getCategoryName(app.category)
+        }));
+
+        return { success: true, data: serializedApps };
+    } catch (error) {
+        console.error('[Main] get-installed-apps failed:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error',
+            data: []
+        };
+    }
+});
+
+/**
+ * Comprehensive cleanup of all app resources
+ * Ensures no orphan processes remain after quit
+ */
+async function cleanupAndQuit(): Promise<void> {
+    console.log('[Main] Starting comprehensive cleanup...');
+
+    try {
+        // 1. Cleanup subscription system (webhook server, trial notifications)
+        await cleanupSubscription();
+
+        // 2. Cleanup auto-updater interval
+        updater.cleanup();
+
+        // 3. Destroy tray icon
+        if (tray) {
+            tray.destroy();
+            tray = null;
+            console.log('[Main] Tray icon destroyed');
+        }
+
+        // 4. Close all windows
+        const windows = BrowserWindow.getAllWindows();
+        windows.forEach(window => {
+            if (!window.isDestroyed()) {
+                window.destroy();
+            }
+        });
+        console.log('[Main] All windows closed');
+
+        console.log('[Main] Cleanup completed successfully');
+    } catch (error) {
+        console.error('[Main] Error during cleanup:', error);
+    } finally {
+        // Force quit the app to ensure all processes are terminated
+        // Using app.exit() instead of app.quit() to bypass any remaining handlers
+        app.exit(0);
+    }
+}
+
 function createTray() {
     // In packaged app, tray icons are in resources folder; in dev, they're in public/
     const iconPath = app.isPackaged
@@ -2138,7 +2362,10 @@ function createTray() {
     // Right-click shows context menu
     tray.on('right-click', () => {
         const contextMenu = Menu.buildFromTemplate([
-            { label: 'Quit', click: () => app.quit() }
+            { label: 'Quit', click: () => {
+                // Use comprehensive cleanup instead of simple quit
+                cleanupAndQuit();
+            } }
         ]);
         tray?.popUpContextMenu(contextMenu);
     });
@@ -2217,9 +2444,26 @@ function createWindow() {
     });
 }
 
+// Track if cleanup has already been initiated to prevent multiple cleanups
+let isCleaningUp = false;
+
+app.on('before-quit', async (event) => {
+    if (!isCleaningUp) {
+        // Prevent the app from quitting until cleanup is complete
+        event.preventDefault();
+        isCleaningUp = true;
+
+        console.log('[Main] App quitting, performing cleanup...');
+        await cleanupAndQuit();
+    }
+});
+
 app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') {
-        app.quit();
+        // Don't call app.quit() directly, use cleanupAndQuit instead
+        if (!isCleaningUp) {
+            cleanupAndQuit();
+        }
     }
 });
 

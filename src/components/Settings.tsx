@@ -4,11 +4,19 @@ import { useSubscription } from '../context/SubscriptionContext';
 import { useAuth } from '../context/AuthContext';
 import { IntegrationConfigModal } from './IntegrationConfigModal';
 import { useJiraCache } from '../context/JiraCacheContext';
+import { TrialBanner } from './TrialBanner';
+import { AppBlacklistManager } from './AppBlacklistManager';
+import { getTimeIncrementOptions } from '../utils/timeRounding';
 import type { SyncStatus } from '../services/jiraSyncScheduler';
 
 type PermissionStatus = 'not-determined' | 'granted' | 'denied' | 'restricted' | 'unknown';
 
-export function Settings() {
+interface SettingsProps {
+    externalShowIntegrationModal?: boolean;
+    onCloseIntegrationModal?: () => void;
+}
+
+export function Settings({ externalShowIntegrationModal, onCloseIntegrationModal }: SettingsProps = {}) {
     const { settings, updateSettings, resetSettings } = useSettings();
     const { subscription, hasFeature } = useSubscription();
     const { user, openCustomerPortal, signOut } = useAuth();
@@ -16,10 +24,22 @@ export function Settings() {
     const [permissionStatus, setPermissionStatus] = useState<PermissionStatus>('unknown');
     const [tempSettings, setTempSettings] = useState(settings);
     const [saveTimeoutId, setSaveTimeoutId] = useState<ReturnType<typeof setTimeout> | null>(null);
-    const [showIntegrationModal, setShowIntegrationModal] = useState(false);
+    const [internalShowIntegrationModal, setInternalShowIntegrationModal] = useState(false);
     const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
     const [isSyncing, setIsSyncing] = useState(false);
     const [isOpeningPortal, setIsOpeningPortal] = useState(false);
+
+    // Use external state if provided, otherwise use internal state
+    const showIntegrationModal = externalShowIntegrationModal !== undefined
+        ? externalShowIntegrationModal
+        : internalShowIntegrationModal;
+
+    const setShowIntegrationModal = (value: boolean) => {
+        if (onCloseIntegrationModal && !value) {
+            onCloseIntegrationModal();
+        }
+        setInternalShowIntegrationModal(value);
+    };
 
     const checkPermission = async () => {
         // @ts-ignore - window.electron is defined in preload
@@ -213,6 +233,9 @@ export function Settings() {
 
     return (
         <div className="w-full flex-1 flex flex-col p-4">
+            {/* Trial Banner - Shows prominently when on trial */}
+            <TrialBanner />
+
             {/* Account & Subscription */}
             <div className="bg-gray-800 p-3 rounded-lg mb-3">
                 <h3 className="text-xs font-semibold text-gray-400 uppercase mb-2">Account</h3>
@@ -222,23 +245,27 @@ export function Settings() {
                         <div>
                             <div className="text-sm font-medium text-white">{user?.email || 'Unknown'}</div>
                             <div className="text-xs text-gray-500">
-                                {subscription.tier === 'workplace' && subscription.isActive
+                                {subscription.isTrial
+                                    ? `Trial (${subscription.trialDaysRemaining} days remaining)`
+                                    : subscription.tier === 'workplace' && subscription.isActive
                                     ? 'Workplace Plan'
                                     : 'Free Plan'
                                 }
                             </div>
                         </div>
                         <span className={`text-xs px-2 py-1 rounded ${
-                            subscription.tier === 'workplace' && subscription.isActive
+                            subscription.isTrial
+                                ? 'bg-blue-900 text-blue-400'
+                                : subscription.tier === 'workplace' && subscription.isActive
                                 ? 'bg-green-900 text-green-400'
                                 : 'bg-gray-700 text-gray-400'
                         }`}>
-                            {subscription.tier === 'workplace' && subscription.isActive ? 'ACTIVE' : 'FREE'}
+                            {subscription.isTrial ? 'TRIAL' : subscription.tier === 'workplace' && subscription.isActive ? 'ACTIVE' : 'FREE'}
                         </span>
                     </div>
 
-                    {/* Upgrade prompt for free users */}
-                    {subscription.tier === 'free' && (
+                    {/* Upgrade prompt for free users (not on trial) */}
+                    {subscription.tier === 'free' && !subscription.isTrial && (
                         <div className="bg-blue-900/30 border border-blue-700 rounded-lg p-3">
                             <div className="flex items-start gap-3">
                                 <svg className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -261,14 +288,23 @@ export function Settings() {
                         </div>
                     )}
 
-                    {/* Manage subscription for paying users */}
-                    {subscription.tier === 'workplace' && subscription.isActive && (
+                    {/* Manage subscription for paying users or upgrade for trial users */}
+                    {subscription.tier === 'workplace' && subscription.isActive && !subscription.isTrial && (
                         <button
                             onClick={handleOpenPortal}
                             disabled={isOpeningPortal}
                             className="w-full px-3 py-1.5 bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 text-white text-sm rounded transition-colors"
                         >
                             {isOpeningPortal ? 'Opening...' : 'Manage Subscription'}
+                        </button>
+                    )}
+                    {subscription.isTrial && (
+                        <button
+                            onClick={handleOpenPortal}
+                            disabled={isOpeningPortal}
+                            className="w-full px-3 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:bg-blue-800 text-white text-sm rounded transition-colors"
+                        >
+                            {isOpeningPortal ? 'Opening...' : 'Upgrade to Workplace Plan'}
                         </button>
                     )}
 
@@ -279,6 +315,49 @@ export function Settings() {
                     >
                         Sign Out
                     </button>
+                </div>
+            </div>
+
+            {/* Time Rounding Settings */}
+            <div className="bg-gray-800 p-3 rounded-lg mb-3">
+                <h3 className="text-xs font-semibold text-gray-400 uppercase mb-2">Time Rounding</h3>
+
+                <div className="space-y-3">
+                    <div>
+                        <div className="flex items-center justify-between mb-1.5">
+                            <label className="block text-xs text-gray-400">
+                                Round Time Entries
+                            </label>
+                        </div>
+                        <select
+                            value={tempSettings.timeRoundingIncrement}
+                            onChange={(e) => {
+                                setTempSettings(prev => ({ ...prev, timeRoundingIncrement: parseInt(e.target.value) }));
+                            }}
+                            className="w-full bg-gray-900 border border-gray-700 text-white text-xs rounded px-3 py-2 focus:outline-none focus:ring-1 focus:ring-green-500"
+                        >
+                            {getTimeIncrementOptions().map(option => (
+                                <option key={option.value} value={option.value}>
+                                    {option.label}
+                                </option>
+                            ))}
+                        </select>
+                        <div className="text-xs text-gray-500 mt-1.5">
+                            Time entries will be rounded UP to the nearest {tempSettings.timeRoundingIncrement} {tempSettings.timeRoundingIncrement === 1 ? 'minute' : 'minutes'}. This affects display and export to Tempo/Jira.
+                        </div>
+
+                        {/* Example showing rounding */}
+                        {tempSettings.timeRoundingIncrement > 1 && (
+                            <div className="mt-2 p-2 bg-gray-900 rounded border border-gray-700">
+                                <div className="text-xs text-gray-400 font-semibold mb-1">Examples:</div>
+                                <div className="text-xs text-gray-500 space-y-0.5">
+                                    <div>• 0:01 to 0:{tempSettings.timeRoundingIncrement.toString().padStart(2, '0')} → 0:{tempSettings.timeRoundingIncrement.toString().padStart(2, '0')}</div>
+                                    <div>• 0:{(tempSettings.timeRoundingIncrement + 1).toString().padStart(2, '0')} to 0:{(tempSettings.timeRoundingIncrement * 2).toString().padStart(2, '0')} → 0:{(tempSettings.timeRoundingIncrement * 2).toString().padStart(2, '0')}</div>
+                                    <div>• 1:01 to 1:{tempSettings.timeRoundingIncrement.toString().padStart(2, '0')} → 1:{tempSettings.timeRoundingIncrement.toString().padStart(2, '0')}</div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
 
@@ -344,6 +423,12 @@ export function Settings() {
                 </div>
             </div>
 
+            {/* App Exclusions / Blacklist */}
+            <div className="bg-gray-800 p-3 rounded-lg mb-3">
+                <h3 className="text-xs font-semibold text-gray-400 uppercase mb-2">App Exclusions</h3>
+                <AppBlacklistManager />
+            </div>
+
             {/* AI Features Settings */}
             <div className="bg-gray-800 p-3 rounded-lg mb-3">
                 <h3 className="text-xs font-semibold text-gray-400 uppercase mb-2">AI Features</h3>
@@ -367,8 +452,6 @@ export function Settings() {
                                             autoGenerateDescription: e.target.checked,
                                             autoAssignWork: prev.ai?.autoAssignWork ?? true,
                                             autoSelectAccount: prev.ai?.autoSelectAccount ?? true,
-                                            assignmentConfidenceThreshold: prev.ai?.assignmentConfidenceThreshold ?? 0.7,
-                                            accountConfidenceThreshold: prev.ai?.accountConfidenceThreshold ?? 0.8,
                                         }
                                     }));
                                 }}
@@ -396,8 +479,6 @@ export function Settings() {
                                             autoGenerateDescription: prev.ai?.autoGenerateDescription ?? true,
                                             autoAssignWork: e.target.checked,
                                             autoSelectAccount: prev.ai?.autoSelectAccount ?? true,
-                                            assignmentConfidenceThreshold: prev.ai?.assignmentConfidenceThreshold ?? 0.7,
-                                            accountConfidenceThreshold: prev.ai?.accountConfidenceThreshold ?? 0.8,
                                         }
                                     }));
                                 }}
@@ -405,35 +486,6 @@ export function Settings() {
                             />
                             <div className="w-11 h-6 bg-gray-700 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-green-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
                         </label>
-                    </div>
-
-                    {/* Assignment confidence threshold */}
-                    <div className="bg-gray-900 p-2.5 rounded border border-gray-700">
-                        <div className="flex items-center justify-between mb-2">
-                            <div className="text-sm font-medium text-white">Assignment Confidence Threshold</div>
-                            <div className="text-sm font-mono text-green-400">{Math.round((tempSettings.ai?.assignmentConfidenceThreshold ?? 0.7) * 100)}%</div>
-                        </div>
-                        <input
-                            type="range"
-                            min="50"
-                            max="90"
-                            value={Math.round((tempSettings.ai?.assignmentConfidenceThreshold ?? 0.7) * 100)}
-                            onChange={(e) => {
-                                setTempSettings(prev => ({
-                                    ...prev,
-                                    ai: {
-                                        ...prev.ai,
-                                        autoGenerateDescription: prev.ai?.autoGenerateDescription ?? true,
-                                        autoAssignWork: prev.ai?.autoAssignWork ?? true,
-                                        autoSelectAccount: prev.ai?.autoSelectAccount ?? true,
-                                        assignmentConfidenceThreshold: parseInt(e.target.value) / 100,
-                                        accountConfidenceThreshold: prev.ai?.accountConfidenceThreshold ?? 0.8,
-                                    }
-                                }));
-                            }}
-                            className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-green-600"
-                        />
-                        <div className="text-xs text-gray-500 mt-1">Minimum confidence to auto-assign work</div>
                     </div>
 
                     {/* Auto-select Tempo accounts */}
@@ -454,8 +506,6 @@ export function Settings() {
                                             autoGenerateDescription: prev.ai?.autoGenerateDescription ?? true,
                                             autoAssignWork: prev.ai?.autoAssignWork ?? true,
                                             autoSelectAccount: e.target.checked,
-                                            assignmentConfidenceThreshold: prev.ai?.assignmentConfidenceThreshold ?? 0.7,
-                                            accountConfidenceThreshold: prev.ai?.accountConfidenceThreshold ?? 0.8,
                                         }
                                     }));
                                 }}
@@ -463,35 +513,6 @@ export function Settings() {
                             />
                             <div className="w-11 h-6 bg-gray-700 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-green-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
                         </label>
-                    </div>
-
-                    {/* Account confidence threshold */}
-                    <div className="bg-gray-900 p-2.5 rounded border border-gray-700">
-                        <div className="flex items-center justify-between mb-2">
-                            <div className="text-sm font-medium text-white">Account Confidence Threshold</div>
-                            <div className="text-sm font-mono text-green-400">{Math.round((tempSettings.ai?.accountConfidenceThreshold ?? 0.8) * 100)}%</div>
-                        </div>
-                        <input
-                            type="range"
-                            min="60"
-                            max="100"
-                            value={Math.round((tempSettings.ai?.accountConfidenceThreshold ?? 0.8) * 100)}
-                            onChange={(e) => {
-                                setTempSettings(prev => ({
-                                    ...prev,
-                                    ai: {
-                                        ...prev.ai,
-                                        autoGenerateDescription: prev.ai?.autoGenerateDescription ?? true,
-                                        autoAssignWork: prev.ai?.autoAssignWork ?? true,
-                                        autoSelectAccount: prev.ai?.autoSelectAccount ?? true,
-                                        assignmentConfidenceThreshold: prev.ai?.assignmentConfidenceThreshold ?? 0.7,
-                                        accountConfidenceThreshold: parseInt(e.target.value) / 100,
-                                    }
-                                }));
-                            }}
-                            className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-green-600"
-                        />
-                        <div className="text-xs text-gray-500 mt-1">Minimum confidence to auto-select accounts</div>
                     </div>
                 </div>
             </div>

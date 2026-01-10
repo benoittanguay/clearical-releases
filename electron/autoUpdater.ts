@@ -58,6 +58,9 @@ export class AutoUpdater {
     private autoDownload = true; // Automatically download updates when found
     private allowPrerelease = false; // Only stable releases by default
 
+    // Track intervals for cleanup
+    private updateCheckInterval: NodeJS.Timeout | null = null;
+
     constructor() {
         this.setupAutoUpdater();
     }
@@ -140,6 +143,26 @@ export class AutoUpdater {
         // Event: Error
         autoUpdater.on('error', (error) => {
             log.error('[AutoUpdater] Error:', error);
+
+            // Check if this is a 404 error (repo doesn't exist yet)
+            const is404Error =
+                error.message.includes('404') ||
+                error.message.includes('Not Found') ||
+                error.message.includes('net::ERR_HTTP_RESPONSE_CODE_FAILURE');
+
+            if (is404Error) {
+                // Silently handle 404 errors - just log and don't notify user
+                log.info('[AutoUpdater] Update repo not found (404) - silently ignoring');
+                this.updateStatus = {
+                    available: false,
+                    downloaded: false,
+                    downloading: false,
+                };
+                // Don't send error status to renderer for 404s
+                return;
+            }
+
+            // For other errors, update status and notify renderer
             this.updateStatus = {
                 ...this.updateStatus,
                 downloading: false,
@@ -185,10 +208,22 @@ export class AutoUpdater {
         }
 
         // Set up periodic checks (every 4 hours)
-        setInterval(() => {
+        this.updateCheckInterval = setInterval(() => {
             log.info('[AutoUpdater] Periodic update check...');
             this.checkForUpdates();
         }, 4 * 60 * 60 * 1000);
+    }
+
+    /**
+     * Cleanup auto-updater resources
+     * Should be called before app quits
+     */
+    public cleanup(): void {
+        if (this.updateCheckInterval) {
+            clearInterval(this.updateCheckInterval);
+            this.updateCheckInterval = null;
+            log.info('[AutoUpdater] Update check interval cleared');
+        }
     }
 
     /**
@@ -213,10 +248,29 @@ export class AutoUpdater {
             return this.updateStatus;
         } catch (error) {
             log.error('[AutoUpdater] Error checking for updates:', error);
-            this.updateStatus = {
-                ...this.updateStatus,
-                error: error instanceof Error ? error.message : 'Unknown error',
-            };
+
+            // Check if this is a 404 error (repo doesn't exist yet)
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            const is404Error =
+                errorMessage.includes('404') ||
+                errorMessage.includes('Not Found') ||
+                errorMessage.includes('net::ERR_HTTP_RESPONSE_CODE_FAILURE');
+
+            if (is404Error) {
+                // Silently handle 404 errors - don't set error status
+                log.info('[AutoUpdater] Update repo not found (404) - silently ignoring');
+                this.updateStatus = {
+                    available: false,
+                    downloaded: false,
+                    downloading: false,
+                };
+            } else {
+                // For other errors, set error status
+                this.updateStatus = {
+                    ...this.updateStatus,
+                    error: errorMessage,
+                };
+            }
             return this.updateStatus;
         }
     }

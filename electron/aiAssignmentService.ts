@@ -76,7 +76,6 @@ const STOP_WORDS = new Set([
  * Now enhanced with sophisticated historical learning
  */
 export class AIAssignmentService {
-    private readonly CONFIDENCE_THRESHOLD = 0.7;  // Only auto-assign if confidence >= 70%
     private readonly historicalMatcher: HistoricalMatchingService;
 
     // Dependencies injected via constructor for testability
@@ -134,27 +133,12 @@ export class AIAssignmentService {
 
         const best = allCandidates[0];
 
-        // Only suggest if confidence meets threshold
-        if (best.score >= this.CONFIDENCE_THRESHOLD) {
-            console.log('[AIAssignmentService] Suggesting assignment with confidence:', (best.score * 100).toFixed(1) + '%');
-            return {
-                assignment: best.assignment,
-                confidence: best.score,
-                reason: best.reason,
-                alternatives: allCandidates.slice(1, 4).map(c => ({
-                    assignment: c.assignment,
-                    confidence: c.score,
-                    reason: c.reason
-                }))
-            };
-        }
-
-        console.log('[AIAssignmentService] Best match below threshold:', (best.score * 100).toFixed(1) + '%');
+        console.log('[AIAssignmentService] Suggesting best assignment with confidence:', (best.score * 100).toFixed(1) + '%');
         return {
-            assignment: null,
+            assignment: best.assignment,
             confidence: best.score,
-            reason: `No confident match found (best: ${(best.score * 100).toFixed(0)}%)`,
-            alternatives: allCandidates.slice(0, 3).map(c => ({
+            reason: best.reason,
+            alternatives: allCandidates.slice(1, 4).map(c => ({
                 assignment: c.assignment,
                 confidence: c.score,
                 reason: c.reason
@@ -273,7 +257,7 @@ export class AIAssignmentService {
             context,
             this.historicalEntries,
             {
-                minScore: 0.25,  // Lower threshold to catch more potential matches
+                minScore: 0.05,  // Very low threshold to catch all potential matches
                 maxResults: 20,
                 requireAssignment: true
             }
@@ -310,7 +294,7 @@ export class AIAssignmentService {
             context,
             this.historicalEntries,
             {
-                minScore: 0.25,
+                minScore: 0.05,  // Very low threshold to catch all potential matches
                 maxResults: 20,
                 requireAssignment: true
             }
@@ -374,7 +358,7 @@ export class AIAssignmentService {
             const similarEntries = this.historicalMatcher.findSimilarEntries(
                 context,
                 this.historicalEntries,
-                { minScore: 0.25, maxResults: 5, requireAssignment: true }
+                { minScore: 0.05, maxResults: 5, requireAssignment: true }
             );
             const bucketEntries = similarEntries.filter(
                 match => match.entry.assignment?.type === 'bucket' &&
@@ -421,7 +405,7 @@ export class AIAssignmentService {
             const similarEntries = this.historicalMatcher.findSimilarEntries(
                 context,
                 this.historicalEntries,
-                { minScore: 0.25, maxResults: 5, requireAssignment: true }
+                { minScore: 0.05, maxResults: 5, requireAssignment: true }
             );
             const issueEntries = similarEntries.filter(
                 match => match.entry.assignment?.type === 'jira' &&

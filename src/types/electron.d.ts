@@ -77,6 +77,20 @@ export interface UpdateStatus {
     };
 }
 
+export interface BlacklistedApp {
+    bundleId: string;
+    name: string;
+    category?: string;
+}
+
+export interface InstalledApp {
+    bundleId: string;
+    name: string;
+    path: string;
+    category?: string;
+    categoryName?: string;
+}
+
 export interface ElectronAPI {
     ipcRenderer: {
         send: (channel: string, data: any) => void;
@@ -101,8 +115,12 @@ export interface ElectronAPI {
             };
             error?: string;
         }>;
-        getActiveWindow: () => Promise<{ appName: string; windowTitle: string }>;
+        getActiveWindow: () => Promise<{ appName: string; windowTitle: string; bundleId: string }>;
         checkAccessibilityPermission: () => Promise<string>;
+        checkScreenPermission: () => Promise<string>;
+        requestScreenPermission: () => Promise<string>;
+        openScreenPermissionSettings: () => Promise<void>;
+        openAccessibilitySettings: () => Promise<void>;
         getAppIcon: (appName: string) => Promise<string | null>;
         getScreenshot: (filePath: string) => Promise<string | null>;
         showItemInFolder: (filePath: string) => Promise<{ success: boolean; error?: string }>;
@@ -280,6 +298,14 @@ export interface ElectronAPI {
             // Migration
             needsMigration: () => Promise<{ success: boolean; needsMigration: boolean; error?: string }>;
             migrateFromLocalStorage: (localStorageData: Record<string, string>) => Promise<{ success: boolean; result: any; error?: string }>;
+        };
+        // App Blacklist operations
+        appBlacklist: {
+            getBlacklistedApps: () => Promise<{ success: boolean; data: BlacklistedApp[]; error?: string }>;
+            addBlacklistedApp: (bundleId: string, name: string, category?: string) => Promise<{ success: boolean; error?: string }>;
+            removeBlacklistedApp: (bundleId: string) => Promise<{ success: boolean; error?: string }>;
+            isAppBlacklisted: (bundleId: string) => Promise<{ success: boolean; isBlacklisted: boolean; error?: string }>;
+            getInstalledApps: () => Promise<{ success: boolean; data: InstalledApp[]; error?: string }>;
         };
     };
 }

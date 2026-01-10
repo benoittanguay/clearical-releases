@@ -31,6 +31,10 @@ contextBridge.exposeInMainWorld('electron', {
         }) => ipcRenderer.invoke('generate-activity-summary', context),
         getActiveWindow: () => ipcRenderer.invoke('get-active-window'),
         checkAccessibilityPermission: () => ipcRenderer.invoke('check-accessibility-permission'),
+        checkScreenPermission: () => ipcRenderer.invoke('check-screen-permission'),
+        requestScreenPermission: () => ipcRenderer.invoke('request-screen-permission'),
+        openScreenPermissionSettings: () => ipcRenderer.invoke('open-screen-permission-settings'),
+        openAccessibilitySettings: () => ipcRenderer.invoke('open-accessibility-settings'),
         getAppIcon: (appName: string) => ipcRenderer.invoke('get-app-icon', appName),
         getScreenshot: (filePath: string) => ipcRenderer.invoke('get-screenshot', filePath),
         showItemInFolder: (filePath: string) => ipcRenderer.invoke('show-item-in-folder', filePath),
@@ -165,6 +169,18 @@ contextBridge.exposeInMainWorld('electron', {
             // Migration
             needsMigration: () => ipcRenderer.invoke('db:needs-migration'),
             migrateFromLocalStorage: (localStorageData: Record<string, string>) => ipcRenderer.invoke('db:migrate-from-localstorage', localStorageData),
+        },
+        // App Blacklist operations
+        appBlacklist: {
+            getBlacklistedApps: () => ipcRenderer.invoke('get-blacklisted-apps'),
+            addBlacklistedApp: (bundleId: string, name: string, category?: string) =>
+                ipcRenderer.invoke('add-blacklisted-app', bundleId, name, category),
+            removeBlacklistedApp: (bundleId: string) =>
+                ipcRenderer.invoke('remove-blacklisted-app', bundleId),
+            isAppBlacklisted: (bundleId: string) =>
+                ipcRenderer.invoke('is-app-blacklisted', bundleId),
+            refreshBlacklist: () => ipcRenderer.invoke('refresh-blacklist'),
+            getInstalledApps: () => ipcRenderer.invoke('get-installed-apps'),
         },
     },
 });

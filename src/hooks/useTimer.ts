@@ -18,6 +18,7 @@ interface VisionFrameworkRawData {
 interface WindowActivity {
     appName: string;
     windowTitle: string;
+    bundleId?: string;
     timestamp: number;
     duration: number;
     screenshotPaths?: string[];
@@ -35,7 +36,7 @@ export function useTimer() {
     const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const windowPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const screenshotIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-    const lastWindowRef = useRef<{ appName: string, windowTitle: string, timestamp: number } | null>(null);
+    const lastWindowRef = useRef<{ appName: string, windowTitle: string, bundleId?: string, timestamp: number } | null>(null);
     const currentActivityScreenshots = useRef<string[]>([]);
     const currentActivityScreenshotDescriptions = useRef<{ [path: string]: string }>({});
     const currentActivityScreenshotVisionData = useRef<{ [path: string]: VisionFrameworkRawData }>({});
@@ -266,6 +267,17 @@ export function useTimer() {
                 const now = Date.now();
                 console.log('[Renderer] pollWindow result:', result);
 
+                // Check if the app is blacklisted
+                if (result.bundleId) {
+                    // @ts-ignore
+                    const blacklistCheck = await window.electron.ipcRenderer.isAppBlacklisted(result.bundleId);
+                    if (blacklistCheck?.success && blacklistCheck.isBlacklisted) {
+                        console.log(`[Renderer] App is blacklisted (${result.appName}, ${result.bundleId}), skipping activity tracking`);
+                        pollingActiveRef.current = false;
+                        return;
+                    }
+                }
+
                 // Check if window changed
                 const windowChanged = !lastWindowRef.current || 
                     lastWindowRef.current.appName !== result.appName || 
@@ -305,6 +317,7 @@ export function useTimer() {
                         const newActivity = {
                             appName: lastWindowRef.current.appName,
                             windowTitle: lastWindowRef.current.windowTitle,
+                            bundleId: lastWindowRef.current.bundleId,
                             timestamp: lastWindowRef.current.timestamp,
                             duration: 0, // Will be calculated properly on stop
                             screenshotPaths: currentActivityScreenshots.current.length > 0 ? [...currentActivityScreenshots.current] : undefined,
@@ -329,7 +342,12 @@ export function useTimer() {
                     lastScreenshotTime.current = 0;
 
                     // Update to new window
-                    lastWindowRef.current = { ...result, timestamp: now };
+                    lastWindowRef.current = {
+                        appName: result.appName,
+                        windowTitle: result.windowTitle,
+                        bundleId: result.bundleId,
+                        timestamp: now
+                    };
                     
                     // Take screenshot for window change (immediate)
                     await captureScreenshotForCurrentWindow('window-change');
@@ -553,6 +571,7 @@ export function useTimer() {
                 activities.push({
                     appName: lastWindowRef.current.appName,
                     windowTitle: lastWindowRef.current.windowTitle,
+                    bundleId: lastWindowRef.current.bundleId,
                     timestamp: lastWindowRef.current.timestamp,
                     duration: 0, // Will be calculated below
                     screenshotPaths: currentActivityScreenshots.current.length > 0 ? [...currentActivityScreenshots.current] : undefined,

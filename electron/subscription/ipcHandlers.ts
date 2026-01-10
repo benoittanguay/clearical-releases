@@ -25,6 +25,7 @@ import {
 import { DeviceFingerprintService } from '../licensing/deviceFingerprint.js';
 import { getConfig } from '../config.js';
 import { getEdgeFunctionClient } from './edgeFunctionClient.js';
+import { initializeTrialNotifications, cleanupTrialNotifications } from './trialNotifications.js';
 
 // Global subscription validator instance
 let subscriptionValidator: SubscriptionValidator | null = null;
@@ -77,6 +78,9 @@ export function initializeSubscription(): void {
         } else {
             console.log('[Subscription] Webhook server not started (webhooks disabled or no secret)');
         }
+
+        // Initialize trial notification system
+        initializeTrialNotifications();
 
         console.log('[Subscription] Subscription system initialized');
     } catch (error) {
@@ -196,38 +200,52 @@ async function handleGetSubscriptionInfo(): Promise<{
  * Returns a simplified status object for the SubscriptionContext
  */
 async function handleGetSubscriptionStatus(): Promise<{
-    success: boolean;
-    status?: SubscriptionStatus;
-    plan?: SubscriptionPlan;
-    isPremium?: boolean;
-    error?: string;
+    tier: 'free' | 'workplace';
+    isActive: boolean;
+    expiresAt?: number;
+    features: string[];
 }> {
     try {
         const subscription = await SubscriptionStorage.getSubscription();
 
         if (!subscription) {
             return {
-                success: true,
-                status: 'none' as any,
-                plan: 'free' as any,
-                isPremium: false,
+                tier: 'free',
+                isActive: false,
+                features: [],
             };
         }
 
         // Check if subscription allows premium features
         const isPremium = ['trial', 'active', 'past_due'].includes(subscription.status);
 
+        // Determine tier based on plan or trial status
+        const tier: 'free' | 'workplace' =
+            subscription.status === 'trial' ||
+            subscription.plan === SubscriptionPlan.WORKPLACE_MONTHLY ||
+            subscription.plan === SubscriptionPlan.WORKPLACE_YEARLY
+                ? 'workplace'
+                : 'free';
+
+        // Build features array from feature flags
+        const features: string[] = [];
+        if (subscription.features.jiraIntegration) features.push('jira');
+        if (subscription.features.tempoIntegration) features.push('tempo');
+        if (subscription.features.aiAnalysis) features.push('ai');
+        if (subscription.features.advancedReporting) features.push('reporting');
+
         return {
-            success: true,
-            status: subscription.status,
-            plan: subscription.plan,
-            isPremium,
+            tier,
+            isActive: isPremium,
+            expiresAt: subscription.currentPeriodEnd,
+            features,
         };
     } catch (error) {
         console.error('[Subscription] Failed to get status:', error);
         return {
-            success: false,
-            error: error instanceof Error ? error.message : 'Unknown error',
+            tier: 'free',
+            isActive: false,
+            features: [],
         };
     }
 }
@@ -516,4 +534,28 @@ async function handleCancelSubscription(): Promise<{
  */
 export function getSubscriptionValidator(): SubscriptionValidator | null {
     return subscriptionValidator;
+}
+
+/**
+ * Cleanup subscription system resources
+ * Should be called before app quits to ensure clean shutdown
+ */
+export async function cleanupSubscription(): Promise<void> {
+    console.log('[Subscription] Cleaning up subscription system...');
+
+    try {
+        // Stop webhook server if running
+        if (webhookServer) {
+            await webhookServer.stop();
+            webhookServer = null;
+            console.log('[Subscription] Webhook server stopped');
+        }
+
+        // Cleanup trial notifications interval
+        cleanupTrialNotifications();
+
+        console.log('[Subscription] Subscription system cleanup completed');
+    } catch (error) {
+        console.error('[Subscription] Error during cleanup:', error);
+    }
 }

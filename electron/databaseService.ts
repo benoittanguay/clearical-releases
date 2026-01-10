@@ -168,6 +168,18 @@ export class DatabaseService {
             );
         `);
 
+        // Create blacklisted_apps table
+        this.db.exec(`
+            CREATE TABLE IF NOT EXISTS blacklisted_apps (
+                bundle_id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                category TEXT,
+                created_at INTEGER NOT NULL
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_blacklisted_apps_name ON blacklisted_apps(name);
+        `);
+
         console.log('[DatabaseService] Schema initialized');
     }
 
@@ -548,6 +560,44 @@ export class DatabaseService {
         }
 
         return settings;
+    }
+
+    // ========================================================================
+    // BLACKLISTED APPS CRUD
+    // ========================================================================
+
+    public getAllBlacklistedApps(): Array<{ bundleId: string; name: string; category?: string }> {
+        const stmt = this.db.prepare('SELECT bundle_id, name, category FROM blacklisted_apps ORDER BY name ASC');
+        const rows = stmt.all() as any[];
+        return rows.map(row => ({
+            bundleId: row.bundle_id,
+            name: row.name,
+            category: row.category || undefined
+        }));
+    }
+
+    public isAppBlacklisted(bundleId: string): boolean {
+        const stmt = this.db.prepare('SELECT 1 FROM blacklisted_apps WHERE bundle_id = ?');
+        const row = stmt.get(bundleId);
+        return !!row;
+    }
+
+    public addBlacklistedApp(bundleId: string, name: string, category?: string): void {
+        const stmt = this.db.prepare(`
+            INSERT OR IGNORE INTO blacklisted_apps (bundle_id, name, category, created_at)
+            VALUES (?, ?, ?, ?)
+        `);
+
+        stmt.run(bundleId, name, category || null, Date.now());
+    }
+
+    public removeBlacklistedApp(bundleId: string): void {
+        const stmt = this.db.prepare('DELETE FROM blacklisted_apps WHERE bundle_id = ?');
+        stmt.run(bundleId);
+    }
+
+    public clearBlacklistedApps(): void {
+        this.db.exec('DELETE FROM blacklisted_apps');
     }
 
     // ========================================================================

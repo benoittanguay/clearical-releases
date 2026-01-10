@@ -5,11 +5,13 @@ import { DeleteButton } from './DeleteButton';
 import { AssignmentPicker } from './AssignmentPicker';
 import { TempoValidationModal } from './TempoValidationModal';
 import { TempoAccountPicker } from './TempoAccountPicker';
+import { InlineTimeEditor } from './InlineTimeEditor';
 import { useStorage } from '../context/StorageContext';
 import { useSettings } from '../context/SettingsContext';
 import { useSubscription } from '../context/SubscriptionContext';
 import { useToast } from '../context/ToastContext';
 import { useJiraCache } from '../context/JiraCacheContext';
+import { useTimeRounding } from '../hooks/useTimeRounding';
 import { TempoService, type TempoAccount } from '../services/tempoService';
 import { JiraService } from '../services/jiraService';
 
@@ -35,6 +37,7 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
     const { hasFeature } = useSubscription();
     const { showToast } = useToast();
     const jiraCache = useJiraCache();
+    const { roundTime, isRoundingEnabled } = useTimeRounding();
     const [description, setDescription] = useState(entry.description || '');
     const [selectedAssignment, setSelectedAssignment] = useState<WorkAssignment | null>(() => {
         // Get assignment from unified model or fallback to legacy fields
@@ -171,6 +174,15 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
         };
     }, [description]);
 
+    // Handle duration changes from inline editor
+    const handleDurationChange = (newDuration: number) => {
+        // Update both the duration and the end time
+        onUpdate(entry.id, {
+            duration: newDuration,
+            endTime: entry.startTime + newDuration
+        });
+    };
+
     // Handle assignment changes separately
     const handleAssignmentChange = (assignment: WorkAssignment | null, autoSelected: boolean = false) => {
         setSelectedAssignment(assignment);
@@ -249,10 +261,7 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
 
             console.log('[HistoryDetail] AI suggestion result:', result);
 
-            // Use confidence threshold from settings
-            const confidenceThreshold = settings.ai?.assignmentConfidenceThreshold ?? 0.7;
-
-            if (result?.success && result.suggestion?.assignment && result.suggestion.confidence >= confidenceThreshold) {
+            if (result?.success && result.suggestion?.assignment) {
                 // Store previous assignment for undo
                 previousAssignmentRef.current = selectedAssignment;
 
@@ -268,7 +277,7 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                 showToast({
                     type: 'success',
                     title: 'Auto-assigned',
-                    message: `Assigned to ${assignmentName} (${Math.round(result.suggestion.confidence * 100)}% confidence)`,
+                    message: `Auto-assigned to ${assignmentName}`,
                     duration: 7000,
                     action: {
                         label: 'Undo',
@@ -280,15 +289,6 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
 
                 // Log the reason
                 console.log('[HistoryDetail] Assignment reason:', result.suggestion.reason);
-            } else if (result?.suggestion?.confidence !== undefined && result.suggestion.confidence < confidenceThreshold) {
-                // Low confidence warning
-                showToast({
-                    type: 'warning',
-                    title: 'Low Confidence',
-                    message: `Could not confidently suggest an assignment (${Math.round(result.suggestion.confidence * 100)}% confidence)`,
-                    duration: 5000
-                });
-                console.log('[HistoryDetail] No confident assignment found');
             } else {
                 console.log('[HistoryDetail] No assignment suggestion available');
             }
@@ -334,10 +334,7 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
 
             console.log('[HistoryDetail] AI tempo account selection result:', result);
 
-            // Use confidence threshold from settings
-            const accountConfidenceThreshold = settings.ai?.accountConfidenceThreshold ?? 0.8;
-
-            if (result?.success && result.selection?.account && result.selection.confidence >= accountConfidenceThreshold) {
+            if (result?.success && result.selection?.account) {
                 // Auto-select account
                 console.log('[HistoryDetail] Auto-selecting tempo account with confidence:', result.selection.confidence);
                 onUpdate(entry.id, {
@@ -353,15 +350,12 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                 showToast({
                     type: 'success',
                     title: 'Account Selected',
-                    message: `Selected account: ${result.selection.account.name}`,
+                    message: `Auto-selected account: ${result.selection.account.name}`,
                     duration: 5000
                 });
 
                 // Log the reason
                 console.log('[HistoryDetail] Account selection reason:', result.selection.reason);
-            } else if (result?.selection?.confidence !== undefined && result.selection.confidence < accountConfidenceThreshold) {
-                // Low confidence - no notification, just log
-                console.log('[HistoryDetail] No confident account selection found');
             } else {
                 console.log('[HistoryDetail] No account selection available');
             }
@@ -405,11 +399,69 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
     }, [entry.windowActivity, selectedScreenshots]);
 
     const handleDeleteActivity = async (activityIndex: number) => {
-        removeActivityFromEntry(entry.id, activityIndex);
+        // Check if there will be remaining activities after deletion
+        const remainingActivitiesCount = (entry.windowActivity?.length || 0) - 1;
+
+        // Check if remaining activities have screenshot descriptions
+        const remainingActivities = entry.windowActivity?.filter((_, idx) => idx !== activityIndex) || [];
+        const hasScreenshotDescriptions = remainingActivities.some(activity =>
+            activity.screenshotDescriptions && Object.keys(activity.screenshotDescriptions).length > 0
+        );
+
+        await removeActivityFromEntry(entry.id, activityIndex);
+
+        // Wait a brief moment for state to update
+        await new Promise(resolve => setTimeout(resolve, 100));
+
+        // Regenerate description after deletion
+        if (remainingActivitiesCount > 0 && hasScreenshotDescriptions) {
+            // Regenerate if there are remaining activities with screenshot descriptions
+            await handleGenerateSummary(false);
+        } else if (remainingActivitiesCount === 0) {
+            // Clear description if no activities remain
+            setDescription('');
+            onUpdate(entry.id, {
+                description: undefined,
+                descriptionAutoGenerated: false,
+                detectedTechnologies: [],
+                detectedActivities: []
+            });
+        }
+        // If activities remain but no screenshots, keep the existing description
     };
 
     const handleDeleteApp = async (appName: string) => {
-        removeAllActivitiesForApp(entry.id, appName);
+        // Check if there will be remaining activities after deletion
+        const remainingActivities = entry.windowActivity?.filter(
+            activity => activity.appName !== appName
+        ) || [];
+        const remainingActivitiesCount = remainingActivities.length;
+
+        // Check if remaining activities have screenshot descriptions
+        const hasScreenshotDescriptions = remainingActivities.some(activity =>
+            activity.screenshotDescriptions && Object.keys(activity.screenshotDescriptions).length > 0
+        );
+
+        await removeAllActivitiesForApp(entry.id, appName);
+
+        // Wait a brief moment for state to update
+        await new Promise(resolve => setTimeout(resolve, 100));
+
+        // Regenerate description after deletion
+        if (remainingActivitiesCount > 0 && hasScreenshotDescriptions) {
+            // Regenerate if there are remaining activities with screenshot descriptions
+            await handleGenerateSummary(false);
+        } else if (remainingActivitiesCount === 0) {
+            // Clear description if no activities remain
+            setDescription('');
+            onUpdate(entry.id, {
+                description: undefined,
+                descriptionAutoGenerated: false,
+                detectedTechnologies: [],
+                detectedActivities: []
+            });
+        }
+        // If activities remain but no screenshots, keep the existing description
     };
 
     const handleScreenshotDeleted = (screenshotPath: string) => {
@@ -773,8 +825,22 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                                 <span className="font-semibold">End:</span> {new Date(entry.startTime + entry.duration).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true })}
                             </div>
                         </div>
-                        <div className="text-2xl font-mono font-bold text-green-400">
-                            {formatTime(entry.duration)}
+                        <div className="flex flex-col items-end gap-1">
+                            <InlineTimeEditor
+                                value={entry.duration}
+                                onChange={handleDurationChange}
+                                formatTime={formatTime}
+                            />
+                            {isRoundingEnabled && roundTime(entry.duration).isRounded && (
+                                <div className="flex items-center gap-1.5 text-xs text-gray-400">
+                                    <span className="text-gray-500">{formatTime(entry.duration)}</span>
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-500">
+                                        <polyline points="9 18 15 12 9 6" />
+                                    </svg>
+                                    <span className="text-green-400 font-semibold">{formatTime(roundTime(entry.duration).rounded)}</span>
+                                    <span className="text-purple-400">({roundTime(entry.duration).formattedDifference})</span>
+                                </div>
+                            )}
                         </div>
                     </div>
 

@@ -1,7 +1,7 @@
 {
   "name": "clearical",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.0-beta.1",
   "type": "module",
   "build": {
     "appId": "io.clearical.app",
@@ -166,10 +166,12 @@
   "main": "dist-electron/main.js",
   "dependencies": {
     "@supabase/supabase-js": "^2.90.1",
+    "@types/plist": "^3.0.5",
     "better-sqlite3": "^12.5.0",
     "dotenv": "^17.2.3",
     "electron-log": "^5.4.3",
     "electron-updater": "^6.7.3",
+    "plist": "^3.1.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },

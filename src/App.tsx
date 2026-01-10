@@ -29,11 +29,19 @@ function App() {
   const [showExportDialog, setShowExportDialog] = useState(false);
   const [showCreateBucketModal, setShowCreateBucketModal] = useState(false);
   const [showCreateFolderModal, setShowCreateFolderModal] = useState(false);
-  const [migrationComplete, setMigrationComplete] = useState(false);
+  const [, setMigrationComplete] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showIntegrationModal, setShowIntegrationModal] = useState(false);
 
   const { isRunning, isPaused, elapsed, start: startTimer, stop: stopTimer, pause: pauseTimer, resume: resumeTimer, formatTime } = useTimer();
+
+  // Check for onboarding BEFORE migration - prevents flash of main UI
+  useEffect(() => {
+    const onboardingComplete = localStorage.getItem('timeportal-onboarding-complete');
+    if (!onboardingComplete) {
+      setShowOnboarding(true);
+    }
+  }, []);
 
   // Migration trigger logic - runs once on app startup
   useEffect(() => {
@@ -72,15 +80,26 @@ function App() {
             keysToMigrate.forEach(key => localStorage.removeItem(key));
             console.log('[App] localStorage cleared');
 
-            alert(
-              `Migration Complete!\n\n` +
-              `Successfully migrated to SQLite database:\n` +
-              `- ${migrationResult.result.entriesMigrated} time entries\n` +
-              `- ${migrationResult.result.bucketsMigrated} buckets\n` +
-              `- ${migrationResult.result.jiraIssuesMigrated} Jira issues\n` +
-              `- ${migrationResult.result.settingsMigrated} settings\n\n` +
-              `Your data is now stored in a more robust database.`
-            );
+            // Only show migration modal if actual data was migrated (not a fresh install)
+            const totalMigrated =
+              migrationResult.result.entriesMigrated +
+              migrationResult.result.bucketsMigrated +
+              migrationResult.result.jiraIssuesMigrated +
+              migrationResult.result.settingsMigrated;
+
+            if (totalMigrated > 0) {
+              alert(
+                `Migration Complete!\n\n` +
+                `Successfully migrated to SQLite database:\n` +
+                `- ${migrationResult.result.entriesMigrated} time entries\n` +
+                `- ${migrationResult.result.bucketsMigrated} buckets\n` +
+                `- ${migrationResult.result.jiraIssuesMigrated} Jira issues\n` +
+                `- ${migrationResult.result.settingsMigrated} settings\n\n` +
+                `Your data is now stored in a more robust database.`
+              );
+            } else {
+              console.log('[App] No data to migrate - fresh install, skipping migration modal');
+            }
           } else {
             console.error('[App] Migration failed:', migrationResult.error);
             alert(
@@ -103,29 +122,16 @@ function App() {
     runMigration();
   }, []);
 
-  // Check for onboarding completion and trigger if needed
+  // Check if we need to open Jira config after onboarding
   useEffect(() => {
-    if (migrationComplete) {
-      const onboardingComplete = localStorage.getItem('timeportal-onboarding-complete');
-      if (!onboardingComplete) {
-        // Small delay to ensure everything is loaded
-        setTimeout(() => {
-          setShowOnboarding(true);
-        }, 500);
-      }
-
-      // Check if we need to open Jira config after onboarding
-      const shouldOpenJiraConfig = localStorage.getItem('timeportal-open-jira-config');
-      if (shouldOpenJiraConfig === 'true') {
-        localStorage.removeItem('timeportal-open-jira-config');
-        setTimeout(() => {
-          setCurrentView('settings');
-          // Import and open the integration modal
-          setShowIntegrationModal(true);
-        }, 300);
-      }
+    const shouldOpenJiraConfig = localStorage.getItem('timeportal-open-jira-config');
+    if (shouldOpenJiraConfig === 'true') {
+      localStorage.removeItem('timeportal-open-jira-config');
+      // Navigate to settings and open the integration modal
+      setCurrentView('settings');
+      setShowIntegrationModal(true);
     }
-  }, [migrationComplete]);
+  }, []);
 
   // DevTools trigger for resetting onboarding
   useEffect(() => {
@@ -207,15 +213,6 @@ function App() {
     }
   };
 
-  const handleClose = () => {
-    // @ts-ignore
-    if (window.electron) {
-      // @ts-ignore
-      window.electron.ipcRenderer.send('hide-window', null);
-    }
-  };
-
-
   useEffect(() => {
     // Check if Electron bridge is available
     // @ts-ignore
@@ -284,18 +281,8 @@ function App() {
       </nav>
 
       <div className="flex-1 flex flex-col h-full bg-gray-900 border-l border-gray-800 min-w-0">
-        {/* Title Bar */}
-        <header className="h-8 flex justify-end items-center px-3 bg-gray-950 drag-handle select-none shrink-0">
-          {/* Window Controls */}
-          {/* @ts-ignore */}
-          {window.electron && <div className="flex space-x-2 no-drag group">
-            <button onClick={handleClose} className="w-3 h-3 rounded-full bg-red-500 hover:bg-red-600 transition-colors flex items-center justify-center">
-              <span className="opacity-0 group-hover:opacity-100 text-[8px] font-bold text-black leading-none">x</span>
-            </button>
-            <div className="w-3 h-3 rounded-full bg-yellow-500/50"></div>
-            <div className="w-3 h-3 rounded-full bg-green-500/50"></div>
-          </div>}
-        </header>
+        {/* Title Bar - Drag region for window movement */}
+        <header className="h-8 bg-gray-950 drag-handle select-none shrink-0"></header>
 
         {/* content */}
         <div className="flex-1 flex flex-col w-full relative overflow-hidden">
@@ -436,7 +423,10 @@ function App() {
               </div>
               {/* Scrollable Content */}
               <div className="flex-1 overflow-y-auto">
-                <Settings />
+                <Settings
+                  externalShowIntegrationModal={showIntegrationModal}
+                  onCloseIntegrationModal={() => setShowIntegrationModal(false)}
+                />
               </div>
             </>
           )}

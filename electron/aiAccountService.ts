@@ -113,35 +113,13 @@ export class AIAccountService {
         });
 
         const best = scores[0];
-        const secondBest = scores[1];
 
-        // Only auto-select if there's a clear winner
-        // Criteria: best score > 0.6 AND difference from second best > 0.2
-        const scoreDifference = secondBest ? best.score - secondBest.score : 1.0;
-
-        if (best.score > 0.6 && scoreDifference > 0.2) {
-            console.log('[AIAccountService] Clear winner found:', best.account.name);
-            return {
-                account: best.account,
-                confidence: best.score,
-                reason: best.reason,
-                suggestions: scores.slice(1, 3).map(s => ({
-                    account: s.account,
-                    score: s.score,
-                    reason: s.reason
-                }))
-            };
-        }
-
-        // Ambiguous - let user choose
-        console.log('[AIAccountService] No clear winner, user selection required');
+        console.log('[AIAccountService] Selecting best account:', best.account.name);
         return {
-            account: null,
-            confidence: 0,
-            reason: scoreDifference <= 0.2
-                ? 'Multiple accounts have similar relevance, please select manually'
-                : 'Low confidence in account match, please select manually',
-            suggestions: scores.slice(0, 3).map(s => ({
+            account: best.account,
+            confidence: best.score,
+            reason: best.reason,
+            suggestions: scores.slice(1, 3).map(s => ({
                 account: s.account,
                 score: s.score,
                 reason: s.reason
