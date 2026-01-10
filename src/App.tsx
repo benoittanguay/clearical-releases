@@ -122,15 +122,10 @@ function App() {
     runMigration();
   }, []);
 
-  // Check if we need to open Jira config after onboarding
+  // Clean up legacy integration modal auto-open flag
   useEffect(() => {
-    const shouldOpenJiraConfig = localStorage.getItem('timeportal-open-jira-config');
-    if (shouldOpenJiraConfig === 'true') {
-      localStorage.removeItem('timeportal-open-jira-config');
-      // Navigate to settings and open the integration modal
-      setCurrentView('settings');
-      setShowIntegrationModal(true);
-    }
+    // Remove the flag if it exists from previous versions
+    localStorage.removeItem('timeportal-open-jira-config');
   }, []);
 
   // DevTools trigger for resetting onboarding

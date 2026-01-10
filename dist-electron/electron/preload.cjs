@@ -25,6 +25,10 @@ electron_1.contextBridge.exposeInMainWorld('electron', {
         generateActivitySummary: (context) => electron_1.ipcRenderer.invoke('generate-activity-summary', context),
         getActiveWindow: () => electron_1.ipcRenderer.invoke('get-active-window'),
         checkAccessibilityPermission: () => electron_1.ipcRenderer.invoke('check-accessibility-permission'),
+        checkScreenPermission: () => electron_1.ipcRenderer.invoke('check-screen-permission'),
+        requestScreenPermission: () => electron_1.ipcRenderer.invoke('request-screen-permission'),
+        openScreenPermissionSettings: () => electron_1.ipcRenderer.invoke('open-screen-permission-settings'),
+        openAccessibilitySettings: () => electron_1.ipcRenderer.invoke('open-accessibility-settings'),
         getAppIcon: (appName) => electron_1.ipcRenderer.invoke('get-app-icon', appName),
         getScreenshot: (filePath) => electron_1.ipcRenderer.invoke('get-screenshot', filePath),
         showItemInFolder: (filePath) => electron_1.ipcRenderer.invoke('show-item-in-folder', filePath),
@@ -57,6 +61,8 @@ electron_1.contextBridge.exposeInMainWorld('electron', {
         subscriptionOpenPortal: () => electron_1.ipcRenderer.invoke('subscription:open-portal'),
         subscriptionSubscribe: (email, plan) => electron_1.ipcRenderer.invoke('subscription:subscribe', email, plan),
         subscriptionCancel: () => electron_1.ipcRenderer.invoke('subscription:cancel'),
+        // Environment info
+        getEnvironmentInfo: () => electron_1.ipcRenderer.invoke('get-environment-info'),
         // AI features
         suggestAssignment: (request) => electron_1.ipcRenderer.invoke('suggest-assignment', request),
         selectTempoAccount: (request) => electron_1.ipcRenderer.invoke('select-tempo-account', request),
@@ -110,6 +116,15 @@ electron_1.contextBridge.exposeInMainWorld('electron', {
             // Migration
             needsMigration: () => electron_1.ipcRenderer.invoke('db:needs-migration'),
             migrateFromLocalStorage: (localStorageData) => electron_1.ipcRenderer.invoke('db:migrate-from-localstorage', localStorageData),
+        },
+        // App Blacklist operations
+        appBlacklist: {
+            getBlacklistedApps: () => electron_1.ipcRenderer.invoke('get-blacklisted-apps'),
+            addBlacklistedApp: (bundleId, name, category) => electron_1.ipcRenderer.invoke('add-blacklisted-app', bundleId, name, category),
+            removeBlacklistedApp: (bundleId) => electron_1.ipcRenderer.invoke('remove-blacklisted-app', bundleId),
+            isAppBlacklisted: (bundleId) => electron_1.ipcRenderer.invoke('is-app-blacklisted', bundleId),
+            refreshBlacklist: () => electron_1.ipcRenderer.invoke('refresh-blacklist'),
+            getInstalledApps: () => electron_1.ipcRenderer.invoke('get-installed-apps'),
         },
     },
 });

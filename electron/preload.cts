@@ -93,6 +93,9 @@ contextBridge.exposeInMainWorld('electron', {
             ipcRenderer.invoke('subscription:subscribe', email, plan),
         subscriptionCancel: () =>
             ipcRenderer.invoke('subscription:cancel'),
+        // Environment info
+        getEnvironmentInfo: () =>
+            ipcRenderer.invoke('get-environment-info'),
         // AI features
         suggestAssignment: (request: {
             context: {

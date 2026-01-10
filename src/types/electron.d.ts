@@ -116,6 +116,7 @@ export interface ElectronAPI {
             error?: string;
         }>;
         getActiveWindow: () => Promise<{ appName: string; windowTitle: string; bundleId: string }>;
+        getEnvironmentInfo: () => Promise<{ isDevelopment: boolean; buildEnv: string; isPackaged: boolean }>;
         checkAccessibilityPermission: () => Promise<string>;
         checkScreenPermission: () => Promise<string>;
         requestScreenPermission: () => Promise<string>;

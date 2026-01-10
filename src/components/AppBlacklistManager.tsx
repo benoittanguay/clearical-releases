@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import type { BlacklistedApp, InstalledApp } from '../types/electron';
 
 // App categories for organization
 export type AppCategory =
@@ -11,20 +12,8 @@ export type AppCategory =
     | 'Browsers'
     | 'Communication'
     | 'Utilities'
-    | 'Other';
-
-export interface BlacklistedApp {
-    bundleId: string;
-    name: string;
-    category?: AppCategory;
-}
-
-export interface InstalledApp {
-    bundleId: string;
-    name: string;
-    category?: AppCategory;
-    iconPath?: string;
-}
+    | 'Other'
+    | string;  // Allow any string for flexibility
 
 interface AppBlacklistManagerProps {
     className?: string;
@@ -55,12 +44,19 @@ export function AppBlacklistManager({ className = '' }: AppBlacklistManagerProps
         try {
             setLoading(true);
             setError(null);
-            // @ts-ignore - IPC methods are defined in preload
-            const apps = await window.electronAPI.invoke('get-blacklisted-apps');
-            setBlacklistedApps(apps || []);
+            const response = await window.electron.ipcRenderer.appBlacklist.getBlacklistedApps();
+
+            if (response.success) {
+                setBlacklistedApps(response.data || []);
+            } else {
+                console.error('[AppBlacklistManager] Failed to load blacklisted apps:', response.error);
+                setError('Failed to load blacklisted apps');
+                setBlacklistedApps([]);
+            }
         } catch (err) {
             console.error('[AppBlacklistManager] Failed to load blacklisted apps:', err);
             setError('Failed to load blacklisted apps');
+            setBlacklistedApps([]);
         } finally {
             setLoading(false);
         }
@@ -68,9 +64,12 @@ export function AppBlacklistManager({ className = '' }: AppBlacklistManagerProps
 
     const loadInstalledApps = async () => {
         try {
-            // @ts-ignore - IPC methods are defined in preload
-            const apps = await window.electronAPI.invoke('get-installed-apps');
-            setInstalledApps(apps || []);
+            const response = await window.electron.ipcRenderer.appBlacklist.getInstalledApps();
+            if (response.success) {
+                setInstalledApps(response.data || []);
+            } else {
+                console.error('[AppBlacklistManager] Failed to load installed apps:', response.error);
+            }
         } catch (err) {
             console.error('[AppBlacklistManager] Failed to load installed apps:', err);
         }
@@ -78,12 +77,11 @@ export function AppBlacklistManager({ className = '' }: AppBlacklistManagerProps
 
     const handleAddApp = async (app: InstalledApp) => {
         try {
-            // @ts-ignore - IPC methods are defined in preload
-            await window.electronAPI.invoke('add-blacklisted-app', {
-                bundleId: app.bundleId,
-                name: app.name,
-                category: app.category,
-            });
+            await window.electron.ipcRenderer.appBlacklist.addBlacklistedApp(
+                app.bundleId,
+                app.name,
+                app.category
+            );
             await loadBlacklistedApps();
         } catch (err) {
             console.error('[AppBlacklistManager] Failed to add app to blacklist:', err);
@@ -93,8 +91,7 @@ export function AppBlacklistManager({ className = '' }: AppBlacklistManagerProps
 
     const handleRemoveApp = async (bundleId: string) => {
         try {
-            // @ts-ignore - IPC methods are defined in preload
-            await window.electronAPI.invoke('remove-blacklisted-app', bundleId);
+            await window.electron.ipcRenderer.appBlacklist.removeBlacklistedApp(bundleId);
             await loadBlacklistedApps();
         } catch (err) {
             console.error('[AppBlacklistManager] Failed to remove app from blacklist:', err);

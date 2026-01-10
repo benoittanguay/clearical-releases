@@ -10,12 +10,12 @@ interface IntegrationConfigModalProps {
     onSave: (tempoSettings: TempoSettings, jiraSettings: JiraSettings) => void;
 }
 
-export function IntegrationConfigModal({ 
-    isOpen, 
-    onClose, 
-    currentTempoSettings, 
-    currentJiraSettings, 
-    onSave 
+export function IntegrationConfigModal({
+    isOpen,
+    onClose,
+    currentTempoSettings,
+    currentJiraSettings,
+    onSave
 }: IntegrationConfigModalProps) {
     const [tempTempoSettings, setTempTempoSettings] = useState<TempoSettings>(currentTempoSettings);
     const [tempJiraSettings, setTempJiraSettings] = useState<JiraSettings>(currentJiraSettings);
@@ -24,6 +24,7 @@ export function IntegrationConfigModal({
     const [activeTab, setActiveTab] = useState<'jira' | 'tempo'>('jira');
     const [availableProjects, setAvailableProjects] = useState<JiraProject[]>([]);
     const [loadingProjects, setLoadingProjects] = useState(false);
+    const [isDevelopment, setIsDevelopment] = useState(false);
 
     useEffect(() => {
         if (isOpen) {
@@ -31,6 +32,21 @@ export function IntegrationConfigModal({
             setTempJiraSettings(currentJiraSettings);
         }
     }, [isOpen, currentTempoSettings, currentJiraSettings]);
+
+    // Check environment mode on mount
+    useEffect(() => {
+        const checkEnvironment = async () => {
+            try {
+                const envInfo = await window.electron.ipcRenderer.getEnvironmentInfo();
+                setIsDevelopment(envInfo.isDevelopment);
+            } catch (error) {
+                console.error('Failed to get environment info:', error);
+                // Default to production (hide banner) if we can't determine
+                setIsDevelopment(false);
+            }
+        };
+        checkEnvironment();
+    }, []);
 
     const handleSave = () => {
         onSave(tempTempoSettings, tempJiraSettings);
@@ -146,20 +162,22 @@ export function IntegrationConfigModal({
                     </button>
                 </div>
 
-                {/* Testing Credentials Banner */}
-                <div className="bg-orange-900/50 border border-orange-700 rounded-lg p-3 mb-4">
-                    <div className="flex items-center gap-2">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-orange-400">
-                            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-                            <line x1="12" y1="9" x2="12" y2="13"/>
-                            <line x1="12" y1="17" x2="12.01" y2="17"/>
-                        </svg>
-                        <span className="text-orange-300 text-sm font-medium">Testing Mode</span>
+                {/* Testing Credentials Banner - Only show in development */}
+                {isDevelopment && (
+                    <div className="bg-orange-900/50 border border-orange-700 rounded-lg p-3 mb-4">
+                        <div className="flex items-center gap-2">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-orange-400">
+                                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                                <line x1="12" y1="9" x2="12" y2="13"/>
+                                <line x1="12" y1="17" x2="12.01" y2="17"/>
+                            </svg>
+                            <span className="text-orange-300 text-sm font-medium">Testing Mode</span>
+                        </div>
+                        <p className="text-orange-200 text-xs mt-1">
+                            Development credentials are automatically loaded for testing purposes.
+                        </p>
                     </div>
-                    <p className="text-orange-200 text-xs mt-1">
-                        Development credentials are automatically loaded for testing purposes.
-                    </p>
-                </div>
+                )}
 
                 <div className="mb-4 text-sm text-gray-400">
                     Both Jira and Tempo integrations work together to provide comprehensive time tracking capabilities.

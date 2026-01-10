@@ -145,9 +145,8 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
 
     const handleConfigureJira = () => {
         // Mark onboarding as complete and close
-        // The Settings page will be opened automatically after onboarding
+        // Users can navigate to Settings > Time Tracking Integration to configure
         localStorage.setItem('timeportal-onboarding-complete', 'true');
-        localStorage.setItem('timeportal-open-jira-config', 'true');
         onClose();
     };
 

@@ -1004,6 +1004,19 @@ ipcMain.handle('open-accessibility-settings', async () => {
     }
 });
 
+// Get environment information
+ipcMain.handle('get-environment-info', async () => {
+    // Check if we're in production mode based on BUILD_ENV or app.isPackaged
+    const isProduction = process.env.BUILD_ENV === 'production' || app.isPackaged;
+
+    return {
+        isProduction,
+        isDevelopment: !isProduction,
+        isPackaged: app.isPackaged,
+        buildEnv: process.env.BUILD_ENV || 'not-set',
+    };
+});
+
 // Open external URL in default browser
 ipcMain.handle('open-external-url', async (_event, url: string) => {
     console.log('[Main] Opening external URL:', url);
