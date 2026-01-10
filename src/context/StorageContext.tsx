@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 import type {
     LinkedJiraIssue,
     WorkAssignment,
@@ -30,7 +30,7 @@ interface StorageContextType {
     unlinkJiraIssueFromEntry: (entryId: string) => void;
     setEntryAssignment: (entryId: string, assignment: WorkAssignment | null) => void;
     setEntryTempoAccount: (entryId: string, account: { key: string; name: string; id: string } | null, autoSelected?: boolean) => void;
-    addEntry: (entry: Omit<TimeEntry, 'id'>) => TimeEntry;
+    addEntry: (entry: Omit<TimeEntry, 'id'>) => Promise<TimeEntry>;
     seedEntries: (newEntries: Omit<TimeEntry, 'id'>[]) => void;
     clearAllEntries: () => void;
     updateEntry: (id: string, updates: Partial<TimeEntry>) => void;
@@ -46,158 +46,80 @@ const StorageContext = createContext<StorageContextType | undefined>(undefined);
 export const StorageProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [buckets, setBuckets] = useState<TimeBucket[]>([]);
     const [entries, setEntries] = useState<TimeEntry[]>([]);
-    const migrationDoneRef = useRef(false);
+    const [, setIsLoading] = useState(true);
 
-    // Migration function to handle old bucket format
-    const migrateBuckets = (buckets: any[]): TimeBucket[] => {
-        return buckets.map(bucket => {
-            // If bucket doesn't have linkedIssue property, add it as undefined
-            if (!bucket.hasOwnProperty('linkedIssue')) {
-                return { ...bucket, linkedIssue: undefined };
-            }
-            return bucket;
-        });
-    };
-
-    // Migration function to handle old entry format (dual-assignment to unified)
-    const migrateEntries = (entries: any[], availableBuckets: TimeBucket[]): TimeEntry[] => {
-        return entries.map(entry => {
-            // If entry has new assignment field, return as is
-            if (entry.assignment) {
-                return entry;
-            }
-
-            // Migrate from old dual-assignment system
-            let assignment: WorkAssignment | undefined = undefined;
-
-            // Priority: Jira issue over bucket (as specified in implementation plan)
-            if (entry.linkedJiraIssue) {
-                assignment = {
-                    type: 'jira',
-                    jiraIssue: entry.linkedJiraIssue
-                };
-            } else if (entry.bucketId) {
-                // Find the bucket to get its details
-                const bucket = availableBuckets.find(b => b.id === entry.bucketId);
-                if (bucket) {
-                    assignment = {
-                        type: 'bucket',
-                        bucket: {
-                            id: bucket.id,
-                            name: bucket.name,
-                            color: bucket.color
-                        }
-                    };
-                }
-            }
-
-            return {
-                ...entry,
-                assignment,
-                // Keep legacy fields for gradual migration
-                bucketId: entry.bucketId,
-                linkedJiraIssue: entry.linkedJiraIssue
-            };
-        });
-    };
-
-    // Load from local storage
+    // Load from SQLite database
     useEffect(() => {
-        console.log('[StorageContext] useEffect triggered - loading data');
-        const loadedBuckets = localStorage.getItem('timeportal-buckets');
-        const loadedEntries = localStorage.getItem('timeportal-entries');
+        const loadData = async () => {
+            console.log('[StorageContext] Loading data from SQLite database');
+            setIsLoading(true);
 
-        console.log('[StorageContext] Loading buckets from localStorage:', loadedBuckets);
-        
-        if (loadedBuckets && loadedBuckets !== 'undefined' && loadedBuckets !== 'null') {
             try {
-                const parsed = JSON.parse(loadedBuckets);
-                console.log('[StorageContext] Parsed buckets:', parsed);
-                
-                if (Array.isArray(parsed) && parsed.length > 0) {
-                    const migratedBuckets = migrateBuckets(parsed);
-                    console.log('[StorageContext] Migrated buckets:', migratedBuckets);
-                    setBuckets(migratedBuckets);
+                // Load buckets from database
+                const bucketsResult = await window.electron.ipcRenderer.db.getAllBuckets();
+                if (bucketsResult.success && bucketsResult.data) {
+                    if (bucketsResult.data.length > 0) {
+                        console.log('[StorageContext] Loaded buckets from database:', bucketsResult.data.length);
+                        setBuckets(bucketsResult.data);
+                    } else {
+                        // Create default buckets if none exist
+                        console.log('[StorageContext] No buckets in database, creating defaults');
+                        const defaultBuckets = [
+                            { id: '1', name: 'Work', color: '#3b82f6' },
+                            { id: '2', name: 'Meeting', color: '#eab308' },
+                            { id: '3', name: 'Break', color: '#22c55e' }
+                        ];
+
+                        // Insert default buckets into database
+                        for (const bucket of defaultBuckets) {
+                            await window.electron.ipcRenderer.db.insertBucket(bucket);
+                        }
+                        setBuckets(defaultBuckets);
+                    }
                 } else {
-                    console.log('[StorageContext] Empty or invalid buckets array, creating defaults');
-                    const defaultBuckets = [
-                        { id: '1', name: 'Work', color: '#3b82f6' },
-                        { id: '2', name: 'Meeting', color: '#eab308' },
-                        { id: '3', name: 'Break', color: '#22c55e' }
-                    ];
-                    setBuckets(defaultBuckets);
+                    console.error('[StorageContext] Failed to load buckets:', bucketsResult.error);
+                    setBuckets([]);
                 }
-            } catch (error) {
-                console.error('[StorageContext] Error parsing buckets, using defaults:', error);
-                const defaultBuckets = [
-                    { id: '1', name: 'Work', color: '#3b82f6' },
-                    { id: '2', name: 'Meeting', color: '#eab308' },
-                    { id: '3', name: 'Break', color: '#22c55e' }
-                ];
-                setBuckets(defaultBuckets);
-            }
-        } else {
-            // Default buckets
-            console.log('[StorageContext] No saved buckets, creating defaults');
-            const defaultBuckets = [
-                { id: '1', name: 'Work', color: '#3b82f6' },
-                { id: '2', name: 'Meeting', color: '#eab308' },
-                { id: '3', name: 'Break', color: '#22c55e' }
-            ];
-            setBuckets(defaultBuckets);
-        }
 
-        if (loadedEntries && loadedEntries !== 'undefined' && loadedEntries !== 'null') {
-            try {
-                const parsed = JSON.parse(loadedEntries);
-                if (Array.isArray(parsed)) {
-                    // Defer entries migration until buckets are loaded
-                    setEntries(parsed);
+                // Load entries from database
+                const entriesResult = await window.electron.ipcRenderer.db.getAllEntries();
+                if (entriesResult.success && entriesResult.data) {
+                    console.log('[StorageContext] Loaded entries from database:', entriesResult.data.length);
+                    setEntries(entriesResult.data);
+                } else {
+                    console.error('[StorageContext] Failed to load entries:', entriesResult.error);
+                    setEntries([]);
                 }
             } catch (error) {
-                console.error('[StorageContext] Error parsing entries:', error);
+                console.error('[StorageContext] Error loading data from database:', error);
+                setBuckets([]);
                 setEntries([]);
+            } finally {
+                setIsLoading(false);
             }
-        }
+        };
+
+        loadData();
     }, []);
 
-    // Migrate entries when buckets are loaded (run only once)
-    useEffect(() => {
-        if (!migrationDoneRef.current && buckets.length > 0 && entries.length > 0) {
-            // Check if any entries need migration
-            const needsMigration = entries.some(entry => 
-                !entry.assignment && (entry.bucketId || entry.linkedJiraIssue)
-            );
-            
-            if (needsMigration) {
-                console.log('[StorageContext] Migrating entries from dual-assignment to unified model');
-                const migratedEntries = migrateEntries(entries, buckets);
-                setEntries(migratedEntries);
-            }
-            // Mark migration as done regardless of whether it was needed
-            migrationDoneRef.current = true;
-        }
-    }, [buckets, entries]);
-
-    // Persist
-    useEffect(() => {
-        localStorage.setItem('timeportal-buckets', JSON.stringify(buckets));
-    }, [buckets]);
-
-    useEffect(() => {
-        localStorage.setItem('timeportal-entries', JSON.stringify(entries));
-    }, [entries]);
-
-    const addBucket = (name: string, color: string, parentId?: string | null) => {
-        setBuckets([...buckets, {
+    const addBucket = async (name: string, color: string, parentId?: string | null) => {
+        const newBucket = {
             id: crypto.randomUUID(),
             name,
             color,
             parentId: parentId || null
-        }]);
+        };
+
+        // Insert into database
+        const result = await window.electron.ipcRenderer.db.insertBucket(newBucket);
+        if (result.success) {
+            setBuckets([...buckets, newBucket]);
+        } else {
+            console.error('[StorageContext] Failed to add bucket:', result.error);
+        }
     };
 
-    const removeBucket = (id: string) => {
+    const removeBucket = async (id: string) => {
         // When deleting a folder, also delete all its children
         const toDelete = new Set([id]);
         const findChildren = (parentId: string) => {
@@ -209,28 +131,49 @@ export const StorageProvider: React.FC<{ children: React.ReactNode }> = ({ child
             });
         };
         findChildren(id);
+
+        // Delete from database
+        for (const bucketId of toDelete) {
+            const result = await window.electron.ipcRenderer.db.deleteBucket(bucketId);
+            if (!result.success) {
+                console.error('[StorageContext] Failed to delete bucket:', bucketId, result.error);
+            }
+        }
+
         setBuckets(buckets.filter(b => !toDelete.has(b.id)));
     };
 
-    const renameBucket = (id: string, newName: string) => {
-        setBuckets(buckets.map(bucket =>
-            bucket.id === id
-                ? { ...bucket, name: newName }
-                : bucket
-        ));
+    const renameBucket = async (id: string, newName: string) => {
+        const result = await window.electron.ipcRenderer.db.updateBucket(id, { name: newName });
+        if (result.success) {
+            setBuckets(buckets.map(bucket =>
+                bucket.id === id
+                    ? { ...bucket, name: newName }
+                    : bucket
+            ));
+        } else {
+            console.error('[StorageContext] Failed to rename bucket:', result.error);
+        }
     };
 
-    const createFolder = (name: string, parentId?: string | null) => {
-        setBuckets([...buckets, {
+    const createFolder = async (name: string, parentId?: string | null) => {
+        const newFolder = {
             id: crypto.randomUUID(),
             name,
             color: '#6b7280',  // Default gray color for folders
             parentId: parentId || null,
             isFolder: true
-        }]);
+        };
+
+        const result = await window.electron.ipcRenderer.db.insertBucket(newFolder);
+        if (result.success) {
+            setBuckets([...buckets, newFolder]);
+        } else {
+            console.error('[StorageContext] Failed to create folder:', result.error);
+        }
     };
 
-    const moveBucket = (bucketId: string, newParentId: string | null) => {
+    const moveBucket = async (bucketId: string, newParentId: string | null) => {
         // Prevent moving a folder into itself or its descendants
         if (newParentId) {
             let currentId: string | null = newParentId;
@@ -244,179 +187,281 @@ export const StorageProvider: React.FC<{ children: React.ReactNode }> = ({ child
             }
         }
 
-        setBuckets(buckets.map(bucket =>
-            bucket.id === bucketId
-                ? { ...bucket, parentId: newParentId }
-                : bucket
-        ));
+        const result = await window.electron.ipcRenderer.db.updateBucket(bucketId, { parentId: newParentId });
+        if (result.success) {
+            setBuckets(buckets.map(bucket =>
+                bucket.id === bucketId
+                    ? { ...bucket, parentId: newParentId }
+                    : bucket
+            ));
+        } else {
+            console.error('[StorageContext] Failed to move bucket:', result.error);
+        }
     };
 
-    const linkJiraIssueToBucket = (bucketId: string, issue: LinkedJiraIssue) => {
-        setBuckets(buckets.map(bucket => 
-            bucket.id === bucketId 
-                ? { ...bucket, linkedIssue: issue }
-                : bucket
-        ));
+    const linkJiraIssueToBucket = async (bucketId: string, issue: LinkedJiraIssue) => {
+        const result = await window.electron.ipcRenderer.db.updateBucket(bucketId, { linkedIssue: issue });
+        if (result.success) {
+            setBuckets(buckets.map(bucket =>
+                bucket.id === bucketId
+                    ? { ...bucket, linkedIssue: issue }
+                    : bucket
+            ));
+        } else {
+            console.error('[StorageContext] Failed to link Jira issue to bucket:', result.error);
+        }
     };
 
-    const unlinkJiraIssueFromBucket = (bucketId: string) => {
-        setBuckets(buckets.map(bucket => 
-            bucket.id === bucketId 
-                ? { ...bucket, linkedIssue: undefined }
-                : bucket
-        ));
+    const unlinkJiraIssueFromBucket = async (bucketId: string) => {
+        const result = await window.electron.ipcRenderer.db.updateBucket(bucketId, { linkedIssue: undefined });
+        if (result.success) {
+            setBuckets(buckets.map(bucket =>
+                bucket.id === bucketId
+                    ? { ...bucket, linkedIssue: undefined }
+                    : bucket
+            ));
+        } else {
+            console.error('[StorageContext] Failed to unlink Jira issue from bucket:', result.error);
+        }
     };
 
-    const addEntry = (entry: Omit<TimeEntry, 'id'>): TimeEntry => {
+    const addEntry = async (entry: Omit<TimeEntry, 'id'>): Promise<TimeEntry> => {
         const newEntry: TimeEntry = { ...entry, id: crypto.randomUUID() };
-        setEntries([newEntry, ...entries]);
-        return newEntry;
+        const result = await window.electron.ipcRenderer.db.insertEntry(newEntry);
+        if (result.success) {
+            setEntries([newEntry, ...entries]);
+            return newEntry;
+        } else {
+            console.error('[StorageContext] Failed to add entry:', result.error);
+            throw new Error('Failed to add entry');
+        }
     };
 
-    const seedEntries = (newEntries: Omit<TimeEntry, 'id'>[]) => {
+    const seedEntries = async (newEntries: Omit<TimeEntry, 'id'>[]) => {
         // Add IDs to all new entries
         const entriesWithIds: TimeEntry[] = newEntries.map(entry => ({
             ...entry,
             id: crypto.randomUUID()
         }));
 
+        // Insert all entries into database
+        for (const entry of entriesWithIds) {
+            const result = await window.electron.ipcRenderer.db.insertEntry(entry);
+            if (!result.success) {
+                console.error('[StorageContext] Failed to seed entry:', result.error);
+            }
+        }
+
         // Add all new entries to existing ones in a single state update
         setEntries(prevEntries => [...entriesWithIds, ...prevEntries]);
     };
 
-    const clearAllEntries = () => {
-        setEntries([]);
+    const clearAllEntries = async () => {
+        const result = await window.electron.ipcRenderer.db.deleteAllEntries();
+        if (result.success) {
+            setEntries([]);
+        } else {
+            console.error('[StorageContext] Failed to clear entries:', result.error);
+        }
     };
 
-    const updateEntry = (id: string, updates: Partial<TimeEntry>) => {
-        setEntries(entries.map(entry => 
-            entry.id === id ? { ...entry, ...updates } : entry
-        ));
+    const updateEntry = async (id: string, updates: Partial<TimeEntry>) => {
+        const result = await window.electron.ipcRenderer.db.updateEntry(id, updates);
+        if (result.success) {
+            setEntries(prevEntries => prevEntries.map(entry =>
+                entry.id === id ? { ...entry, ...updates } : entry
+            ));
+        } else {
+            console.error('[StorageContext] Failed to update entry:', result.error);
+        }
     };
 
-    const removeEntry = (id: string) => {
-        setEntries(entries.filter(entry => entry.id !== id));
+    const removeEntry = async (id: string) => {
+        const result = await window.electron.ipcRenderer.db.deleteEntry(id);
+        if (result.success) {
+            setEntries(prevEntries => prevEntries.filter(entry => entry.id !== id));
+        } else {
+            console.error('[StorageContext] Failed to remove entry:', result.error);
+        }
     };
 
-    const removeActivityFromEntry = (entryId: string, activityIndex: number) => {
-        setEntries(entries.map(entry => {
-            if (entry.id === entryId && entry.windowActivity) {
-                const updatedActivity = [...entry.windowActivity];
-                updatedActivity.splice(activityIndex, 1);
-                
-                // Recalculate total duration based on remaining activities
-                const newDuration = updatedActivity.reduce((sum, activity) => sum + activity.duration, 0);
-                
-                return { 
-                    ...entry, 
-                    windowActivity: updatedActivity,
-                    duration: newDuration
-                };
-            }
-            return entry;
-        }));
+    const removeActivityFromEntry = async (entryId: string, activityIndex: number) => {
+        const entry = entries.find(e => e.id === entryId);
+        if (!entry || !entry.windowActivity) return;
+
+        const updatedActivity = [...entry.windowActivity];
+        updatedActivity.splice(activityIndex, 1);
+
+        // Recalculate total duration based on remaining activities
+        const newDuration = updatedActivity.reduce((sum, activity) => sum + activity.duration, 0);
+
+        const updates = {
+            windowActivity: updatedActivity,
+            duration: newDuration
+        };
+
+        const result = await window.electron.ipcRenderer.db.updateEntry(entryId, updates);
+        if (result.success) {
+            setEntries(prevEntries => prevEntries.map(e =>
+                e.id === entryId ? { ...e, ...updates } : e
+            ));
+        } else {
+            console.error('[StorageContext] Failed to remove activity from entry:', result.error);
+        }
     };
 
-    const removeAllActivitiesForApp = (entryId: string, appName: string) => {
-        setEntries(entries.map(entry => {
-            if (entry.id === entryId && entry.windowActivity) {
-                const filteredActivity = entry.windowActivity.filter(
-                    activity => activity.appName !== appName
-                );
-                
-                // Recalculate total duration based on remaining activities
-                const newDuration = filteredActivity.reduce((sum, activity) => sum + activity.duration, 0);
-                
-                return { 
-                    ...entry, 
-                    windowActivity: filteredActivity,
-                    duration: newDuration
-                };
-            }
-            return entry;
-        }));
+    const removeAllActivitiesForApp = async (entryId: string, appName: string) => {
+        const entry = entries.find(e => e.id === entryId);
+        if (!entry || !entry.windowActivity) return;
+
+        const filteredActivity = entry.windowActivity.filter(
+            activity => activity.appName !== appName
+        );
+
+        // Recalculate total duration based on remaining activities
+        const newDuration = filteredActivity.reduce((sum, activity) => sum + activity.duration, 0);
+
+        const updates = {
+            windowActivity: filteredActivity,
+            duration: newDuration
+        };
+
+        const result = await window.electron.ipcRenderer.db.updateEntry(entryId, updates);
+        if (result.success) {
+            setEntries(prevEntries => prevEntries.map(e =>
+                e.id === entryId ? { ...e, ...updates } : e
+            ));
+        } else {
+            console.error('[StorageContext] Failed to remove activities for app:', result.error);
+        }
     };
 
-    const removeScreenshotFromEntry = (screenshotPath: string) => {
-        setEntries(entries.map(entry => {
-            if (entry.windowActivity) {
-                const updatedActivity = entry.windowActivity.map(activity => {
-                    if (activity.screenshotPaths) {
-                        return {
-                            ...activity,
-                            screenshotPaths: activity.screenshotPaths.filter(path => path !== screenshotPath)
-                        };
-                    }
-                    return activity;
-                });
-                return { ...entry, windowActivity: updatedActivity };
-            }
-            return entry;
-        }));
-    };
+    const removeScreenshotFromEntry = async (screenshotPath: string) => {
+        // Find the entry that contains this screenshot
+        const affectedEntry = entries.find(entry =>
+            entry.windowActivity?.some(activity =>
+                activity.screenshotPaths?.includes(screenshotPath)
+            )
+        );
 
-    const addManualActivityToEntry = (entryId: string, description: string, duration: number) => {
-        setEntries(entries.map(entry => {
-            if (entry.id === entryId) {
-                const manualActivity: WindowActivity = {
-                    appName: 'Manual Entry',
-                    windowTitle: description,
-                    timestamp: Date.now(),
-                    duration: duration
-                };
-                
-                const updatedActivity = [...(entry.windowActivity || []), manualActivity];
-                // Recalculate total duration including the new manual activity
-                const newDuration = updatedActivity.reduce((sum, activity) => sum + activity.duration, 0);
-                
+        if (!affectedEntry) return;
+
+        const updatedActivity = affectedEntry.windowActivity!.map(activity => {
+            if (activity.screenshotPaths) {
                 return {
-                    ...entry,
-                    windowActivity: updatedActivity,
-                    duration: newDuration
+                    ...activity,
+                    screenshotPaths: activity.screenshotPaths.filter(path => path !== screenshotPath)
                 };
             }
-            return entry;
-        }));
+            return activity;
+        });
+
+        const result = await window.electron.ipcRenderer.db.updateEntry(affectedEntry.id, {
+            windowActivity: updatedActivity
+        });
+
+        if (result.success) {
+            setEntries(prevEntries => prevEntries.map(entry =>
+                entry.id === affectedEntry.id
+                    ? { ...entry, windowActivity: updatedActivity }
+                    : entry
+            ));
+        } else {
+            console.error('[StorageContext] Failed to remove screenshot from entry:', result.error);
+        }
     };
 
-    const linkJiraIssueToEntry = (entryId: string, issue: LinkedJiraIssue) => {
-        setEntries(entries.map(entry => 
-            entry.id === entryId 
-                ? { ...entry, linkedJiraIssue: issue }
-                : entry
-        ));
+    const addManualActivityToEntry = async (entryId: string, description: string, duration: number) => {
+        const entry = entries.find(e => e.id === entryId);
+        if (!entry) return;
+
+        const manualActivity: WindowActivity = {
+            appName: 'Manual Entry',
+            windowTitle: description,
+            timestamp: Date.now(),
+            duration: duration
+        };
+
+        const updatedActivity = [...(entry.windowActivity || []), manualActivity];
+        // Recalculate total duration including the new manual activity
+        const newDuration = updatedActivity.reduce((sum, activity) => sum + activity.duration, 0);
+
+        const updates = {
+            windowActivity: updatedActivity,
+            duration: newDuration
+        };
+
+        const result = await window.electron.ipcRenderer.db.updateEntry(entryId, updates);
+        if (result.success) {
+            setEntries(prevEntries => prevEntries.map(e =>
+                e.id === entryId ? { ...e, ...updates } : e
+            ));
+        } else {
+            console.error('[StorageContext] Failed to add manual activity to entry:', result.error);
+        }
     };
 
-    const unlinkJiraIssueFromEntry = (entryId: string) => {
-        setEntries(entries.map(entry => 
-            entry.id === entryId 
-                ? { ...entry, linkedJiraIssue: undefined }
-                : entry
-        ));
+    const linkJiraIssueToEntry = async (entryId: string, issue: LinkedJiraIssue) => {
+        const result = await window.electron.ipcRenderer.db.updateEntry(entryId, { linkedJiraIssue: issue });
+        if (result.success) {
+            setEntries(prevEntries => prevEntries.map(entry =>
+                entry.id === entryId
+                    ? { ...entry, linkedJiraIssue: issue }
+                    : entry
+            ));
+        } else {
+            console.error('[StorageContext] Failed to link Jira issue to entry:', result.error);
+        }
     };
 
-    const setEntryAssignment = (entryId: string, assignment: WorkAssignment | null) => {
-        setEntries(entries.map(entry =>
-            entry.id === entryId
-                ? { ...entry, assignment: assignment || undefined }
-                : entry
-        ));
+    const unlinkJiraIssueFromEntry = async (entryId: string) => {
+        const result = await window.electron.ipcRenderer.db.updateEntry(entryId, { linkedJiraIssue: undefined });
+        if (result.success) {
+            setEntries(prevEntries => prevEntries.map(entry =>
+                entry.id === entryId
+                    ? { ...entry, linkedJiraIssue: undefined }
+                    : entry
+            ));
+        } else {
+            console.error('[StorageContext] Failed to unlink Jira issue from entry:', result.error);
+        }
     };
 
-    const setEntryTempoAccount = (
+    const setEntryAssignment = async (entryId: string, assignment: WorkAssignment | null) => {
+        const result = await window.electron.ipcRenderer.db.updateEntry(entryId, {
+            assignment: assignment || undefined
+        });
+        if (result.success) {
+            setEntries(prevEntries => prevEntries.map(entry =>
+                entry.id === entryId
+                    ? { ...entry, assignment: assignment || undefined }
+                    : entry
+            ));
+        } else {
+            console.error('[StorageContext] Failed to set entry assignment:', result.error);
+        }
+    };
+
+    const setEntryTempoAccount = async (
         entryId: string,
         account: { key: string; name: string; id: string } | null,
         autoSelected?: boolean
     ) => {
-        setEntries(entries.map(entry =>
-            entry.id === entryId
-                ? {
-                    ...entry,
-                    tempoAccount: account || undefined,
-                    tempoAccountAutoSelected: account ? (autoSelected || false) : undefined
-                }
-                : entry
-        ));
+        const updates = {
+            tempoAccount: account || undefined,
+            tempoAccountAutoSelected: account ? (autoSelected || false) : undefined
+        };
+
+        const result = await window.electron.ipcRenderer.db.updateEntry(entryId, updates);
+        if (result.success) {
+            setEntries(prevEntries => prevEntries.map(entry =>
+                entry.id === entryId
+                    ? { ...entry, ...updates }
+                    : entry
+            ));
+        } else {
+            console.error('[StorageContext] Failed to set entry tempo account:', result.error);
+        }
     };
 
     return (

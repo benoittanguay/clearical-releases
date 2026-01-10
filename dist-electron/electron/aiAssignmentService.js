@@ -1,3 +1,4 @@
+import { HistoricalMatchingService } from './historicalMatchingService.js';
 /**
  * Technology keyword mappings for matching
  */
@@ -40,17 +41,20 @@ const STOP_WORDS = new Set([
 /**
  * AI Assignment Service
  * Analyzes activity context to suggest the best bucket or Jira issue assignment
+ * Now enhanced with sophisticated historical learning
  */
 export class AIAssignmentService {
     buckets;
     jiraIssues;
     historicalEntries;
     CONFIDENCE_THRESHOLD = 0.7; // Only auto-assign if confidence >= 70%
+    historicalMatcher;
     // Dependencies injected via constructor for testability
     constructor(buckets = [], jiraIssues = [], historicalEntries = []) {
         this.buckets = buckets;
         this.jiraIssues = jiraIssues;
         this.historicalEntries = historicalEntries;
+        this.historicalMatcher = new HistoricalMatchingService();
     }
     /**
      * Suggest the best assignment based on activity context
@@ -122,17 +126,17 @@ export class AIAssignmentService {
      */
     calculateBucketScore(bucket, context) {
         let score = 0;
-        // 1. Keyword matching in bucket name (40%)
+        // 1. Keyword matching in bucket name (30%)
         const nameMatch = this.keywordMatch(bucket.name, context.description);
-        score += nameMatch * 0.4;
-        // 2. Linked Jira issue relevance (30%)
+        score += nameMatch * 0.3;
+        // 2. Linked Jira issue relevance (20%)
         if (bucket.linkedIssue) {
             const issueMatch = this.keywordMatch(bucket.linkedIssue.summary, context.description);
-            score += issueMatch * 0.3;
+            score += issueMatch * 0.2;
         }
-        // 3. Historical usage pattern (30%)
-        const historicalMatch = this.calculateHistoricalMatch(bucket.id, context);
-        score += historicalMatch * 0.3;
+        // 3. Historical usage pattern - ENHANCED (50%)
+        const historicalMatch = this.calculateHistoricalBucketMatch(bucket.id, context);
+        score += historicalMatch * 0.5;
         return Math.min(score, 1.0);
     }
     /**
@@ -140,18 +144,18 @@ export class AIAssignmentService {
      */
     calculateJiraScore(issue, context) {
         let score = 0;
-        // 1. Summary keyword match (40%)
+        // 1. Summary keyword match (25%)
         const summaryMatch = this.keywordMatch(issue.summary, context.description);
-        score += summaryMatch * 0.4;
-        // 2. Technology/domain match (20%)
+        score += summaryMatch * 0.25;
+        // 2. Technology/domain match (15%)
         const techMatch = this.technologyMatch(issue, context.detectedTechnologies);
-        score += techMatch * 0.2;
-        // 3. Historical usage (25%)
+        score += techMatch * 0.15;
+        // 3. Historical usage - ENHANCED (50%)
         const historicalMatch = this.calculateHistoricalJiraMatch(issue.key, context);
-        score += historicalMatch * 0.25;
-        // 4. Project affinity (15%) - prefer recently used projects
+        score += historicalMatch * 0.5;
+        // 4. Project affinity (10%) - prefer recently used projects
         const projectMatch = this.projectAffinityMatch(issue.projectKey);
-        score += projectMatch * 0.15;
+        score += projectMatch * 0.1;
         return Math.min(score, 1.0);
     }
     /**
@@ -195,42 +199,55 @@ export class AIAssignmentService {
         return matches / detectedTechnologies.length;
     }
     /**
-     * Calculate historical bucket usage match
+     * Calculate enhanced historical bucket usage match
+     * Uses sophisticated similarity matching across multiple factors
      */
-    calculateHistoricalMatch(bucketId, context) {
+    calculateHistoricalBucketMatch(bucketId, context) {
         if (this.historicalEntries.length === 0)
             return 0;
-        // Look for similar activities in the past
-        const similarEntries = this.historicalEntries.filter(entry => {
-            if (entry.assignment?.type !== 'bucket')
-                return false;
-            if (entry.assignment.bucket?.id !== bucketId)
-                return false;
-            // Must have description to compare
-            if (!entry.description)
-                return false;
-            // Check for similar keywords
-            const similarity = this.keywordMatch(entry.description, context.description);
-            return similarity > 0.3; // At least 30% keyword overlap
+        // Find similar historical entries using the enhanced matching service
+        const similarEntries = this.historicalMatcher.findSimilarEntries(context, this.historicalEntries, {
+            minScore: 0.25, // Lower threshold to catch more potential matches
+            maxResults: 20,
+            requireAssignment: true
         });
-        // More similar historical entries = higher score
-        const recentCount = Math.min(this.historicalEntries.length, 20); // Last 20 entries
-        return Math.min(similarEntries.length / recentCount, 1.0);
+        // Filter to entries that used this specific bucket
+        const bucketEntries = similarEntries.filter(match => match.entry.assignment?.type === 'bucket' &&
+            match.entry.assignment.bucket?.id === bucketId);
+        if (bucketEntries.length === 0)
+            return 0;
+        // Calculate weighted score based on similarity and frequency
+        // Higher similarity matches count more
+        const totalWeight = bucketEntries.reduce((sum, match) => sum + match.score, 0);
+        const avgScore = totalWeight / bucketEntries.length;
+        // Frequency boost: more uses = higher confidence
+        const frequencyBoost = Math.min(bucketEntries.length / 10, 0.3); // Max 30% boost
+        return Math.min(avgScore + frequencyBoost, 1.0);
     }
     /**
-     * Calculate historical Jira issue usage match
+     * Calculate enhanced historical Jira issue usage match
+     * Uses sophisticated similarity matching across multiple factors
      */
     calculateHistoricalJiraMatch(issueKey, context) {
         if (this.historicalEntries.length === 0)
             return 0;
-        const issueEntries = this.historicalEntries.filter(entry => entry.assignment?.type === 'jira' &&
-            entry.assignment.jiraIssue?.key === issueKey);
-        // Boost score if this issue was used recently
-        if (issueEntries.length > 0) {
-            const recentCount = Math.min(this.historicalEntries.length, 20);
-            return Math.min(issueEntries.length / recentCount * 1.5, 1.0); // 1.5x multiplier
-        }
-        return 0;
+        // Find similar historical entries using the enhanced matching service
+        const similarEntries = this.historicalMatcher.findSimilarEntries(context, this.historicalEntries, {
+            minScore: 0.25,
+            maxResults: 20,
+            requireAssignment: true
+        });
+        // Filter to entries that used this specific issue
+        const issueEntries = similarEntries.filter(match => match.entry.assignment?.type === 'jira' &&
+            match.entry.assignment.jiraIssue?.key === issueKey);
+        if (issueEntries.length === 0)
+            return 0;
+        // Calculate weighted score based on similarity and frequency
+        const totalWeight = issueEntries.reduce((sum, match) => sum + match.score, 0);
+        const avgScore = totalWeight / issueEntries.length;
+        // Frequency boost: more uses = higher confidence
+        const frequencyBoost = Math.min(issueEntries.length / 8, 0.3); // Max 30% boost
+        return Math.min(avgScore + frequencyBoost, 1.0);
     }
     /**
      * Calculate project affinity based on recent usage
@@ -258,9 +275,23 @@ export class AIAssignmentService {
                 reasons.push(`similar to linked Jira issue ${bucket.linkedIssue.key}`);
             }
         }
-        const historicalMatch = this.calculateHistoricalMatch(bucket.id, context);
-        if (historicalMatch > 0.2) {
-            reasons.push(`frequently used for similar work`);
+        // Enhanced historical matching with detailed reasons
+        const historicalMatch = this.calculateHistoricalBucketMatch(bucket.id, context);
+        if (historicalMatch > 0.4) {
+            // Get detailed similarity info from matcher
+            const similarEntries = this.historicalMatcher.findSimilarEntries(context, this.historicalEntries, { minScore: 0.25, maxResults: 5, requireAssignment: true });
+            const bucketEntries = similarEntries.filter(match => match.entry.assignment?.type === 'bucket' &&
+                match.entry.assignment.bucket?.id === bucket.id);
+            if (bucketEntries.length > 0 && bucketEntries[0].reasons.length > 0) {
+                const topReason = bucketEntries[0].reasons[0];
+                reasons.push(`learned from history: ${topReason}`);
+            }
+            else {
+                reasons.push(`frequently used for similar work`);
+            }
+        }
+        else if (historicalMatch > 0.2) {
+            reasons.push(`sometimes used for similar work`);
         }
         return reasons.length > 0
             ? reasons.join(', ')
@@ -281,9 +312,23 @@ export class AIAssignmentService {
                 reasons.push(`matches detected technologies`);
             }
         }
+        // Enhanced historical matching with detailed reasons
         const historicalMatch = this.calculateHistoricalJiraMatch(issue.key, context);
-        if (historicalMatch > 0.2) {
-            reasons.push(`recently used issue`);
+        if (historicalMatch > 0.4) {
+            // Get detailed similarity info from matcher
+            const similarEntries = this.historicalMatcher.findSimilarEntries(context, this.historicalEntries, { minScore: 0.25, maxResults: 5, requireAssignment: true });
+            const issueEntries = similarEntries.filter(match => match.entry.assignment?.type === 'jira' &&
+                match.entry.assignment.jiraIssue?.key === issue.key);
+            if (issueEntries.length > 0 && issueEntries[0].reasons.length > 0) {
+                const topReason = issueEntries[0].reasons[0];
+                reasons.push(`learned from history: ${topReason}`);
+            }
+            else {
+                reasons.push(`frequently used for this type of work`);
+            }
+        }
+        else if (historicalMatch > 0.2) {
+            reasons.push(`used before for similar work`);
         }
         const projectMatch = this.projectAffinityMatch(issue.projectKey);
         if (projectMatch > 0.3) {

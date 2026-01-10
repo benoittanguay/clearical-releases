@@ -1,24 +1,117 @@
 {
   "name": "time-portal",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.1.0",
   "type": "module",
+  "build": {
+    "appId": "io.clearical.timeportal",
+    "productName": "TimePortal",
+    "directories": {
+      "buildResources": "build"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*",
+      "node_modules/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "native/screenshot-analyzer/build/screenshot-analyzer",
+        "to": "screenshot-analyzer",
+        "filter": ["**/*"]
+      }
+    ],
+    "mac": {
+      "icon": "build/icon.icns",
+      "category": "public.app-category.productivity",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": ["x64", "arm64"]
+        },
+        {
+          "target": "zip",
+          "arch": ["x64", "arm64"]
+        }
+      ]
+    },
+    "dmg": {
+      "sign": false,
+      "contents": [
+        {
+          "x": 130,
+          "y": 220
+        },
+        {
+          "x": 410,
+          "y": 220,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ]
+    },
+    "win": {
+      "icon": "build/icon.png",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64", "ia32"]
+        },
+        {
+          "target": "zip",
+          "arch": ["x64", "ia32"]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "TimePortal"
+    },
+    "linux": {
+      "icon": "build/icon.png",
+      "target": ["AppImage", "deb", "rpm"],
+      "category": "Office"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "benoittanguay",
+      "repo": "TimePortal",
+      "releaseType": "release"
+    }
+  },
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "build:electron-main": "tsc -p electron/tsconfig.json && cp dist-electron/electron/main.js dist-electron/main.js",
+    "build:electron-main": "tsc -p electron/tsconfig.json && cp dist-electron/electron/*.js dist-electron/electron/*.cjs dist-electron/ && cp -r dist-electron/electron/subscription dist-electron/ && cp -r dist-electron/electron/licensing dist-electron/ && cp -r dist-electron/electron/auth dist-electron/",
     "dev:electron": "npm run build:electron-main && concurrently \"vite\" \"tsc -p electron/tsconfig.json -w\" \"wait-on tcp:5173 && electron .\"",
     "build:electron": "tsc -b && vite build && npm run build:electron-main && electron-builder",
+    "release:alpha": "export $(grep -v '^#' .env.local | xargs) && npm run build:electron -- --publish always -c.publish.releaseType=draft",
+    "release:beta": "export $(grep -v '^#' .env.local | xargs) && npm run build:electron -- --publish always -c.publish.releaseType=prerelease",
+    "release:stable": "export $(grep -v '^#' .env.local | xargs) && npm run build:electron -- --publish always -c.publish.releaseType=release",
     "lint": "eslint .",
     "preview": "vite preview"
   },
   "main": "dist-electron/main.js",
   "dependencies": {
+    "@supabase/supabase-js": "^2.90.1",
+    "better-sqlite3": "^12.5.0",
+    "dotenv": "^17.2.3",
+    "electron-log": "^5.4.3",
+    "electron-updater": "^6.7.3",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",
+    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^22.10.2",
     "@types/react": "^19.0.2",
     "@types/react-dom": "^19.0.2",

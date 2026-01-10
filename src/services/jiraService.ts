@@ -126,7 +126,8 @@ export class JiraService {
         }
 
         try {
-            console.log('[JiraService] Making IPC request to:', url);
+            const requestStart = Date.now();
+            console.log(`[JiraService] 🌐 Making ${method} request to:`, url);
             // @ts-ignore
             const result = await window.electron.ipcRenderer.jiraApiRequest({
                 url,
@@ -134,8 +135,9 @@ export class JiraService {
                 headers,
                 body: body, // Send raw body object - IPC handler will stringify it
             });
-            
-            console.log('[JiraService] IPC response received:', { success: result.success, status: result.status });
+
+            const requestDuration = Date.now() - requestStart;
+            console.log(`[JiraService] ✅ Response received in ${requestDuration}ms:`, { success: result.success, status: result.status });
             
             if (!result.success) {
                 if (result.error) {

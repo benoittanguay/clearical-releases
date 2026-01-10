@@ -70,6 +70,25 @@ contextBridge.exposeInMainWorld('electron', {
             ipcRenderer.invoke('license-is-valid'),
         licenseHasFeature: (featureName: string) =>
             ipcRenderer.invoke('license-has-feature', featureName),
+        // Subscription (Stripe-based)
+        subscriptionValidate: () =>
+            ipcRenderer.invoke('subscription:validate'),
+        subscriptionGetInfo: () =>
+            ipcRenderer.invoke('subscription:get-info'),
+        subscriptionGetStatus: () =>
+            ipcRenderer.invoke('subscription:get-status'),
+        subscriptionHasFeature: (featureName: string) =>
+            ipcRenderer.invoke('subscription:has-feature', featureName),
+        subscriptionGetTrialInfo: () =>
+            ipcRenderer.invoke('subscription:get-trial-info'),
+        subscriptionCreateCheckout: (plan: string, email: string) =>
+            ipcRenderer.invoke('subscription:create-checkout', plan, email),
+        subscriptionOpenPortal: () =>
+            ipcRenderer.invoke('subscription:open-portal'),
+        subscriptionSubscribe: (email: string, plan: string) =>
+            ipcRenderer.invoke('subscription:subscribe', email, plan),
+        subscriptionCancel: () =>
+            ipcRenderer.invoke('subscription:cancel'),
         // AI features
         suggestAssignment: (request: {
             context: {
@@ -91,5 +110,61 @@ contextBridge.exposeInMainWorld('electron', {
             description?: string;
             historicalAccounts: any[];
         }) => ipcRenderer.invoke('select-tempo-account', request),
+        // Auto-updater operations
+        updater: {
+            checkForUpdates: () => ipcRenderer.invoke('updater:check-for-updates'),
+            getStatus: () => ipcRenderer.invoke('updater:get-status'),
+            downloadUpdate: () => ipcRenderer.invoke('updater:download-update'),
+            quitAndInstall: () => ipcRenderer.invoke('updater:quit-and-install'),
+            configure: (options: {
+                checkOnStartup?: boolean;
+                checkOnStartupDelay?: number;
+                autoDownload?: boolean;
+                allowPrerelease?: boolean;
+            }) => ipcRenderer.invoke('updater:configure', options),
+            onStatusUpdate: (callback: (status: any) => void) => {
+                const subscription = (_event: any, status: any) => callback(status);
+                ipcRenderer.on('update-status', subscription);
+                return () => ipcRenderer.removeListener('update-status', subscription);
+            },
+        },
+        // Database operations
+        db: {
+            // Entries
+            getAllEntries: () => ipcRenderer.invoke('db:get-all-entries'),
+            getEntry: (id: string) => ipcRenderer.invoke('db:get-entry', id),
+            insertEntry: (entry: any) => ipcRenderer.invoke('db:insert-entry', entry),
+            updateEntry: (id: string, updates: any) => ipcRenderer.invoke('db:update-entry', id, updates),
+            deleteEntry: (id: string) => ipcRenderer.invoke('db:delete-entry', id),
+            deleteAllEntries: () => ipcRenderer.invoke('db:delete-all-entries'),
+            // Buckets
+            getAllBuckets: () => ipcRenderer.invoke('db:get-all-buckets'),
+            insertBucket: (bucket: any) => ipcRenderer.invoke('db:insert-bucket', bucket),
+            updateBucket: (id: string, updates: any) => ipcRenderer.invoke('db:update-bucket', id, updates),
+            deleteBucket: (id: string) => ipcRenderer.invoke('db:delete-bucket', id),
+            // Settings
+            getSetting: (key: string) => ipcRenderer.invoke('db:get-setting', key),
+            setSetting: (key: string, value: any) => ipcRenderer.invoke('db:set-setting', key, value),
+            deleteSetting: (key: string) => ipcRenderer.invoke('db:delete-setting', key),
+            getAllSettings: () => ipcRenderer.invoke('db:get-all-settings'),
+            // Jira Issues Cache
+            getAllJiraIssues: () => ipcRenderer.invoke('db:get-all-jira-issues'),
+            getJiraIssuesByProject: (projectKey: string) => ipcRenderer.invoke('db:get-jira-issues-by-project', projectKey),
+            getJiraIssue: (key: string) => ipcRenderer.invoke('db:get-jira-issue', key),
+            upsertJiraIssue: (issue: any) => ipcRenderer.invoke('db:upsert-jira-issue', issue),
+            clearJiraCache: () => ipcRenderer.invoke('db:clear-jira-cache'),
+            // Jira Cache Metadata
+            getJiraCacheMeta: (key: string) => ipcRenderer.invoke('db:get-jira-cache-meta', key),
+            setJiraCacheMeta: (key: string, data: any, query?: string) => ipcRenderer.invoke('db:set-jira-cache-meta', key, data, query),
+            // Crawler State
+            getCrawlerState: (projectKey: string) => ipcRenderer.invoke('db:get-crawler-state', projectKey),
+            setCrawlerState: (projectKey: string, state: any) => ipcRenderer.invoke('db:set-crawler-state', projectKey, state),
+            clearCrawlerState: () => ipcRenderer.invoke('db:clear-crawler-state'),
+            // Database Stats
+            getStats: () => ipcRenderer.invoke('db:get-stats'),
+            // Migration
+            needsMigration: () => ipcRenderer.invoke('db:needs-migration'),
+            migrateFromLocalStorage: (localStorageData: Record<string, string>) => ipcRenderer.invoke('db:migrate-from-localstorage', localStorageData),
+        },
     },
 });

@@ -8,10 +8,13 @@ import { ExportDialog } from './components/ExportDialog';
 import { DeleteButton } from './components/DeleteButton';
 import { JiraIssuesSection } from './components/JiraIssuesSection';
 import { AssignmentPicker } from './components/AssignmentPicker';
-import { DevTools } from './components/DevTools';
 import { FolderTree } from './components/FolderTree';
 import { CreateBucketModal } from './components/CreateBucketModal';
 import { CreateFolderModal } from './components/CreateFolderModal';
+import { CrawlerProgressBar } from './components/CrawlerProgressBar';
+import { OnboardingModal } from './components/OnboardingModal';
+import { IntegrationConfigModal } from './components/IntegrationConfigModal';
+import { UpdateNotification } from './components/UpdateNotification';
 import type { WorkAssignment } from './context/StorageContext';
 import './App.css'
 
@@ -19,15 +22,138 @@ type View = 'chrono' | 'worklog' | 'buckets' | 'settings' | 'worklog-detail';
 
 function App() {
   const { buckets, entries, addEntry, addBucket, removeBucket, renameBucket, createFolder, moveBucket, updateEntry, removeEntry, unlinkJiraIssueFromBucket } = useStorage();
-  const { settings } = useSettings();
+  const { settings, updateSettings } = useSettings();
   const [selectedAssignment, setSelectedAssignment] = useState<WorkAssignment | null>(null);
   const [currentView, setCurrentView] = useState<View>('chrono');
   const [selectedEntry, setSelectedEntry] = useState<string | null>(null);
   const [showExportDialog, setShowExportDialog] = useState(false);
   const [showCreateBucketModal, setShowCreateBucketModal] = useState(false);
   const [showCreateFolderModal, setShowCreateFolderModal] = useState(false);
+  const [migrationComplete, setMigrationComplete] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [showIntegrationModal, setShowIntegrationModal] = useState(false);
 
   const { isRunning, isPaused, elapsed, start: startTimer, stop: stopTimer, pause: pauseTimer, resume: resumeTimer, formatTime } = useTimer();
+
+  // Migration trigger logic - runs once on app startup
+  useEffect(() => {
+    const runMigration = async () => {
+      try {
+        console.log('[App] Checking if migration is needed...');
+        const needsMigrationResult = await window.electron.ipcRenderer.db.needsMigration();
+
+        if (needsMigrationResult.success && needsMigrationResult.needsMigration) {
+          console.log('[App] Migration needed - gathering localStorage data...');
+
+          // Gather all localStorage data
+          const localStorageData: Record<string, string> = {};
+          const keysToMigrate = [
+            'timeportal-buckets',
+            'timeportal-entries',
+            'timeportal-settings',
+            'jira-issues-cache',
+            'jira-crawler-state'
+          ];
+
+          for (const key of keysToMigrate) {
+            const value = localStorage.getItem(key);
+            if (value) {
+              localStorageData[key] = value;
+            }
+          }
+
+          console.log('[App] Migrating data to SQLite database...');
+          const migrationResult = await window.electron.ipcRenderer.db.migrateFromLocalStorage(localStorageData);
+
+          if (migrationResult.success && migrationResult.result) {
+            console.log('[App] Migration successful:', migrationResult.result);
+
+            // Clear localStorage after successful migration
+            keysToMigrate.forEach(key => localStorage.removeItem(key));
+            console.log('[App] localStorage cleared');
+
+            alert(
+              `Migration Complete!\n\n` +
+              `Successfully migrated to SQLite database:\n` +
+              `- ${migrationResult.result.entriesMigrated} time entries\n` +
+              `- ${migrationResult.result.bucketsMigrated} buckets\n` +
+              `- ${migrationResult.result.jiraIssuesMigrated} Jira issues\n` +
+              `- ${migrationResult.result.settingsMigrated} settings\n\n` +
+              `Your data is now stored in a more robust database.`
+            );
+          } else {
+            console.error('[App] Migration failed:', migrationResult.error);
+            alert(
+              `Migration Failed!\n\n` +
+              `There was an error migrating your data: ${migrationResult.error}\n\n` +
+              `Your data in localStorage is preserved. Please report this issue.`
+            );
+          }
+        } else {
+          console.log('[App] No migration needed');
+        }
+
+        setMigrationComplete(true);
+      } catch (error) {
+        console.error('[App] Migration error:', error);
+        setMigrationComplete(true);
+      }
+    };
+
+    runMigration();
+  }, []);
+
+  // Check for onboarding completion and trigger if needed
+  useEffect(() => {
+    if (migrationComplete) {
+      const onboardingComplete = localStorage.getItem('timeportal-onboarding-complete');
+      if (!onboardingComplete) {
+        // Small delay to ensure everything is loaded
+        setTimeout(() => {
+          setShowOnboarding(true);
+        }, 500);
+      }
+
+      // Check if we need to open Jira config after onboarding
+      const shouldOpenJiraConfig = localStorage.getItem('timeportal-open-jira-config');
+      if (shouldOpenJiraConfig === 'true') {
+        localStorage.removeItem('timeportal-open-jira-config');
+        setTimeout(() => {
+          setCurrentView('settings');
+          // Import and open the integration modal
+          setShowIntegrationModal(true);
+        }, 300);
+      }
+    }
+  }, [migrationComplete]);
+
+  // DevTools trigger for resetting onboarding
+  useEffect(() => {
+    // Expose reset function globally for devtools
+    (window as any).__resetOnboarding = () => {
+      localStorage.removeItem('timeportal-onboarding-complete');
+      setShowOnboarding(true);
+      console.log('[DevTools] Onboarding reset triggered');
+    };
+
+    // Keyboard shortcut: Cmd+Shift+O (or Ctrl+Shift+O on Windows/Linux)
+    const handleKeyPress = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'O') {
+        e.preventDefault();
+        localStorage.removeItem('timeportal-onboarding-complete');
+        setShowOnboarding(true);
+        console.log('[DevTools] Onboarding reset triggered via keyboard shortcut');
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyPress);
+
+    // Cleanup
+    return () => {
+      delete (window as any).__resetOnboarding;
+      window.removeEventListener('keydown', handleKeyPress);
+    };
+  }, []);
 
   const handleBulkLogToTempo = async () => {
     if (!settings.tempo?.enabled) {
@@ -59,7 +185,7 @@ function App() {
     } else {
       // Stop timer and save entry - await to ensure AI analyses complete
       const finalActivity = await stopTimer();
-      const newEntry = addEntry({
+      const newEntry = await addEntry({
         startTime: Date.now() - elapsed,
         endTime: Date.now(),
         duration: elapsed,
@@ -116,9 +242,14 @@ function App() {
   }, [buckets, selectedAssignment]);
 
   return (
-    <div className="flex h-screen bg-gray-900 text-white overflow-hidden font-sans w-full">
-      {/* Sidebar */}
-      <nav className="w-20 bg-gray-950 flex flex-col items-center py-4 border-r border-gray-800 z-50 drag-handle">
+    <div className="flex h-screen bg-gray-900 text-white overflow-hidden font-sans w-full flex-col">
+      {/* Global Crawler Progress Bar - Fixed at top */}
+      <CrawlerProgressBar />
+
+      {/* Main app content */}
+      <div className="flex flex-1 overflow-hidden">
+        {/* Sidebar */}
+        <nav className="w-20 bg-gray-950 flex flex-col items-center py-4 border-r border-gray-800 z-50 drag-handle">
         <div className="mb-8 text-green-500 font-bold text-xl tracking-tighter">TP</div>
 
         <div className="flex flex-col gap-6 w-full items-center no-drag">
@@ -138,7 +269,7 @@ function App() {
 
           <button onClick={() => setCurrentView('buckets')} className={`flex flex-col items-center gap-1 group w-full`}>
             <div className={`p-2 rounded-lg transition-colors ${currentView === 'buckets' ? 'bg-gray-800 text-green-400' : 'text-gray-500 group-hover:text-gray-300'}`}>
-              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg>
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="3" width="20" height="18" rx="2"/><path d="M2 12h20"/><path d="M10 7h4"/><path d="M10 16h4"/></svg>
             </div>
             <span className={`text-[10px] font-medium ${currentView === 'buckets' ? 'text-green-400' : 'text-gray-500'}`}>Buckets</span>
           </button>
@@ -310,18 +441,27 @@ function App() {
             </>
           )}
 
-          {currentView === 'worklog-detail' && selectedEntry && (
-            <>
+          {currentView === 'worklog-detail' && selectedEntry && (() => {
+            const entry = entries.find(e => e.id === selectedEntry);
+            if (!entry) {
+              // Entry not found - navigate back to worklog
+              return (
+                <div className="flex items-center justify-center h-full">
+                  <div className="text-gray-400">Loading activity...</div>
+                </div>
+              );
+            }
+            return (
               <HistoryDetail
-                entry={entries.find(e => e.id === selectedEntry)!}
+                entry={entry}
                 buckets={buckets}
                 onBack={() => setCurrentView('worklog')}
                 onUpdate={updateEntry}
                 onNavigateToSettings={() => setCurrentView('settings')}
                 formatTime={formatTime}
               />
-            </>
-          )}
+            );
+          })()}
 
           {currentView === 'worklog' && (
             <>
@@ -537,9 +677,31 @@ function App() {
         availableFolders={buckets.filter(b => b.isFolder)}
       />
 
-      {/* DevTools - Only in development */}
-      {import.meta.env.DEV && <DevTools />}
+      {/* Onboarding Modal */}
+      <OnboardingModal
+        isOpen={showOnboarding}
+        onClose={() => setShowOnboarding(false)}
+      />
 
+      {/* Integration Configuration Modal - for post-onboarding Jira setup */}
+      <IntegrationConfigModal
+        isOpen={showIntegrationModal}
+        onClose={() => setShowIntegrationModal(false)}
+        currentTempoSettings={settings.tempo || { enabled: false, apiToken: '', baseUrl: 'https://api.tempo.io' }}
+        currentJiraSettings={settings.jira || { enabled: false, apiToken: '', baseUrl: '', email: '', selectedProjects: [], autoSync: true, syncInterval: 30, lastSyncTimestamp: 0 }}
+        onSave={(tempoSettings, jiraSettings) => {
+          updateSettings({
+            tempo: tempoSettings,
+            jira: jiraSettings,
+          });
+          setShowIntegrationModal(false);
+        }}
+      />
+
+      {/* Auto-Update Notification - shows when updates are available */}
+      <UpdateNotification showManualCheck={false} />
+
+      </div>
     </div>
   )
 }

@@ -7,18 +7,57 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Dependencies
 node_modules
+
+# Build outputs
 dist
 dist-ssr
-*.local
+dist-electron
+
+# Environment variables and secrets
+.env
+.env.local
+.env.*.local
+.env.production
+.env.development
+.env.test
+
+# Credential files
+.credentials
+secure-credentials.enc
+*.credentials
+*credentials*.json
+*credentials*.yml
+*credentials*.yaml
+
+# Local config files that may contain secrets
+config.local.*
+*-config.local.*
+secrets.*
 
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
 .idea
-.DS_Store
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+
+# Temporary files
+*.local
+*.tmp
+*.temp
+.cache

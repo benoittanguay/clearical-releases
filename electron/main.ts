@@ -4,12 +4,28 @@ import path from 'path';
 import fs from 'fs';
 import os from 'os';
 import { fileURLToPath } from 'url';
+import { config as dotenvConfig } from 'dotenv';
+
+// Load environment variables from .env.local
+const __dirnameTemp = path.dirname(fileURLToPath(import.meta.url));
+const envPath = path.resolve(__dirnameTemp, '../.env.local');
+if (fs.existsSync(envPath)) {
+    dotenvConfig({ path: envPath });
+    console.log('[Main] Loaded environment variables from .env.local');
+} else {
+    console.log('[Main] No .env.local found at:', envPath);
+}
 import { saveEncryptedFile, decryptFile, getEncryptionKey } from './encryption.js';
 import { storeCredential, getCredential, deleteCredential, hasCredential, listCredentialKeys, isSecureStorageAvailable } from './credentialStorage.js';
 import { initializeLicensing } from './licensing/ipcHandlers.js';
+import { initializeSubscription } from './subscription/ipcHandlers.js';
+import { initializeAuth } from './auth/ipcHandlers.js';
 import { AIAssignmentService, ActivityContext, AssignmentSuggestion } from './aiAssignmentService.js';
 import { AIAccountService, TempoAccount, AccountSelection, HistoricalAccountUsage } from './aiAccountService.js';
 import { LinkedJiraIssue } from '../src/types/shared.js';
+import { DatabaseService } from './databaseService.js';
+import { MigrationService } from './migration.js';
+import { updater } from './autoUpdater.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -74,6 +90,30 @@ console.warn = safeConsoleWrapper(originalConsoleWarn);
 
 let win: BrowserWindow | null;
 let tray: Tray | null;
+let currentTimerText: string = '';
+
+/**
+ * Convert regular digits to monospace digits to prevent menu bar jiggling.
+ * Uses Unicode Numeric Forms block (U+1D7F6 - U+1D7FF) which renders as fixed-width.
+ * Falls back to padding with hair spaces if monospace digits aren't supported.
+ */
+function toMonospaceDigits(text: string): string {
+    // Map of regular digits to their monospace equivalents
+    const monoDigits: { [key: string]: string } = {
+        '0': '𝟶',
+        '1': '𝟷',
+        '2': '𝟸',
+        '3': '𝟹',
+        '4': '𝟺',
+        '5': '𝟻',
+        '6': '𝟼',
+        '7': '𝟽',
+        '8': '𝟾',
+        '9': '𝟿'
+    };
+
+    return text.split('').map(char => monoDigits[char] || char).join('');
+}
 
 // Ensure screenshots directory exists
 const SCREENSHOTS_DIR = path.join(app.getPath('userData'), 'screenshots');
@@ -389,8 +429,12 @@ ipcMain.handle('generate-activity-summary', async (event, context: {
         };
     }
 
-    // Path to our Swift helper
-    const helperPath = '/Users/benoittanguay/Documents/Anti/TimePortal/native/screenshot-analyzer/build/screenshot-analyzer';
+    // Path to our Swift helper - relative to app root
+    // In development: native/screenshot-analyzer/build/screenshot-analyzer
+    // In production: bundled with the app in resources
+    const helperPath = app.isPackaged
+        ? path.join(process.resourcesPath, 'screenshot-analyzer')
+        : path.join(app.getAppPath(), 'native', 'screenshot-analyzer', 'build', 'screenshot-analyzer');
 
     // Check if the helper exists
     if (!fs.existsSync(helperPath)) {
@@ -477,7 +521,13 @@ ipcMain.handle('generate-activity-summary', async (event, context: {
     }
 });
 
-// Helper function to generate a text-based summary from context
+/**
+ * Helper function to generate a narrative-focused activity summary
+ *
+ * This function analyzes screenshot descriptions, window titles, and app context
+ * to build a cohesive narrative about what the user worked on. The summary focuses
+ * on the "what" rather than the "how long", creating a work log entry style description.
+ */
 function generateTextBasedSummary(context: {
     screenshotDescriptions: string[];
     windowTitles: string[];
@@ -486,130 +536,208 @@ function generateTextBasedSummary(context: {
     startTime: number;
     endTime: number;
 }): { summary: string; metadata: { detectedActivities: string[]; detectedTechnologies: string[]; confidence: number } } {
-    const durationMinutes = Math.round(context.duration / 1000 / 60);
-    const durationHours = Math.floor(durationMinutes / 60);
-    const remainingMinutes = durationMinutes % 60;
 
-    let durationStr = '';
-    if (durationHours > 0) {
-        durationStr = remainingMinutes > 0
-            ? `${durationHours} hour${durationHours > 1 ? 's' : ''} and ${remainingMinutes} minutes`
-            : `${durationHours} hour${durationHours > 1 ? 's' : ''}`;
-    } else {
-        durationStr = `${durationMinutes} minutes`;
-    }
+    // Combine all available text for comprehensive analysis
+    const allText = [
+        ...context.screenshotDescriptions,
+        ...context.windowTitles,
+        ...context.appNames
+    ].join(' ').toLowerCase();
 
-    // Analyze the descriptions to extract common themes
-    const allText = context.screenshotDescriptions.join(' ').toLowerCase();
-
-    // Detect primary activities
+    // Detect primary activities with more granular patterns
     const activities: string[] = [];
-    if (allText.includes('code') || allText.includes('programming') || allText.includes('development')) {
-        activities.push('software development');
-    }
-    if (allText.includes('debug') || allText.includes('error') || allText.includes('troubleshoot')) {
-        activities.push('debugging and troubleshooting');
-    }
-    if (allText.includes('documentation') || allText.includes('readme') || allText.includes('writing')) {
-        activities.push('documentation');
-    }
-    if (allText.includes('research') || allText.includes('browsing') || allText.includes('reading')) {
-        activities.push('research and reading');
-    }
-    if (allText.includes('design') || allText.includes('ui') || allText.includes('interface')) {
-        activities.push('design work');
-    }
-    if (allText.includes('testing') || allText.includes('test')) {
-        activities.push('testing');
-    }
+    const activityPatterns = [
+        { patterns: ['implement', 'build', 'creat', 'develop', 'add', 'writing', 'coding'], label: 'implementing' },
+        { patterns: ['debug', 'fix', 'error', 'troubleshoot', 'resolv'], label: 'debugging' },
+        { patterns: ['refactor', 'restructur', 'reorganiz', 'clean'], label: 'refactoring' },
+        { patterns: ['test', 'qa', 'quality'], label: 'testing' },
+        { patterns: ['document', 'readme', 'comment', 'annotation'], label: 'documenting' },
+        { patterns: ['design', 'ui', 'ux', 'interface', 'layout'], label: 'designing' },
+        { patterns: ['research', 'investigat', 'explor', 'learn'], label: 'researching' },
+        { patterns: ['review', 'audit', 'inspect', 'analyz'], label: 'reviewing' },
+        { patterns: ['deploy', 'release', 'ship', 'publish'], label: 'deploying' },
+        { patterns: ['configur', 'setup', 'install'], label: 'configuring' }
+    ];
 
-    // Detect technologies
+    activityPatterns.forEach(({ patterns, label }) => {
+        if (patterns.some(p => allText.includes(p)) && !activities.includes(label)) {
+            activities.push(label);
+        }
+    });
+
+    // Enhanced technology detection with common frameworks and tools
     const technologies: string[] = [];
     const techPatterns = [
-        { pattern: /\b(react|reactjs)\b/i, name: 'React' },
+        { pattern: /\b(react|reactjs|react\.js)\b/i, name: 'React' },
         { pattern: /\btypescript\b/i, name: 'TypeScript' },
         { pattern: /\bjavascript\b/i, name: 'JavaScript' },
         { pattern: /\belectron\b/i, name: 'Electron' },
-        { pattern: /\bswift\b/i, name: 'Swift' },
+        { pattern: /\b(swift|swiftui)\b/i, name: 'Swift' },
         { pattern: /\bpython\b/i, name: 'Python' },
-        { pattern: /\bnode(\.js|js)?\b/i, name: 'Node.js' },
-        { pattern: /\bgit\b/i, name: 'Git' },
+        { pattern: /\b(node|nodejs|node\.js)\b/i, name: 'Node.js' },
+        { pattern: /\b(git|github|gitlab)\b/i, name: 'Git' },
         { pattern: /\bdocker\b/i, name: 'Docker' },
         { pattern: /\bjira\b/i, name: 'Jira' },
-        { pattern: /\bapi\b/i, name: 'API' }
+        { pattern: /\b(api|rest|graphql)\b/i, name: 'API' },
+        { pattern: /\b(vue|vuejs)\b/i, name: 'Vue' },
+        { pattern: /\bangular\b/i, name: 'Angular' },
+        { pattern: /\b(postgres|postgresql|mysql|mongodb)\b/i, name: 'Database' },
+        { pattern: /\b(aws|azure|gcp|cloud)\b/i, name: 'Cloud' },
+        { pattern: /\b(kubernetes|k8s)\b/i, name: 'Kubernetes' }
     ];
 
     techPatterns.forEach(({ pattern, name }) => {
-        if (pattern.test(allText) && technologies.length < 3) {
+        if (pattern.test(allText) && !technologies.includes(name)) {
             technologies.push(name);
         }
     });
 
-    // Build the summary
-    const parts: string[] = [];
+    // Extract project name from descriptions and window titles
+    let projectName: string | null = null;
+    const projectPatterns = [
+        /\b(timeportal|time[\s-]?portal)\b/gi,
+        /\bthe\s+([A-Z][a-zA-Z]{3,20})\s+(?:app|application|project|system)\b/g,
+        /\b([A-Z][a-zA-Z]{3,20})\s+(?:application|project)\b/g
+    ];
 
-    // Opening: What was done
-    if (activities.length > 0) {
-        const activityList = activities.length > 2
-            ? activities.slice(0, -1).join(', ') + ', and ' + activities[activities.length - 1]
-            : activities.join(' and ');
-        parts.push(`Spent ${durationStr} on ${activityList}`);
-    } else {
-        parts.push(`Worked for ${durationStr}`);
-    }
-
-    // Apps used
-    if (context.appNames.length > 0) {
-        const uniqueApps = [...new Set(context.appNames)];
-        if (uniqueApps.length === 1) {
-            parts.push(`using ${uniqueApps[0]}`);
-        } else if (uniqueApps.length === 2) {
-            parts.push(`using ${uniqueApps[0]} and ${uniqueApps[1]}`);
-        } else {
-            parts.push(`across multiple applications including ${uniqueApps.slice(0, 3).join(', ')}`);
+    for (const pattern of projectPatterns) {
+        const matches = allText.match(pattern);
+        if (matches && matches.length > 0) {
+            const match = matches[0].trim();
+            if (match.toLowerCase().includes('timeportal') || match.toLowerCase().includes('time portal')) {
+                projectName = 'TimePortal';
+                break;
+            }
+            // Extract project name from pattern captures
+            const cleanMatch = match.replace(/\b(the|app|application|project|system)\b/gi, '').trim();
+            if (cleanMatch.length > 3 && cleanMatch.length < 30) {
+                projectName = cleanMatch.charAt(0).toUpperCase() + cleanMatch.slice(1).toLowerCase();
+                break;
+            }
         }
     }
 
-    // Technologies
-    if (technologies.length > 0) {
-        const techList = technologies.length > 1
-            ? technologies.slice(0, -1).join(', ') + ' and ' + technologies[technologies.length - 1]
-            : technologies[0];
-        parts.push(`Technologies involved included ${techList}`);
-    }
+    // Extract file and directory context from descriptions
+    const fileMatches = allText.match(/\b([a-zA-Z0-9_-]+\.(ts|tsx|js|jsx|py|swift|java|go|rs|cpp|c|h|json|yaml|yml))\b/gi);
+    const dirMatches = allText.match(/\b(electron|native|components|services|handlers|api|utils|lib|src)(?:\s+(?:directory|folder|module))?/gi);
 
-    // Extract key phrases from descriptions for specificity
-    const keyPhrases: string[] = [];
+    const files = fileMatches ? [...new Set(fileMatches.slice(0, 3))].map(f => f.toLowerCase()) : [];
+    const directories = dirMatches ? [...new Set(dirMatches.slice(0, 2))].map(d =>
+        d.replace(/\s+(directory|folder|module)$/i, '').trim()
+    ) : [];
+
+    // Extract specific work context from screenshot descriptions
+    const workContext: string[] = [];
     context.screenshotDescriptions.forEach(desc => {
-        // Look for phrases that indicate specific work
-        const lowerDesc = desc.toLowerCase();
-        if (lowerDesc.includes('implementation') && !keyPhrases.includes('implementation work')) {
-            keyPhrases.push('implementation work');
+        const descLower = desc.toLowerCase();
+
+        // Extract main action/focus from descriptions
+        if (descLower.includes('main process') || descLower.includes('main.ts') || descLower.includes('main.js')) {
+            workContext.push('the Electron main process');
         }
-        if (lowerDesc.includes('refactor') && !keyPhrases.includes('code refactoring')) {
-            keyPhrases.push('code refactoring');
+        if (descLower.includes('build') && (descLower.includes('config') || descLower.includes('output'))) {
+            workContext.push('build configuration');
         }
-        if (lowerDesc.includes('feature') && !keyPhrases.includes('feature development')) {
-            keyPhrases.push('feature development');
+        if (descLower.includes('terminal') && descLower.includes('compil')) {
+            workContext.push('compilation issues');
         }
-        if (lowerDesc.includes('bug') && !keyPhrases.includes('bug fixing')) {
-            keyPhrases.push('bug fixing');
+        if (descLower.includes('problems panel') || descLower.includes('error') || descLower.includes('debug')) {
+            workContext.push('troubleshooting errors');
+        }
+        if (descLower.includes('file explorer') || descLower.includes('file tree')) {
+            workContext.push('project structure');
         }
     });
 
-    if (keyPhrases.length > 0 && keyPhrases.length <= 2) {
-        parts.push(`The session focused on ${keyPhrases.join(' and ')}`);
+    // Build a narrative summary (3-5 sentences)
+    const sentences: string[] = [];
+
+    // Sentence 1: Main activity + project context
+    let firstSentence = '';
+    if (projectName) {
+        if (activities.length > 0) {
+            const primaryActivity = activities[0].charAt(0).toUpperCase() + activities[0].slice(1);
+            firstSentence = `${primaryActivity} the ${projectName} application`;
+        } else {
+            firstSentence = `Worked on the ${projectName} application`;
+        }
+    } else if (activities.length > 0) {
+        const primaryActivity = activities[0].charAt(0).toUpperCase() + activities[0].slice(1);
+        firstSentence = `${primaryActivity} work on a software project`;
+    } else {
+        firstSentence = 'Worked on software development tasks';
     }
 
-    // Calculate confidence based on how much information we have
-    let confidence = 0.5;  // Base confidence
+    // Add technology stack to first sentence
+    if (technologies.length > 0) {
+        const techStack = technologies.slice(0, 2).join(' and ');
+        firstSentence += `, utilizing ${techStack}`;
+    }
+    sentences.push(firstSentence + '.');
+
+    // Sentence 2: Specific focus area (files, directories, features)
+    const focusElements: string[] = [];
+    if (workContext.length > 0) {
+        focusElements.push(...workContext.slice(0, 2));
+    }
+    if (directories.length > 0 && workContext.length === 0) {
+        const dirList = directories.slice(0, 2).join(' and ');
+        focusElements.push(`the ${dirList} ${directories.length === 1 ? 'directory' : 'directories'}`);
+    }
+    if (files.length > 0 && focusElements.length === 0) {
+        const fileList = files.slice(0, 2).join(', ');
+        focusElements.push(fileList);
+    }
+
+    if (focusElements.length > 0) {
+        const focusDescription = focusElements.join(', focusing on ');
+        if (focusDescription.includes('the ') || focusDescription.includes('.ts') || focusDescription.includes('.js')) {
+            sentences.push(`Focused on ${focusDescription}.`);
+        } else {
+            sentences.push(`Worked primarily on ${focusDescription}.`);
+        }
+    }
+
+    // Sentence 3: IDE and tools used
+    const uniqueApps = [...new Set(context.appNames)].filter(app =>
+        app && !['Electron', 'Time-Portal', 'TimePortal', 'Unknown'].includes(app)
+    );
+
+    if (uniqueApps.length > 0) {
+        const toolsDesc = uniqueApps.length === 1
+            ? uniqueApps[0]
+            : `${uniqueApps.slice(0, -1).join(', ')} and ${uniqueApps[uniqueApps.length - 1]}`;
+
+        // Check if debugging or terminal work was mentioned
+        if (allText.includes('debug') || allText.includes('problems panel')) {
+            sentences.push(`Used ${toolsDesc} with debugging tools and error panels for troubleshooting.`);
+        } else if (allText.includes('terminal') || allText.includes('command')) {
+            sentences.push(`Used ${toolsDesc} with integrated terminal for development tasks.`);
+        } else {
+            sentences.push(`Development environment: ${toolsDesc}.`);
+        }
+    }
+
+    // Sentence 4: Additional activities
+    if (activities.length > 1) {
+        const secondaryActivities = activities.slice(1, 3);
+        const activityList = secondaryActivities.join(' and ');
+        sentences.push(`Additional work included ${activityList}.`);
+    }
+
+    // Calculate confidence based on richness of context
+    let confidence = 0.3;  // Base confidence
     if (context.screenshotDescriptions.length > 0) confidence += 0.2;
+    if (context.screenshotDescriptions.length > 2) confidence += 0.1;
     if (activities.length > 0) confidence += 0.15;
     if (technologies.length > 0) confidence += 0.15;
+    if (workContext.length > 0 || files.length > 0) confidence += 0.1;
 
-    // Join all parts into a coherent summary
+    // Join sentences with proper spacing
+    const summary = sentences.join(' ');
+
     return {
-        summary: parts.join('. ') + '.',
+        summary,
         metadata: {
             detectedActivities: activities,
             detectedTechnologies: technologies,
@@ -618,31 +746,42 @@ function generateTextBasedSummary(context: {
     };
 }
 
-// Screenshot Analysis with Apple Vision Framework
+// Screenshot Analysis with TWO-STAGE ARCHITECTURE
+// Stage 1: Vision Framework (Swift) extracts raw data
+// Stage 2: LLM (Claude) generates narrative description
 ipcMain.handle('analyze-screenshot', async (event, imagePath: string, requestId?: string) => {
     console.log('[Main] analyze-screenshot requested for:', imagePath);
+    console.log('[Main] Using two-stage architecture: Vision Framework → Claude LLM');
 
     if (process.platform !== 'darwin') {
         console.log('[Main] analyze-screenshot: Not macOS, skipping Vision Framework analysis');
         return {
             success: false,
             error: 'Vision Framework analysis only available on macOS',
-            description: 'Screenshot captured'  // Fallback description
+            description: 'Screenshot captured',  // Fallback description
+            rawVisionData: null,
+            aiDescription: null
         };
     }
 
-    // Path to our Swift helper - use absolute path based on current project location
-    const helperPath = '/Users/benoittanguay/Documents/Anti/TimePortal/native/screenshot-analyzer/build/screenshot-analyzer';
-    
+    // Path to our Swift helper - relative to app root
+    // In development: native/screenshot-analyzer/build/screenshot-analyzer
+    // In production: bundled with the app in resources
+    const helperPath = app.isPackaged
+        ? path.join(process.resourcesPath, 'screenshot-analyzer')
+        : path.join(app.getAppPath(), 'native', 'screenshot-analyzer', 'build', 'screenshot-analyzer');
+
     console.log('[Main] Looking for Swift helper at:', helperPath);
-    
+
     // Check if the helper exists
     if (!fs.existsSync(helperPath)) {
         console.log('[Main] analyze-screenshot: Swift helper not found at:', helperPath);
         return {
             success: false,
             error: 'Vision Framework helper not built. Run: cd native/screenshot-analyzer && ./build.sh',
-            description: 'Screenshot captured'  // Fallback description
+            description: 'Screenshot captured',  // Fallback description
+            rawVisionData: null,
+            aiDescription: null
         };
     }
 
@@ -652,12 +791,16 @@ ipcMain.handle('analyze-screenshot', async (event, imagePath: string, requestId?
         return {
             success: false,
             error: 'Image file not found',
-            description: 'Screenshot captured'  // Fallback description
+            description: 'Screenshot captured',  // Fallback description
+            rawVisionData: null,
+            aiDescription: null
         };
     }
 
     try {
-        const result = await new Promise<any>((resolve, reject) => {
+        // STAGE 1: Vision Framework Extraction (Swift)
+        console.log('[Main] Stage 1: Running Vision Framework extraction...');
+        const visionResult = await new Promise<any>((resolve, reject) => {
             const child = spawn(helperPath, [], {
                 stdio: ['pipe', 'pipe', 'pipe']
             });
@@ -703,21 +846,45 @@ ipcMain.handle('analyze-screenshot', async (event, imagePath: string, requestId?
             child.stdin.end();
         });
 
-        console.log('[Main] analyze-screenshot success:', {
-            path: imagePath,
-            description: result.description?.substring(0, 100) + '...',
-            confidence: result.confidence,
-            hasText: !!result.detectedText,
-            hasObjects: !!result.objects
+        console.log('[Main] Stage 1 complete - Vision Framework extraction successful');
+        console.log('[Main] Extracted:', {
+            textItems: visionResult.detectedText?.length || 0,
+            objects: visionResult.objects?.length || 0,
+            hasExtraction: !!visionResult.extraction,
+            confidence: visionResult.confidence
         });
 
+        // Prepare raw Vision data for response
+        const rawVisionData = {
+            confidence: visionResult.confidence,
+            detectedText: visionResult.detectedText,
+            objects: visionResult.objects,
+            extraction: visionResult.extraction
+        };
+
+        // STAGE 2: On-device AI narrative (already generated by Swift)
+        // The Swift analyzer now includes intelligent narrative generation using
+        // Apple's NaturalLanguage framework combined with advanced heuristics
+        const aiDescription = visionResult.description || 'Screenshot captured';
+
+        console.log('[Main] Stage 2 complete - On-device AI narrative generated by Swift analyzer');
+        console.log('[Main] Description length:', aiDescription.length, 'characters');
+        console.log('[Main] Using Apple Intelligence (NaturalLanguage framework + heuristics)');
+
+        // Return both raw Vision data AND AI-generated description
         return {
             success: true,
-            description: result.description || 'Screenshot captured',
-            confidence: result.confidence,
-            detectedText: result.detectedText,
-            objects: result.objects,
-            requestId: result.requestId
+            // The description field now contains the on-device AI-generated narrative
+            description: aiDescription,
+            confidence: visionResult.confidence,
+            detectedText: visionResult.detectedText,
+            objects: visionResult.objects,
+            extraction: visionResult.extraction,
+            requestId: visionResult.requestId,
+            // NEW: Separate fields for two-stage architecture
+            rawVisionData: rawVisionData,
+            aiDescription: aiDescription,
+            llmError: null  // No external LLM, so no errors
         };
 
     } catch (error) {
@@ -725,7 +892,9 @@ ipcMain.handle('analyze-screenshot', async (event, imagePath: string, requestId?
         return {
             success: false,
             error: error instanceof Error ? error.message : 'Unknown error',
-            description: 'Screenshot captured'  // Fallback description
+            description: 'Screenshot captured',  // Fallback description
+            rawVisionData: null,
+            aiDescription: null
         };
     }
 });
@@ -778,12 +947,53 @@ ipcMain.handle('open-screen-permission-settings', async () => {
     }
 });
 
+// Open external URL in default browser
+ipcMain.handle('open-external-url', async (_event, url: string) => {
+    console.log('[Main] Opening external URL:', url);
+    try {
+        await shell.openExternal(url);
+        return { success: true };
+    } catch (error) {
+        console.error('[Main] Failed to open external URL:', error);
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+});
+
 ipcMain.on('hide-window', () => {
     toggleWindow();
 });
 
 ipcMain.on('ping', () => {
     console.log('[Main] Received ping from renderer - IPC is working');
+});
+
+// Timer update handler for menu bar display
+ipcMain.on('update-timer-display', (event, timerData: { isRunning: boolean; isPaused: boolean; elapsed: number; formattedTime: string }) => {
+    console.log('[Main] Timer update received:', timerData);
+
+    if (!tray) return;
+
+    if (timerData.isRunning && !timerData.isPaused) {
+        // Timer is actively running - show the elapsed time with monospace digits
+        const monoTime = toMonospaceDigits(timerData.formattedTime);
+        currentTimerText = monoTime;
+        if (process.platform === 'darwin') {
+            tray.setTitle(monoTime);
+        }
+    } else if (timerData.isPaused) {
+        // Timer is paused - show time with pause indicator and monospace digits
+        const monoTime = toMonospaceDigits(timerData.formattedTime);
+        currentTimerText = `⏸ ${monoTime}`;
+        if (process.platform === 'darwin') {
+            tray.setTitle(`⏸ ${monoTime}`);
+        }
+    } else {
+        // Timer is stopped - show just the icon (empty title)
+        currentTimerText = '';
+        if (process.platform === 'darwin') {
+            tray.setTitle('');
+        }
+    }
 });
 
 // Active Window Tracking
@@ -1465,11 +1675,13 @@ ipcMain.handle('select-tempo-account', async (event, request: {
     accounts: TempoAccount[];
     description?: string;
     historicalAccounts: HistoricalAccountUsage[];
+    historicalEntries?: any[];  // NEW: Pass full entries for enhanced learning
 }) => {
     console.log('[Main] select-tempo-account requested');
     console.log('[Main] Issue:', request.issue.key);
     console.log('[Main] Available accounts:', request.accounts.length);
     console.log('[Main] Historical records:', request.historicalAccounts.length);
+    console.log('[Main] Historical entries:', request.historicalEntries?.length || 0);
 
     try {
         // Create AI service
@@ -1481,7 +1693,8 @@ ipcMain.handle('select-tempo-account', async (event, request: {
             request.accounts,
             {
                 description: request.description,
-                historicalAccounts: request.historicalAccounts
+                historicalAccounts: request.historicalAccounts,
+                historicalEntries: request.historicalEntries  // NEW: Pass full entries
             }
         );
 
@@ -1506,18 +1719,420 @@ ipcMain.handle('select-tempo-account', async (event, request: {
     }
 });
 
+// ========================================================================
+// DATABASE IPC HANDLERS
+// ========================================================================
+
+// Entries
+ipcMain.handle('db:get-all-entries', async () => {
+    try {
+        const db = DatabaseService.getInstance();
+        return { success: true, data: db.getAllEntries() };
+    } catch (error) {
+        console.error('[Main] db:get-all-entries failed:', error);
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error', data: [] };
+    }
+});
+
+ipcMain.handle('db:get-entry', async (event, id: string) => {
+    try {
+        const db = DatabaseService.getInstance();
+        return { success: true, data: db.getEntry(id) };
+    } catch (error) {
+        console.error('[Main] db:get-entry failed:', error);
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error', data: null };
+    }
+});
+
+ipcMain.handle('db:insert-entry', async (event, entry: any) => {
+    try {
+        const db = DatabaseService.getInstance();
+        db.insertEntry(entry);
+        return { success: true };
+    } catch (error) {
+        console.error('[Main] db:insert-entry failed:', error);
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+});
+
+ipcMain.handle('db:update-entry', async (event, id: string, updates: any) => {
+    try {
+        const db = DatabaseService.getInstance();
+        db.updateEntry(id, updates);
+        return { success: true };
+    } catch (error) {
+        console.error('[Main] db:update-entry failed:', error);
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+});
+
+ipcMain.handle('db:delete-entry', async (event, id: string) => {
+    try {
+        const db = DatabaseService.getInstance();
+        db.deleteEntry(id);
+        return { success: true };
+    } catch (error) {
+        console.error('[Main] db:delete-entry failed:', error);
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+});
+
+ipcMain.handle('db:delete-all-entries', async () => {
+    try {
+        const db = DatabaseService.getInstance();
+        db.deleteAllEntries();
+        return { success: true };
+    } catch (error) {
+        console.error('[Main] db:delete-all-entries failed:', error);
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+});
+
+// Buckets
+ipcMain.handle('db:get-all-buckets', async () => {
+    try {
+        const db = DatabaseService.getInstance();
+        return { success: true, data: db.getAllBuckets() };
+    } catch (error) {
+        console.error('[Main] db:get-all-buckets failed:', error);
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error', data: [] };
+    }
+});
+
+ipcMain.handle('db:insert-bucket', async (event, bucket: any) => {
+    try {
+        const db = DatabaseService.getInstance();
+        db.insertBucket(bucket);
+        return { success: true };
+    } catch (error) {
+        console.error('[Main] db:insert-bucket failed:', error);
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+});
+
+ipcMain.handle('db:update-bucket', async (event, id: string, updates: any) => {
+    try {
+        const db = DatabaseService.getInstance();
+        db.updateBucket(id, updates);
+        return { success: true };
+    } catch (error) {
+        console.error('[Main] db:update-bucket failed:', error);
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+});
+
+ipcMain.handle('db:delete-bucket', async (event, id: string) => {
+    try {
+        const db = DatabaseService.getInstance();
+        db.deleteBucket(id);
+        return { success: true };
+    } catch (error) {
+        console.error('[Main] db:delete-bucket failed:', error);
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+});
+
+// Settings
+ipcMain.handle('db:get-setting', async (event, key: string) => {
+    try {
+        const db = DatabaseService.getInstance();
+        return { success: true, data: db.getSetting(key) };
+    } catch (error) {
+        console.error('[Main] db:get-setting failed:', error);
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error', data: null };
+    }
+});
+
+ipcMain.handle('db:set-setting', async (event, key: string, value: any) => {
+    try {
+        const db = DatabaseService.getInstance();
+        db.setSetting(key, value);
+        return { success: true };
+    } catch (error) {
+        console.error('[Main] db:set-setting failed:', error);
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+});
+
+ipcMain.handle('db:delete-setting', async (event, key: string) => {
+    try {
+        const db = DatabaseService.getInstance();
+        db.deleteSetting(key);
+        return { success: true };
+    } catch (error) {
+        console.error('[Main] db:delete-setting failed:', error);
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+});
+
+ipcMain.handle('db:get-all-settings', async () => {
+    try {
+        const db = DatabaseService.getInstance();
+        return { success: true, data: db.getAllSettings() };
+    } catch (error) {
+        console.error('[Main] db:get-all-settings failed:', error);
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error', data: {} };
+    }
+});
+
+// Jira Issues Cache
+ipcMain.handle('db:get-all-jira-issues', async () => {
+    try {
+        const db = DatabaseService.getInstance();
+        return { success: true, data: db.getAllJiraIssues() };
+    } catch (error) {
+        console.error('[Main] db:get-all-jira-issues failed:', error);
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error', data: [] };
+    }
+});
+
+ipcMain.handle('db:get-jira-issues-by-project', async (event, projectKey: string) => {
+    try {
+        const db = DatabaseService.getInstance();
+        return { success: true, data: db.getJiraIssuesByProject(projectKey) };
+    } catch (error) {
+        console.error('[Main] db:get-jira-issues-by-project failed:', error);
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error', data: [] };
+    }
+});
+
+ipcMain.handle('db:get-jira-issue', async (event, key: string) => {
+    try {
+        const db = DatabaseService.getInstance();
+        return { success: true, data: db.getJiraIssue(key) };
+    } catch (error) {
+        console.error('[Main] db:get-jira-issue failed:', error);
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error', data: null };
+    }
+});
+
+ipcMain.handle('db:upsert-jira-issue', async (event, issue: any) => {
+    try {
+        const db = DatabaseService.getInstance();
+        db.upsertJiraIssue(issue);
+        return { success: true };
+    } catch (error) {
+        console.error('[Main] db:upsert-jira-issue failed:', error);
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+});
+
+ipcMain.handle('db:clear-jira-cache', async () => {
+    try {
+        const db = DatabaseService.getInstance();
+        db.clearJiraCache();
+        return { success: true };
+    } catch (error) {
+        console.error('[Main] db:clear-jira-cache failed:', error);
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+});
+
+// Jira Cache Metadata
+ipcMain.handle('db:get-jira-cache-meta', async (event, key: string) => {
+    try {
+        const db = DatabaseService.getInstance();
+        return { success: true, data: db.getJiraCacheMeta(key) };
+    } catch (error) {
+        console.error('[Main] db:get-jira-cache-meta failed:', error);
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error', data: null };
+    }
+});
+
+ipcMain.handle('db:set-jira-cache-meta', async (event, key: string, data: any, query?: string) => {
+    try {
+        const db = DatabaseService.getInstance();
+        db.setJiraCacheMeta(key, data, query);
+        return { success: true };
+    } catch (error) {
+        console.error('[Main] db:set-jira-cache-meta failed:', error);
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+});
+
+// ========================================================================
+// AUTO-UPDATE IPC HANDLERS
+// ========================================================================
+
+// Check for updates
+ipcMain.handle('updater:check-for-updates', async () => {
+    console.log('[Main] updater:check-for-updates requested');
+    try {
+        const status = await updater.checkForUpdates();
+        return { success: true, status };
+    } catch (error) {
+        console.error('[Main] updater:check-for-updates failed:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error',
+            status: updater.getStatus()
+        };
+    }
+});
+
+// Get current update status
+ipcMain.handle('updater:get-status', async () => {
+    console.log('[Main] updater:get-status requested');
+    try {
+        const status = updater.getStatus();
+        return { success: true, status };
+    } catch (error) {
+        console.error('[Main] updater:get-status failed:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error',
+            status: {
+                available: false,
+                downloaded: false,
+                downloading: false
+            }
+        };
+    }
+});
+
+// Download update
+ipcMain.handle('updater:download-update', async () => {
+    console.log('[Main] updater:download-update requested');
+    try {
+        await updater.downloadUpdate();
+        return { success: true };
+    } catch (error) {
+        console.error('[Main] updater:download-update failed:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error'
+        };
+    }
+});
+
+// Install update and restart
+ipcMain.handle('updater:quit-and-install', async () => {
+    console.log('[Main] updater:quit-and-install requested');
+    try {
+        updater.quitAndInstall();
+        return { success: true };
+    } catch (error) {
+        console.error('[Main] updater:quit-and-install failed:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error'
+        };
+    }
+});
+
+// Configure updater
+ipcMain.handle('updater:configure', async (event, options: {
+    checkOnStartup?: boolean;
+    checkOnStartupDelay?: number;
+    autoDownload?: boolean;
+    allowPrerelease?: boolean;
+}) => {
+    console.log('[Main] updater:configure requested:', options);
+    try {
+        updater.configure(options);
+        return { success: true };
+    } catch (error) {
+        console.error('[Main] updater:configure failed:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error'
+        };
+    }
+});
+
+// Crawler State
+ipcMain.handle('db:get-crawler-state', async (event, projectKey: string) => {
+    try {
+        const db = DatabaseService.getInstance();
+        return { success: true, data: db.getCrawlerState(projectKey) };
+    } catch (error) {
+        console.error('[Main] db:get-crawler-state failed:', error);
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error', data: null };
+    }
+});
+
+ipcMain.handle('db:set-crawler-state', async (event, projectKey: string, state: any) => {
+    try {
+        const db = DatabaseService.getInstance();
+        db.setCrawlerState(projectKey, state);
+        return { success: true };
+    } catch (error) {
+        console.error('[Main] db:set-crawler-state failed:', error);
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+});
+
+ipcMain.handle('db:clear-crawler-state', async () => {
+    try {
+        const db = DatabaseService.getInstance();
+        db.clearCrawlerState();
+        return { success: true };
+    } catch (error) {
+        console.error('[Main] db:clear-crawler-state failed:', error);
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+});
+
+// Database Stats
+ipcMain.handle('db:get-stats', async () => {
+    try {
+        const db = DatabaseService.getInstance();
+        return { success: true, data: db.getStats() };
+    } catch (error) {
+        console.error('[Main] db:get-stats failed:', error);
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error', data: null };
+    }
+});
+
+// Migration
+ipcMain.handle('db:needs-migration', async () => {
+    try {
+        return { success: true, needsMigration: MigrationService.needsMigration() };
+    } catch (error) {
+        console.error('[Main] db:needs-migration failed:', error);
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error', needsMigration: false };
+    }
+});
+
+ipcMain.handle('db:migrate-from-localstorage', async (event, localStorageData: Record<string, string>) => {
+    try {
+        console.log('[Main] Starting migration from localStorage...');
+        const result = await MigrationService.migrateFromLocalStorage(localStorageData);
+        return { success: true, result };
+    } catch (error) {
+        console.error('[Main] db:migrate-from-localstorage failed:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error',
+            result: {
+                success: false,
+                entriesMigrated: 0,
+                bucketsMigrated: 0,
+                jiraIssuesMigrated: 0,
+                crawlerStatesMigrated: 0,
+                settingsMigrated: 0,
+                errors: [error instanceof Error ? error.message : 'Unknown error']
+            }
+        };
+    }
+});
+
 function createTray() {
     const iconPath = path.join(process.env.VITE_PUBLIC || '', 'tray-icon.png');
     console.log('Tray Icon Path:', iconPath);
     const icon = nativeImage.createFromPath(iconPath);
     tray = new Tray(icon.resize({ width: 16, height: 16 }));
 
+    // Set initial title and tooltip
+    tray.setTitle(''); // Start with empty title (icon only)
     tray.setToolTip('TimePortal');
 
+    // Click toggles the main window
     tray.on('click', () => {
         toggleWindow();
     });
 
+    // Right-click shows context menu
     tray.on('right-click', () => {
         const contextMenu = Menu.buildFromTemplate([
             { label: 'Quit', click: () => app.quit() }
@@ -1556,30 +2171,40 @@ function createWindow() {
     win = new BrowserWindow({
         width: 640,
         height: 450,
-        show: true, // DEBUG
+        show: true,
         frame: false,
         resizable: true,
         minWidth: 400,
         minHeight: 300,
-        movable: true, // DEBUG
-        minimizable: false,
+        movable: true,
+        minimizable: true,  // Enable minimize to dock
         maximizable: false,
         fullscreenable: false,
-        skipTaskbar: false, // DEBUG
+        skipTaskbar: false, // Show in dock
         webPreferences: {
             preload: preloadPath,
             nodeIntegration: false,
             contextIsolation: true,
             webSecurity: true,
-            sandbox: false
+            sandbox: false,
+            devTools: false // Disable devTools
         },
     });
 
     if (!app.isPackaged) {
         win.loadURL('http://127.0.0.1:5173');
-        // win.webContents.openDevTools({ mode: 'detach' }); 
+        // win.webContents.openDevTools({ mode: 'detach' });
     } else {
         win.loadFile(path.join(process.env.DIST || '', 'index.html'));
+    }
+
+    // Handle dock icon click on macOS
+    if (process.platform === 'darwin') {
+        win.on('close', (event) => {
+            // Prevent window from closing completely - just hide it
+            event.preventDefault();
+            win?.hide();
+        });
     }
 
     win.on('blur', () => {
@@ -1595,6 +2220,17 @@ app.on('window-all-closed', () => {
     }
 });
 
+// Handle app activation (macOS)
+// Note: Since dock icon is hidden, this mainly handles edge cases
+app.on('activate', () => {
+    if (win === null) {
+        createWindow();
+        createTray();
+    } else {
+        toggleWindow();
+    }
+});
+
 app.whenReady().then(() => {
     // Initialize encryption key on app startup
     try {
@@ -1605,19 +2241,45 @@ app.whenReady().then(() => {
         console.warn('[Main] Screenshots will be saved unencrypted as fallback');
     }
 
-    // Initialize licensing system
+    // Initialize licensing system (legacy - being replaced by Stripe)
     try {
         initializeLicensing();
-        console.log('[Main] Licensing system initialized');
+        console.log('[Main] Licensing system initialized (legacy)');
     } catch (error) {
         console.error('[Main] Failed to initialize licensing:', error);
         console.warn('[Main] App will run without licensing (development mode)');
     }
 
+    // Initialize auth system (Supabase)
+    try {
+        initializeAuth();
+        console.log('[Main] Auth system initialized (Supabase)');
+    } catch (error) {
+        console.error('[Main] Failed to initialize auth:', error);
+    }
+
+    // Initialize subscription system (Stripe-based)
+    try {
+        initializeSubscription();
+        console.log('[Main] Subscription system initialized (Stripe)');
+    } catch (error) {
+        console.error('[Main] Failed to initialize subscription system:', error);
+        console.warn('[Main] App will run without subscription features');
+    }
+
     createWindow();
     createTray();
 
-    // if (process.platform === 'darwin') {
-    //     app.dock.hide();
-    // }
+    // Initialize auto-updater
+    // Set main window reference so updater can send status updates
+    updater.setMainWindow(win);
+    // Start auto-update checks (with delay)
+    updater.start();
+    console.log('[Main] Auto-updater initialized');
+
+    // Hide dock icon on macOS - app only appears in menu bar
+    if (process.platform === 'darwin') {
+        app.dock.hide();
+        console.log('[Main] Dock icon hidden - app runs from menu bar only');
+    }
 });

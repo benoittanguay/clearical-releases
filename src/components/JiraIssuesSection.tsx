@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useSettings } from '../context/SettingsContext';
-import { JiraCache } from '../services/jiraCache';
+import { useSubscription } from '../context/SubscriptionContext';
+import { useCrawlerProgress } from '../context/CrawlerProgressContext';
+import { useJiraCache } from '../context/JiraCacheContext';
 import type { JiraIssue } from '../services/jiraService';
 
 interface TabData {
@@ -15,10 +17,12 @@ interface JiraIssuesSectionProps {
 
 export function JiraIssuesSection({ onIssueClick }: JiraIssuesSectionProps = {}) {
     const { settings } = useSettings();
+    const { hasFeature } = useSubscription();
+    const { projects, isActive, totalIssuesFound } = useCrawlerProgress();
+    const jiraCache = useJiraCache();
     const [activeTab, setActiveTab] = useState<string>('assigned');
     const [searchQuery, setSearchQuery] = useState('');
     const [tabData, setTabData] = useState<Record<string, TabData>>({});
-    const [jiraCache] = useState(() => new JiraCache());
 
     // Get available tabs - simple, no complex dependencies
     const getAvailableTabs = () => {
@@ -34,21 +38,18 @@ export function JiraIssuesSection({ onIssueClick }: JiraIssuesSectionProps = {})
         return tabs;
     };
 
-    // Initialize cache service when settings change
-    useEffect(() => {
-        const { jira } = settings;
-        if (jira?.enabled && jira?.apiToken && jira?.baseUrl && jira?.email) {
-            jiraCache.initializeService(jira.baseUrl, jira.email, jira.apiToken);
-            if (jira.selectedProjects?.length) {
-                jiraCache.setSelectedProjects(jira.selectedProjects);
-            }
-        }
-    }, [settings.jira, jiraCache]);
+    // Note: JiraCache initialization is handled by JiraCacheContext
+
+    const hasJiraAccess = hasFeature('jira');
 
     // Simple loading function without complex dependencies
     const loadTabData = async (tabKey: string) => {
         if (tabKey === 'search') return;
-        
+
+        if (!hasJiraAccess) {
+            return;
+        }
+
         const { jira } = settings;
         if (!jira?.enabled || !jira?.apiToken || !jira?.baseUrl || !jira?.email) {
             return;
@@ -94,6 +95,10 @@ export function JiraIssuesSection({ onIssueClick }: JiraIssuesSectionProps = {})
 
     // Search function
     const handleSearch = async () => {
+        if (!hasJiraAccess) {
+            return;
+        }
+
         const { jira } = settings;
         if (!jira?.enabled || !jira?.apiToken || !jira?.baseUrl || !jira?.email || !searchQuery.trim()) {
             return;
@@ -144,11 +149,6 @@ export function JiraIssuesSection({ onIssueClick }: JiraIssuesSectionProps = {})
         if (jira?.enabled && jira?.selectedProjects?.length) {
             jiraCache.syncAllData(jira.selectedProjects);
         }
-
-        // Cleanup function
-        return () => {
-            jiraCache.destroy();
-        };
     }, []); // Run only once on mount
 
 
@@ -167,6 +167,36 @@ export function JiraIssuesSection({ onIssueClick }: JiraIssuesSectionProps = {})
 
     const tabs = getAvailableTabs();
     const currentTabData = tabData[activeTab] || { issues: [], loading: false, error: null };
+
+    // If user doesn't have Jira access, show upgrade prompt
+    if (!hasJiraAccess) {
+        return (
+            <div className="mt-6">
+                <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-base font-semibold text-white">Jira Issues</h3>
+                    <span className="text-xs px-2 py-1 bg-yellow-900/30 text-yellow-400 rounded border border-yellow-700">
+                        WORKPLACE ONLY
+                    </span>
+                </div>
+                <div className="bg-gray-800/30 rounded-lg p-6 border border-gray-700">
+                    <div className="text-center">
+                        <svg className="w-12 h-12 mx-auto mb-3 text-yellow-500" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+                        </svg>
+                        <h4 className="text-lg font-semibold text-white mb-2">Jira Integration Locked</h4>
+                        <p className="text-sm text-gray-400 mb-4">
+                            Upgrade to Workplace Plan to connect your Jira account and track time to issues
+                        </p>
+                        <button
+                            className="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm rounded transition-colors"
+                        >
+                            Upgrade to Workplace
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="mt-6">
@@ -197,6 +227,64 @@ export function JiraIssuesSection({ onIssueClick }: JiraIssuesSectionProps = {})
                     Refresh
                 </button>
             </div>
+
+            {/* Crawler Status Section */}
+            {Object.keys(projects).length > 0 && (
+                <div className="mb-3 bg-gray-800/30 rounded-lg p-3 border border-gray-700">
+                    <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                            <svg
+                                className={`w-4 h-4 text-green-400 ${isActive ? 'animate-spin' : ''}`}
+                                style={{ animationDuration: '2s' }}
+                                xmlns="http://www.w3.org/2000/svg"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                            >
+                                <path
+                                    stroke="currentColor"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                                />
+                            </svg>
+                            <span className="text-xs font-medium text-gray-300">
+                                {isActive ? 'Syncing projects...' : 'Projects synced'}
+                            </span>
+                        </div>
+                        <span className="text-xs text-gray-400">
+                            {totalIssuesFound} total issues discovered
+                        </span>
+                    </div>
+
+                    {/* Per-project status */}
+                    <div className="space-y-1.5">
+                        {Object.values(projects).map(project => (
+                            <div key={project.projectKey} className="flex items-center justify-between text-xs">
+                                <span className={`font-medium ${project.isComplete ? 'text-gray-400' : 'text-white'}`}>
+                                    {project.projectKey}
+                                </span>
+                                <div className="flex items-center gap-2">
+                                    <span className="text-gray-500">{project.issuesFound} issues</span>
+                                    {project.isComplete && (
+                                        <svg className="w-4 h-4 text-green-400" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                        </svg>
+                                    )}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    {isActive && (
+                        <div className="mt-2 pt-2 border-t border-gray-700">
+                            <p className="text-xs text-gray-500">
+                                The crawler is discovering all issues in your projects. Check the top bar for detailed progress.
+                            </p>
+                        </div>
+                    )}
+                </div>
+            )}
 
             {/* Tab Navigation */}
             <div className="flex space-x-1 mb-3 overflow-x-auto">

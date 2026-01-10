@@ -8,6 +8,13 @@ export interface TimerState {
     elapsed: number;
 }
 
+interface VisionFrameworkRawData {
+    confidence?: number;
+    detectedText?: string[];
+    objects?: string[];
+    extraction?: any;
+}
+
 interface WindowActivity {
     appName: string;
     windowTitle: string;
@@ -15,6 +22,7 @@ interface WindowActivity {
     duration: number;
     screenshotPaths?: string[];
     screenshotDescriptions?: { [path: string]: string };
+    screenshotVisionData?: { [path: string]: VisionFrameworkRawData };
 }
 
 export function useTimer() {
@@ -30,6 +38,7 @@ export function useTimer() {
     const lastWindowRef = useRef<{ appName: string, windowTitle: string, timestamp: number } | null>(null);
     const currentActivityScreenshots = useRef<string[]>([]);
     const currentActivityScreenshotDescriptions = useRef<{ [path: string]: string }>({});
+    const currentActivityScreenshotVisionData = useRef<{ [path: string]: VisionFrameworkRawData }>({});
     const lastScreenshotTime = useRef<number>(0);
     const pollingActiveRef = useRef<boolean>(false);
     const pendingAnalyses = useRef<Map<string, Promise<void>>>(new Map());
@@ -58,6 +67,20 @@ export function useTimer() {
     useEffect(() => {
         localStorage.setItem('timeportal-timer-state', JSON.stringify({ isRunning, isPaused, startTime, elapsed }));
     }, [isRunning, isPaused, startTime, elapsed]);
+
+    // Send timer updates to main process for menu bar display
+    useEffect(() => {
+        // @ts-ignore
+        if (window.electron && window.electron.ipcRenderer) {
+            // @ts-ignore
+            window.electron.ipcRenderer.send('update-timer-display', {
+                isRunning,
+                isPaused,
+                elapsed,
+                formattedTime: formatTime(elapsed)
+            });
+        }
+    }, [isRunning, isPaused, elapsed]);
 
     useEffect(() => {
         const INTERVAL_SCREENSHOT_TIME = 2 * 60 * 1000; // 2 minutes - screenshot if no window change
@@ -120,14 +143,23 @@ export function useTimer() {
                     const analysisResult = await window.electron.ipcRenderer.analyzeScreenshot(path, `${timestamp}`);
 
                     if (analysisResult?.success && analysisResult.description) {
+                        // Store in refs (always - this ensures data is captured even if activity not in state yet)
                         currentActivityScreenshotDescriptions.current[path] = analysisResult.description;
+                        currentActivityScreenshotVisionData.current[path] = {
+                            confidence: analysisResult.confidence,
+                            detectedText: analysisResult.detectedText,
+                            objects: analysisResult.objects,
+                            extraction: analysisResult.extraction
+                        };
+
                         console.log('[Renderer] ✅ AI analysis completed:', {
                             file: path.split('/').pop(),
                             confidence: analysisResult.confidence,
-                            descriptionLength: analysisResult.description.length
+                            descriptionLength: analysisResult.description.length,
+                            hasExtraction: !!analysisResult.extraction
                         });
 
-                        // Update windowActivity state to trigger re-render with new description
+                        // Also update windowActivity state to trigger re-render (if activity exists in state)
                         setWindowActivity(prev => {
                             // Find if this screenshot belongs to any existing activity
                             return prev.map(activity => {
@@ -138,9 +170,24 @@ export function useTimer() {
                                         existingDescriptions,
                                         { [path]: analysisResult.description }
                                     );
+
+                                    // Store raw Vision Framework data
+                                    const existingVisionData = activity.screenshotVisionData || {};
+                                    const newVisionData: { [path: string]: VisionFrameworkRawData } = Object.assign(
+                                        {},
+                                        existingVisionData,
+                                        { [path]: {
+                                            confidence: analysisResult.confidence,
+                                            detectedText: analysisResult.detectedText,
+                                            objects: analysisResult.objects,
+                                            extraction: analysisResult.extraction
+                                        }}
+                                    );
+
                                     return {
                                         ...activity,
-                                        screenshotDescriptions: newDescriptions
+                                        screenshotDescriptions: newDescriptions,
+                                        screenshotVisionData: newVisionData
                                     };
                                 }
                                 return activity;
@@ -232,18 +279,44 @@ export function useTimer() {
 
                     // Save previous activity if it existed
                     if (lastWindowRef.current) {
+                        // Collect vision data from BOTH the ref AND state
+                        // The ref contains data from analysis that completed before activity was in state
+                        const visionDataForActivity: { [path: string]: VisionFrameworkRawData } = {
+                            ...currentActivityScreenshotVisionData.current
+                        };
+
+                        // Also check state for any vision data that was stored there
+                        setWindowActivity(prev => {
+                            // Find if this activity already exists in state with vision data
+                            const existingActivity = prev.find(act =>
+                                act.appName === lastWindowRef.current!.appName &&
+                                act.windowTitle === lastWindowRef.current!.windowTitle &&
+                                act.timestamp === lastWindowRef.current!.timestamp
+                            );
+
+                            // Merge vision data from state (state takes precedence)
+                            if (existingActivity?.screenshotVisionData) {
+                                Object.assign(visionDataForActivity, existingActivity.screenshotVisionData);
+                            }
+
+                            return prev;
+                        });
+
                         const newActivity = {
                             appName: lastWindowRef.current.appName,
                             windowTitle: lastWindowRef.current.windowTitle,
                             timestamp: lastWindowRef.current.timestamp,
                             duration: 0, // Will be calculated properly on stop
                             screenshotPaths: currentActivityScreenshots.current.length > 0 ? [...currentActivityScreenshots.current] : undefined,
-                            screenshotDescriptions: Object.keys(currentActivityScreenshotDescriptions.current).length > 0 ? { ...currentActivityScreenshotDescriptions.current } : undefined
+                            screenshotDescriptions: Object.keys(currentActivityScreenshotDescriptions.current).length > 0 ? { ...currentActivityScreenshotDescriptions.current } : undefined,
+                            screenshotVisionData: Object.keys(visionDataForActivity).length > 0 ? visionDataForActivity : undefined
                         };
 
                         console.log('[Renderer] Saving previous activity with screenshots:', {
                             app: newActivity.appName,
-                            screenshotCount: currentActivityScreenshots.current.length
+                            screenshotCount: currentActivityScreenshots.current.length,
+                            visionDataCount: Object.keys(visionDataForActivity).length,
+                            descriptionsCount: Object.keys(currentActivityScreenshotDescriptions.current).length
                         });
 
                         setWindowActivity(prev => [...prev, newActivity]);
@@ -252,6 +325,7 @@ export function useTimer() {
                     // Reset for new activity
                     currentActivityScreenshots.current = [];
                     currentActivityScreenshotDescriptions.current = {};
+                    currentActivityScreenshotVisionData.current = {};
                     lastScreenshotTime.current = 0;
 
                     // Update to new window
@@ -322,6 +396,7 @@ export function useTimer() {
         lastWindowRef.current = null;
         currentActivityScreenshots.current = []; // Reset screenshots
         currentActivityScreenshotDescriptions.current = {}; // Reset descriptions
+        currentActivityScreenshotVisionData.current = {}; // Reset vision data
         lastScreenshotTime.current = 0; // Reset screenshot timing
         pendingAnalyses.current.clear(); // Clear any pending analyses from previous session
     };
@@ -442,26 +517,37 @@ export function useTimer() {
                     ...(existingActivity.screenshotDescriptions || {})
                 };
 
+                // Merge vision data - include both ref and state (state takes precedence)
+                const allVisionData = {
+                    ...currentActivityScreenshotVisionData.current,
+                    ...(existingActivity.screenshotVisionData || {})
+                };
+
                 console.log('[Renderer] Merging final activity with state:', {
                     app: existingActivity.appName,
                     screenshotsInState: existingActivity.screenshotPaths?.length || 0,
                     screenshotsInRef: currentActivityScreenshots.current.length,
                     descriptionsInState: Object.keys(existingActivity.screenshotDescriptions || {}).length,
                     descriptionsInRef: Object.keys(currentActivityScreenshotDescriptions.current).length,
-                    totalDescriptions: Object.keys(allDescriptions).length
+                    totalDescriptions: Object.keys(allDescriptions).length,
+                    visionDataInState: Object.keys(existingActivity.screenshotVisionData || {}).length,
+                    visionDataInRef: Object.keys(currentActivityScreenshotVisionData.current).length,
+                    totalVisionData: Object.keys(allVisionData).length
                 });
 
                 activities[existingActivityIndex] = {
                     ...existingActivity,
                     screenshotPaths: allScreenshotPaths.length > 0 ? allScreenshotPaths : undefined,
-                    screenshotDescriptions: Object.keys(allDescriptions).length > 0 ? allDescriptions : undefined
+                    screenshotDescriptions: Object.keys(allDescriptions).length > 0 ? allDescriptions : undefined,
+                    screenshotVisionData: Object.keys(allVisionData).length > 0 ? allVisionData : undefined
                 };
             } else {
                 // Activity not in state yet, add it
                 console.log('[Renderer] Adding final activity from ref:', {
                     app: lastWindowRef.current.appName,
                     screenshots: currentActivityScreenshots.current.length,
-                    descriptions: Object.keys(currentActivityScreenshotDescriptions.current).length
+                    descriptions: Object.keys(currentActivityScreenshotDescriptions.current).length,
+                    visionData: Object.keys(currentActivityScreenshotVisionData.current).length
                 });
 
                 activities.push({
@@ -470,7 +556,8 @@ export function useTimer() {
                     timestamp: lastWindowRef.current.timestamp,
                     duration: 0, // Will be calculated below
                     screenshotPaths: currentActivityScreenshots.current.length > 0 ? [...currentActivityScreenshots.current] : undefined,
-                    screenshotDescriptions: Object.keys(currentActivityScreenshotDescriptions.current).length > 0 ? { ...currentActivityScreenshotDescriptions.current } : undefined
+                    screenshotDescriptions: Object.keys(currentActivityScreenshotDescriptions.current).length > 0 ? { ...currentActivityScreenshotDescriptions.current } : undefined,
+                    screenshotVisionData: Object.keys(currentActivityScreenshotVisionData.current).length > 0 ? { ...currentActivityScreenshotVisionData.current } : undefined
                 });
             }
         }
@@ -540,6 +627,7 @@ export function useTimer() {
         lastWindowRef.current = null;
         currentActivityScreenshots.current = [];
         currentActivityScreenshotDescriptions.current = {};
+        currentActivityScreenshotVisionData.current = {};
         return filteredActivity;
     };
 
@@ -552,6 +640,7 @@ export function useTimer() {
         lastWindowRef.current = null;
         currentActivityScreenshots.current = []; // Reset screenshots
         currentActivityScreenshotDescriptions.current = {}; // Reset descriptions
+        currentActivityScreenshotVisionData.current = {}; // Reset vision data
         lastScreenshotTime.current = 0; // Reset screenshot timing
         pendingAnalyses.current.clear(); // Clear pending analyses
     };

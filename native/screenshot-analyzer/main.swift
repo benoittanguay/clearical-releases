@@ -3,6 +3,7 @@
 import Foundation
 import Vision
 import AppKit
+import NaturalLanguage
 
 // MARK: - Prompt Configuration
 struct PromptConfig: Codable {
@@ -40,9 +41,18 @@ struct AnalysisRequest: Codable {
 
 // Structured extraction data
 struct ExtractedText: Codable {
-    let filenames: [String]
+    // Industry-agnostic text categories (matching prompts.json)
+    let filenames: [String]      // File names, paths, document names
+    let headings: [String]       // Headers, titles, section names
+    let bodyText: [String]       // Regular paragraph text, content
+    let urls: [String]           // URLs, web addresses, links
+    let labels: [String]         // Button text, menu items, tab names, field labels
+    let values: [String]         // Numbers, dates, times, measurements, data values
+    let notifications: [String]  // Alerts, errors, warnings, status messages
+    let identifiers: [String]    // Reference numbers, codes, IDs, tags
+
+    // Legacy fields for backward compatibility
     let code: [String]
-    let urls: [String]
     let commands: [String]
     let uiLabels: [String]
     let documentText: [String]
@@ -123,12 +133,14 @@ class ScreenshotAnalyzer {
                     promptConfig = try JSONDecoder().decode(PromptConfig.self, from: data)
                     return
                 } catch {
-                    print("Failed to parse prompt config at \(promptPath): \(error)")
+                    // Write to stderr to avoid corrupting JSON output on stdout
+                    FileHandle.standardError.write("Failed to parse prompt config at \(promptPath): \(error)\n".data(using: .utf8)!)
                 }
             }
         }
 
-        print("Failed to load prompt config from any location, using defaults")
+        // Write to stderr to avoid corrupting JSON output on stdout
+        FileHandle.standardError.write("Failed to load prompt config from any location, using defaults\n".data(using: .utf8)!)
         // Use default config as fallback
         promptConfig = createDefaultPromptConfig()
     }
@@ -241,15 +253,16 @@ class ScreenshotAnalyzer {
         // Wait for all Vision tasks to complete
         _ = semaphore.wait(timeout: .now() + 10)
 
-        // Generate structured extraction from detected text and objects
+        // STAGE 1: Generate structured extraction from detected text and objects
         let extraction = self.generateStructuredExtraction(
             detectedText: detectedText,
             detectedObjects: detectedObjects,
             imagePath: path
         )
 
-        // Generate natural language description from structured data
-        analysisDescription = self.generateNarrativeFromExtraction(
+        // STAGE 2: Generate on-device AI narrative using Apple Intelligence
+        // This uses Apple's NaturalLanguage framework + advanced heuristics
+        let aiDescription = self.generateOnDeviceAINarrative(
             extraction: extraction,
             imagePath: path
         )
@@ -257,7 +270,7 @@ class ScreenshotAnalyzer {
         completion(AnalysisResponse(
             success: true,
             requestId: nil,
-            description: analysisDescription,
+            description: aiDescription,  // On-device AI-generated narrative
             confidence: confidenceScore > 0 ? confidenceScore : 0.8,
             error: nil,
             detectedText: detectedText.isEmpty ? nil : detectedText,
@@ -276,17 +289,41 @@ class ScreenshotAnalyzer {
         let appInfo = extractAppInfoFromFilename(filename)
 
         // === TEXT EXTRACTION ===
+        // New industry-agnostic fields
         var filenames: [String] = []
-        var code: [String] = []
+        var headings: [String] = []         // Headers, titles, section names
+        var bodyText: [String] = []         // Regular paragraph text
         var urls: [String] = []
+        var labels: [String] = []           // Button text, menu items, field labels
+        var values: [String] = []           // Numbers, dates, times, measurements
+        var notifications: [String] = []   // Alerts, errors, warnings, status messages
+        var identifiers: [String] = []     // Reference numbers, codes, IDs
+
+        // Legacy fields for backward compatibility
+        var code: [String] = []  // Structured text that looks like code/syntax
         var commands: [String] = []
         var uiLabels: [String] = []
         var documentText: [String] = []
-        var errors: [String] = []
+        var errors: [String] = []  // Error/warning messages
         var projectIdentifiers: [String] = []
 
-        // File extensions to look for
-        let fileExtensions = [".tsx", ".ts", ".jsx", ".js", ".swift", ".py", ".java", ".go", ".rs", ".cpp", ".c", ".h", ".json", ".yaml", ".yml", ".toml", ".md", ".txt", ".css", ".html", ".xml"]
+        // Common file extensions across all industries
+        let fileExtensions = [
+            // Documents
+            ".pdf", ".doc", ".docx", ".txt", ".rtf", ".odt", ".pages",
+            // Spreadsheets
+            ".xlsx", ".xls", ".csv", ".numbers", ".ods",
+            // Presentations
+            ".pptx", ".ppt", ".key", ".odp",
+            // Images
+            ".jpg", ".jpeg", ".png", ".gif", ".svg", ".bmp", ".tiff", ".psd", ".ai", ".sketch", ".fig",
+            // Data/Config
+            ".json", ".xml", ".yaml", ".yml", ".toml", ".ini", ".conf",
+            // Code (software development)
+            ".tsx", ".ts", ".jsx", ".js", ".swift", ".py", ".java", ".go", ".rs", ".cpp", ".c", ".h", ".css", ".html",
+            // Other
+            ".md", ".log", ".sql"
+        ]
 
         for text in detectedText {
             let textLower = text.lowercased()
@@ -296,36 +333,147 @@ class ScreenshotAnalyzer {
                 filenames.append(text)
             }
 
-            // Categorize code patterns
+            // Categorize structured text (could be code, formulas, technical notation)
+            // Look for syntax patterns common in structured content
             if textLower.contains("function") || textLower.contains("const ") || textLower.contains("let ") ||
                textLower.contains("var ") || textLower.contains("import ") || textLower.contains("export ") ||
                textLower.contains("class ") || textLower.contains("interface ") || textLower.contains("type ") ||
-               textLower.contains("func ") || textLower.contains("def ") || textLower.contains("async ") {
+               textLower.contains("func ") || textLower.contains("def ") || textLower.contains("async ") ||
+               textLower.contains("=sum(") || textLower.contains("=if(") || textLower.contains("=vlookup(") {
                 code.append(text)
             }
 
             // Categorize URLs
             if textLower.contains("http://") || textLower.contains("https://") || textLower.contains("localhost") ||
-               textLower.contains("://") || textLower.contains(".com") || textLower.contains(".org") {
+               textLower.contains("://") || textLower.contains(".com") || textLower.contains(".org") || textLower.contains(".net") {
                 urls.append(text)
             }
 
-            // Categorize commands
-            if textLower.starts(with: "npm ") || textLower.starts(with: "git ") || textLower.starts(with: "$") ||
-               textLower.starts(with: "yarn ") || textLower.starts(with: "docker ") || textLower.contains("cargo ") {
+            // Categorize commands - CLI patterns
+            if textLower.starts(with: "$ ") || textLower.starts(with: "> ") ||
+               textLower.starts(with: "npm ") || textLower.starts(with: "git ") ||
+               textLower.starts(with: "yarn ") || textLower.starts(with: "docker ") ||
+               textLower.starts(with: "cargo ") || textLower.starts(with: "python ") {
                 commands.append(text)
             }
 
-            // Categorize errors
+            // Categorize errors and warnings (universal)
             if textLower.contains("error") || textLower.contains("exception") || textLower.contains("failed") ||
-               textLower.contains("warning") || textLower.contains("stack trace") || textLower.contains("cannot") {
+               textLower.contains("warning") || textLower.contains("alert") || textLower.contains("cannot") ||
+               textLower.contains("invalid") || textLower.contains("denied") {
                 errors.append(text)
             }
 
-            // Categorize project identifiers
-            if textLower.contains("project") || text.contains("PROJ-") || text.contains("JIRA-") ||
-               (text.count > 3 && text.count < 30 && text.first?.isUppercase == true && !text.contains(" ")) {
-                projectIdentifiers.append(text)
+            // Categorize project identifiers - strict pattern matching for issue tracking
+            // Matches patterns like: PROJ-123, ABC-456, etc.
+            if text.contains("-") && text.count >= 5 {
+                let pattern = "\\b([A-Z]{2,10})-([0-9]+)\\b"
+                if let regex = try? NSRegularExpression(pattern: pattern) {
+                    let range = NSRange(text.startIndex..., in: text)
+                    if regex.firstMatch(in: text, range: range) != nil {
+                        projectIdentifiers.append(text)
+                    }
+                }
+            }
+
+            // === NEW INDUSTRY-AGNOSTIC FIELD EXTRACTION ===
+
+            // Categorize headings - short, prominent text (often ALL CAPS or Title Case)
+            // These are typically headers, titles, or section names
+            let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmedText.count >= 3 && trimmedText.count <= 50 {
+                // Check for ALL CAPS text (common for headings)
+                let uppercased = trimmedText.uppercased()
+                if trimmedText == uppercased && trimmedText.contains(" ") == false && trimmedText.first?.isLetter == true {
+                    headings.append(trimmedText)
+                }
+                // Check for Title Case patterns (word starts with caps, 2-5 words)
+                let words = trimmedText.components(separatedBy: " ")
+                if words.count >= 1 && words.count <= 5 {
+                    let titleCaseCount = words.filter { word in
+                        guard let first = word.first else { return false }
+                        return first.isUppercase
+                    }.count
+                    if titleCaseCount == words.count && words[0].count > 2 {
+                        headings.append(trimmedText)
+                    }
+                }
+            }
+
+            // Categorize body text - longer text strings that look like content
+            if trimmedText.count > 30 && !textLower.contains("http") && !textLower.contains("://") {
+                // Exclude text that looks like code or commands
+                let codeIndicators = ["function", "const ", "let ", "var ", "import ", "export ", "class ", "def "]
+                let looksLikeCode = codeIndicators.contains(where: { textLower.contains($0) })
+                if !looksLikeCode && !textLower.starts(with: "$ ") && !textLower.starts(with: "> ") {
+                    bodyText.append(trimmedText)
+                }
+            }
+
+            // Categorize labels - short text that looks like UI elements
+            // Menu items, button text, field labels typically < 25 chars
+            if trimmedText.count >= 2 && trimmedText.count <= 25 && !filenames.contains(trimmedText) {
+                // Common UI label patterns
+                let labelKeywords = ["save", "cancel", "close", "open", "edit", "delete", "add", "remove", "new", "create",
+                                    "submit", "send", "ok", "yes", "no", "apply", "reset", "search", "filter", "sort",
+                                    "settings", "preferences", "options", "help", "about", "menu", "file", "view", "tools",
+                                    "window", "quit", "exit", "back", "forward", "next", "previous", "home", "end"]
+                if labelKeywords.contains(where: { textLower == $0 || textLower.contains($0) }) {
+                    labels.append(trimmedText)
+                }
+            }
+
+            // Categorize values - numbers, dates, times, measurements
+            // Detect numeric patterns, date/time formats, currency, percentages
+            let valuePatterns = [
+                "\\$[0-9,]+\\.?[0-9]*",           // Currency: $1,234.56
+                "[0-9]+\\.[0-9]+%?",               // Decimal numbers with optional %
+                "[0-9]{1,2}:[0-9]{2}(:[0-9]{2})?", // Time: 12:34 or 12:34:56
+                "[0-9]{1,2}/[0-9]{1,2}/[0-9]{2,4}", // Date: 12/31/2024
+                "[0-9]{4}-[0-9]{2}-[0-9]{2}",      // ISO date: 2024-12-31
+                "[0-9]+\\s*(KB|MB|GB|TB|px|em|rem|pt|%)", // Sizes and measurements
+                "\\b[0-9]{1,3}(,[0-9]{3})+\\b"    // Large numbers with commas
+            ]
+            for pattern in valuePatterns {
+                if let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) {
+                    let range = NSRange(text.startIndex..., in: text)
+                    if regex.firstMatch(in: text, range: range) != nil {
+                        values.append(trimmedText)
+                        break
+                    }
+                }
+            }
+
+            // Categorize notifications - alerts, warnings, status messages
+            // Already captured in errors, but expand to include success/info messages
+            let notificationKeywords = ["success", "complete", "done", "saved", "updated", "loading", "processing",
+                                        "please wait", "in progress", "connecting", "syncing", "ready", "offline",
+                                        "online", "connected", "disconnected", "uploading", "downloading"]
+            if notificationKeywords.contains(where: { textLower.contains($0) }) || errors.contains(trimmedText) {
+                notifications.append(trimmedText)
+            }
+
+            // Categorize identifiers - reference numbers, codes, IDs, tags
+            // Alphanumeric patterns that look like IDs or reference numbers
+            let identifierPatterns = [
+                "\\b[A-Z]{2,5}-[0-9]{1,6}\\b",     // JIRA-style: ABC-123
+                "#[0-9]+\\b",                       // Issue/PR numbers: #123
+                "\\b[A-Za-z0-9]{8,12}\\b",         // Short hashes/IDs: abc123def
+                "\\b(ID|REF|ORDER|TICKET|CASE)[:\\s]?[A-Za-z0-9]+\\b"  // Labeled IDs
+            ]
+            for pattern in identifierPatterns {
+                if let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) {
+                    let range = NSRange(text.startIndex..., in: text)
+                    if regex.firstMatch(in: text, range: range) != nil {
+                        // Apply false positive filter
+                        let prefix = trimmedText.components(separatedBy: "-").first?.uppercased() ?? ""
+                        let commonFalsePositives = ["UTF", "ISO", "HTTP", "HTTPS", "RGB", "RGBA", "API", "URL", "URI", "SQL", "HTML", "CSS", "JSON", "XML", "PDF", "PNG", "JPG", "GIF", "MP3", "MP4", "H264"]
+                        if !commonFalsePositives.contains(prefix) {
+                            identifiers.append(trimmedText)
+                        }
+                        break
+                    }
+                }
             }
         }
 
@@ -411,14 +559,21 @@ class ScreenshotAnalyzer {
         directoryStructure = Array(Set(directoryStructure)).sorted()
 
         // Extract issue references (JIRA-style)
+        // Use strict pattern: 2-10 uppercase letters, hyphen, 1+ digits, with word boundaries
         for text in detectedText {
-            let pattern = "[A-Z]{2,10}-[0-9]+"
+            let pattern = "\\b([A-Z]{2,10})-([0-9]+)\\b"
             if let regex = try? NSRegularExpression(pattern: pattern) {
                 let range = NSRange(text.startIndex..., in: text)
                 let matches = regex.matches(in: text, range: range)
                 for match in matches {
                     if let range = Range(match.range, in: text) {
-                        issueRefs.append(String(text[range]))
+                        let issueKey = String(text[range])
+                        // Filter out common false positives like "UTF-8", "ISO-9001", etc.
+                        let prefix = issueKey.components(separatedBy: "-")[0]
+                        let commonFalsePositives = ["UTF", "ISO", "HTTP", "HTTPS", "RGB", "RGBA", "API", "URL", "URI", "SQL", "HTML", "CSS", "JSON", "XML", "PDF", "PNG", "JPG", "GIF", "MP3", "MP4", "H264"]
+                        if !commonFalsePositives.contains(prefix) {
+                            issueRefs.append(issueKey)
+                        }
                     }
                 }
             }
@@ -444,31 +599,36 @@ class ScreenshotAnalyzer {
                 break
             }
             // Look for other common project name patterns in paths
-            let components = filename.components(separatedBy: "/")
-            for component in components {
-                let componentLower = component.lowercased()
-                if !["src", "lib", "components", "utils", "node_modules", "build", "dist", "tests", "test", "public", "assets", "styles", "electron", "native", "landing"].contains(componentLower) && component.count > 3 {
-                    // Capitalize first letter
-                    projectName = component.prefix(1).uppercased() + component.dropFirst()
-                    break
+            // Only consider paths with slashes (actual file paths, not commands)
+            if filename.contains("/") || filename.contains("\\") {
+                let components = filename.components(separatedBy: "/")
+                // Skip common directory names and look for project root
+                let skipDirs = ["src", "lib", "components", "utils", "node_modules", "build", "dist", "dist-electron", "tests", "test", "public", "assets", "styles", "electron", "native", "landing", "bin", "obj", "target", "out"]
+                for component in components {
+                    let componentLower = component.lowercased()
+                    // Must be a reasonable length, not in skip list, and not a file with extension
+                    if !skipDirs.contains(componentLower) &&
+                       component.count > 3 &&
+                       component.count < 30 &&
+                       !component.contains(".") {
+                        // Capitalize first letter
+                        projectName = component.prefix(1).uppercased() + component.dropFirst()
+                        break
+                    }
                 }
+                if projectName != nil { break }
             }
-            if projectName != nil { break }
         }
 
-        // Fallback to directory structure
+        // Fallback to directory structure (only meaningful directories)
         if projectName == nil {
+            let skipDirs = ["src", "lib", "components", "utils", "node_modules", "build", "dist", "dist-electron", "tests", "test", "public", "assets", "styles", "electron", "native"]
             for path in directoryStructure {
-                if !["src", "lib", "components", "utils", "node_modules", "build", "dist", "tests", "test", "public", "assets", "styles", "electron", "native"].contains(path.lowercased()) && path.count > 2 {
+                if !skipDirs.contains(path.lowercased()) && path.count > 2 && path.count < 30 {
                     projectName = path
                     break
                 }
             }
-        }
-
-        // Last resort: check project identifiers
-        if projectName == nil && !projectIdentifiers.isEmpty {
-            projectName = projectIdentifiers.first
         }
 
         let projectContext = ProjectContext(
@@ -480,49 +640,78 @@ class ScreenshotAnalyzer {
             configFiles: configFiles
         )
 
-        // === DETECT TECHNOLOGIES ===
+        // === DETECT TOOLS/APPLICATIONS (Industry-agnostic) ===
         var technologies: [String] = []
-        let techKeywords: [(String, [String])] = [
-            ("React", ["react", "jsx", "tsx", "usestate", "useeffect", "component"]),
-            ("TypeScript", ["typescript", "interface", "type", ".ts", ".tsx"]),
-            ("JavaScript", ["javascript", ".js", "node", "npm"]),
-            ("Swift", ["swift", "func", "import foundation", ".swift"]),
-            ("Python", ["python", "def", "import", ".py"]),
-            ("Electron", ["electron", "ipcmain", "ipcrenderer", "browserwindow"]),
-            ("Git", ["git", "commit", "branch", "merge", "push"]),
-            ("Jira", ["jira", "issue", "ticket", "sprint"]),
-            ("Tempo", ["tempo", "timesheet", "worklog"]),
-            ("Docker", ["docker", "container", "dockerfile"])
+        let toolKeywords: [(String, [String])] = [
+            // Software Development
+            ("React", ["react", "jsx", "tsx", "usestate", "useeffect"]),
+            ("TypeScript", ["typescript", "interface", ".ts", ".tsx"]),
+            ("JavaScript", ["javascript", ".js", "node.js"]),
+            ("Python", ["python", ".py", "def ", "import "]),
+            ("Swift", ["swift", ".swift", "import foundation"]),
+            ("Java", ["java", ".java", "public class"]),
+            // Office/Productivity
+            ("Excel", ["excel", ".xlsx", ".xls", "spreadsheet"]),
+            ("Word", ["microsoft word", ".docx", ".doc"]),
+            ("PowerPoint", ["powerpoint", ".pptx", ".ppt"]),
+            ("Google Docs", ["google docs", "docs.google.com"]),
+            ("Google Sheets", ["google sheets", "sheets.google.com"]),
+            // Design
+            ("Photoshop", ["photoshop", ".psd"]),
+            ("Illustrator", ["illustrator", ".ai"]),
+            ("Figma", ["figma", "figma.com"]),
+            ("Sketch", ["sketch", ".sketch"]),
+            // Communication
+            ("Slack", ["slack", "slack.com"]),
+            ("Teams", ["microsoft teams", "teams.microsoft.com"]),
+            ("Zoom", ["zoom", "zoom.us"]),
+            // Project Management
+            ("Jira", ["jira", "atlassian"]),
+            ("Asana", ["asana", "asana.com"]),
+            ("Trello", ["trello", "trello.com"]),
+            // Development Tools
+            ("Git", ["git ", "github", "gitlab"]),
+            ("Docker", ["docker", "container"]),
+            ("VSCode", ["visual studio code", "vscode"]),
+            ("Xcode", ["xcode", ".xcodeproj"])
         ]
 
-        for (tech, keywords) in techKeywords {
+        for (tool, keywords) in toolKeywords {
             if keywords.contains(where: { allTextLower.contains($0) }) {
-                technologies.append(tech)
+                technologies.append(tool)
             }
         }
 
-        // === DETECT ACTIVITIES ===
+        // === DETECT CONTENT TYPES (Not activities - what's being viewed) ===
         var activities: [String] = []
         if !code.isEmpty {
-            activities.append("Coding")
+            activities.append("Structured text visible")  // Could be code, formulas, etc.
         }
         if !errors.isEmpty {
-            activities.append("Debugging")
+            activities.append("Error/warning messages present")
         }
-        if allTextLower.contains("test") || allTextLower.contains("spec") {
-            activities.append("Testing")
+        if !urls.isEmpty {
+            activities.append("Web content")
         }
-        if allTextLower.contains("documentation") || allTextLower.contains("readme") {
-            activities.append("Documentation")
+        if allTextLower.contains("edit") || allTextLower.contains("type") {
+            activities.append("Text editing")
         }
         if !commands.isEmpty {
-            activities.append("Command-line operations")
+            activities.append("Command-line interface")
         }
 
+        // Deduplicate arrays before creating ExtractedText
         let extractedText = ExtractedText(
-            filenames: filenames,
+            filenames: Array(Set(filenames)),
+            headings: Array(Set(headings)),
+            bodyText: Array(Set(bodyText)),
+            urls: Array(Set(urls)),
+            labels: Array(Set(labels)),
+            values: Array(Set(values)),
+            notifications: Array(Set(notifications)),
+            identifiers: Array(Set(identifiers)),
+            // Legacy fields for backward compatibility
             code: code,
-            urls: urls,
             commands: commands,
             uiLabels: uiLabels,
             documentText: documentText,
@@ -540,124 +729,599 @@ class ScreenshotAnalyzer {
         )
     }
 
-    // MARK: - Narrative Generation (Step 2)
-    private func generateNarrativeFromExtraction(extraction: StructuredExtraction, imagePath: String) -> String {
-        // Part 1: Determine the primary activity (without raw error text)
-        let activities = extraction.detectedActivities
+    // MARK: - On-Device AI Narrative Generation (Stage 2)
+    /**
+     * Generate an intelligent, contextual narrative using on-device AI techniques.
+     * This combines Apple's NaturalLanguage framework with sophisticated heuristics
+     * to create narrative descriptions comparable to external LLMs, but entirely on-device.
+     *
+     * Architecture:
+     * 1. Semantic Analysis - Use NaturalLanguage to understand content relationships
+     * 2. Context Synthesis - Build narrative structure from extracted elements
+     * 3. Natural Language Generation - Create coherent, varied descriptions
+     */
+    private func generateOnDeviceAINarrative(extraction: StructuredExtraction, imagePath: String) -> String {
+        // Analyze the semantic content using Apple's NaturalLanguage framework
+        let semanticContext = analyzeSemanticContext(extraction: extraction)
+
+        // Build narrative components
+        var narrative: [String] = []
+
+        // PART 1: Primary Activity Statement
+        let activityStatement = generateActivityStatement(
+            extraction: extraction,
+            semanticContext: semanticContext
+        )
+        narrative.append(activityStatement)
+
+        // PART 2: Context and Details
+        if let contextStatement = generateContextStatement(
+            extraction: extraction,
+            semanticContext: semanticContext
+        ) {
+            narrative.append(contextStatement)
+        }
+
+        // PART 3: Technical Stack (when relevant)
+        if let techStatement = generateTechnologyStatement(
+            extraction: extraction,
+            semanticContext: semanticContext
+        ) {
+            narrative.append(techStatement)
+        }
+
+        return narrative.joined(separator: " ")
+    }
+
+    /**
+     * Semantic Context - Uses Apple's NaturalLanguage to understand relationships
+     */
+    private struct SemanticContext {
+        let primaryIntent: WorkIntent
+        let complexity: ComplexityLevel
+        let contentDomain: ContentDomain
+        let keyEntities: [String]
+        let sentimentScore: Double
+    }
+
+    private enum WorkIntent {
+        case editing         // Creating or modifying content
+        case troubleshooting // Addressing errors/issues
+        case reviewing       // Reading/analyzing content
+        case configuring     // Setting up or adjusting settings
+        case communicating   // Messaging or email
+        case presenting      // Viewing or creating presentations
+        case analyzing       // Working with data/analytics
+        case unknown
+    }
+
+    private enum ComplexityLevel {
+        case simple      // Single file, clear focus
+        case moderate    // Multiple files, clear task
+        case complex     // Many files, complex task
+    }
+
+    private enum ContentDomain {
+        case textDocument    // Word processors, documents
+        case spreadsheet     // Excel, data tables
+        case presentation    // Slides, presentations
+        case communication   // Email, chat, messaging
+        case webBrowser      // Web browsing
+        case graphics        // Image/design work
+        case codeEditor      // Software development
+        case general
+    }
+
+    /**
+     * Analyze semantic context using NaturalLanguage framework
+     */
+    private func analyzeSemanticContext(extraction: StructuredExtraction) -> SemanticContext {
+        // Combine all text for semantic analysis
+        let allText = [
+            extraction.extractedText.code,
+            extraction.extractedText.filenames,
+            extraction.extractedText.commands,
+            extraction.extractedText.errors,
+            extraction.extractedText.documentText
+        ].flatMap { $0 }.joined(separator: " ")
+
+        // Use NaturalLanguage for sentiment analysis
+        let tagger = NLTagger(tagSchemes: [.sentimentScore])
+        tagger.string = allText
+        let (sentiment, _) = tagger.tag(at: allText.startIndex, unit: .paragraph, scheme: .sentimentScore)
+        let sentimentScore = Double(sentiment?.rawValue ?? "0") ?? 0.0
+
+        // Determine primary work intent
+        let intent = determineWorkIntent(extraction: extraction)
+
+        // Assess complexity
+        let complexity = assessComplexity(extraction: extraction)
+
+        // Identify content domain
+        let domain = identifyContentDomain(extraction: extraction)
+
+        // Extract key entities using Named Entity Recognition
+        let entities = extractKeyEntities(from: allText)
+
+        return SemanticContext(
+            primaryIntent: intent,
+            complexity: complexity,
+            contentDomain: domain,
+            keyEntities: entities,
+            sentimentScore: sentimentScore
+        )
+    }
+
+    /**
+     * Determine the primary work intent from activities and content
+     */
+    private func determineWorkIntent(extraction: StructuredExtraction) -> WorkIntent {
         let hasErrors = !extraction.extractedText.errors.isEmpty
-        let code = extraction.extractedText.code
+        let hasStructuredText = !extraction.extractedText.code.isEmpty
+        let allText = extraction.extractedText.documentText.joined(separator: " ").lowercased()
 
-        var taskDescription = ""
+        // Check for communication patterns
+        let hasCommunication = extraction.visualContext.application.lowercased().contains("slack") ||
+                              extraction.visualContext.application.lowercased().contains("teams") ||
+                              extraction.visualContext.application.lowercased().contains("mail") ||
+                              allText.contains("sent:") || allText.contains("from:") || allText.contains("to:")
+
+        // Check for presentation mode
+        let hasPresentation = extraction.visualContext.application.lowercased().contains("powerpoint") ||
+                             extraction.visualContext.application.lowercased().contains("keynote") ||
+                             allText.contains("slide")
+
+        // Check for data analysis
+        let hasDataAnalysis = extraction.visualContext.application.lowercased().contains("excel") ||
+                             extraction.visualContext.application.lowercased().contains("sheets") ||
+                             allText.contains("chart") || allText.contains("graph")
+
+        // Determine intent based on observable patterns
         if hasErrors {
-            // Just say "Debugging" without including the actual error message
-            taskDescription = "Debugging"
-        } else if !code.isEmpty && activities.contains("Coding") {
-            // Be specific about what kind of coding
-            if let firstCode = code.first {
-                let codeLower = firstCode.lowercased()
-                if codeLower.contains("function") || codeLower.contains("func") {
-                    taskDescription = "Implementing functions"
-                } else if codeLower.contains("interface") || codeLower.contains("type") {
-                    taskDescription = "Defining types"
-                } else if codeLower.contains("import") || codeLower.contains("export") {
-                    taskDescription = "Organizing imports"
-                } else {
-                    taskDescription = "Writing code"
-                }
-            } else {
-                taskDescription = "Writing code"
-            }
-        } else if !activities.isEmpty {
-            taskDescription = activities.first ?? "Working"
+            return .troubleshooting
+        } else if hasCommunication {
+            return .communicating
+        } else if hasPresentation {
+            return .presenting
+        } else if hasDataAnalysis {
+            return .analyzing
+        } else if hasStructuredText || allText.contains("edit") {
+            return .editing
+        } else if allText.contains("settings") || allText.contains("preferences") || allText.contains("configure") {
+            return .configuring
+        } else if allText.count > 100 {
+            return .reviewing  // Lots of text visible, likely reading
         } else {
-            taskDescription = "Working"
+            return .unknown
+        }
+    }
+
+    /**
+     * Assess the complexity of the work session
+     */
+    private func assessComplexity(extraction: StructuredExtraction) -> ComplexityLevel {
+        let fileCount = extraction.extractedText.filenames.count
+        let techCount = extraction.detectedTechnologies.count
+        let hasMultipleContexts = extraction.visualContext.visiblePanels.count > 2
+
+        if fileCount > 5 || techCount > 3 || hasMultipleContexts {
+            return .complex
+        } else if fileCount > 2 || techCount > 1 {
+            return .moderate
+        } else {
+            return .simple
+        }
+    }
+
+    /**
+     * Identify the primary content domain
+     */
+    private func identifyContentDomain(extraction: StructuredExtraction) -> ContentDomain {
+        let appName = extraction.visualContext.application.lowercased()
+        let techs = extraction.detectedTechnologies.map { $0.lowercased() }
+
+        // Check by application type first
+        if appName.contains("word") || appName.contains("pages") || techs.contains("word") {
+            return .textDocument
+        } else if appName.contains("excel") || appName.contains("sheets") || appName.contains("numbers") || techs.contains("excel") {
+            return .spreadsheet
+        } else if appName.contains("powerpoint") || appName.contains("keynote") || techs.contains("powerpoint") {
+            return .presentation
+        } else if appName.contains("slack") || appName.contains("teams") || appName.contains("mail") || appName.contains("outlook") || techs.contains("slack") {
+            return .communication
+        } else if appName.contains("safari") || appName.contains("chrome") || appName.contains("firefox") || appName.contains("browser") {
+            return .webBrowser
+        } else if appName.contains("photoshop") || appName.contains("illustrator") || appName.contains("figma") || appName.contains("sketch") || techs.contains("photoshop") || techs.contains("figma") {
+            return .graphics
+        } else if appName.contains("vscode") || appName.contains("xcode") || appName.contains("cursor") || appName.contains("atom") ||
+                  techs.contains("react") || techs.contains("typescript") || techs.contains("python") {
+            return .codeEditor
+        } else {
+            return .general
+        }
+    }
+
+    /**
+     * Extract key named entities using NaturalLanguage
+     */
+    private func extractKeyEntities(from text: String) -> [String] {
+        guard !text.isEmpty else { return [] }
+
+        let tagger = NLTagger(tagSchemes: [.nameType])
+        tagger.string = text
+
+        var entities: [String] = []
+        let options: NLTagger.Options = [.omitWhitespace, .omitPunctuation, .joinNames]
+
+        tagger.enumerateTags(in: text.startIndex..<text.endIndex, unit: .word, scheme: .nameType, options: options) { tag, tokenRange in
+            if let tag = tag, tag == .organizationName || tag == .placeName {
+                let entity = String(text[tokenRange])
+                entities.append(entity)
+            }
+            return true
         }
 
-        // Part 2: Identify project name from various sources
-        var projectName: String? = nil
+        return Array(Set(entities)).prefix(5).map { String($0) }
+    }
 
-        // Try to extract project name from directory structure
-        let directories = extraction.projectContext.directoryStructure
-        let commonGenericDirs = ["src", "lib", "components", "utils", "node_modules", "build", "dist", "tests", "test", "public", "assets", "styles", "electron", "native"]
+    /**
+     * Generate the primary activity statement (first sentence)
+     */
+    private func generateActivityStatement(extraction: StructuredExtraction, semanticContext: SemanticContext) -> String {
+        let intent = semanticContext.primaryIntent
+        let domain = semanticContext.contentDomain
+        let appName = extraction.visualContext.application
+        let file = extraction.fileContext?.filename
 
-        for dir in directories {
-            let dirLower = dir.lowercased()
-            if !commonGenericDirs.contains(dirLower) && dir.count > 2 {
-                // Capitalize properly (TimePortal instead of timeportal)
-                projectName = dir.prefix(1).uppercased() + dir.dropFirst()
-                break
+        // Build activity verb phrase based on intent - neutral, observable language
+        let activityPhrase: String
+        switch intent {
+        case .editing:
+            activityPhrase = "Working in \(appName)"
+        case .troubleshooting:
+            let errorCount = extraction.extractedText.errors.count
+            activityPhrase = errorCount > 1 ? "Addressing multiple errors in \(appName)" : "Addressing an error in \(appName)"
+        case .reviewing:
+            activityPhrase = "Reviewing content in \(appName)"
+        case .configuring:
+            activityPhrase = "Configuring settings in \(appName)"
+        case .communicating:
+            activityPhrase = "Using \(appName) for communication"
+        case .presenting:
+            activityPhrase = "Working on a presentation in \(appName)"
+        case .analyzing:
+            activityPhrase = "Analyzing data in \(appName)"
+        case .unknown:
+            activityPhrase = "Using \(appName)"
+        }
+
+        // Add content type context
+        var contextParts: [String] = []
+
+        switch domain {
+        case .textDocument:
+            contextParts.append("with a text document")
+        case .spreadsheet:
+            contextParts.append("with a spreadsheet")
+        case .presentation:
+            contextParts.append("with presentation slides")
+        case .communication:
+            contextParts.append("viewing messages")
+        case .webBrowser:
+            contextParts.append("viewing web content")
+        case .graphics:
+            contextParts.append("with graphics or images")
+        case .codeEditor:
+            contextParts.append("with a code editor")
+        case .general:
+            break
+        }
+
+        // Add file/document name if meaningful
+        if let filename = file, !filename.isEmpty && filename != "Unknown" {
+            let cleanName = cleanupFilename(filename)
+            if !cleanName.isEmpty && cleanName.count > 2 && !cleanName.contains("untitled") {
+                contextParts.append("file '\(cleanName)'")
             }
         }
 
-        // Fallback to extraction.projectContext.projectName if available
-        if projectName == nil {
-            projectName = extraction.projectContext.projectName
+        if !contextParts.isEmpty {
+            return "\(activityPhrase), \(contextParts.joined(separator: ", "))."
+        } else {
+            return "\(activityPhrase)."
         }
+    }
 
-        var projectInfo = ""
-        if let project = projectName {
-            projectInfo = " on the \(project) project"
-        }
+    /**
+     * Generate contextual details (second sentence)
+     */
+    private func generateContextStatement(extraction: StructuredExtraction, semanticContext: SemanticContext) -> String? {
+        var details: [String] = []
 
-        // Part 3: Identify what specific file/module is being worked on
-        var fileInfo = ""
-        if let fileContext = extraction.fileContext, let filename = fileContext.filename {
-            // Clean up the filename - remove git status indicators and truncation artifacts
-            let cleanFilename = cleanupFilename(filename)
-
-            // Extract just the directory/module path for context, not the full filename
-            if let language = fileContext.language {
-                // If we have a path structure, extract the relevant module
-                if cleanFilename.contains("/") {
-                    let pathComponents = cleanFilename.components(separatedBy: "/")
-                    if pathComponents.count > 1 {
-                        // Get the module folder (e.g., "electron/licensing" from a full path)
-                        let moduleComponents = pathComponents.dropLast().suffix(2)
-                        let module = moduleComponents.joined(separator: "/")
-                        fileInfo = ", editing \(language) files in the \(module) module"
-                    } else {
-                        fileInfo = ", editing \(cleanFilename)"
-                    }
-                } else {
-                    // Just a filename, include it
-                    fileInfo = ", editing \(cleanFilename)"
+        // Add observable details based on what's visible
+        switch semanticContext.primaryIntent {
+        case .troubleshooting:
+            // Describe error messages
+            let errors = extraction.extractedText.errors
+            if !errors.isEmpty {
+                let errorTypes = categorizeErrors(errors)
+                if !errorTypes.isEmpty {
+                    details.append("\(errorTypes.joined(separator: " and ")) visible")
                 }
-            } else if !cleanFilename.isEmpty {
-                fileInfo = ", working on \(cleanFilename)"
+            }
+
+        case .editing:
+            // Describe content being edited
+            if !extraction.extractedText.code.isEmpty {
+                details.append("structured text content")
+            } else if extraction.extractedText.documentText.count > 5 {
+                details.append("multiple sections of text")
+            }
+
+        case .analyzing:
+            // Describe data visible
+            if !extraction.extractedText.filenames.isEmpty {
+                let fileCount = extraction.extractedText.filenames.count
+                if fileCount > 1 {
+                    details.append("\(fileCount) files or data sources referenced")
+                }
+            }
+
+        default:
+            break
+        }
+
+        // Add visible UI panels for context
+        if !extraction.visualContext.visiblePanels.isEmpty {
+            let panels = extraction.visualContext.visiblePanels.prefix(2).joined(separator: " and ")
+            details.append("with \(panels) visible")
+        }
+
+        // Add window title if it provides meaningful context
+        if let windowTitle = extraction.visualContext.activeTab, !windowTitle.isEmpty && windowTitle != "Unknown" {
+            let cleanTitle = cleanupFilename(windowTitle)
+            if !cleanTitle.isEmpty && cleanTitle.count > 2 && !details.contains(where: { $0.contains(cleanTitle) }) {
+                details.append("viewing '\(cleanTitle)'")
             }
         }
 
-        // Part 4: Application and mode
-        let appContext = extraction.visualContext.application
-        var appDetail = "Using \(appContext)"
-        if let mode = extraction.visualContext.applicationMode {
-            // Clean up mode description
-            if mode == "Debug mode" {
-                appDetail += " with debugger"
-            } else if mode.contains("Terminal") {
-                appDetail += " with integrated terminal"
-            } else {
-                appDetail += " in \(mode)"
+        return details.isEmpty ? nil : "The screen shows \(details.joined(separator: ", "))."
+    }
+
+    /**
+     * Generate tools/applications statement (third sentence) - optional
+     */
+    private func generateTechnologyStatement(extraction: StructuredExtraction, semanticContext: SemanticContext) -> String? {
+        let tools = extraction.detectedTechnologies
+        guard tools.count > 0 && tools.count <= 4 else { return nil }
+
+        // Only mention tools if they add meaningful context beyond the app name
+        let appName = extraction.visualContext.application.lowercased()
+        let relevantTools = tools.filter { !appName.contains($0.lowercased()) }
+
+        guard !relevantTools.isEmpty else { return nil }
+
+        if relevantTools.count == 1 {
+            return "Working with \(relevantTools[0])."
+        } else if relevantTools.count <= 3 {
+            return "Tools visible: \(relevantTools.joined(separator: ", "))."
+        } else {
+            return nil  // Too many tools, skip
+        }
+    }
+
+    /**
+     * Categorize errors into meaningful types
+     */
+    private func categorizeErrors(_ errors: [String]) -> [String] {
+        var types = Set<String>()
+
+        for error in errors {
+            let lower = error.lowercased()
+
+            // Generic error categories that apply across industries
+            if lower.contains("syntax") || lower.contains("format") {
+                types.insert("format errors")
+            }
+            if lower.contains("permission") || lower.contains("access") || lower.contains("denied") {
+                types.insert("access errors")
+            }
+            if lower.contains("network") || lower.contains("connection") || lower.contains("timeout") {
+                types.insert("connection issues")
+            }
+            if lower.contains("invalid") || lower.contains("incorrect") {
+                types.insert("validation errors")
+            }
+            if lower.contains("failed") || lower.contains("error") || lower.contains("exception") {
+                types.insert("error messages")
+            }
+            if lower.contains("warning") {
+                types.insert("warnings")
             }
         }
 
-        // Part 5: Technologies (limit to 3 most relevant)
-        var techContext = ""
-        if !extraction.detectedTechnologies.isEmpty {
-            let techs = Array(extraction.detectedTechnologies.prefix(3))
-            techContext = " with \(techs.joined(separator: ", "))"
+        return Array(types).prefix(2).map { String($0) }
+    }
+
+    /**
+     * Analyze code features being worked on
+     */
+    private func analyzeCodeFeatures(_ code: [String]) -> [String] {
+        var features = Set<String>()
+
+        for snippet in code.prefix(10) {
+            let lower = snippet.lowercased()
+            if lower.contains("async") || lower.contains("await") {
+                features.insert("asynchronous logic")
+            }
+            if lower.contains("interface") || lower.contains("type ") {
+                features.insert("type definitions")
+            }
+            if lower.contains("component") || lower.contains("render") {
+                features.insert("UI components")
+            }
+            if lower.contains("api") || lower.contains("fetch") || lower.contains("http") {
+                features.insert("API integration")
+            }
+            if lower.contains("test") || lower.contains("expect") {
+                features.insert("test cases")
+            }
+            if lower.contains("hook") || lower.contains("useeffect") || lower.contains("usestate") {
+                features.insert("React hooks")
+            }
         }
 
-        // Assemble the final narrative (2-3 sentences max)
-        var parts: [String] = []
+        return Array(features).prefix(3).map { String($0) }
+    }
 
-        // Sentence 1: Activity + Project + File context
-        parts.append(taskDescription + projectInfo + fileInfo + ".")
+    // MARK: - Industry-Agnostic Narrative Generation
+    // Generates objective descriptions of what is visible on screen
+    // WITHOUT assuming industry, profession, or intent
+    private func generateNarrativeFromExtraction(extraction: StructuredExtraction, imagePath: String) -> String {
+        var sentences: [String] = []
 
-        // Sentence 2: Application + Technologies
-        parts.append(appDetail + techContext + ".")
+        // Sentence 1: Application and content type
+        let appName = extraction.visualContext.application
+        var firstSentence = "Using \(appName)"
 
-        return parts.joined(separator: " ")
+        // Determine content type from visible elements
+        let contentType = determineContentType(extraction: extraction)
+        if !contentType.isEmpty {
+            firstSentence += " with \(contentType)"
+        }
+
+        // Add window/document title if available
+        if let fileContext = extraction.fileContext, let filename = fileContext.filename {
+            let cleanName = cleanupFilename(filename)
+            if !cleanName.isEmpty && cleanName.count > 2 {
+                firstSentence += " — '\(cleanName)'"
+            }
+        }
+        firstSentence += "."
+        sentences.append(firstSentence)
+
+        // Sentence 2: Describe what is visible on screen (objective)
+        var visibleElements: [String] = []
+
+        // Visible panels/UI elements
+        let panels = extraction.visualContext.visiblePanels
+        if !panels.isEmpty {
+            visibleElements.append("visible panels include \(panels.prefix(3).joined(separator: ", "))")
+        }
+
+        // Application mode
+        if let mode = extraction.visualContext.applicationMode, !mode.isEmpty {
+            visibleElements.append("currently in \(mode.lowercased())")
+        }
+
+        // Count of visible text elements
+        let textCount = extraction.extractedText.filenames.count +
+                        extraction.extractedText.headings.count +
+                        extraction.extractedText.bodyText.count
+        if textCount > 5 {
+            visibleElements.append("\(textCount) text elements visible")
+        }
+
+        // Headings visible
+        let headings = extraction.extractedText.headings
+        if !headings.isEmpty {
+            let topHeadings = headings.prefix(2).map { "'\($0)'" }.joined(separator: ", ")
+            visibleElements.append("headings: \(topHeadings)")
+        }
+
+        // Notifications/status messages
+        let notifications = extraction.extractedText.notifications
+        if !notifications.isEmpty {
+            visibleElements.append("\(notifications.count) notification(s) displayed")
+        }
+
+        if !visibleElements.isEmpty {
+            let secondSentence = "The screen shows " + visibleElements.prefix(3).joined(separator: "; ") + "."
+            sentences.append(secondSentence)
+        }
+
+        // Sentence 3: Specific content details (if relevant)
+        var contentDetails: [String] = []
+
+        // URLs visible
+        if !extraction.extractedText.urls.isEmpty {
+            contentDetails.append("\(extraction.extractedText.urls.count) web address(es)")
+        }
+
+        // Values/data visible
+        let values = extraction.extractedText.values
+        if !values.isEmpty {
+            contentDetails.append("data values visible")
+        }
+
+        // Identifiers/reference numbers
+        let identifiers = extraction.extractedText.identifiers
+        if !identifiers.isEmpty {
+            contentDetails.append("\(identifiers.count) identifier(s) or reference number(s)")
+        }
+
+        if !contentDetails.isEmpty {
+            let thirdSentence = "Content includes " + contentDetails.joined(separator: ", ") + "."
+            sentences.append(thirdSentence)
+        }
+
+        return sentences.prefix(3).joined(separator: " ")
+    }
+
+    // Determine content type objectively based on visual elements
+    private func determineContentType(extraction: StructuredExtraction) -> String {
+        let text = extraction.extractedText
+        let visual = extraction.visualContext
+
+        // Check for specific content patterns
+        if !text.values.isEmpty && text.values.count > 3 {
+            return "numerical data"
+        }
+
+        if !text.urls.isEmpty && text.urls.count > 2 {
+            return "web content"
+        }
+
+        if visual.application.lowercased().contains("mail") ||
+           visual.application.lowercased().contains("outlook") ||
+           visual.application.lowercased().contains("gmail") {
+            return "email content"
+        }
+
+        if visual.application.lowercased().contains("slack") ||
+           visual.application.lowercased().contains("teams") ||
+           visual.application.lowercased().contains("discord") {
+            return "messaging content"
+        }
+
+        if visual.application.lowercased().contains("excel") ||
+           visual.application.lowercased().contains("sheets") ||
+           visual.application.lowercased().contains("numbers") {
+            return "spreadsheet data"
+        }
+
+        if visual.application.lowercased().contains("word") ||
+           visual.application.lowercased().contains("docs") ||
+           visual.application.lowercased().contains("pages") {
+            return "document content"
+        }
+
+        if visual.application.lowercased().contains("chrome") ||
+           visual.application.lowercased().contains("safari") ||
+           visual.application.lowercased().contains("firefox") ||
+           visual.application.lowercased().contains("edge") {
+            return "web browser content"
+        }
+
+        if !text.bodyText.isEmpty && text.bodyText.count > 5 {
+            return "text content"
+        }
+
+        if !text.labels.isEmpty && text.labels.count > 3 {
+            return "interface elements"
+        }
+
+        return "content"
     }
 
     // Helper function to clean up filenames

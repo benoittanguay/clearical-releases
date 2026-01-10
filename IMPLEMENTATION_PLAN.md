@@ -175,6 +175,14 @@
 - Fixed deprecated API endpoints (/search → /search/jql)
 - Rate limiting and error handling
 - Connection testing for both Jira and Tempo APIs
+- **Periodic Background Sync** (January 2026)
+  - Automatic sync at configurable intervals (15min, 30min, 1hr, 2hr)
+  - Smart scheduling with startup delay and periodic refresh
+  - Manual "Sync Now" functionality
+  - Sync status indicators showing last sync time and next scheduled sync
+  - Settings UI for enabling/disabling auto-sync and configuring intervals
+  - Prevents concurrent syncs and respects rate limits
+  - Integration with existing crawler for incremental issue discovery
 
 **🚧 In Progress - Enhanced Jira Integration Requirements**:
 

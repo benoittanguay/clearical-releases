@@ -7,8 +7,9 @@ import { TempoValidationModal } from './TempoValidationModal';
 import { TempoAccountPicker } from './TempoAccountPicker';
 import { useStorage } from '../context/StorageContext';
 import { useSettings } from '../context/SettingsContext';
+import { useSubscription } from '../context/SubscriptionContext';
 import { useToast } from '../context/ToastContext';
-import { JiraCache } from '../services/jiraCache';
+import { useJiraCache } from '../context/JiraCacheContext';
 import { TempoService, type TempoAccount } from '../services/tempoService';
 import { JiraService } from '../services/jiraService';
 
@@ -31,7 +32,9 @@ interface AppGroup {
 export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSettings, formatTime }: HistoryDetailProps) {
     const { removeActivityFromEntry, removeAllActivitiesForApp, removeScreenshotFromEntry, addManualActivityToEntry, setEntryAssignment, entries } = useStorage();
     const { settings } = useSettings();
+    const { hasFeature } = useSubscription();
     const { showToast } = useToast();
+    const jiraCache = useJiraCache();
     const [description, setDescription] = useState(entry.description || '');
     const [selectedAssignment, setSelectedAssignment] = useState<WorkAssignment | null>(() => {
         // Get assignment from unified model or fallback to legacy fields
@@ -54,32 +57,32 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
     const [manualDuration, setManualDuration] = useState('');
     const [showTempoValidationModal, setShowTempoValidationModal] = useState(false);
     const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
-    const [jiraCache] = useState(() => new JiraCache());
     const [availableAccounts, setAvailableAccounts] = useState<TempoAccount[]>([]);
     const [isLoadingAccounts, setIsLoadingAccounts] = useState(false);
     const [showAccountPicker, setShowAccountPicker] = useState(false);
+    const [showUpgradeModal, setShowUpgradeModal] = useState(false);
     const previousAssignmentRef = useRef<WorkAssignment | null>(null);
 
-    // Initialize Jira cache when settings change
+    // Note: JiraCache initialization is handled by JiraCacheContext
     useEffect(() => {
         const { jira } = settings;
         if (jira?.enabled && jira?.apiToken && jira?.baseUrl && jira?.email) {
-            jiraCache.initializeService(jira.baseUrl, jira.email, jira.apiToken);
-            if (jira.selectedProjects?.length) {
-                jiraCache.setSelectedProjects(jira.selectedProjects);
-            }
+            // JiraCache is already initialized by context, no need to initialize again
         }
     }, [settings.jira, jiraCache]);
+
+    const hasJiraAccess = hasFeature('jira');
+    const hasTempoAccess = hasFeature('tempo');
 
     // Fetch Tempo accounts when Jira assignment changes
     useEffect(() => {
         const fetchAccountsForAssignment = async (jiraIssue: LinkedJiraIssue) => {
-            if (!settings.tempo?.enabled || !settings.tempo?.apiToken || !settings.tempo?.baseUrl) {
+            if (!hasTempoAccess || !settings.tempo?.enabled || !settings.tempo?.apiToken || !settings.tempo?.baseUrl) {
                 setAvailableAccounts([]);
                 return;
             }
 
-            if (!settings.jira?.enabled || !settings.jira?.apiToken || !settings.jira?.baseUrl || !settings.jira?.email) {
+            if (!hasJiraAccess || !settings.jira?.enabled || !settings.jira?.apiToken || !settings.jira?.baseUrl || !settings.jira?.email) {
                 setAvailableAccounts([]);
                 return;
             }
@@ -105,8 +108,9 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
 
                 setAvailableAccounts(accounts);
 
-                // Auto-select account if we have accounts
-                if (accounts.length > 0) {
+                // Auto-select account if we have accounts and no account is currently selected
+                // This check is important: we only auto-select if the entry has no tempo account
+                if (accounts.length > 0 && !entry.tempoAccount) {
                     autoSelectTempoAccount(jiraIssue, accounts);
                 }
             } catch (error) {
@@ -123,7 +127,7 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
         } else {
             setAvailableAccounts([]);
         }
-    }, [selectedAssignment, settings.tempo, settings.jira]);
+    }, [selectedAssignment, settings.tempo, settings.jira, entry.tempoAccount]);
 
     // Update local state when entry changes
     useEffect(() => {
@@ -171,6 +175,19 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
     const handleAssignmentChange = (assignment: WorkAssignment | null, autoSelected: boolean = false) => {
         setSelectedAssignment(assignment);
         setEntryAssignment(entry.id, assignment);
+
+        // Clear Tempo account when switching to a different Jira issue or changing assignment type
+        // This allows auto-selection to run for the new issue
+        const previousIssueKey = selectedAssignment?.type === 'jira' ? selectedAssignment.jiraIssue?.key : null;
+        const newIssueKey = assignment?.type === 'jira' ? assignment.jiraIssue?.key : null;
+
+        if (previousIssueKey !== newIssueKey) {
+            // Different issue or assignment type changed - clear Tempo account
+            onUpdate(entry.id, {
+                tempoAccount: undefined,
+                tempoAccountAutoSelected: false
+            });
+        }
 
         // Update auto-selected flag
         if (autoSelected && assignment) {
@@ -306,11 +323,13 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                 }));
 
             // Call the select-tempo-account IPC handler
+            // NEW: Pass full entries for enhanced learning
             const result = await window.electron?.ipcRenderer?.selectTempoAccount?.({
                 issue,
                 accounts,
                 description: entry.description || '',
-                historicalAccounts
+                historicalAccounts,
+                historicalEntries: entries  // Pass all entries for context-aware matching
             });
 
             console.log('[HistoryDetail] AI tempo account selection result:', result);
@@ -375,7 +394,9 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                     timestamp: activity?.timestamp || Date.now(),
                     appName: activity?.appName,
                     windowTitle: activity?.windowTitle,
-                    aiDescription: activity?.screenshotDescriptions?.[path]
+                    aiDescription: activity?.screenshotDescriptions?.[path],
+                    rawVisionData: activity?.screenshotVisionData?.[path],
+                    visionData: activity?.screenshotVisionData?.[path] // Legacy fallback
                 };
             });
 
@@ -424,6 +445,12 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
     };
 
     const handleOpenTempoModal = () => {
+        // Check if user has premium access for Tempo
+        if (!hasTempoAccess) {
+            setShowUpgradeModal(true);
+            return;
+        }
+
         // Check if Tempo is configured
         if (!settings.tempo?.enabled || !settings.tempo?.apiToken || !settings.tempo?.baseUrl) {
             onNavigateToSettings();
@@ -445,6 +472,11 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
 
         // Open the validation modal
         setShowTempoValidationModal(true);
+    };
+
+    const handleOpenUpgradeUrl = () => {
+        window.electron.ipcRenderer.invoke('open-external-url', 'https://clearical.io/pricing');
+        setShowUpgradeModal(false);
     };
 
     const handleTempoSuccess = () => {
@@ -708,13 +740,20 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                     <div>
                         <button
                             onClick={handleOpenTempoModal}
-                            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-sm rounded-lg transition-all active:scale-[0.99] flex items-center justify-center gap-1.5"
+                            className={`px-3 py-1.5 ${hasTempoAccess ? 'bg-blue-600 hover:bg-blue-700 active:bg-blue-800' : 'bg-gray-600 hover:bg-gray-500 active:bg-gray-400'} text-white text-sm rounded-lg transition-all active:scale-[0.99] flex items-center justify-center gap-1.5`}
                             style={{ transitionDuration: 'var(--duration-fast)', transitionTimingFunction: 'var(--ease-out)' }}
                         >
-                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <circle cx="12" cy="12" r="10"/>
-                                <path d="M12 6v6l4 2"/>
-                            </svg>
+                            {hasTempoAccess ? (
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <circle cx="12" cy="12" r="10"/>
+                                    <path d="M12 6v6l4 2"/>
+                                </svg>
+                            ) : (
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                                    <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                                </svg>
+                            )}
                             Log to Tempo
                         </button>
                     </div>
@@ -1055,7 +1094,9 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                                                                             timestamp: activity.timestamp,
                                                                             appName: activity.appName,
                                                                             windowTitle: activity.windowTitle,
-                                                                            aiDescription: activity.screenshotDescriptions?.[path]
+                                                                            aiDescription: activity.screenshotDescriptions?.[path],
+                                                                            rawVisionData: activity.screenshotVisionData?.[path],
+                                                                            visionData: activity.screenshotVisionData?.[path] // Legacy fallback
                                                                         }));
 
                                                                         setSelectedScreenshots(screenshots);
@@ -1140,6 +1181,48 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                     onSelect={handleAccountSelect}
                     onClose={() => setShowAccountPicker(false)}
                 />
+            )}
+
+            {/* Upgrade Modal for Free Users */}
+            {showUpgradeModal && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
+                    <div className="bg-gray-800 rounded-xl border border-gray-700 p-6 max-w-sm w-full mx-4 shadow-2xl">
+                        <div className="text-center">
+                            {/* Lock Icon */}
+                            <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full mx-auto mb-4 flex items-center justify-center">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                                    <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                                </svg>
+                            </div>
+
+                            <h3 className="text-xl font-bold text-white mb-2">Premium Feature</h3>
+                            <p className="text-gray-400 mb-6">
+                                Upgrade for Jira and Tempo integrations
+                            </p>
+
+                            <div className="flex flex-col gap-3">
+                                <button
+                                    onClick={handleOpenUpgradeUrl}
+                                    className="w-full py-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white font-medium rounded-lg transition-all active:scale-[0.98] flex items-center justify-center gap-2"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                                        <polyline points="15 3 21 3 21 9"/>
+                                        <line x1="10" y1="14" x2="21" y2="3"/>
+                                    </svg>
+                                    View Plans
+                                </button>
+                                <button
+                                    onClick={() => setShowUpgradeModal(false)}
+                                    className="w-full py-2 text-gray-400 hover:text-white text-sm transition-colors"
+                                >
+                                    Maybe Later
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );

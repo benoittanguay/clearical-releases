@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { useStorage } from '../context/StorageContext';
 import type { WorkAssignment, TimeBucket } from '../context/StorageContext';
 import { useSettings } from '../context/SettingsContext';
-import { JiraCache } from '../services/jiraCache';
+import { useSubscription } from '../context/SubscriptionContext';
+import { useJiraCache } from '../context/JiraCacheContext';
 import type { JiraIssue } from '../services/jiraService';
 
 interface AssignmentPickerProps {
@@ -15,26 +16,27 @@ interface AssignmentPickerProps {
 export function AssignmentPicker({ value, onChange, placeholder = "Select assignment...", className = "" }: AssignmentPickerProps) {
     const { buckets } = useStorage();
     const { settings } = useSettings();
+    const { hasFeature } = useSubscription();
+    const jiraCache = useJiraCache();
     const [isOpen, setIsOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [jiraIssues, setJiraIssues] = useState<JiraIssue[]>([]);
-    const [jiraCache] = useState(() => new JiraCache());
     const [selectedProject, setSelectedProject] = useState<string>('all'); // 'all' or specific project key
 
-    // Initialize Jira cache when settings change
+    const hasJiraAccess = hasFeature('jira');
+
+    // Load Jira issues when settings change
     useEffect(() => {
         const { jira } = settings;
-        if (jira?.enabled && jira?.apiToken && jira?.baseUrl && jira?.email) {
-            jiraCache.initializeService(jira.baseUrl, jira.email, jira.apiToken);
-            if (jira.selectedProjects?.length) {
-                jiraCache.setSelectedProjects(jira.selectedProjects);
-            }
+        if (hasJiraAccess && jira?.enabled && jira?.apiToken && jira?.baseUrl && jira?.email) {
             // Load assigned issues for the picker
             jiraCache.getAssignedIssues().then(issues => {
                 setJiraIssues(issues);
             });
+        } else {
+            setJiraIssues([]);
         }
-    }, [settings.jira, jiraCache]);
+    }, [settings.jira, jiraCache, hasJiraAccess]);
 
     const handleSelectBucket = (bucket: TimeBucket) => {
         onChange({
@@ -215,7 +217,7 @@ export function AssignmentPicker({ value, onChange, placeholder = "Select assign
                         )}
 
                         {/* Jira issues section */}
-                        {settings.jira?.enabled && filteredJiraIssues.length > 0 && (
+                        {hasJiraAccess && settings.jira?.enabled && filteredJiraIssues.length > 0 && (
                             <div>
                                 <div className="px-3 py-1 text-xs text-gray-500 bg-gray-750 font-medium border-t border-gray-600">
                                     Jira Issues {(searchQuery || selectedProject !== 'all') && `(${filteredJiraIssues.length})`}
@@ -243,7 +245,7 @@ export function AssignmentPicker({ value, onChange, placeholder = "Select assign
                         )}
 
                         {/* Empty state */}
-                        {filteredBuckets.length === 0 && (!settings.jira?.enabled || filteredJiraIssues.length === 0) && (
+                        {filteredBuckets.length === 0 && (!hasJiraAccess || !settings.jira?.enabled || filteredJiraIssues.length === 0) && (
                             <div className="px-3 py-8 text-center text-gray-500 text-sm animate-fade-in">
                                 <svg className="w-12 h-12 mx-auto mb-2 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />

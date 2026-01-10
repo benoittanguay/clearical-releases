@@ -3,6 +3,7 @@
  */
 
 import type { WorkAssignment, TimeBucket, LinkedJiraIssue, TimeEntry } from './shared';
+import type { JiraIssue } from '../services/jiraService';
 
 // Structured screenshot analysis types
 export interface ExtractedText {
@@ -59,6 +60,21 @@ export interface ScreenshotAnalysisResult {
     objects?: string[];
     extraction?: StructuredExtraction;
     requestId?: string;
+}
+
+export interface UpdateStatus {
+    available: boolean;
+    downloaded: boolean;
+    downloading: boolean;
+    version?: string;
+    releaseDate?: string;
+    releaseNotes?: string;
+    error?: string;
+    downloadProgress?: {
+        percent: number;
+        transferred: number;
+        total: number;
+    };
 }
 
 export interface ElectronAPI {
@@ -173,6 +189,7 @@ export interface ElectronAPI {
                 issueKey: string;
                 accountKey: string;
             }>;
+            historicalEntries?: TimeEntry[];  // NEW: Full entries for enhanced learning
         }) => Promise<{
             success: boolean;
             selection?: {
@@ -195,6 +212,75 @@ export interface ElectronAPI {
             };
             error?: string;
         }>;
+        // Auto-updater
+        updater: {
+            checkForUpdates: () => Promise<{
+                success: boolean;
+                status?: UpdateStatus;
+                error?: string;
+            }>;
+            getStatus: () => Promise<{
+                success: boolean;
+                status?: UpdateStatus;
+                error?: string;
+            }>;
+            downloadUpdate: () => Promise<{
+                success: boolean;
+                error?: string;
+            }>;
+            quitAndInstall: () => Promise<{
+                success: boolean;
+                error?: string;
+            }>;
+            configure: (options: {
+                checkOnStartup?: boolean;
+                checkOnStartupDelay?: number;
+                autoDownload?: boolean;
+                allowPrerelease?: boolean;
+            }) => Promise<{
+                success: boolean;
+                error?: string;
+            }>;
+            onStatusUpdate: (callback: (status: UpdateStatus) => void) => (() => void) | undefined;
+        };
+        // Database operations
+        db: {
+            // Entries
+            getAllEntries: () => Promise<{ success: boolean; data: TimeEntry[]; error?: string }>;
+            getEntry: (id: string) => Promise<{ success: boolean; data: TimeEntry | null; error?: string }>;
+            insertEntry: (entry: TimeEntry) => Promise<{ success: boolean; error?: string }>;
+            updateEntry: (id: string, updates: Partial<TimeEntry>) => Promise<{ success: boolean; error?: string }>;
+            deleteEntry: (id: string) => Promise<{ success: boolean; error?: string }>;
+            deleteAllEntries: () => Promise<{ success: boolean; error?: string }>;
+            // Buckets
+            getAllBuckets: () => Promise<{ success: boolean; data: TimeBucket[]; error?: string }>;
+            insertBucket: (bucket: TimeBucket) => Promise<{ success: boolean; error?: string }>;
+            updateBucket: (id: string, updates: Partial<TimeBucket>) => Promise<{ success: boolean; error?: string }>;
+            deleteBucket: (id: string) => Promise<{ success: boolean; error?: string }>;
+            // Settings
+            getSetting: (key: string) => Promise<{ success: boolean; data: any; error?: string }>;
+            setSetting: (key: string, value: any) => Promise<{ success: boolean; error?: string }>;
+            deleteSetting: (key: string) => Promise<{ success: boolean; error?: string }>;
+            getAllSettings: () => Promise<{ success: boolean; data: Record<string, any>; error?: string }>;
+            // Jira Issues Cache
+            getAllJiraIssues: () => Promise<{ success: boolean; data: JiraIssue[]; error?: string }>;
+            getJiraIssuesByProject: (projectKey: string) => Promise<{ success: boolean; data: JiraIssue[]; error?: string }>;
+            getJiraIssue: (key: string) => Promise<{ success: boolean; data: JiraIssue | null; error?: string }>;
+            upsertJiraIssue: (issue: JiraIssue) => Promise<{ success: boolean; error?: string }>;
+            clearJiraCache: () => Promise<{ success: boolean; error?: string }>;
+            // Jira Cache Metadata
+            getJiraCacheMeta: (key: string) => Promise<{ success: boolean; data: any; error?: string }>;
+            setJiraCacheMeta: (key: string, data: any, query?: string) => Promise<{ success: boolean; error?: string }>;
+            // Crawler State
+            getCrawlerState: (projectKey: string) => Promise<{ success: boolean; data: any; error?: string }>;
+            setCrawlerState: (projectKey: string, state: any) => Promise<{ success: boolean; error?: string }>;
+            clearCrawlerState: () => Promise<{ success: boolean; error?: string }>;
+            // Database Stats
+            getStats: () => Promise<{ success: boolean; data: any; error?: string }>;
+            // Migration
+            needsMigration: () => Promise<{ success: boolean; needsMigration: boolean; error?: string }>;
+            migrateFromLocalStorage: (localStorageData: Record<string, string>) => Promise<{ success: boolean; result: any; error?: string }>;
+        };
     };
 }
 

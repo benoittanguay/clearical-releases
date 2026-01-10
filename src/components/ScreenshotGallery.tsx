@@ -1,12 +1,26 @@
 import { useState, useEffect } from 'react';
 import { DeleteButton } from './DeleteButton';
 
+interface VisionFrameworkRawData {
+    confidence?: number;
+    detectedText?: string[];
+    objects?: string[];
+    extraction?: any;
+}
+
 interface ScreenshotMetadata {
     path: string;
     timestamp: number;
     appName?: string;
     windowTitle?: string;
-    aiDescription?: string;
+
+    // NEW: Two-stage architecture fields
+    aiDescription?: string;  // LLM-generated narrative (Stage 2)
+    rawVisionData?: VisionFrameworkRawData;  // Vision Framework extraction (Stage 1)
+    llmError?: string;  // LLM error if description generation failed
+
+    // Legacy field (deprecated)
+    visionData?: VisionFrameworkRawData;
 }
 
 interface ScreenshotGalleryProps {
@@ -19,6 +33,7 @@ interface ScreenshotGalleryProps {
 export function ScreenshotGallery({ screenshotPaths, metadata, onClose, onScreenshotDeleted }: ScreenshotGalleryProps) {
     const [selectedIndex, setSelectedIndex] = useState(0);
     const [showMetadata, setShowMetadata] = useState(true);
+    // Raw vision data is always shown, no toggle needed
     const [loadedImages, setLoadedImages] = useState<Map<string, string>>(new Map());
 
     // Load images via IPC
@@ -318,19 +333,31 @@ export function ScreenshotGallery({ screenshotPaths, metadata, onClose, onScreen
                             </div>
                         )}
                         
-                        {/* AI Description Section */}
+                        {/* AI Description Section - On-Device AI Narrative (Stage 2) */}
                         <div className="border-t border-gray-600 pt-3">
                             <div className="flex items-center gap-2 mb-2">
-                                <span className="text-green-400 font-medium">AI Description:</span>
-                                <span className="text-xs bg-green-900/30 text-green-300 px-2 py-1 rounded-full">
-                                    Vision Framework
+                                <span className="text-purple-400 font-medium">AI Narrative:</span>
+                                <span className="text-xs bg-purple-900/30 text-purple-300 px-2 py-1 rounded-full">
+                                    Apple Intelligence
                                 </span>
                             </div>
                             {currentMetadata.aiDescription ? (
-                                <div className="text-white text-sm leading-relaxed bg-gray-900/50 rounded p-3 border-l-2 border-green-500">
+                                <div className="text-white text-sm leading-relaxed bg-gray-900/50 rounded p-3 border-l-2 border-purple-500">
                                     <p className="whitespace-pre-wrap break-words">
                                         {currentMetadata.aiDescription}
                                     </p>
+                                </div>
+                            ) : currentMetadata.llmError ? (
+                                <div className="text-yellow-400 text-sm bg-gray-900/50 rounded p-3 border-l-2 border-yellow-500">
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                            <circle cx="12" cy="12" r="10"/>
+                                            <line x1="12" y1="8" x2="12" y2="12"/>
+                                            <line x1="12" y1="16" x2="12.01" y2="16"/>
+                                        </svg>
+                                        <span className="font-semibold">AI Description Unavailable</span>
+                                    </div>
+                                    <p className="text-xs text-gray-300 mt-1">{currentMetadata.llmError}</p>
                                 </div>
                             ) : (
                                 <div className="flex items-center gap-2 text-gray-400 text-sm bg-gray-900/50 rounded p-2 border-l-2 border-gray-500">
@@ -338,10 +365,88 @@ export function ScreenshotGallery({ screenshotPaths, metadata, onClose, onScreen
                                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                                     </svg>
-                                    <span>Analyzing screenshot content...</span>
+                                    <span>Generating AI description...</span>
                                 </div>
                             )}
                         </div>
+
+                        {/* Raw Vision Framework Data Section (Stage 1) */}
+                        {(currentMetadata.rawVisionData || currentMetadata.visionData) && (
+                            <div className="border-t border-gray-600 pt-3">
+                                <div className="flex items-center gap-2 mb-2">
+                                    <span className="text-green-400 font-medium text-sm">Raw Vision Framework Data</span>
+                                    <span className="text-xs bg-green-900/30 text-green-300 px-2 py-1 rounded-full">
+                                        Stage 1: Extraction
+                                    </span>
+                                </div>
+
+                                <div className="space-y-3 text-xs font-mono">
+                                        {/* Use rawVisionData if available, fall back to legacy visionData */}
+                                        {(() => {
+                                            const visionData = currentMetadata.rawVisionData || currentMetadata.visionData;
+                                            if (!visionData) return null;
+
+                                            return (
+                                                <>
+                                                    {/* Confidence Score */}
+                                                    {visionData.confidence !== undefined && (
+                                                        <div>
+                                                            <div className="text-gray-400 mb-1">Vision Framework Confidence:</div>
+                                                            <div className="bg-gray-900/50 rounded p-2 border-l-2 border-green-500 text-green-300">
+                                                                {(visionData.confidence * 100).toFixed(1)}%
+                                                            </div>
+                                                        </div>
+                                                    )}
+
+                                                    {/* Detected Text (OCR Results) */}
+                                                    {visionData.detectedText && visionData.detectedText.length > 0 && (
+                                                        <div>
+                                                            <div className="text-gray-400 mb-1">OCR Text ({visionData.detectedText.length} items):</div>
+                                                            <div className="bg-gray-900/50 rounded p-2 border-l-2 border-green-500 max-h-40 overflow-y-auto">
+                                                                <ul className="space-y-1">
+                                                                    {visionData.detectedText.map((text, idx) => (
+                                                                        <li key={idx} className="text-white break-words">
+                                                                            <span className="text-gray-500">{idx + 1}.</span> {text}
+                                                                        </li>
+                                                                    ))}
+                                                                </ul>
+                                                            </div>
+                                                        </div>
+                                                    )}
+
+                                                    {/* Detected Objects */}
+                                                    {visionData.objects && visionData.objects.length > 0 && (
+                                                        <div>
+                                                            <div className="text-gray-400 mb-1">Visual Objects ({visionData.objects.length} items):</div>
+                                                            <div className="bg-gray-900/50 rounded p-2 border-l-2 border-green-500">
+                                                                <div className="flex flex-wrap gap-1">
+                                                                    {visionData.objects.map((obj, idx) => (
+                                                                        <span key={idx} className="bg-green-900/30 text-green-300 px-2 py-1 rounded">
+                                                                            {obj}
+                                                                        </span>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    )}
+
+                                                    {/* Structured Extraction (Detailed Analysis) */}
+                                                    {visionData.extraction && (
+                                                        <div>
+                                                            <div className="text-gray-400 mb-1">Structured Analysis (JSON):</div>
+                                                            <div className="bg-gray-900/50 rounded p-2 border-l-2 border-green-500 max-h-60 overflow-y-auto">
+                                                                <pre className="text-white whitespace-pre-wrap break-words text-xs">
+                                                                    {JSON.stringify(visionData.extraction, null, 2)}
+                                                                </pre>
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </>
+                                            );
+                                        })()}
+                                </div>
+                            </div>
+                        )}
                         
                         <div className="border-t border-gray-600 pt-3">
                             <span className="text-gray-300">File:</span>{' '}

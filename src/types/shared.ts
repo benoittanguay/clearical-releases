@@ -31,13 +31,53 @@ export interface TimeBucket {
     linkedIssue?: LinkedJiraIssue;
 }
 
+/**
+ * Raw data extracted by Vision Framework (Stage 1)
+ * This is the unprocessed OCR and object detection output
+ */
+export interface VisionFrameworkRawData {
+    confidence?: number;
+    detectedText?: string[];
+    objects?: string[];
+    extraction?: any; // StructuredExtraction from Swift Vision Framework
+}
+
+/**
+ * Complete screenshot analysis result with two-stage architecture
+ * Stage 1: Vision Framework extracts raw data
+ * Stage 2: LLM generates narrative description from raw data
+ */
+export interface ScreenshotAnalysisResult {
+    // Raw Vision Framework data (Stage 1)
+    rawVisionData?: VisionFrameworkRawData;
+
+    // AI-generated narrative description (Stage 2)
+    aiDescription?: string;
+
+    // LLM error message if description generation failed
+    llmError?: string;
+
+    // Legacy fields for backward compatibility
+    description?: string; // Falls back to aiDescription or raw summary
+    confidence?: number;
+    detectedText?: string[];
+    objects?: string[];
+    extraction?: any;
+}
+
 export interface WindowActivity {
     appName: string;
     windowTitle: string;
     timestamp: number;
     duration: number;
     screenshotPaths?: string[];
+
+    // Legacy fields (deprecated in favor of two-stage architecture)
     screenshotDescriptions?: { [path: string]: string };
+    screenshotVisionData?: { [path: string]: VisionFrameworkRawData };
+
+    // NEW: Two-stage architecture fields
+    screenshotAnalysis?: { [path: string]: ScreenshotAnalysisResult };
 }
 
 export interface TimeEntry {

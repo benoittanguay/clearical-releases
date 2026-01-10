@@ -1,4 +1,5 @@
-import { LinkedJiraIssue } from '../src/types/shared.js';
+import { LinkedJiraIssue, TimeEntry } from '../src/types/shared.js';
+import { HistoricalMatchingService } from './historicalMatchingService.js';
 
 /**
  * Tempo Account structure
@@ -45,14 +46,21 @@ const STOP_WORDS = new Set([
 /**
  * AI Account Service
  * Intelligently selects Tempo accounts based on Jira issue context and historical patterns
+ * Enhanced with sophisticated historical learning from time entries
  */
 export class AIAccountService {
+    private readonly historicalMatcher: HistoricalMatchingService;
+
+    constructor() {
+        this.historicalMatcher = new HistoricalMatchingService();
+    }
+
     /**
      * Select the best Tempo account for a Jira issue
      *
      * @param issue - The Jira issue requiring an account
      * @param availableAccounts - List of accounts available for this issue/project
-     * @param context - Additional context (description, historical usage)
+     * @param context - Additional context (description, historical usage, full time entries)
      * @returns Account selection with confidence and reasoning
      */
     async selectAccount(
@@ -61,6 +69,7 @@ export class AIAccountService {
         context: {
             description?: string;
             historicalAccounts: HistoricalAccountUsage[];
+            historicalEntries?: TimeEntry[];  // NEW: Full entries for enhanced matching
         }
     ): Promise<AccountSelection> {
         console.log('[AIAccountService] Selecting account for issue:', issue.key);
@@ -142,6 +151,7 @@ export class AIAccountService {
 
     /**
      * Calculate score for an account based on various factors
+     * Enhanced with context-aware historical matching
      */
     private calculateAccountScore(
         account: TempoAccount,
@@ -149,25 +159,25 @@ export class AIAccountService {
         context: {
             description?: string;
             historicalAccounts: HistoricalAccountUsage[];
+            historicalEntries?: TimeEntry[];
         }
     ): number {
         let score = 0;
 
-        // 1. Historical usage - strongest signal (50%)
-        const historicalScore = this.calculateHistoricalScore(
-            account.key,
-            issue.projectKey,
-            context.historicalAccounts
-        );
-        score += historicalScore * 0.5;
+        // 1. Historical usage - strongest signal (60%)
+        // Use enhanced matching if full entries available, otherwise fall back to basic
+        const historicalScore = context.historicalEntries
+            ? this.calculateEnhancedHistoricalScore(account.key, issue, context)
+            : this.calculateHistoricalScore(account.key, issue.projectKey, context.historicalAccounts);
+        score += historicalScore * 0.6;
 
-        // 2. Account name matches issue summary (25%)
+        // 2. Account name matches issue summary (20%)
         const keywordScore = this.keywordMatch(account.name, issue.summary);
-        score += keywordScore * 0.25;
+        score += keywordScore * 0.2;
 
-        // 3. Account name matches project name (15%)
+        // 3. Account name matches project name (10%)
         if (this.containsKeywords(account.name, issue.projectName)) {
-            score += 0.15;
+            score += 0.1;
         }
 
         // 4. Account name matches description (10%)
@@ -180,7 +190,39 @@ export class AIAccountService {
     }
 
     /**
-     * Calculate historical usage score
+     * Enhanced historical score calculation using full context
+     * Considers work similarity, not just project/issue matching
+     */
+    private calculateEnhancedHistoricalScore(
+        accountKey: string,
+        issue: LinkedJiraIssue,
+        context: {
+            description?: string;
+            historicalAccounts: HistoricalAccountUsage[];
+            historicalEntries?: TimeEntry[];
+        }
+    ): number {
+        if (!context.historicalEntries || context.historicalEntries.length === 0) {
+            return this.calculateHistoricalScore(accountKey, issue.projectKey, context.historicalAccounts);
+        }
+
+        // Use the historical matching service to find patterns
+        const patterns = this.historicalMatcher.extractAccountPatterns(
+            issue.key,
+            issue.projectKey,
+            context.historicalEntries
+        );
+
+        // Find the pattern for this account
+        const accountPattern = patterns.find(p => p.accountKey === accountKey);
+
+        if (!accountPattern) return 0;
+
+        return accountPattern.matchScore;
+    }
+
+    /**
+     * Calculate historical usage score (basic version)
      * Heavily weight accounts that have been used with this project before
      */
     private calculateHistoricalScore(
@@ -243,6 +285,7 @@ export class AIAccountService {
 
     /**
      * Generate human-readable explanation for account score
+     * Enhanced with historical pattern insights
      */
     private explainAccountScore(
         account: TempoAccount,
@@ -250,21 +293,39 @@ export class AIAccountService {
         context: {
             description?: string;
             historicalAccounts: HistoricalAccountUsage[];
+            historicalEntries?: TimeEntry[];
         }
     ): string {
         const reasons: string[] = [];
 
-        // Check historical usage
-        const historicalScore = this.calculateHistoricalScore(
-            account.key,
-            issue.projectKey,
-            context.historicalAccounts
-        );
+        // Check enhanced historical usage if available
+        if (context.historicalEntries && context.historicalEntries.length > 0) {
+            const patterns = this.historicalMatcher.extractAccountPatterns(
+                issue.key,
+                issue.projectKey,
+                context.historicalEntries
+            );
 
-        if (historicalScore > 0.5) {
-            reasons.push('frequently used for this project');
-        } else if (historicalScore > 0.2) {
-            reasons.push('occasionally used for this project');
+            const accountPattern = patterns.find(p => p.accountKey === account.key);
+            if (accountPattern && accountPattern.matchScore > 0.3) {
+                // Use the learned reasons from pattern matching
+                if (accountPattern.reasons.length > 0) {
+                    reasons.push(...accountPattern.reasons.slice(0, 2));  // Top 2 reasons
+                }
+            }
+        } else {
+            // Fall back to basic historical scoring
+            const historicalScore = this.calculateHistoricalScore(
+                account.key,
+                issue.projectKey,
+                context.historicalAccounts
+            );
+
+            if (historicalScore > 0.5) {
+                reasons.push('frequently used for this project');
+            } else if (historicalScore > 0.2) {
+                reasons.push('occasionally used for this project');
+            }
         }
 
         // Check keyword matches
