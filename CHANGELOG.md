@@ -7,11 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-01-10
+
+### Fixed
+- Fixed corrupted text display caused by asar packing
+- Use `pathToFileURL` for proper loading of frontend assets from asar archive
+
+---
+
 ## [0.1.3] - 2026-01-10
 
 ### Fixed
 - **Reduced build size by ~80%**: Removed duplicate Electron bundles from asarUnpack
-- Fixed corrupted text display caused by asar packing (use pathToFileURL for proper file loading)
 - Unpacked resources reduced from 800MB to 13MB
 
 ---
@@ -105,6 +112,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version       | Date       | Type    | Notes |
 |---------------|------------|---------|-------|
+| 0.1.4         | 2026-01-10 | Release | Fix corrupted display from asar packing |
 | 0.1.3         | 2026-01-10 | Release | Reduce build size by ~80% |
 | 0.1.2         | 2026-01-10 | Release | Fix window visibility on launch |
 | 0.1.1         | 2026-01-10 | Release | Fix first-launch and trial bugs |
