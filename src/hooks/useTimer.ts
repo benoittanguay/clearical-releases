@@ -69,7 +69,8 @@ export function useTimer() {
         localStorage.setItem('timeportal-timer-state', JSON.stringify({ isRunning, isPaused, startTime, elapsed }));
     }, [isRunning, isPaused, startTime, elapsed]);
 
-    // Send timer updates to main process for menu bar display
+    // Send timer state to main process for menu bar display
+    // Main process will handle the timer interval to avoid renderer throttling
     useEffect(() => {
         // @ts-ignore
         if (window.electron && window.electron.ipcRenderer) {
@@ -78,10 +79,10 @@ export function useTimer() {
                 isRunning,
                 isPaused,
                 elapsed,
-                formattedTime: formatTime(elapsed)
+                startTime
             });
         }
-    }, [isRunning, isPaused, elapsed]);
+    }, [isRunning, isPaused, elapsed, startTime]);
 
     useEffect(() => {
         const INTERVAL_SCREENSHOT_TIME = 2 * 60 * 1000; // 2 minutes - screenshot if no window change

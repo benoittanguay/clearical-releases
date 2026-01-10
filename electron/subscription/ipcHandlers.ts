@@ -167,13 +167,29 @@ async function handleGetSubscriptionInfo(): Promise<{
     error?: string;
 }> {
     try {
-        const subscription = await SubscriptionStorage.getSubscription();
+        let subscription = await SubscriptionStorage.getSubscription();
 
+        // If no subscription exists, trigger validation to create trial
         if (!subscription) {
-            return {
-                success: true,
-                subscription: undefined,
-            };
+            console.log('[Subscription] No subscription found in info request, triggering validation to create trial');
+
+            if (subscriptionValidator) {
+                const validationResult = await subscriptionValidator.validate();
+                subscription = validationResult.subscription;
+
+                console.log('[Subscription] Validation result for info request:', {
+                    valid: validationResult.valid,
+                    mode: validationResult.mode,
+                    status: subscription.status,
+                });
+            } else {
+                // Fallback if validator not initialized
+                console.warn('[Subscription] Validator not initialized, returning undefined');
+                return {
+                    success: true,
+                    subscription: undefined,
+                };
+            }
         }
 
         console.log('[Subscription] Info retrieved:', {
@@ -206,14 +222,30 @@ async function handleGetSubscriptionStatus(): Promise<{
     features: string[];
 }> {
     try {
-        const subscription = await SubscriptionStorage.getSubscription();
+        let subscription = await SubscriptionStorage.getSubscription();
 
+        // If no subscription exists, trigger validation to create trial
         if (!subscription) {
-            return {
-                tier: 'free',
-                isActive: false,
-                features: [],
-            };
+            console.log('[Subscription] No subscription found, triggering validation to create trial');
+
+            if (subscriptionValidator) {
+                const validationResult = await subscriptionValidator.validate();
+                subscription = validationResult.subscription;
+
+                console.log('[Subscription] Validation result:', {
+                    valid: validationResult.valid,
+                    mode: validationResult.mode,
+                    status: subscription.status,
+                });
+            } else {
+                // Fallback if validator not initialized
+                console.warn('[Subscription] Validator not initialized, returning free tier');
+                return {
+                    tier: 'free',
+                    isActive: false,
+                    features: [],
+                };
+            }
         }
 
         // Check if subscription allows premium features
@@ -294,14 +326,30 @@ async function handleGetTrialInfo(): Promise<{
     error?: string;
 }> {
     try {
-        const subscription = await SubscriptionStorage.getSubscription();
+        let subscription = await SubscriptionStorage.getSubscription();
 
+        // If no subscription exists, trigger validation to create trial
         if (!subscription) {
-            return {
-                success: true,
-                isTrial: false,
-                daysRemaining: 0,
-            };
+            console.log('[Subscription] No subscription found in trial info, triggering validation to create trial');
+
+            if (subscriptionValidator) {
+                const validationResult = await subscriptionValidator.validate();
+                subscription = validationResult.subscription;
+
+                console.log('[Subscription] Validation result for trial info:', {
+                    valid: validationResult.valid,
+                    mode: validationResult.mode,
+                    status: subscription.status,
+                });
+            } else {
+                // Fallback if validator not initialized
+                console.warn('[Subscription] Validator not initialized, returning no trial');
+                return {
+                    success: true,
+                    isTrial: false,
+                    daysRemaining: 0,
+                };
+            }
         }
 
         const isTrial = subscription.status === 'trial';

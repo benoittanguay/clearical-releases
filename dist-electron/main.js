@@ -81,6 +81,14 @@ console.warn = safeConsoleWrapper(originalConsoleWarn);
 let win;
 let tray;
 let currentTimerText = '';
+// Timer state managed in main process to avoid renderer throttling
+let timerState = {
+    isRunning: false,
+    isPaused: false,
+    startTime: null,
+    elapsed: 0
+};
+let timerInterval = null;
 /**
  * Convert regular digits to monospace digits to prevent menu bar jiggling.
  * Uses Unicode Numeric Forms block (U+1D7F6 - U+1D7FF) which renders as fixed-width.
@@ -101,6 +109,73 @@ function toMonospaceDigits(text) {
         '9': '𝟿'
     };
     return text.split('').map(char => monoDigits[char] || char).join('');
+}
+/**
+ * Format elapsed time in milliseconds to HH:MM:SS
+ */
+function formatTime(ms) {
+    const totalSeconds = Math.floor(ms / 1000);
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+}
+/**
+ * Update the tray title based on current timer state.
+ * This runs in the main process and is not affected by renderer throttling.
+ */
+function updateTrayTitle() {
+    if (!tray)
+        return;
+    if (timerState.isRunning && !timerState.isPaused && timerState.startTime) {
+        // Calculate current elapsed time
+        const elapsed = Date.now() - timerState.startTime;
+        const formattedTime = formatTime(elapsed);
+        const monoTime = toMonospaceDigits(formattedTime);
+        currentTimerText = monoTime;
+        if (process.platform === 'darwin') {
+            tray.setTitle(monoTime);
+        }
+    }
+    else if (timerState.isPaused) {
+        // Show paused state with last elapsed time
+        const formattedTime = formatTime(timerState.elapsed);
+        const monoTime = toMonospaceDigits(formattedTime);
+        currentTimerText = `⏸ ${monoTime}`;
+        if (process.platform === 'darwin') {
+            tray.setTitle(`⏸ ${monoTime}`);
+        }
+    }
+    else {
+        // Timer stopped - clear title
+        currentTimerText = '';
+        if (process.platform === 'darwin') {
+            tray.setTitle('');
+        }
+    }
+}
+/**
+ * Start the main process timer interval.
+ * Updates tray title every second independently of renderer process.
+ */
+function startTimerInterval() {
+    if (timerInterval) {
+        clearInterval(timerInterval);
+    }
+    // Update immediately
+    updateTrayTitle();
+    // Then update every second (1000ms is sufficient for display)
+    timerInterval = setInterval(updateTrayTitle, 1000);
+}
+/**
+ * Stop the main process timer interval.
+ */
+function stopTimerInterval() {
+    if (timerInterval) {
+        clearInterval(timerInterval);
+        timerInterval = null;
+    }
+    updateTrayTitle(); // Update one last time to show final state
 }
 // Ensure screenshots directory exists
 const SCREENSHOTS_DIR = path.join(app.getPath('userData'), 'screenshots');
@@ -915,33 +990,39 @@ ipcMain.on('hide-window', () => {
 ipcMain.on('ping', () => {
     console.log('[Main] Received ping from renderer - IPC is working');
 });
-// Timer update handler for menu bar display
+// Timer state update handler for menu bar display
+// Main process maintains its own timer to avoid renderer throttling issues
 ipcMain.on('update-timer-display', (event, timerData) => {
-    console.log('[Main] Timer update received:', timerData);
-    if (!tray)
-        return;
-    if (timerData.isRunning && !timerData.isPaused) {
-        // Timer is actively running - show the elapsed time with monospace digits
-        const monoTime = toMonospaceDigits(timerData.formattedTime);
-        currentTimerText = monoTime;
-        if (process.platform === 'darwin') {
-            tray.setTitle(monoTime);
-        }
+    console.log('[Main] Timer state update received:', timerData);
+    const wasRunning = timerState.isRunning && !timerState.isPaused;
+    // Update timer state
+    timerState.isRunning = timerData.isRunning;
+    timerState.isPaused = timerData.isPaused;
+    timerState.startTime = timerData.startTime;
+    timerState.elapsed = timerData.elapsed;
+    const isNowRunning = timerState.isRunning && !timerState.isPaused;
+    // Manage the timer interval based on running state
+    if (isNowRunning && !wasRunning) {
+        // Timer started or resumed - start interval
+        console.log('[Main] Starting timer interval');
+        startTimerInterval();
     }
-    else if (timerData.isPaused) {
-        // Timer is paused - show time with pause indicator and monospace digits
-        const monoTime = toMonospaceDigits(timerData.formattedTime);
-        currentTimerText = `⏸ ${monoTime}`;
-        if (process.platform === 'darwin') {
-            tray.setTitle(`⏸ ${monoTime}`);
+    else if (!isNowRunning && wasRunning) {
+        // Timer paused or stopped - stop interval but update display
+        console.log('[Main] Stopping timer interval');
+        stopTimerInterval();
+    }
+    else if (isNowRunning) {
+        // Timer is running and was already running - ensure interval is active
+        // This handles edge cases like window reload
+        if (!timerInterval) {
+            console.log('[Main] Timer is running but interval was missing - restarting');
+            startTimerInterval();
         }
     }
     else {
-        // Timer is stopped - show just the icon (empty title)
-        currentTimerText = '';
-        if (process.platform === 'darwin') {
-            tray.setTitle('');
-        }
+        // Timer not running - just update display once
+        updateTrayTitle();
     }
 });
 // Active Window Tracking

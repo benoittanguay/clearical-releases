@@ -7,12 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.1.1-beta.1] - 2026-01-10
+## [0.1.1] - 2026-01-10
 
 ### Fixed
 - Testing Mode banner no longer appears in production builds
 - Integration modal no longer auto-opens on first launch
 - Clean first-run experience: only onboarding modal appears for new users
+- **14-day trial now works correctly**: All new users automatically get full access to all features for 14 days
 
 ---
 
@@ -86,7 +87,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version       | Date       | Type    | Notes |
 |---------------|------------|---------|-------|
-| 0.1.1-beta.1  | 2026-01-10 | Beta    | Fix first-launch experience bugs |
+| 0.1.1         | 2026-01-10 | Release | Fix first-launch and trial bugs |
 | 0.1.0-beta.1  | 2026-01-10 | Beta    | Initial beta release with full feature set |
 
 ---

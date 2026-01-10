@@ -220,7 +220,7 @@ function App() {
     }
 
     // If selectedAssignment references a deleted bucket, reset to first available
-    if (selectedAssignment?.type === 'bucket' && selectedAssignment.bucket && 
+    if (selectedAssignment?.type === 'bucket' && selectedAssignment.bucket &&
         buckets.length > 0 && !buckets.find(b => b.id === selectedAssignment.bucket!.id)) {
       setSelectedAssignment({
         type: 'bucket',
@@ -232,6 +232,26 @@ function App() {
       });
     }
   }, [buckets, selectedAssignment]);
+
+  // Listen for window opened from tray and navigate to chrono if timer is running
+  useEffect(() => {
+    // @ts-ignore
+    if (window.electron?.ipcRenderer?.on) {
+      console.log('[Renderer] Setting up tray-open listener');
+      // @ts-ignore
+      const unsubscribe = window.electron.ipcRenderer.on('window-opened-from-tray', () => {
+        console.log('[Renderer] Window opened from tray, isRunning:', isRunning);
+        if (isRunning) {
+          console.log('[Renderer] Timer is running, navigating to chrono page');
+          setCurrentView('chrono');
+        }
+      });
+
+      return () => {
+        if (unsubscribe) unsubscribe();
+      };
+    }
+  }, [isRunning]);
 
   return (
     <div className="flex h-screen bg-gray-900 text-white overflow-hidden font-sans w-full flex-col">
