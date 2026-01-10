@@ -184,6 +184,7 @@ contextBridge.exposeInMainWorld('electron', {
                 ipcRenderer.invoke('is-app-blacklisted', bundleId),
             refreshBlacklist: () => ipcRenderer.invoke('refresh-blacklist'),
             getInstalledApps: () => ipcRenderer.invoke('get-installed-apps'),
+            getAppIconBase64: (iconPath: string) => ipcRenderer.invoke('get-app-icon-base64', iconPath),
         },
     },
 });

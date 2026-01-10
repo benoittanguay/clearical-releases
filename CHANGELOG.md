@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-01-10
+
+### Fixed
+- Window now automatically appears below tray icon on app launch
+- Users no longer see a blank screen - the app is immediately visible and usable
+- Proper menu bar app behavior: window positioned below tray, hides on blur
+
+---
+
 ## [0.1.1] - 2026-01-10
 
 ### Fixed
@@ -87,6 +96,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version       | Date       | Type    | Notes |
 |---------------|------------|---------|-------|
+| 0.1.2         | 2026-01-10 | Release | Fix window visibility on launch |
 | 0.1.1         | 2026-01-10 | Release | Fix first-launch and trial bugs |
 | 0.1.0-beta.1  | 2026-01-10 | Beta    | Initial beta release with full feature set |
 

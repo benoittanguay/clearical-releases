@@ -89,6 +89,7 @@ export interface InstalledApp {
     path: string;
     category?: string;
     categoryName?: string;
+    iconPath?: string;
 }
 
 export interface ElectronAPI {
@@ -307,6 +308,7 @@ export interface ElectronAPI {
             removeBlacklistedApp: (bundleId: string) => Promise<{ success: boolean; error?: string }>;
             isAppBlacklisted: (bundleId: string) => Promise<{ success: boolean; isBlacklisted: boolean; error?: string }>;
             getInstalledApps: () => Promise<{ success: boolean; data: InstalledApp[]; error?: string }>;
+            getAppIconBase64: (iconPath: string) => Promise<{ success: boolean; dataUrl?: string; error?: string }>;
         };
     };
 }

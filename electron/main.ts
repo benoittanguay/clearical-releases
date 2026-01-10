@@ -2385,13 +2385,14 @@ ipcMain.handle('get-installed-apps', async () => {
         const apps = await AppDiscoveryService.getInstalledApps();
         console.log(`[Main] Found ${apps.length} installed apps`);
 
-        // Convert to serializable format (remove iconPath as it's not needed for the list)
+        // Convert to serializable format with iconPath included
         const serializedApps = apps.map(app => ({
             bundleId: app.bundleId,
             name: app.name,
             path: app.path,
             category: app.category,
-            categoryName: AppDiscoveryService.getCategoryName(app.category)
+            categoryName: AppDiscoveryService.getCategoryName(app.category),
+            iconPath: app.iconPath
         }));
 
         return { success: true, data: serializedApps };
@@ -2401,6 +2402,35 @@ ipcMain.handle('get-installed-apps', async () => {
             success: false,
             error: error instanceof Error ? error.message : 'Unknown error',
             data: []
+        };
+    }
+});
+
+// Convert .icns icon to base64 data URL for display in UI
+ipcMain.handle('get-app-icon-base64', async (_event, iconPath: string) => {
+    if (!iconPath || !fs.existsSync(iconPath)) {
+        return { success: false, error: 'Icon path does not exist' };
+    }
+
+    try {
+        // Use nativeImage to convert .icns to PNG
+        const image = nativeImage.createFromPath(iconPath);
+        if (image.isEmpty()) {
+            return { success: false, error: 'Failed to load icon' };
+        }
+
+        // Resize to a reasonable size (64x64) to keep data URL small
+        const resized = image.resize({ width: 64, height: 64 });
+        const png = resized.toPNG();
+        const base64 = png.toString('base64');
+        const dataUrl = `data:image/png;base64,${base64}`;
+
+        return { success: true, dataUrl };
+    } catch (error) {
+        console.error('[Main] get-app-icon-base64 failed:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error'
         };
     }
 });
@@ -2498,6 +2528,19 @@ function toggleWindow() {
     }
 }
 
+function showWindowBelowTray() {
+    if (!win || !tray) {
+        console.warn('[Main] Cannot show window - window or tray not initialized');
+        return;
+    }
+
+    const { x, y } = getWindowPosition();
+    win.setPosition(x, y, false);
+    win.show();
+    win.focus();
+    console.log('[Main] Window shown below tray icon at position:', { x, y });
+}
+
 function createWindow() {
     const preloadPath = path.join(__dirname, 'preload.cjs');
     console.log('[Main] Preload Path:', preloadPath);
@@ -2505,7 +2548,7 @@ function createWindow() {
     win = new BrowserWindow({
         width: 640,
         height: 450,
-        show: true,
+        show: false, // Don't show immediately - we'll position and show after tray is ready
         frame: false,
         resizable: true,
         minWidth: 400,
@@ -2621,16 +2664,23 @@ app.whenReady().then(() => {
     createWindow();
     createTray();
 
+    // Hide dock icon on macOS - app only appears in menu bar
+    // Do this before showing window to avoid visual glitches
+    if (process.platform === 'darwin') {
+        app.dock.hide();
+        console.log('[Main] Dock icon hidden - app runs from menu bar only');
+    }
+
+    // Now that both window and tray are created, show the window below the tray icon
+    // Use a small delay to ensure tray icon is fully rendered and positioned
+    setTimeout(() => {
+        showWindowBelowTray();
+    }, 100);
+
     // Initialize auto-updater
     // Set main window reference so updater can send status updates
     updater.setMainWindow(win);
     // Start auto-update checks (with delay)
     updater.start();
     console.log('[Main] Auto-updater initialized');
-
-    // Hide dock icon on macOS - app only appears in menu bar
-    if (process.platform === 'darwin') {
-        app.dock.hide();
-        console.log('[Main] Dock icon hidden - app runs from menu bar only');
-    }
 });
