@@ -399,7 +399,7 @@ export function useTimer() {
             if (screenshotIntervalRef.current) clearInterval(screenshotIntervalRef.current);
             if (windowPollRef.current) clearInterval(windowPollRef.current);
         };
-    }, [isRunning, isPaused, startTime, windowActivity]);
+    }, [isRunning, isPaused, startTime]); // Note: windowActivity intentionally excluded to prevent interval thrashing
 
     const start = () => {
         setIsRunning(true);
