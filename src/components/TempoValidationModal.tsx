@@ -158,7 +158,7 @@ export function TempoValidationModal({
                 timeSpentSeconds: TempoService.durationMsToSeconds(entry.duration),
                 startDate: TempoService.formatDate(entry.startTime),
                 startTime: TempoService.formatTime(entry.startTime),
-                description: description.trim() || `Time logged from TimePortal for ${formatTime(entry.duration)}`,
+                description: description.trim() || `Time logged from Clearical for ${formatTime(entry.duration)}`,
                 authorAccountId: currentUser.accountId,
                 attributes: [
                     {

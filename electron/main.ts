@@ -158,9 +158,9 @@ ipcMain.handle('capture-screenshot', async () => {
                 currentWindow = { appName, windowTitle };
                 console.log('[Main] capture-screenshot - Active window:', currentWindow);
 
-                // NOTE: We don't skip here based on active window - we'll filter TimePortal
+                // NOTE: We don't skip here based on active window - we'll filter Clearical
                 // from the window sources later. This allows screenshots to be taken even
-                // when TimePortal is in focus (we'll capture other windows).
+                // when Clearical is in focus (we'll capture other windows).
             }
         } catch (error) {
             console.log('[Main] Could not get active window info for screenshot:', error);
@@ -181,18 +181,18 @@ ipcMain.handle('capture-screenshot', async () => {
             console.log(`[Main] ${index}: "${source.name}" (${size.width}x${size.height})`);
         });
 
-        // Filter out the TimePortal app window itself and very small windows
+        // Filter out the Clearical app window itself and very small windows
         const validSources = sources.filter(source => {
             const lowerName = source.name.toLowerCase();
             const size = source.thumbnail.getSize();
-            
-            // Filter out the actual TimePortal app window
-            if (lowerName === 'time-portal' || lowerName === 'timeportal') {
-                console.log('[Main] Filtering out TimePortal app window:', source.name);
+
+            // Filter out the actual Clearical app window
+            if (lowerName === 'time-portal' || lowerName === 'timeportal' || lowerName === 'clearical') {
+                console.log('[Main] Filtering out Clearical app window:', source.name);
                 return false;
             }
 
-            // Filter out Electron windows (these are usually the TimePortal app or dev tools)
+            // Filter out Electron windows (these are usually the Clearical app or dev tools)
             if (lowerName === 'electron' || source.name === 'Electron') {
                 console.log('[Main] Filtering out Electron window:', source.name);
                 return false;
@@ -595,7 +595,7 @@ function generateTextBasedSummary(context: {
     // Extract project name from descriptions and window titles
     let projectName: string | null = null;
     const projectPatterns = [
-        /\b(timeportal|time[\s-]?portal)\b/gi,
+        /\b(timeportal|time[\s-]?portal|clearical)\b/gi,
         /\bthe\s+([A-Z][a-zA-Z]{3,20})\s+(?:app|application|project|system)\b/g,
         /\b([A-Z][a-zA-Z]{3,20})\s+(?:application|project)\b/g
     ];
@@ -604,8 +604,8 @@ function generateTextBasedSummary(context: {
         const matches = allText.match(pattern);
         if (matches && matches.length > 0) {
             const match = matches[0].trim();
-            if (match.toLowerCase().includes('timeportal') || match.toLowerCase().includes('time portal')) {
-                projectName = 'TimePortal';
+            if (match.toLowerCase().includes('timeportal') || match.toLowerCase().includes('time portal') || match.toLowerCase().includes('clearical')) {
+                projectName = 'Clearical';
                 break;
             }
             // Extract project name from pattern captures
@@ -700,7 +700,7 @@ function generateTextBasedSummary(context: {
 
     // Sentence 3: IDE and tools used
     const uniqueApps = [...new Set(context.appNames)].filter(app =>
-        app && !['Electron', 'Time-Portal', 'TimePortal', 'Unknown'].includes(app)
+        app && !['Electron', 'Time-Portal', 'TimePortal', 'Clearical', 'Unknown'].includes(app)
     );
 
     if (uniqueApps.length > 0) {
@@ -2125,7 +2125,7 @@ function createTray() {
 
     // Set initial title and tooltip
     tray.setTitle(''); // Start with empty title (icon only)
-    tray.setToolTip('TimePortal');
+    tray.setToolTip('Clearical');
 
     // Click toggles the main window
     tray.on('click', () => {

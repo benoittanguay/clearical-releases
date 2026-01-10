@@ -744,7 +744,7 @@ export function Settings() {
 
             <div className="bg-gray-800 p-3 rounded-lg">
                 <h3 className="text-xs font-semibold text-gray-400 uppercase mb-2">About</h3>
-                <p className="text-xs text-gray-500">TimePortal v0.1.0</p>
+                <p className="text-xs text-gray-500">Clearical v0.1.0</p>
             </div>
 
             {/* Integration Configuration Modal */}

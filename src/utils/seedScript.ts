@@ -2,7 +2,7 @@
  * Standalone seed script that can be run from the browser console.
  *
  * Usage in browser console:
- * 1. Open the TimePortal app
+ * 1. Open the Clearical app
  * 2. Open browser DevTools (F12 or Cmd+Option+I)
  * 3. Go to Console tab
  * 4. Run: seedMockData(14)  // Seeds 14 days of data
@@ -72,7 +72,7 @@ window.exportData = () => {
 };
 
 // Log available commands
-console.log('%cTimePortal Dev Utils Available:', 'color: cyan; font-weight: bold; font-size: 14px');
+console.log('%cClearical Dev Utils Available:', 'color: cyan; font-weight: bold; font-size: 14px');
 console.log('%cseedMockData(days)', 'color: yellow', '- Seed mock data for N days (default: 14)');
 console.log('%cclearAllData()', 'color: yellow', '- Clear all entries');
 console.log('%cexportData()', 'color: yellow', '- Export current data as JSON');

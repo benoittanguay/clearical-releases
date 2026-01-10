@@ -20,7 +20,7 @@ export function AppWithUpdates() {
         <div className="app">
             {/* Your existing app content */}
             <div className="main-content">
-                <h1>TimePortal</h1>
+                <h1>Clearical</h1>
                 {/* ... rest of your app ... */}
             </div>
 

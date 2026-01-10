@@ -124,7 +124,7 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                                             <path d="M10 16h4"/>
                                         </svg>
                                     </div>
-                                    <h2 className="text-3xl font-bold text-white mb-2">Welcome to TimePortal</h2>
+                                    <h2 className="text-3xl font-bold text-white mb-2">Welcome to Clearical</h2>
                                     <p className="text-gray-400 text-lg">Let's get you started with your first bucket</p>
                                 </div>
 
@@ -228,7 +228,7 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                                         </svg>
                                     </div>
                                     <h2 className="text-3xl font-bold text-white mb-2">AI-Powered Insights</h2>
-                                    <p className="text-gray-400 text-lg">TimePortal works smarter, not harder</p>
+                                    <p className="text-gray-400 text-lg">Clearical works smarter, not harder</p>
                                 </div>
 
                                 {/* Features List */}
@@ -266,7 +266,7 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                                             <div className="flex-1">
                                                 <h3 className="text-lg font-semibold text-white mb-1">Auto-Assignment</h3>
                                                 <p className="text-sm text-gray-400">
-                                                    Based on your activity patterns, TimePortal suggests the right bucket or Jira
+                                                    Based on your activity patterns, Clearical suggests the right bucket or Jira
                                                     issue for each time entry, making tracking effortless.
                                                 </p>
                                             </div>
@@ -286,7 +286,7 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                                             <div className="flex-1">
                                                 <h3 className="text-lg font-semibold text-white mb-1">Learns Your Workflow</h3>
                                                 <p className="text-sm text-gray-400">
-                                                    The more you use TimePortal, the better it gets at understanding your work
+                                                    The more you use Clearical, the better it gets at understanding your work
                                                     patterns and providing accurate suggestions.
                                                 </p>
                                             </div>

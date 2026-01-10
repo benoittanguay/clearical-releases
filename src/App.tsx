@@ -250,7 +250,7 @@ function App() {
       <div className="flex flex-1 overflow-hidden">
         {/* Sidebar */}
         <nav className="w-20 bg-gray-950 flex flex-col items-center py-4 border-r border-gray-800 z-50 drag-handle">
-        <div className="mb-8 text-green-500 font-bold text-xl tracking-tighter">TP</div>
+        <div className="mb-8 text-green-500 font-bold text-xl tracking-tighter">CL</div>
 
         <div className="flex flex-col gap-6 w-full items-center no-drag">
           <button onClick={() => setCurrentView('chrono')} className={`flex flex-col items-center gap-1 group w-full`}>

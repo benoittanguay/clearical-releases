@@ -1,11 +1,11 @@
 {
-  "name": "time-portal",
+  "name": "clearical",
   "private": true,
   "version": "0.1.0",
   "type": "module",
   "build": {
-    "appId": "io.clearical.timeportal",
-    "productName": "TimePortal",
+    "appId": "io.clearical.app",
+    "productName": "Clearical",
     "directories": {
       "buildResources": "build"
     },
@@ -13,13 +13,24 @@
       "dist/**/*",
       "dist-electron/**/*",
       "node_modules/**/*",
-      "package.json"
+      "package.json",
+      "!tests/**/*",
+      "!**/*.test.ts",
+      "!**/*.test.js",
+      "!**/*.spec.ts",
+      "!**/*.spec.js",
+      "!playwright.config.ts",
+      "!playwright-report/**/*",
+      "!test-results/**/*",
+      "!.playwright-setup-summary.md"
     ],
     "extraResources": [
       {
         "from": "native/screenshot-analyzer/build/screenshot-analyzer",
         "to": "screenshot-analyzer",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
       }
     ],
     "mac": {
@@ -32,11 +43,17 @@
       "target": [
         {
           "target": "dmg",
-          "arch": ["x64", "arm64"]
+          "arch": [
+            "x64",
+            "arm64"
+          ]
         },
         {
           "target": "zip",
-          "arch": ["x64", "arm64"]
+          "arch": [
+            "x64",
+            "arm64"
+          ]
         }
       ]
     },
@@ -60,11 +77,17 @@
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64", "ia32"]
+          "arch": [
+            "x64",
+            "ia32"
+          ]
         },
         {
           "target": "zip",
-          "arch": ["x64", "ia32"]
+          "arch": [
+            "x64",
+            "ia32"
+          ]
         }
       ]
     },
@@ -73,17 +96,21 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "TimePortal"
+      "shortcutName": "Clearical"
     },
     "linux": {
       "icon": "build/icon.png",
-      "target": ["AppImage", "deb", "rpm"],
+      "target": [
+        "AppImage",
+        "deb",
+        "rpm"
+      ],
       "category": "Office"
     },
     "publish": {
       "provider": "github",
       "owner": "benoittanguay",
-      "repo": "TimePortal",
+      "repo": "Clearical",
       "releaseType": "release"
     }
   },
@@ -92,12 +119,18 @@
     "build": "tsc -b && vite build",
     "build:electron-main": "tsc -p electron/tsconfig.json && cp dist-electron/electron/*.js dist-electron/electron/*.cjs dist-electron/ && cp -r dist-electron/electron/subscription dist-electron/ && cp -r dist-electron/electron/licensing dist-electron/ && cp -r dist-electron/electron/auth dist-electron/",
     "dev:electron": "npm run build:electron-main && concurrently \"vite\" \"tsc -p electron/tsconfig.json -w\" \"wait-on tcp:5173 && electron .\"",
-    "build:electron": "tsc -b && vite build && npm run build:electron-main && electron-builder",
+    "build:electron": "cross-env BUILD_ENV=production tsc -b && vite build && npm run build:electron-main && electron-builder",
+    "build:electron:dev": "cross-env BUILD_ENV=development tsc -b && vite build && npm run build:electron-main && electron-builder",
+    "build:electron:prod": "cross-env BUILD_ENV=production tsc -b && vite build && npm run build:electron-main && electron-builder",
     "release:alpha": "export $(grep -v '^#' .env.local | xargs) && npm run build:electron -- --publish always -c.publish.releaseType=draft",
     "release:beta": "export $(grep -v '^#' .env.local | xargs) && npm run build:electron -- --publish always -c.publish.releaseType=prerelease",
     "release:stable": "export $(grep -v '^#' .env.local | xargs) && npm run build:electron -- --publish always -c.publish.releaseType=release",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "npm run build:electron-main && playwright test",
+    "test:headed": "npm run build:electron-main && playwright test --headed",
+    "test:debug": "npm run build:electron-main && playwright test --debug",
+    "test:report": "playwright show-report test-results/html"
   },
   "main": "dist-electron/main.js",
   "dependencies": {
@@ -111,6 +144,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",
+    "@playwright/test": "^1.57.0",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^22.10.2",
     "@types/react": "^19.0.2",
@@ -118,12 +152,14 @@
     "@vitejs/plugin-react-swc": "^3.5.0",
     "autoprefixer": "^10.4.20",
     "concurrently": "^9.1.0",
+    "cross-env": "^7.0.3",
     "electron": "^33.4.11",
     "electron-builder": "^25.1.8",
     "eslint": "^9.17.0",
     "eslint-plugin-react-hooks": "^5.0.0",
     "eslint-plugin-react-refresh": "^0.4.16",
     "globals": "^15.14.0",
+    "playwright": "^1.57.0",
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.17",
     "typescript": "~5.6.2",

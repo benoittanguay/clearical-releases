@@ -12,9 +12,10 @@
  *
  * Total header overhead: 38 bytes
  */
-import { safeStorage } from 'electron';
+import { safeStorage, app } from 'electron';
 import crypto from 'crypto';
 import fs from 'fs';
+import path from 'path';
 // Constants
 const ENCRYPTION_HEADER = Buffer.from('ENCRYPTED', 'utf-8'); // 9 bytes
 const ENCRYPTION_VERSION = 0x01; // 1 byte
@@ -67,8 +68,6 @@ export function getEncryptionKey() {
  * Get the path where the encrypted key is stored
  */
 function getKeyStoragePath() {
-    const { app } = require('electron');
-    const path = require('path');
     return path.join(app.getPath('userData'), '.screenshot-key');
 }
 /**

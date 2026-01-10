@@ -61,3 +61,8 @@ Desktop.ini
 *.tmp
 *.temp
 .cache
+
+# Test results
+test-results/
+playwright-report/
+playwright/.cache/

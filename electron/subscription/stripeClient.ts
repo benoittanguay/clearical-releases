@@ -109,7 +109,7 @@ export class StripeClient {
     private async createCustomer(email: string, deviceInfo: DeviceInfo): Promise<StripeCustomer> {
         const params = new URLSearchParams({
             email,
-            description: `TimePortal user - ${deviceInfo.deviceName}`,
+            description: `Clearical user - ${deviceInfo.deviceName}`,
             'metadata[deviceId]': deviceInfo.deviceId,
             'metadata[platform]': deviceInfo.platform,
             'metadata[osVersion]': deviceInfo.osVersion,

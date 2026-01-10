@@ -9,7 +9,14 @@
  * - Stripe publishable key is public
  *
  * Secret keys (Stripe secret, etc.) should be in backend only.
+ *
+ * ENVIRONMENT SWITCHING:
+ * - Development: Uses Clearical Dev environment (wyikhlelmuvcxozwktzr.supabase.co)
+ * - Production: Uses Clearical App environment (jiuxhwrgmexhhpoaazbj.supabase.co)
+ * - Environment is determined by app.isPackaged or BUILD_ENV environment variable
  */
+
+import { app } from 'electron';
 
 export interface AppConfig {
     // Supabase (Auth & Database)
@@ -41,29 +48,29 @@ export interface AppConfig {
 }
 
 /**
- * Production configuration
- * These values are bundled into the app
+ * Development Configuration (Clearical Dev)
+ * Used when running in development mode or when BUILD_ENV=development
  */
-export const config: AppConfig = {
+const developmentConfig: AppConfig = {
     supabase: {
-        url: 'https://jiuxhwrgmexhhpoaazbj.supabase.co',
-        anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImppdXhod3JnbWV4aGhwb2FhemJqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk1MTE0MzAsImV4cCI6MjA2NTA4NzQzMH0.SI3jPMLxjHsNFAGQ8gHiGY2fgcRu9cgXZgl527IMfEU',
+        url: 'https://wyikhlelmuvcxozwktzr.supabase.co',
+        anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind5aWtobGVsbXV2Y3hvendrdHpyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgwNTY0NDksImV4cCI6MjA4MzYzMjQ0OX0.f_E7FudrxoXsq40QGqnujt3IZHai116TrzHlcFh-rQI',
     },
 
     stripe: {
-        // Publishable key is safe to include - it's meant to be public
+        // Stripe test publishable key for development
         publishableKey: 'pk_test_51Rpg8S2O2zPtqFKnntZfwgWA0rRp1dircceQFDIiiz6X5o16cHrvyLzTEDvqTRFlq1EcxIeMphwYLjjgJHY8aQGB00AFJQOmQM',
     },
 
     api: {
-        // Supabase Edge Functions for Stripe (server-side operations)
-        stripeCheckout: 'https://jiuxhwrgmexhhpoaazbj.supabase.co/functions/v1/stripe-checkout',
-        stripePortal: 'https://jiuxhwrgmexhhpoaazbj.supabase.co/functions/v1/stripe-portal',
-        stripeWebhook: 'https://jiuxhwrgmexhhpoaazbj.supabase.co/functions/v1/stripe-webhook',
+        // Development Supabase Edge Functions
+        stripeCheckout: 'https://wyikhlelmuvcxozwktzr.supabase.co/functions/v1/stripe-checkout',
+        stripePortal: 'https://wyikhlelmuvcxozwktzr.supabase.co/functions/v1/stripe-portal',
+        stripeWebhook: 'https://wyikhlelmuvcxozwktzr.supabase.co/functions/v1/stripe-webhook',
     },
 
     app: {
-        name: 'TimePortal',
+        name: 'Clearical',
         version: '0.1.0',
         website: 'https://clearical.io',
         support: 'https://clearical.io/support',
@@ -71,29 +78,87 @@ export const config: AppConfig = {
 };
 
 /**
- * Get configuration value with optional override from environment
- * In development, environment variables can override bundled config
+ * Production Configuration (Clearical App)
+ * Used when app is packaged or when BUILD_ENV=production
  */
-export function getConfig(): AppConfig {
-    // In development, allow environment overrides
-    if (process.env.NODE_ENV === 'development' || !require('electron').app.isPackaged) {
-        return {
-            supabase: {
-                url: process.env.SUPABASE_URL || config.supabase.url,
-                anonKey: process.env.SUPABASE_ANON_KEY || config.supabase.anonKey,
-            },
-            stripe: {
-                publishableKey: process.env.STRIPE_PUBLISHABLE_KEY || config.stripe.publishableKey,
-            },
-            api: {
-                stripeCheckout: process.env.STRIPE_CHECKOUT_URL || config.api.stripeCheckout,
-                stripePortal: process.env.STRIPE_PORTAL_URL || config.api.stripePortal,
-                stripeWebhook: process.env.STRIPE_WEBHOOK_URL || config.api.stripeWebhook,
-            },
-            app: config.app,
-        };
+const productionConfig: AppConfig = {
+    supabase: {
+        url: 'https://jiuxhwrgmexhhpoaazbj.supabase.co',
+        anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImppdXhod3JnbWV4aGhwb2FhemJqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk1MTE0MzAsImV4cCI6MjA2NTA4NzQzMH0.SI3jPMLxjHsNFAGQ8gHiGY2fgcRu9cgXZgl527IMfEU',
+    },
+
+    stripe: {
+        // Stripe live publishable key for production
+        publishableKey: 'pk_live_51Rpg8S2O2zPtqFKnX2v6X4DnFkXOVuflVQV3VzndswExtMIjXTc7yOYyo04GVo2pBQxr3eAWSn2Uukm9PBm5DRYl0087tuBY6o',
+    },
+
+    api: {
+        // Production Supabase Edge Functions
+        stripeCheckout: 'https://jiuxhwrgmexhhpoaazbj.supabase.co/functions/v1/stripe-checkout',
+        stripePortal: 'https://jiuxhwrgmexhhpoaazbj.supabase.co/functions/v1/stripe-portal',
+        stripeWebhook: 'https://jiuxhwrgmexhhpoaazbj.supabase.co/functions/v1/stripe-webhook',
+    },
+
+    app: {
+        name: 'Clearical',
+        version: '0.1.0',
+        website: 'https://clearical.io',
+        support: 'https://clearical.io/support',
+    },
+};
+
+/**
+ * Determine if the app is running in production mode
+ *
+ * Environment detection priority:
+ * 1. BUILD_ENV environment variable (for CI/CD and explicit control)
+ * 2. app.isPackaged (true when running from packaged app, false in development)
+ *
+ * @returns true if running in production mode, false for development
+ */
+function isProduction(): boolean {
+    // Allow BUILD_ENV to explicitly override environment
+    if (process.env.BUILD_ENV) {
+        return process.env.BUILD_ENV === 'production';
     }
 
-    // In production, use bundled config
+    // Default to checking if the app is packaged
+    try {
+        return app.isPackaged;
+    } catch (error) {
+        // If electron is not available (e.g., in tests), default to development
+        console.warn('Electron app not available, defaulting to development config');
+        return false;
+    }
+}
+
+/**
+ * Get the appropriate configuration based on the current environment
+ *
+ * Returns development config when:
+ * - Running in development mode (npm run dev)
+ * - BUILD_ENV=development is set
+ * - app.isPackaged is false
+ *
+ * Returns production config when:
+ * - Running from packaged app
+ * - BUILD_ENV=production is set
+ *
+ * @returns AppConfig object with environment-specific values
+ */
+export function getConfig(): AppConfig {
+    const config = isProduction() ? productionConfig : developmentConfig;
+
+    // Log the active environment for debugging (only in development)
+    if (!isProduction()) {
+        console.log('[Config] Using DEVELOPMENT configuration (Clearical Dev)');
+    }
+
     return config;
 }
+
+/**
+ * Legacy export for backward compatibility
+ * @deprecated Use getConfig() instead to ensure correct environment configuration
+ */
+export const config = getConfig();
