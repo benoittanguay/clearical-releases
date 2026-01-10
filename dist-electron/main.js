@@ -1901,7 +1901,10 @@ ipcMain.handle('db:migrate-from-localstorage', async (event, localStorageData) =
     }
 });
 function createTray() {
-    const iconPath = path.join(process.env.VITE_PUBLIC || '', 'tray-icon.png');
+    // In packaged app, tray icons are in resources folder; in dev, they're in public/
+    const iconPath = app.isPackaged
+        ? path.join(process.resourcesPath, 'tray-icon.png')
+        : path.join(process.env.VITE_PUBLIC || '', 'tray-icon.png');
     console.log('Tray Icon Path:', iconPath);
     const icon = nativeImage.createFromPath(iconPath);
     tray = new Tray(icon.resize({ width: 16, height: 16 }));

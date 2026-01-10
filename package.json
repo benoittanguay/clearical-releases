@@ -9,11 +9,34 @@
     "directories": {
       "buildResources": "build"
     },
+    "asar": {
+      "smartUnpack": true
+    },
+    "asarUnpack": [
+      "package.json",
+      "dist/**/*",
+      "dist-electron/**/*"
+    ],
     "files": [
+      "package.json",
       "dist/**/*",
       "dist-electron/**/*",
       "node_modules/**/*",
-      "package.json",
+      "!**/LICENSE*",
+      "!**/LICENCE*",
+      "!**/*.md",
+      "!**/README*",
+      "!**/CHANGELOG*",
+      "!**/HISTORY*",
+      "!**/*.map",
+      "!**/*.ts",
+      "!**/*.d.ts",
+      "!**/node_modules/**/test/**",
+      "!**/node_modules/**/tests/**",
+      "!**/node_modules/**/__tests__/**",
+      "!**/node_modules/playwright/**",
+      "!**/node_modules/playwright-core/**",
+      "!**/node_modules/@playwright/**",
       "!tests/**/*",
       "!**/*.test.ts",
       "!**/*.test.js",
@@ -31,6 +54,14 @@
         "filter": [
           "**/*"
         ]
+      },
+      {
+        "from": "public/tray-icon.png",
+        "to": "tray-icon.png"
+      },
+      {
+        "from": "public/tray-icon@2x.png",
+        "to": "tray-icon@2x.png"
       }
     ],
     "mac": {
