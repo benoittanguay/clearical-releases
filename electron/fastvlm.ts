@@ -45,6 +45,20 @@ interface AnalysisResponse {
     requestId?: string;
 }
 
+interface ClassifyRequest {
+    description: string;
+    options: Array<{ id: string; name: string }>;
+    context?: string;
+}
+
+interface ClassifyResponse {
+    success: boolean;
+    selected_id?: string;
+    selected_name?: string;
+    confidence?: number;
+    error?: string;
+}
+
 class FastVLMServer {
     private process: ChildProcessWithoutNullStreams | null = null;
     private isRunning: boolean = false;
@@ -357,6 +371,66 @@ class FastVLMServer {
             return {
                 success: false,
                 description: null,
+                error: error instanceof Error ? error.message : String(error)
+            };
+        }
+    }
+
+    /**
+     * Classify an activity description to one of the provided options
+     * Uses the Qwen3-0.6B reasoning model for semantic understanding
+     */
+    async classifyActivity(
+        description: string,
+        options: Array<{ id: string; name: string }>,
+        context?: string
+    ): Promise<ClassifyResponse> {
+        // Ensure server is running before attempting classification
+        console.log('[FastVLM] Ensuring server is running for classification...');
+        const serverReady = await this.ensureRunning();
+
+        if (!serverReady) {
+            return {
+                success: false,
+                error: 'Failed to start FastVLM server'
+            };
+        }
+
+        try {
+            const requestBody: ClassifyRequest = {
+                description,
+                options,
+                context
+            };
+
+            console.log('[FastVLM] Sending classify request with', options.length, 'options');
+
+            const response = await fetch(`${this.serverUrl}/classify`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(requestBody),
+                signal: AbortSignal.timeout(15000) // 15 second timeout for classification
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Server returned ${response.status}: ${errorText}`);
+            }
+
+            const result = await response.json() as ClassifyResponse;
+            console.log('[FastVLM] Classification complete:', result.selected_name, 'confidence:', result.confidence);
+
+            // Reset idle timer after successful classification
+            this.resetIdleTimer();
+
+            return result;
+
+        } catch (error) {
+            console.error('[FastVLM] Classification request failed:', error);
+            return {
+                success: false,
                 error: error instanceof Error ? error.message : String(error)
             };
         }
