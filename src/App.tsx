@@ -16,6 +16,7 @@ import { OnboardingModal } from './components/OnboardingModal';
 import { IntegrationConfigModal } from './components/IntegrationConfigModal';
 import { UpdateNotification } from './components/UpdateNotification';
 import { UpdateSuccessModal } from './components/UpdateSuccessModal';
+import { PermissionRequestModal } from './components/PermissionRequestModal';
 import type { WorkAssignment } from './context/StorageContext';
 import './App.css'
 
@@ -34,8 +35,10 @@ function App() {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showIntegrationModal, setShowIntegrationModal] = useState(false);
   const [showUpdateSuccessModal, setShowUpdateSuccessModal] = useState(false);
+  const [showPermissionModal, setShowPermissionModal] = useState(false);
+  const [isStopping, setIsStopping] = useState(false);
 
-  const { isRunning, isPaused, elapsed, start: startTimer, stop: stopTimer, pause: pauseTimer, resume: resumeTimer, formatTime } = useTimer();
+  const { isRunning, isPaused, elapsed, start: startTimer, stop: stopTimer, pause: pauseTimer, resume: resumeTimer, formatTime, checkPermissions } = useTimer();
 
   // Check for onboarding BEFORE migration - prevents flash of main UI
   useEffect(() => {
@@ -207,23 +210,54 @@ function App() {
 
   const handleStartStop = async () => {
     if (!isRunning) {
+      // Check permissions before starting
+      const permissions = await checkPermissions();
+
+      if (!permissions.allGranted) {
+        // Show permission modal if permissions are not granted
+        setShowPermissionModal(true);
+        return;
+      }
+
       // Start timer fresh (elapsed should be 0)
       startTimer();
     } else {
-      // Stop timer and save entry - await to ensure AI analyses complete
-      const finalActivity = await stopTimer();
-      const newEntry = await addEntry({
-        startTime: Date.now() - elapsed,
-        endTime: Date.now(),
-        duration: elapsed,
-        assignment: selectedAssignment || undefined,
-        windowActivity: finalActivity
-      });
+      try {
+        // Set stopping state to show loading UI
+        setIsStopping(true);
 
-      // Navigate to the Activity Details view for the new entry
-      setSelectedEntry(newEntry.id);
-      setCurrentView('worklog-detail');
+        // Stop timer and save entry - await to ensure AI analyses complete
+        const finalActivity = await stopTimer();
+        const newEntry = await addEntry({
+          startTime: Date.now() - elapsed,
+          endTime: Date.now(),
+          duration: elapsed,
+          assignment: selectedAssignment || undefined,
+          windowActivity: finalActivity
+        });
+
+        console.log('[App] Activity saved, navigating to details for entry:', newEntry.id);
+
+        // Navigate to the Activity Details view for the new entry
+        // Use setTimeout to ensure state update completes before navigation
+        setSelectedEntry(newEntry.id);
+        setCurrentView('worklog-detail');
+
+        // Navigation happens immediately, but the worklog-detail view will show
+        // a loading state until the entry appears in the entries array
+      } catch (error) {
+        console.error('[App] Error stopping timer:', error);
+        alert('Failed to save activity. Please try again.');
+      } finally {
+        // Reset stopping state
+        setIsStopping(false);
+      }
     }
+  };
+
+  const handlePermissionsGranted = () => {
+    // Permissions are now granted, start the timer
+    startTimer();
   };
 
   const handlePauseResume = () => {
@@ -323,12 +357,23 @@ function App() {
 
       <div className="flex-1 flex flex-col h-full bg-gray-900 border-l border-gray-800 min-w-0">
         {/* Title Bar - Drag region for window movement */}
-        <header className="h-8 bg-gray-950 drag-handle select-none shrink-0"></header>
+        <header className="h-0 bg-gray-950 drag-handle select-none shrink-0"></header>
 
         {/* content */}
         <div className="flex-1 flex flex-col w-full relative overflow-hidden">
           {currentView === 'chrono' && (
-            <div className="flex flex-col items-center justify-center h-full w-full p-4">
+            <div className="flex flex-col items-center justify-center h-full w-full px-4 pb-4">
+              {/* Stopping overlay */}
+              {isStopping && (
+                <div className="absolute inset-0 bg-gray-900/95 flex flex-col items-center justify-center z-50">
+                  <div className="flex flex-col items-center gap-4">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-400"></div>
+                    <div className="text-green-400 font-medium text-lg">Finalizing activity...</div>
+                    <div className="text-gray-400 text-sm">Processing screenshots and analysis</div>
+                  </div>
+                </div>
+              )}
+
               {/* Assignment Picker - Above the counter */}
               <div className="w-full max-w-xs mb-6">
                 <label className="text-xs text-gray-500 uppercase font-bold mb-1.5 block tracking-wider">Assignment</label>
@@ -360,11 +405,14 @@ function App() {
               <div className="w-full max-w-md flex gap-2.5 min-h-[52px]">
                 <button
                   onClick={handleStartStop}
+                  disabled={isStopping}
                   className={`
                     flex-1 py-3 rounded-lg text-lg font-bold transition-all transform hover:-translate-y-0.5 active:scale-95 shadow-lg
-                    ${isRunning
-                      ? 'bg-red-500 hover:bg-red-600 shadow-red-500/30'
-                      : 'bg-green-500 hover:bg-green-600 shadow-green-500/30'
+                    ${isStopping
+                      ? 'bg-gray-700 text-gray-500 cursor-not-allowed opacity-50'
+                      : isRunning
+                        ? 'bg-red-500 hover:bg-red-600 shadow-red-500/30'
+                        : 'bg-green-500 hover:bg-green-600 shadow-green-500/30'
                     }
                   `}
                 >
@@ -374,10 +422,10 @@ function App() {
                 {/* Pause/Resume button - always takes up space to prevent layout shift */}
                 <button
                   onClick={handlePauseResume}
-                  disabled={!isRunning}
+                  disabled={!isRunning || isStopping}
                   className={`
                     flex-1 py-3 rounded-lg text-lg font-bold transition-all transform shadow-lg
-                    ${!isRunning
+                    ${!isRunning || isStopping
                       ? 'bg-gray-700 text-gray-500 cursor-not-allowed opacity-50'
                       : isPaused
                         ? 'bg-blue-500 hover:bg-blue-600 shadow-blue-500/30 hover:-translate-y-0.5 active:scale-95'
@@ -394,27 +442,16 @@ function App() {
           {currentView === 'buckets' && (
             <>
               {/* Sticky Header */}
-              <div className="flex-shrink-0 bg-gray-900 border-b border-gray-800 px-4 py-3 z-20">
+              <div className="flex-shrink-0 bg-gray-900 border-b border-gray-800 px-4 py-3 z-20 drag-handle">
                 <div className="flex justify-between items-center">
                   <h2 className="text-xl font-bold">Manage Buckets</h2>
-                  <div className="flex items-center gap-3">
-                    {settings.tempo?.enabled && (
-                      <div className="text-xs text-green-400 flex items-center gap-1.5">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
-                          <circle cx="12" cy="12" r="4"/>
-                        </svg>
-                        Tempo Connected
-                      </div>
-                    )}
-                  </div>
                 </div>
               </div>
 
               {/* Scrollable Content */}
               <div className="flex-1 overflow-y-auto px-4 pb-4">
                 {/* Action Buttons */}
-                <div className="flex gap-2 mb-4 mt-3">
+                <div className="flex gap-2 mb-4">
                   <button
                     onClick={() => setShowCreateBucketModal(true)}
                     className="flex items-center gap-2 bg-green-600 hover:bg-green-500 px-4 py-2 rounded-lg text-sm font-medium transition-all hover:shadow-lg hover:shadow-green-500/20"
@@ -459,7 +496,7 @@ function App() {
           {currentView === 'settings' && (
             <>
               {/* Sticky Header */}
-              <div className="flex-shrink-0 bg-gray-900 border-b border-gray-800 px-4 py-3 z-20">
+              <div className="flex-shrink-0 bg-gray-900 border-b border-gray-800 px-4 py-3 z-20 drag-handle">
                 <h2 className="text-xl font-bold">Settings</h2>
               </div>
               {/* Scrollable Content */}
@@ -474,10 +511,11 @@ function App() {
           {currentView === 'worklog-detail' && selectedEntry && (() => {
             const entry = entries.find(e => e.id === selectedEntry);
             if (!entry) {
-              // Entry not found - navigate back to worklog
+              // Entry not found yet - show loading state while state updates
               return (
-                <div className="flex items-center justify-center h-full">
-                  <div className="text-gray-400">Loading activity...</div>
+                <div className="flex flex-col items-center justify-center h-full gap-4">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-400"></div>
+                  <div className="text-green-400 font-medium text-lg">Loading activity...</div>
                 </div>
               );
             }
@@ -496,11 +534,11 @@ function App() {
           {currentView === 'worklog' && (
             <>
               {/* Fixed Header */}
-              <div className="flex-shrink-0 bg-gray-900 border-b border-gray-800 px-6 py-4 z-20">
+              <div className="flex-shrink-0 bg-gray-900 border-b border-gray-800 px-6 py-4 z-20 drag-handle">
                 <div className="flex items-center justify-between">
                   <h2 className="text-2xl font-bold">Worklog</h2>
                   {entries.length > 0 && (
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3 no-drag">
                       <button
                         onClick={handleBulkLogToTempo}
                         className={`px-4 py-2 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2 ${
@@ -534,9 +572,9 @@ function App() {
               {/* Scrollable Content Area */}
               <div className="flex-1 overflow-y-auto px-4 pb-4">
                 {entries.length === 0 ? (
-                  <div className="text-gray-500 text-sm pt-4">No activities recorded yet.</div>
+                  <div className="text-gray-500 text-sm">No activities recorded yet.</div>
                 ) : (
-                  <div className="pt-4">
+                  <div>
                     {(() => {
                       // Group entries by date
                       const sortedEntries = entries.sort((a, b) => b.startTime - a.startTime);
@@ -741,6 +779,13 @@ function App() {
       <UpdateSuccessModal
         isOpen={showUpdateSuccessModal}
         onClose={handleCloseUpdateSuccessModal}
+      />
+
+      {/* Permission Request Modal - shows when permissions are missing */}
+      <PermissionRequestModal
+        isOpen={showPermissionModal}
+        onClose={() => setShowPermissionModal(false)}
+        onPermissionsGranted={handlePermissionsGranted}
       />
 
       </div>

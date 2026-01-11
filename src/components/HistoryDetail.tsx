@@ -12,6 +12,7 @@ import { useSubscription } from '../context/SubscriptionContext';
 import { useToast } from '../context/ToastContext';
 import { useJiraCache } from '../context/JiraCacheContext';
 import { useTimeRounding } from '../hooks/useTimeRounding';
+import { useScreenshotAnalysis } from '../context/ScreenshotAnalysisContext';
 import { TempoService, type TempoAccount } from '../services/tempoService';
 import { JiraService } from '../services/jiraService';
 
@@ -38,6 +39,7 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
     const { showToast } = useToast();
     const jiraCache = useJiraCache();
     const { roundTime, isRoundingEnabled } = useTimeRounding();
+    const { totalAnalyzing } = useScreenshotAnalysis();
     const [description, setDescription] = useState(entry.description || '');
     const [selectedAssignment, setSelectedAssignment] = useState<WorkAssignment | null>(() => {
         // Get assignment from unified model or fallback to legacy fields
@@ -773,9 +775,9 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
     return (
         <div className="w-full h-full flex flex-col">
             {/* Sticky Header with Back Button and Log to Tempo Button */}
-            <div className="flex-shrink-0 bg-gray-900 border-b border-gray-800 px-4 py-3 z-20">
+            <div className="flex-shrink-0 bg-gray-900 border-b border-gray-800 px-4 py-3 z-20 drag-handle">
                 <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 no-drag">
                         <button
                             onClick={onBack}
                             className="p-1.5 hover:bg-gray-800 active:bg-gray-700 rounded-lg transition-all text-gray-400 hover:text-white active:scale-95"
@@ -789,7 +791,7 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                     </div>
 
                     {/* Log to Tempo Button - moved to header */}
-                    <div>
+                    <div className="no-drag">
                         <button
                             onClick={handleOpenTempoModal}
                             className={`px-3 py-1.5 ${hasTempoAccess ? 'bg-blue-600 hover:bg-blue-700 active:bg-blue-800' : 'bg-gray-600 hover:bg-gray-500 active:bg-gray-400'} text-white text-sm rounded-lg transition-all active:scale-[0.99] flex items-center justify-center gap-1.5`}
@@ -812,7 +814,7 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                 </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto space-y-4 px-4 pb-4 pt-4">
+            <div className="flex-1 overflow-y-auto px-4 pb-4">
                 {/* Entry Summary - Reorganized */}
                 <div className="bg-gray-800/50 rounded-lg border border-gray-700">
                     {/* Time Summary Section - Start/End times and Duration counter */}
@@ -943,8 +945,19 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                                     </span>
                                 )}
                                 {screenshotStats.total > 0 && (
-                                    <div className="text-xs text-gray-500">
-                                        {screenshotStats.analyzed}/{screenshotStats.total} screenshots analyzed
+                                    <div className="flex items-center gap-2">
+                                        <div className="text-xs text-gray-500">
+                                            {screenshotStats.analyzed}/{screenshotStats.total} screenshots analyzed
+                                        </div>
+                                        {totalAnalyzing > 0 && (
+                                            <div className="flex items-center gap-1.5 text-xs bg-blue-900/20 text-blue-300 px-2 py-1 rounded-full border border-blue-500/30 animate-pulse">
+                                                <svg className="animate-spin h-3 w-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                                </svg>
+                                                <span>{totalAnalyzing} analyzing</span>
+                                            </div>
+                                        )}
                                     </div>
                                 )}
                             </div>
@@ -984,7 +997,7 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                 </div>
 
                 {/* Window Activity - Grouped by App */}
-                <div>
+                <div className="mt-4">
                     <div className="flex items-center justify-between mb-2">
                         <h3 className="text-base font-semibold text-gray-300">Window Activity</h3>
                         <button

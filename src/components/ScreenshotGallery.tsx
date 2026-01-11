@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { DeleteButton } from './DeleteButton';
+import { useScreenshotAnalysis } from '../context/ScreenshotAnalysisContext';
 
 interface VisionFrameworkRawData {
     confidence?: number;
@@ -35,6 +36,7 @@ export function ScreenshotGallery({ screenshotPaths, metadata, onClose, onScreen
     const [showMetadata, setShowMetadata] = useState(true);
     // Raw vision data is always shown, no toggle needed
     const [loadedImages, setLoadedImages] = useState<Map<string, string>>(new Map());
+    const { isAnalyzing } = useScreenshotAnalysis();
 
     // Load images via IPC
     useEffect(() => {
@@ -338,17 +340,26 @@ export function ScreenshotGallery({ screenshotPaths, metadata, onClose, onScreen
                             <div className="flex items-center gap-2 mb-2">
                                 <span className="text-purple-400 font-medium">AI Narrative:</span>
                                 <span className="text-xs bg-purple-900/30 text-purple-300 px-2 py-1 rounded-full">
-                                    Apple Intelligence
+                                    FastVLM
                                 </span>
+                                {isAnalyzing(currentScreenshot) && (
+                                    <span className="text-xs bg-blue-900/30 text-blue-300 px-2 py-1 rounded-full flex items-center gap-1 animate-pulse">
+                                        <svg className="animate-spin h-3 w-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                        </svg>
+                                        Analyzing...
+                                    </span>
+                                )}
                             </div>
                             {currentMetadata.aiDescription ? (
-                                <div className="text-white text-sm leading-relaxed bg-gray-900/50 rounded p-3 border-l-2 border-purple-500">
+                                <div className="text-white text-sm leading-relaxed bg-gray-900/50 rounded p-3 border-l-2 border-purple-500 animate-fade-in">
                                     <p className="whitespace-pre-wrap break-words">
                                         {currentMetadata.aiDescription}
                                     </p>
                                 </div>
                             ) : currentMetadata.llmError ? (
-                                <div className="text-yellow-400 text-sm bg-gray-900/50 rounded p-3 border-l-2 border-yellow-500">
+                                <div className="text-yellow-400 text-sm bg-gray-900/50 rounded p-3 border-l-2 border-yellow-500 animate-fade-in">
                                     <div className="flex items-center gap-2 mb-1">
                                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                             <circle cx="12" cy="12" r="10"/>
@@ -359,13 +370,35 @@ export function ScreenshotGallery({ screenshotPaths, metadata, onClose, onScreen
                                     </div>
                                     <p className="text-xs text-gray-300 mt-1">{currentMetadata.llmError}</p>
                                 </div>
+                            ) : isAnalyzing(currentScreenshot) ? (
+                                <div className="bg-gradient-to-r from-blue-900/20 to-purple-900/20 rounded-lg p-4 border border-blue-500/30 animate-fade-in">
+                                    <div className="flex items-center gap-3 mb-3">
+                                        <div className="relative">
+                                            <svg className="animate-spin h-6 w-6 text-blue-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                            </svg>
+                                            <div className="absolute inset-0 bg-blue-400/20 rounded-full blur-md animate-pulse"></div>
+                                        </div>
+                                        <div className="flex-1">
+                                            <div className="text-blue-300 font-medium text-sm">Analyzing screenshot with FastVLM...</div>
+                                            <div className="text-blue-400/60 text-xs mt-0.5">Extracting visual information and generating description</div>
+                                        </div>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <div className="h-2 bg-gray-800/50 rounded-full overflow-hidden">
+                                            <div className="h-full bg-gradient-to-r from-blue-500 to-purple-500 rounded-full animate-shimmer" style={{ width: '100%' }}></div>
+                                        </div>
+                                    </div>
+                                </div>
                             ) : (
-                                <div className="flex items-center gap-2 text-gray-400 text-sm bg-gray-900/50 rounded p-2 border-l-2 border-gray-500">
-                                    <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                <div className="flex items-center gap-2 text-gray-400 text-sm bg-gray-900/50 rounded p-3 border-l-2 border-gray-500 animate-fade-in">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <circle cx="12" cy="12" r="10"/>
+                                        <line x1="12" y1="12" x2="12" y2="16"/>
+                                        <line x1="12" y1="8" x2="12.01" y2="8"/>
                                     </svg>
-                                    <span>Generating AI description...</span>
+                                    <span>Waiting for AI analysis...</span>
                                 </div>
                             )}
                         </div>

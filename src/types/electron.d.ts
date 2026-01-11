@@ -117,7 +117,7 @@ export interface ElectronAPI {
             error?: string;
         }>;
         getActiveWindow: () => Promise<{ appName: string; windowTitle: string; bundleId: string }>;
-        getEnvironmentInfo: () => Promise<{ isDevelopment: boolean; buildEnv: string; isPackaged: boolean }>;
+        getEnvironmentInfo: () => Promise<{ isDevelopment: boolean; buildEnv: string; isPackaged: boolean; version: string }>;
         checkAccessibilityPermission: () => Promise<string>;
         checkScreenPermission: () => Promise<string>;
         requestScreenPermission: () => Promise<string>;
@@ -126,6 +126,7 @@ export interface ElectronAPI {
         getAppIcon: (appName: string) => Promise<string | null>;
         getScreenshot: (filePath: string) => Promise<string | null>;
         showItemInFolder: (filePath: string) => Promise<{ success: boolean; error?: string }>;
+        openExternal: (url: string) => Promise<{ success: boolean; error?: string }>;
         tempoApiRequest: (requestParams: {
             url: string;
             method?: string;

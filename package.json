@@ -1,7 +1,7 @@
 {
   "name": "clearical",
   "private": true,
-  "version": "0.2.3",
+  "version": "0.3.3",
   "type": "module",
   "build": {
     "appId": "io.clearical.app",
@@ -67,15 +67,22 @@
       {
         "from": "public/tray-icon@2x.png",
         "to": "tray-icon@2x.png"
+      },
+      {
+        "from": "python/dist/fastvlm-server",
+        "to": "fastvlm-server",
+        "filter": [
+          "**/*"
+        ]
       }
     ],
     "mac": {
       "icon": "build/icon.icns",
       "category": "public.app-category.productivity",
-      "hardenedRuntime": true,
+      "identity": null,
+      "hardenedRuntime": false,
       "gatekeeperAssess": false,
-      "entitlements": "build/entitlements.mac.plist",
-      "entitlementsInherit": "build/entitlements.mac.plist",
+      "artifactName": "${productName}-${arch}.${ext}",
       "target": [
         {
           "target": "dmg",
@@ -89,6 +96,7 @@
     },
     "dmg": {
       "sign": false,
+      "artifactName": "${productName}-${arch}.${ext}",
       "contents": [
         {
           "x": 130,
@@ -140,7 +148,7 @@
     "publish": {
       "provider": "github",
       "owner": "benoittanguay",
-      "repo": "timeportal",
+      "repo": "clearical-releases",
       "releaseType": "release"
     }
   },
@@ -152,9 +160,8 @@
     "build:electron": "cross-env BUILD_ENV=production tsc -b && vite build && npm run build:electron-main && electron-builder",
     "build:electron:dev": "cross-env BUILD_ENV=development tsc -b && vite build && npm run build:electron-main && electron-builder",
     "build:electron:prod": "cross-env BUILD_ENV=production tsc -b && vite build && npm run build:electron-main && electron-builder",
-    "release:alpha": "export $(grep -v '^#' .env.local | xargs) && npm run build:electron -- --publish always -c.publish.releaseType=draft",
-    "release:beta": "export $(grep -v '^#' .env.local | xargs) && npm run build:electron -- --publish always -c.publish.releaseType=prerelease",
-    "release:stable": "export $(grep -v '^#' .env.local | xargs) && npm run build:electron -- --publish always -c.publish.releaseType=release",
+    "release": "./scripts/release.sh",
+    "release:publish": "./scripts/release.sh --publish",
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "npm run build:electron-main && playwright test",

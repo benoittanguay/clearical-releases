@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { useSettings } from '../context/SettingsContext';
+import { useScreenshotAnalysis } from '../context/ScreenshotAnalysisContext';
 
 export interface TimerState {
     isRunning: boolean;
@@ -26,8 +27,15 @@ interface WindowActivity {
     screenshotVisionData?: { [path: string]: VisionFrameworkRawData };
 }
 
+export interface PermissionCheckResult {
+    hasAccessibility: boolean;
+    hasScreenRecording: boolean;
+    allGranted: boolean;
+}
+
 export function useTimer() {
     const { settings } = useSettings();
+    const { startAnalysis, completeAnalysis, failAnalysis } = useScreenshotAnalysis();
     const [isRunning, setIsRunning] = useState(false);
     const [isPaused, setIsPaused] = useState(false);
     const [startTime, setStartTime] = useState<number | null>(null);
@@ -138,6 +146,9 @@ export function useTimer() {
         const analyzeScreenshotAsync = async (path: string, timestamp: number) => {
             console.log('[Renderer] 🔍 Starting AI analysis for:', path.split('/').pop());
 
+            // Notify context that analysis is starting
+            startAnalysis(path);
+
             // Create and track the promise
             const analysisPromise = (async () => {
                 try {
@@ -160,6 +171,9 @@ export function useTimer() {
                             descriptionLength: analysisResult.description.length,
                             hasExtraction: !!analysisResult.extraction
                         });
+
+                        // Notify context that analysis completed successfully
+                        completeAnalysis(path);
 
                         // Also update windowActivity state to trigger re-render (if activity exists in state)
                         setWindowActivity(prev => {
@@ -197,6 +211,10 @@ export function useTimer() {
                         });
                     } else {
                         console.log('[Renderer] ⚠️ AI analysis failed, using fallback', analysisResult);
+
+                        // Notify context that analysis failed
+                        failAnalysis(path, analysisResult?.error || 'Analysis failed');
+
                         const fallbackDescription = 'Screenshot captured during work session';
                         currentActivityScreenshotDescriptions.current[path] = fallbackDescription;
 
@@ -221,6 +239,10 @@ export function useTimer() {
                     }
                 } catch (error) {
                     console.error('[Renderer] ❌ AI analysis error:', error);
+
+                    // Notify context that analysis encountered an error
+                    failAnalysis(path, error instanceof Error ? error.message : 'Unknown error');
+
                     const fallbackDescription = 'Screenshot captured during work session';
                     currentActivityScreenshotDescriptions.current[path] = fallbackDescription;
 
@@ -412,6 +434,38 @@ export function useTimer() {
             if (windowPollRef.current) clearInterval(windowPollRef.current);
         };
     }, [isRunning, isPaused, startTime]); // Note: windowActivity intentionally excluded to prevent interval thrashing
+
+    const checkPermissions = async (): Promise<PermissionCheckResult> => {
+        try {
+            // Check screen recording permission
+            // @ts-ignore
+            const screenStatus = await window.electron.ipcRenderer.checkScreenPermission();
+            const hasScreenRecording = screenStatus === 'granted';
+
+            // Check accessibility permission by trying to get active window
+            let hasAccessibility = false;
+            try {
+                // @ts-ignore
+                await window.electron.ipcRenderer.getActiveWindow();
+                hasAccessibility = true;
+            } catch {
+                hasAccessibility = false;
+            }
+
+            return {
+                hasAccessibility,
+                hasScreenRecording,
+                allGranted: hasAccessibility && hasScreenRecording
+            };
+        } catch (error) {
+            console.error('[Timer] Error checking permissions:', error);
+            return {
+                hasAccessibility: false,
+                hasScreenRecording: false,
+                allGranted: false
+            };
+        }
+    };
 
     const start = () => {
         setIsRunning(true);
@@ -685,5 +739,5 @@ export function useTimer() {
         return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
     };
 
-    return { isRunning, isPaused, elapsed, windowActivity, start, stop, pause, resume, reset, formatTime };
+    return { isRunning, isPaused, elapsed, windowActivity, start, stop, pause, resume, reset, formatTime, checkPermissions };
 }
