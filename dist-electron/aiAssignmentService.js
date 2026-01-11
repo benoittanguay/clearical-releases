@@ -1,4 +1,5 @@
 import { HistoricalMatchingService } from './historicalMatchingService.js';
+import { fastVLMServer } from './fastvlm.js';
 /**
  * Technology keyword mappings for matching
  */
@@ -57,23 +58,26 @@ export class AIAssignmentService {
     }
     /**
      * Suggest the best assignment based on activity context
+     * Uses Qwen3 reasoning model for semantic understanding + historical patterns
      */
     async suggestAssignment(context) {
         console.log('[AIAssignmentService] Analyzing context for assignment suggestion');
         console.log('[AIAssignmentService] Available buckets:', this.buckets.length);
         console.log('[AIAssignmentService] Available Jira issues:', this.jiraIssues.length);
-        // Calculate scores for all candidates
+        // Get AI classification from Qwen3 reasoning model
+        const aiClassification = await this.getAIClassification(context);
+        // Calculate scores for all candidates (now with AI boost)
         const bucketScores = this.buckets
             .filter(b => !b.isFolder) // Only consider actual buckets, not folders
             .map(bucket => ({
             assignment: this.bucketToAssignment(bucket),
-            score: this.calculateBucketScore(bucket, context),
-            reason: this.explainBucketScore(bucket, context)
+            score: this.calculateBucketScore(bucket, context, aiClassification),
+            reason: this.explainBucketScore(bucket, context, aiClassification)
         }));
         const jiraScores = this.jiraIssues.map(issue => ({
             assignment: this.jiraToAssignment(issue),
-            score: this.calculateJiraScore(issue, context),
-            reason: this.explainJiraScore(issue, context)
+            score: this.calculateJiraScore(issue, context, aiClassification),
+            reason: this.explainJiraScore(issue, context, aiClassification)
         }));
         // Combine and sort by score
         const allCandidates = [...bucketScores, ...jiraScores]
@@ -107,40 +111,120 @@ export class AIAssignmentService {
         };
     }
     /**
-     * Calculate score for a bucket assignment
+     * Get AI classification from Qwen3 reasoning model
+     * Returns the top choice with confidence
      */
-    calculateBucketScore(bucket, context) {
+    async getAIClassification(context) {
+        try {
+            // Build options list from buckets and Jira issues
+            const options = [];
+            // Add buckets
+            for (const bucket of this.buckets.filter(b => !b.isFolder)) {
+                options.push({
+                    id: `bucket:${bucket.id}`,
+                    name: bucket.name
+                });
+            }
+            // Add Jira issues
+            for (const issue of this.jiraIssues) {
+                options.push({
+                    id: `jira:${issue.key}`,
+                    name: `${issue.key}: ${issue.summary}`
+                });
+            }
+            if (options.length === 0) {
+                console.log('[AIAssignmentService] No options available for AI classification');
+                return { selectedId: null, confidence: 0, available: false };
+            }
+            // Build context string from activity metadata
+            const contextParts = [];
+            if (context.appNames.length > 0) {
+                contextParts.push(`Applications: ${context.appNames.join(', ')}`);
+            }
+            if (context.windowTitles.length > 0) {
+                contextParts.push(`Windows: ${context.windowTitles.slice(0, 3).join(', ')}`);
+            }
+            if (context.detectedTechnologies.length > 0) {
+                contextParts.push(`Technologies: ${context.detectedTechnologies.join(', ')}`);
+            }
+            if (context.detectedActivities.length > 0) {
+                contextParts.push(`Activities: ${context.detectedActivities.join(', ')}`);
+            }
+            const contextStr = contextParts.join('. ');
+            console.log('[AIAssignmentService] Calling AI classification with', options.length, 'options');
+            console.log('[AIAssignmentService] Description:', context.description.substring(0, 100));
+            // Call the Qwen3 classify endpoint
+            const result = await fastVLMServer.classifyActivity(context.description, options, contextStr);
+            if (result.success && result.selected_id) {
+                console.log('[AIAssignmentService] AI selected:', result.selected_name, 'confidence:', result.confidence);
+                return {
+                    selectedId: result.selected_id,
+                    confidence: result.confidence || 0.8,
+                    available: true
+                };
+            }
+            console.log('[AIAssignmentService] AI classification failed or returned no selection');
+            return { selectedId: null, confidence: 0, available: false };
+        }
+        catch (error) {
+            console.error('[AIAssignmentService] AI classification error:', error);
+            return { selectedId: null, confidence: 0, available: false };
+        }
+    }
+    /**
+     * Calculate score for a bucket assignment
+     * New scoring with AI classification:
+     * - 40% AI classification (semantic understanding)
+     * - 35% Historical usage pattern
+     * - 15% Keyword matching in bucket name
+     * - 10% Linked Jira issue relevance
+     */
+    calculateBucketScore(bucket, context, aiClassification) {
         let score = 0;
-        // 1. Keyword matching in bucket name (30%)
+        // 1. AI classification (40%) - semantic understanding
+        if (aiClassification.available && aiClassification.selectedId === `bucket:${bucket.id}`) {
+            score += aiClassification.confidence * 0.4;
+        }
+        // 2. Historical usage pattern (35%)
+        const historicalMatch = this.calculateHistoricalBucketMatch(bucket.id, context);
+        score += historicalMatch * 0.35;
+        // 3. Keyword matching in bucket name (15%)
         const nameMatch = this.keywordMatch(bucket.name, context.description);
-        score += nameMatch * 0.3;
-        // 2. Linked Jira issue relevance (20%)
+        score += nameMatch * 0.15;
+        // 4. Linked Jira issue relevance (10%)
         if (bucket.linkedIssue) {
             const issueMatch = this.keywordMatch(bucket.linkedIssue.summary, context.description);
-            score += issueMatch * 0.2;
+            score += issueMatch * 0.1;
         }
-        // 3. Historical usage pattern - ENHANCED (50%)
-        const historicalMatch = this.calculateHistoricalBucketMatch(bucket.id, context);
-        score += historicalMatch * 0.5;
         return Math.min(score, 1.0);
     }
     /**
      * Calculate score for a Jira issue assignment
+     * New scoring with AI classification:
+     * - 40% AI classification (semantic understanding)
+     * - 35% Historical usage pattern
+     * - 15% Summary keyword match
+     * - 5% Technology/domain match
+     * - 5% Project affinity
      */
-    calculateJiraScore(issue, context) {
+    calculateJiraScore(issue, context, aiClassification) {
         let score = 0;
-        // 1. Summary keyword match (25%)
-        const summaryMatch = this.keywordMatch(issue.summary, context.description);
-        score += summaryMatch * 0.25;
-        // 2. Technology/domain match (15%)
-        const techMatch = this.technologyMatch(issue, context.detectedTechnologies);
-        score += techMatch * 0.15;
-        // 3. Historical usage - ENHANCED (50%)
+        // 1. AI classification (40%) - semantic understanding
+        if (aiClassification.available && aiClassification.selectedId === `jira:${issue.key}`) {
+            score += aiClassification.confidence * 0.4;
+        }
+        // 2. Historical usage (35%)
         const historicalMatch = this.calculateHistoricalJiraMatch(issue.key, context);
-        score += historicalMatch * 0.5;
-        // 4. Project affinity (10%) - prefer recently used projects
+        score += historicalMatch * 0.35;
+        // 3. Summary keyword match (15%)
+        const summaryMatch = this.keywordMatch(issue.summary, context.description);
+        score += summaryMatch * 0.15;
+        // 4. Technology/domain match (5%)
+        const techMatch = this.technologyMatch(issue, context.detectedTechnologies);
+        score += techMatch * 0.05;
+        // 5. Project affinity (5%) - prefer recently used projects
         const projectMatch = this.projectAffinityMatch(issue.projectKey);
-        score += projectMatch * 0.1;
+        score += projectMatch * 0.05;
         return Math.min(score, 1.0);
     }
     /**
@@ -248,8 +332,12 @@ export class AIAssignmentService {
     /**
      * Explain why a bucket was scored a certain way
      */
-    explainBucketScore(bucket, context) {
+    explainBucketScore(bucket, context, aiClassification) {
         const reasons = [];
+        // AI classification reason (primary)
+        if (aiClassification.available && aiClassification.selectedId === `bucket:${bucket.id}`) {
+            reasons.push(`AI selected (${Math.round(aiClassification.confidence * 100)}% confidence)`);
+        }
         const nameMatch = this.keywordMatch(bucket.name, context.description);
         if (nameMatch > 0.5) {
             reasons.push(`matches bucket name keywords`);
@@ -285,8 +373,12 @@ export class AIAssignmentService {
     /**
      * Explain why a Jira issue was scored a certain way
      */
-    explainJiraScore(issue, context) {
+    explainJiraScore(issue, context, aiClassification) {
         const reasons = [];
+        // AI classification reason (primary)
+        if (aiClassification.available && aiClassification.selectedId === `jira:${issue.key}`) {
+            reasons.push(`AI selected (${Math.round(aiClassification.confidence * 100)}% confidence)`);
+        }
         const summaryMatch = this.keywordMatch(issue.summary, context.description);
         if (summaryMatch > 0.4) {
             reasons.push(`high keyword match with issue summary`);

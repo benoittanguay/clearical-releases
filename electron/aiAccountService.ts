@@ -1,5 +1,6 @@
 import { LinkedJiraIssue, TimeEntry } from '../src/types/shared.js';
 import { HistoricalMatchingService } from './historicalMatchingService.js';
+import { fastVLMServer } from './fastvlm.js';
 
 /**
  * Tempo Account structure
@@ -96,12 +97,16 @@ export class AIAccountService {
             };
         }
 
-        // Case 3: Multiple accounts - use scoring logic
+        // Case 3: Multiple accounts - use scoring logic with AI classification
         console.log('[AIAccountService] Multiple accounts, analyzing...');
+
+        // Get AI classification from Qwen3 reasoning model
+        const aiClassification = await this.getAIAccountClassification(issue, availableAccounts, context);
+
         const scores = availableAccounts.map(account => ({
             account,
-            score: this.calculateAccountScore(account, issue, context),
-            reason: this.explainAccountScore(account, issue, context)
+            score: this.calculateAccountScore(account, issue, context, aiClassification),
+            reason: this.explainAccountScore(account, issue, context, aiClassification)
         }));
 
         // Sort by score descending
@@ -128,8 +133,84 @@ export class AIAccountService {
     }
 
     /**
+     * Get AI classification from Qwen3 reasoning model
+     * Returns the top choice with confidence
+     */
+    private async getAIAccountClassification(
+        issue: LinkedJiraIssue,
+        availableAccounts: TempoAccount[],
+        context: {
+            description?: string;
+            historicalAccounts: HistoricalAccountUsage[];
+            historicalEntries?: TimeEntry[];
+        }
+    ): Promise<{
+        selectedKey: string | null;
+        confidence: number;
+        available: boolean;
+    }> {
+        try {
+            // Build options list from available accounts
+            const options = availableAccounts.map(account => ({
+                id: account.key,
+                name: account.name
+            }));
+
+            if (options.length === 0) {
+                console.log('[AIAccountService] No options available for AI classification');
+                return { selectedKey: null, confidence: 0, available: false };
+            }
+
+            // Build context string from issue metadata
+            const contextParts: string[] = [];
+            contextParts.push(`Project: ${issue.projectName} (${issue.projectKey})`);
+            contextParts.push(`Issue Type: ${issue.issueType}`);
+            contextParts.push(`Status: ${issue.status}`);
+
+            const contextStr = contextParts.join('. ');
+
+            // Build the text to classify: issue summary + description
+            const textToClassify = context.description
+                ? `${issue.summary}. ${context.description}`
+                : issue.summary;
+
+            console.log('[AIAccountService] Calling AI classification with', options.length, 'accounts');
+            console.log('[AIAccountService] Issue:', issue.key, '-', issue.summary.substring(0, 80));
+
+            // Call the Qwen3 classify endpoint
+            const result = await fastVLMServer.classifyActivity(
+                textToClassify,
+                options,
+                contextStr
+            );
+
+            if (result.success && result.selected_id) {
+                console.log('[AIAccountService] AI selected:', result.selected_name, 'confidence:', result.confidence);
+                return {
+                    selectedKey: result.selected_id,
+                    confidence: result.confidence || 0.8,
+                    available: true
+                };
+            }
+
+            console.log('[AIAccountService] AI classification failed or returned no selection');
+            return { selectedKey: null, confidence: 0, available: false };
+
+        } catch (error) {
+            console.error('[AIAccountService] AI classification error:', error);
+            return { selectedKey: null, confidence: 0, available: false };
+        }
+    }
+
+    /**
      * Calculate score for an account based on various factors
-     * Enhanced with context-aware historical matching
+     * Enhanced with AI classification and context-aware historical matching
+     * New scoring with AI classification:
+     * - 40% AI classification (semantic understanding)
+     * - 35% Historical usage pattern
+     * - 15% Keyword match on issue summary
+     * - 5% Project name match
+     * - 5% Description match
      */
     private calculateAccountScore(
         account: TempoAccount,
@@ -138,30 +219,40 @@ export class AIAccountService {
             description?: string;
             historicalAccounts: HistoricalAccountUsage[];
             historicalEntries?: TimeEntry[];
+        },
+        aiClassification: {
+            selectedKey: string | null;
+            confidence: number;
+            available: boolean;
         }
     ): number {
         let score = 0;
 
-        // 1. Historical usage - strongest signal (60%)
+        // 1. AI classification (40%) - semantic understanding
+        if (aiClassification.available && aiClassification.selectedKey === account.key) {
+            score += aiClassification.confidence * 0.4;
+        }
+
+        // 2. Historical usage - strong signal (35%)
         // Use enhanced matching if full entries available, otherwise fall back to basic
         const historicalScore = context.historicalEntries
             ? this.calculateEnhancedHistoricalScore(account.key, issue, context)
             : this.calculateHistoricalScore(account.key, issue.projectKey, context.historicalAccounts);
-        score += historicalScore * 0.6;
+        score += historicalScore * 0.35;
 
-        // 2. Account name matches issue summary (20%)
+        // 3. Account name matches issue summary (15%)
         const keywordScore = this.keywordMatch(account.name, issue.summary);
-        score += keywordScore * 0.2;
+        score += keywordScore * 0.15;
 
-        // 3. Account name matches project name (10%)
+        // 4. Account name matches project name (5%)
         if (this.containsKeywords(account.name, issue.projectName)) {
-            score += 0.1;
+            score += 0.05;
         }
 
-        // 4. Account name matches description (10%)
+        // 5. Account name matches description (5%)
         if (context.description) {
             const descScore = this.keywordMatch(account.name, context.description);
-            score += descScore * 0.1;
+            score += descScore * 0.05;
         }
 
         return Math.min(score, 1.0);
@@ -263,7 +354,7 @@ export class AIAccountService {
 
     /**
      * Generate human-readable explanation for account score
-     * Enhanced with historical pattern insights
+     * Enhanced with AI reasoning and historical pattern insights
      */
     private explainAccountScore(
         account: TempoAccount,
@@ -272,9 +363,19 @@ export class AIAccountService {
             description?: string;
             historicalAccounts: HistoricalAccountUsage[];
             historicalEntries?: TimeEntry[];
+        },
+        aiClassification: {
+            selectedKey: string | null;
+            confidence: number;
+            available: boolean;
         }
     ): string {
         const reasons: string[] = [];
+
+        // AI classification reason (primary)
+        if (aiClassification.available && aiClassification.selectedKey === account.key) {
+            reasons.push(`AI selected (${Math.round(aiClassification.confidence * 100)}% confidence)`);
+        }
 
         // Check enhanced historical usage if available
         if (context.historicalEntries && context.historicalEntries.length > 0) {
@@ -288,7 +389,7 @@ export class AIAccountService {
             if (accountPattern && accountPattern.matchScore > 0.3) {
                 // Use the learned reasons from pattern matching
                 if (accountPattern.reasons.length > 0) {
-                    reasons.push(...accountPattern.reasons.slice(0, 2));  // Top 2 reasons
+                    reasons.push(`learned from history: ${accountPattern.reasons[0]}`);
                 }
             }
         } else {
