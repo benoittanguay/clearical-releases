@@ -274,18 +274,22 @@ export function useTimer() {
 
                 // Check if the app is blacklisted
                 if (result.bundleId) {
-                    // @ts-ignore
-                    const blacklistCheck = await window.electron.ipcRenderer.isAppBlacklisted(result.bundleId);
-                    if (blacklistCheck?.success && blacklistCheck.isBlacklisted) {
-                        console.log(`[Renderer] App is blacklisted (${result.appName}, ${result.bundleId}), skipping activity tracking`);
-                        pollingActiveRef.current = false;
-                        return;
+                    try {
+                        // @ts-ignore
+                        const blacklistCheck = await window.electron.ipcRenderer.appBlacklist.isAppBlacklisted(result.bundleId);
+                        if (blacklistCheck?.success && blacklistCheck.isBlacklisted) {
+                            console.log(`[Renderer] App is blacklisted (${result.appName}, ${result.bundleId}), skipping activity tracking`);
+                            return;
+                        }
+                    } catch (error) {
+                        console.error('[Renderer] Failed to check blacklist, continuing with tracking:', error);
+                        // Continue with tracking even if blacklist check fails
                     }
                 }
 
                 // Check if window changed
-                const windowChanged = !lastWindowRef.current || 
-                    lastWindowRef.current.appName !== result.appName || 
+                const windowChanged = !lastWindowRef.current ||
+                    lastWindowRef.current.appName !== result.appName ||
                     lastWindowRef.current.windowTitle !== result.windowTitle;
 
                 if (windowChanged) {
@@ -353,7 +357,7 @@ export function useTimer() {
                         bundleId: result.bundleId,
                         timestamp: now
                     };
-                    
+
                     // Take screenshot for window change (immediate)
                     await captureScreenshotForCurrentWindow('window-change');
 
@@ -372,6 +376,8 @@ export function useTimer() {
                     // We just continue tracking the same window without any action needed.
                     console.log('[Renderer] Same window, continuing activity tracking');
                 }
+            } catch (error) {
+                console.error('[Renderer] Error in pollWindow:', error);
             } finally {
                 pollingActiveRef.current = false;
             }

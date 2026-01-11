@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-01-10
+
+### Fixed
+- **Activity recording**: Fixed wrong API path for blacklist check that broke all activity/screenshot capture
+- Added error handling to prevent silent failures in recording loop
+
+---
+
 ## [0.2.1] - 2026-01-10
 
 ### Fixed
@@ -153,6 +161,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version       | Date       | Type    | Notes |
 |---------------|------------|---------|-------|
+| 0.2.2         | 2026-01-10 | Release | Fix activity recording (blacklist API path) |
 | 0.2.1         | 2026-01-10 | Release | Fix auto-updater, recording, and config button |
 | 0.2.0         | 2026-01-10 | Release | Add auto-updater test modal |
 | 0.1.7         | 2026-01-10 | Release | Fix corrupted display (keep dist unpacked) |
