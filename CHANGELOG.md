@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.7] - 2026-01-10
+
+### Fixed
+- **Fixed corrupted display**: Keep `dist/**/*` unpacked from asar (packing caused unresolvable loading issues)
+- Added node_modules exclusions to offset size: test dirs, docs, examples, markdown files
+
+---
+
 ## [0.1.6] - 2026-01-10
 
 ### Fixed
@@ -128,6 +136,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version       | Date       | Type    | Notes |
 |---------------|------------|---------|-------|
+| 0.1.7         | 2026-01-10 | Release | Fix corrupted display (keep dist unpacked) |
 | 0.1.6         | 2026-01-10 | Release | Fix corrupted display (loadFile for asar support) |
 | 0.1.5         | 2026-01-10 | Release | Fix corrupted display (absolute path resolution) |
 | 0.1.4         | 2026-01-10 | Release | Fix corrupted display from asar packing |

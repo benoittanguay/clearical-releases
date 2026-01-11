@@ -1,7 +1,7 @@
 {
   "name": "clearical",
   "private": true,
-  "version": "0.1.6",
+  "version": "0.1.7",
   "type": "module",
   "build": {
     "appId": "io.clearical.app",
@@ -14,6 +14,7 @@
     },
     "asarUnpack": [
       "package.json",
+      "dist/**/*",
       "dist-electron/**/*"
     ],
     "files": [
@@ -33,6 +34,11 @@
       "!**/node_modules/**/test/**",
       "!**/node_modules/**/tests/**",
       "!**/node_modules/**/__tests__/**",
+      "!**/node_modules/**/*.md",
+      "!**/node_modules/**/docs/**",
+      "!**/node_modules/**/.github/**",
+      "!**/node_modules/**/example/**",
+      "!**/node_modules/**/examples/**",
       "!**/node_modules/playwright/**",
       "!**/node_modules/playwright-core/**",
       "!**/node_modules/@playwright/**",
