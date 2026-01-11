@@ -15,6 +15,7 @@ import { CrawlerProgressBar } from './components/CrawlerProgressBar';
 import { OnboardingModal } from './components/OnboardingModal';
 import { IntegrationConfigModal } from './components/IntegrationConfigModal';
 import { UpdateNotification } from './components/UpdateNotification';
+import { UpdateSuccessModal } from './components/UpdateSuccessModal';
 import type { WorkAssignment } from './context/StorageContext';
 import './App.css'
 
@@ -32,6 +33,7 @@ function App() {
   const [, setMigrationComplete] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showIntegrationModal, setShowIntegrationModal] = useState(false);
+  const [showUpdateSuccessModal, setShowUpdateSuccessModal] = useState(false);
 
   const { isRunning, isPaused, elapsed, start: startTimer, stop: stopTimer, pause: pauseTimer, resume: resumeTimer, formatTime } = useTimer();
 
@@ -40,6 +42,24 @@ function App() {
     const onboardingComplete = localStorage.getItem('timeportal-onboarding-complete');
     if (!onboardingComplete) {
       setShowOnboarding(true);
+    }
+  }, []);
+
+  // Check if we should show the update success modal
+  // TEST FEATURE: To verify auto-updater is working
+  // The modal will show once per version when the app detects a new version number
+  // To test manually: Open DevTools Console and run: localStorage.removeItem('timeportal-last-seen-version')
+  useEffect(() => {
+    const currentVersion = '0.1.7'; // This should match package.json version
+    const lastSeenVersion = localStorage.getItem('timeportal-last-seen-version');
+
+    // Show modal if this is a new version and onboarding is complete
+    const onboardingComplete = localStorage.getItem('timeportal-onboarding-complete');
+    if (onboardingComplete && lastSeenVersion !== currentVersion) {
+      // Delay slightly to ensure app is fully loaded
+      setTimeout(() => {
+        setShowUpdateSuccessModal(true);
+      }, 1000);
     }
   }, []);
 
@@ -155,6 +175,12 @@ function App() {
       window.removeEventListener('keydown', handleKeyPress);
     };
   }, []);
+
+  const handleCloseUpdateSuccessModal = () => {
+    const currentVersion = '0.1.7';
+    localStorage.setItem('timeportal-last-seen-version', currentVersion);
+    setShowUpdateSuccessModal(false);
+  };
 
   const handleBulkLogToTempo = async () => {
     if (!settings.tempo?.enabled) {
@@ -705,6 +731,12 @@ function App() {
 
       {/* Auto-Update Notification - shows when updates are available */}
       <UpdateNotification showManualCheck={false} />
+
+      {/* Update Success Modal - shows after successful auto-update */}
+      <UpdateSuccessModal
+        isOpen={showUpdateSuccessModal}
+        onClose={handleCloseUpdateSuccessModal}
+      />
 
       </div>
     </div>

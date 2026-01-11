@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-01-10
+
+### Added
+- **Auto-updater test modal**: Shows "Auto-Updater Worked!" message after successful update
+- Modal displays current version and only shows once per version update
+
+---
+
 ## [0.1.7] - 2026-01-10
 
 ### Fixed
@@ -136,6 +144,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version       | Date       | Type    | Notes |
 |---------------|------------|---------|-------|
+| 0.2.0         | 2026-01-10 | Release | Add auto-updater test modal |
 | 0.1.7         | 2026-01-10 | Release | Fix corrupted display (keep dist unpacked) |
 | 0.1.6         | 2026-01-10 | Release | Fix corrupted display (loadFile for asar support) |
 | 0.1.5         | 2026-01-10 | Release | Fix corrupted display (absolute path resolution) |
