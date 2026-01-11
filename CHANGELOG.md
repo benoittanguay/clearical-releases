@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-01-10
+
+### Fixed
+- **Fixed corrupted display**: Use `app.getAppPath()` for absolute path resolution in packaged app
+- Root cause: relative path `dist` was resolving against CWD instead of asar archive
+
+---
+
 ## [0.1.4] - 2026-01-10
 
 ### Fixed
@@ -112,6 +120,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version       | Date       | Type    | Notes |
 |---------------|------------|---------|-------|
+| 0.1.5         | 2026-01-10 | Release | Fix corrupted display (absolute path resolution) |
 | 0.1.4         | 2026-01-10 | Release | Fix corrupted display from asar packing |
 | 0.1.3         | 2026-01-10 | Release | Reduce build size by ~80% |
 | 0.1.2         | 2026-01-10 | Release | Fix window visibility on launch |

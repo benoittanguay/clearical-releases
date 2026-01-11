@@ -31,7 +31,13 @@ import { BlacklistService } from './blacklistService.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-process.env.DIST = path.join(__dirname, '../dist');
+// In production (packaged), app.getAppPath() returns the path to the asar file
+// In development, it returns the project root directory
+// This ensures DIST always points to the correct absolute path
+const appPath = app.getAppPath();
+process.env.DIST = app.isPackaged
+    ? path.join(appPath, 'dist')  // In asar: /path/to/app.asar/dist
+    : path.join(__dirname, '../dist');  // In dev: project-root/dist
 process.env.VITE_PUBLIC = app.isPackaged ? process.env.DIST : path.join(process.env.DIST, '../public');
 
 // Handle EPIPE errors gracefully to prevent crash dialogs
