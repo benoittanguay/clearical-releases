@@ -263,7 +263,9 @@ export function useTimer() {
             try {
                 // @ts-ignore
                 if (!window.electron?.ipcRenderer?.getActiveWindow) {
-                    console.log('[Renderer] ❌ getActiveWindow not available');
+                    console.error('[Renderer] ❌ CRITICAL: getActiveWindow not available - IPC bridge may not be loaded');
+                    // @ts-ignore
+                    console.error('[Renderer] window.electron:', window.electron);
                     return;
                 }
 
@@ -388,7 +390,8 @@ export function useTimer() {
                 setElapsed(Date.now() - startTime);
             }, 100);
 
-            // Start window polling (which handles initial screenshot)
+            // Start window polling immediately, then continue every interval
+            pollWindow();
             windowPollRef.current = setInterval(pollWindow, WINDOW_POLL_INTERVAL);
         } else {
             if (intervalRef.current) {

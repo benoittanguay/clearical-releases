@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-01-10
+
+### Fixed
+- **Activity recording**: Fixed timing bug where `setInterval` didn't call pollWindow immediately, causing 1-second delay before any activity detection
+- Window polling now starts immediately when recording begins, not after the first interval
+- Added better error logging for IPC bridge issues
+
+---
+
 ## [0.2.2] - 2026-01-10
 
 ### Fixed
@@ -161,6 +170,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version       | Date       | Type    | Notes |
 |---------------|------------|---------|-------|
+| 0.2.3         | 2026-01-10 | Release | Fix activity recording (immediate polling) |
 | 0.2.2         | 2026-01-10 | Release | Fix activity recording (blacklist API path) |
 | 0.2.1         | 2026-01-10 | Release | Fix auto-updater, recording, and config button |
 | 0.2.0         | 2026-01-10 | Release | Add auto-updater test modal |
