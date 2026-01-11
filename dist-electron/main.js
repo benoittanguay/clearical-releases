@@ -3,7 +3,7 @@ import { spawn } from 'child_process';
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
-import { fileURLToPath, pathToFileURL } from 'url';
+import { fileURLToPath } from 'url';
 import { config as dotenvConfig } from 'dotenv';
 // Load environment variables from .env.local
 const __dirnameTemp = path.dirname(fileURLToPath(import.meta.url));
@@ -2328,10 +2328,11 @@ function createWindow() {
         // win.webContents.openDevTools({ mode: 'detach' });
     }
     else {
-        // Use loadURL with proper URL formatting for asar compatibility
-        // pathToFileURL ensures correct encoding and path resolution on all platforms
+        // Use loadFile for production - it has built-in asar support
+        // Electron's loadFile() correctly handles files inside asar archives
         const indexPath = path.join(process.env.DIST || '', 'index.html');
-        win.loadURL(pathToFileURL(indexPath).toString());
+        console.log('[Main] Loading index.html from:', indexPath);
+        win.loadFile(indexPath);
     }
     // Handle dock icon click on macOS
     if (process.platform === 'darwin') {

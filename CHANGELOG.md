@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.6] - 2026-01-10
+
+### Fixed
+- **Fixed corrupted display**: Use `loadFile()` instead of `loadURL()` for asar support
+- Root cause: `file://` protocol doesn't support asar; `loadFile()` has native asar handling
+
+---
+
 ## [0.1.5] - 2026-01-10
 
 ### Fixed
@@ -120,6 +128,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version       | Date       | Type    | Notes |
 |---------------|------------|---------|-------|
+| 0.1.6         | 2026-01-10 | Release | Fix corrupted display (loadFile for asar support) |
 | 0.1.5         | 2026-01-10 | Release | Fix corrupted display (absolute path resolution) |
 | 0.1.4         | 2026-01-10 | Release | Fix corrupted display from asar packing |
 | 0.1.3         | 2026-01-10 | Release | Reduce build size by ~80% |
