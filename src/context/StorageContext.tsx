@@ -229,7 +229,8 @@ export const StorageProvider: React.FC<{ children: React.ReactNode }> = ({ child
         const newEntry: TimeEntry = { ...entry, id: crypto.randomUUID() };
         const result = await window.electron.ipcRenderer.db.insertEntry(newEntry);
         if (result.success) {
-            setEntries([newEntry, ...entries]);
+            // Use functional update to ensure we have the latest state
+            setEntries(prevEntries => [newEntry, ...prevEntries]);
             return newEntry;
         } else {
             console.error('[StorageContext] Failed to add entry:', result.error);

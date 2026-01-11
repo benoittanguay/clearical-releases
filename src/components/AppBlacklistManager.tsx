@@ -35,27 +35,43 @@ function cleanCategoryName(category?: string): string {
 function AppIcon({ app, size = 32 }: { app: InstalledApp; size?: number }) {
     const [iconDataUrl, setIconDataUrl] = useState<string | null>(null);
     const [loadError, setLoadError] = useState(false);
+    const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         let mounted = true;
 
         async function loadIcon() {
             if (!app.iconPath) {
-                setLoadError(true);
+                console.log(`[AppIcon] No icon path for ${app.name}`);
+                if (mounted) {
+                    setLoadError(true);
+                    setLoading(false);
+                }
                 return;
             }
 
             try {
+                console.log(`[AppIcon] Loading icon for ${app.name} from ${app.iconPath}`);
                 const response = await window.electron.ipcRenderer.appBlacklist.getAppIconBase64(app.iconPath);
-                if (mounted && response.success && response.dataUrl) {
+
+                if (!mounted) return;
+
+                if (response.success && response.dataUrl) {
+                    console.log(`[AppIcon] Successfully loaded icon for ${app.name}`);
                     setIconDataUrl(response.dataUrl);
+                    setLoadError(false);
                 } else {
+                    console.warn(`[AppIcon] Failed to load icon for ${app.name}:`, response.error);
                     setLoadError(true);
                 }
             } catch (err) {
-                console.error('[AppIcon] Failed to load icon:', err);
+                console.error(`[AppIcon] Exception loading icon for ${app.name}:`, err);
                 if (mounted) {
                     setLoadError(true);
+                }
+            } finally {
+                if (mounted) {
+                    setLoading(false);
                 }
             }
         }
@@ -65,8 +81,23 @@ function AppIcon({ app, size = 32 }: { app: InstalledApp; size?: number }) {
         return () => {
             mounted = false;
         };
-    }, [app.iconPath]);
+    }, [app.iconPath, app.name]);
 
+    // Show loading placeholder while fetching
+    if (loading) {
+        return (
+            <div
+                className="bg-gray-700 rounded flex items-center justify-center flex-shrink-0 animate-pulse"
+                style={{ width: size, height: size }}
+            >
+                <svg className="text-gray-600" style={{ width: size * 0.5, height: size * 0.5 }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+            </div>
+        );
+    }
+
+    // Show actual icon if loaded successfully
     if (iconDataUrl && !loadError) {
         return (
             <img
@@ -74,15 +105,20 @@ function AppIcon({ app, size = 32 }: { app: InstalledApp; size?: number }) {
                 alt={app.name}
                 className="flex-shrink-0 rounded"
                 style={{ width: size, height: size }}
+                onError={() => {
+                    console.error(`[AppIcon] Image failed to render for ${app.name}`);
+                    setLoadError(true);
+                }}
             />
         );
     }
 
-    // Fallback icon
+    // Fallback icon for errors or missing icons
     return (
         <div
             className="bg-gray-700 rounded flex items-center justify-center flex-shrink-0"
             style={{ width: size, height: size }}
+            title={loadError ? `Icon not available for ${app.name}` : undefined}
         >
             <svg className="text-gray-500" style={{ width: size * 0.625, height: size * 0.625 }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
@@ -360,9 +396,6 @@ export function AppBlacklistManager({ className = '' }: AppBlacklistManagerProps
                                                     <div className="flex-1 min-w-0">
                                                         <div className="text-sm font-medium text-white truncate">
                                                             {app.name}
-                                                        </div>
-                                                        <div className="text-xs text-gray-500 truncate">
-                                                            {app.bundleId}
                                                         </div>
                                                     </div>
 

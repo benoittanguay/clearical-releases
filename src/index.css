@@ -188,6 +188,15 @@ a:focus-visible {
   }
 }
 
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
 /* Utility Animation Classes */
 .animate-fade-in {
   animation: fadeIn var(--duration-base) var(--ease-out);
@@ -252,6 +261,10 @@ button:not(:disabled):active {
 /* Loading Spinner Styles */
 .spinner {
   animation: spin 1s linear infinite;
+}
+
+.animate-shimmer {
+  animation: shimmer 2s ease-in-out infinite;
 }
 
 /* Smooth Modal Backdrop */

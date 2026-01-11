@@ -2,11 +2,11 @@ import { useState } from 'react';
 import { useCrawlerProgress } from '../context/CrawlerProgressContext';
 
 export function CrawlerProgressBar() {
-    const { isActive, projects, overallProgress, totalIssuesFound, isDismissed, dismiss } = useCrawlerProgress();
+    const { isActive, projects, overallProgress, totalIssuesFound } = useCrawlerProgress();
     const [isExpanded, setIsExpanded] = useState(false);
 
-    // Don't render if not active or dismissed
-    if (!isActive || isDismissed) {
+    // Don't render if not active
+    if (!isActive) {
         return null;
     }
 
@@ -29,13 +29,13 @@ export function CrawlerProgressBar() {
     };
 
     return (
-        <div className="relative z-50">
+        <div className="fixed top-0 left-0 right-0 z-50">
             {/* Collapsed view - thin bar at top */}
             <div
                 className="bg-gray-800 border-b border-gray-700 shadow-lg cursor-pointer select-none"
                 onClick={() => setIsExpanded(!isExpanded)}
             >
-                <div className="px-4 py-2 flex items-center justify-between">
+                <div className="px-4 py-2 flex items-center">
                     <div className="flex items-center gap-3 flex-1">
                         {/* Animated sync icon */}
                         <div className="relative">
@@ -91,31 +91,12 @@ export function CrawlerProgressBar() {
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                         </svg>
                     </div>
-
-                    {/* Dismiss button */}
-                    <button
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            dismiss();
-                        }}
-                        className="ml-3 p-1 rounded hover:bg-gray-700 transition-colors"
-                        title="Dismiss (will return when sync starts again)"
-                    >
-                        <svg
-                            className="w-3.5 h-3.5 text-gray-400 hover:text-gray-300"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                        >
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                    </button>
                 </div>
             </div>
 
             {/* Expanded view - detailed per-project progress */}
             {isExpanded && (
-                <div className="absolute top-full left-20 right-0 bg-gray-800 border-b border-gray-700 shadow-xl z-[60] animate-fade-in">
+                <div className="absolute top-full left-0 right-0 bg-gray-800 border-b border-gray-700 shadow-xl z-[60] animate-fade-in">
                     <div className="px-4 py-3 max-h-64 overflow-y-auto">
                         <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
                             Project Details

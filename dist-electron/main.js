@@ -15,7 +15,7 @@ if (fs.existsSync(envPath)) {
 else {
     console.log('[Main] No .env.local found at:', envPath);
 }
-import { saveEncryptedFile, decryptFile, getEncryptionKey } from './encryption.js';
+import { saveEncryptedFile, decryptFile, getEncryptionKey, isFileEncrypted } from './encryption.js';
 import { storeCredential, getCredential, deleteCredential, hasCredential, listCredentialKeys, isSecureStorageAvailable } from './credentialStorage.js';
 import { initializeLicensing } from './licensing/ipcHandlers.js';
 import { initializeSubscription, cleanupSubscription } from './subscription/ipcHandlers.js';
@@ -27,6 +27,7 @@ import { MigrationService } from './migration.js';
 import { updater } from './autoUpdater.js';
 import { AppDiscoveryService } from './appDiscoveryService.js';
 import { BlacklistService } from './blacklistService.js';
+import { fastVLMServer } from './fastvlm.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // In production (packaged), app.getAppPath() returns the path to the asar file
 // In development, it returns the project root directory
@@ -395,10 +396,12 @@ ipcMain.handle('capture-screenshot', async () => {
             console.log('[Main] Capturing window:', targetSource.name, `(${targetSource.thumbnail.getSize().width}x${targetSource.thumbnail.getSize().height})`);
             const image = targetSource.thumbnail.toPNG();
             // Create a more descriptive filename with app name and timestamp
+            // Format: timestamp|||AppName|||WindowTitle.png
+            // Using ||| as delimiter to preserve spaces in app names and window titles
             const timestamp = Date.now();
-            const appNameSafe = (currentWindow?.appName || 'Unknown').replace(/[^a-zA-Z0-9]/g, '_');
-            const windowTitleSafe = targetSource.name.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 50);
-            const filename = `${timestamp}_${appNameSafe}_${windowTitleSafe}.png`;
+            const appNameSafe = (currentWindow?.appName || 'Unknown').replace(/[\/\\:*?"<>|]/g, '_');
+            const windowTitleSafe = targetSource.name.replace(/[\/\\:*?"<>|]/g, '_').substring(0, 100);
+            const filename = `${timestamp}|||${appNameSafe}|||${windowTitleSafe}.png`;
             const filePath = path.join(SCREENSHOTS_DIR, filename);
             // Save screenshot with encryption
             try {
@@ -422,8 +425,8 @@ ipcMain.handle('capture-screenshot', async () => {
                 const image = screenSources[0].thumbnail.toPNG();
                 // Use same naming convention for fallback
                 const timestamp = Date.now();
-                const appNameSafe = (currentWindow?.appName || 'Unknown').replace(/[^a-zA-Z0-9]/g, '_');
-                const filename = `${timestamp}_${appNameSafe}_SCREEN_FALLBACK.png`;
+                const appNameSafe = (currentWindow?.appName || 'Unknown').replace(/[\/\\:*?"<>|]/g, '_');
+                const filename = `${timestamp}|||${appNameSafe}|||SCREEN_FALLBACK.png`;
                 const filePath = path.join(SCREENSHOTS_DIR, filename);
                 // Save screenshot with encryption
                 try {
@@ -741,40 +744,12 @@ function generateTextBasedSummary(context) {
         }
     };
 }
-// Screenshot Analysis with TWO-STAGE ARCHITECTURE
-// Stage 1: Vision Framework (Swift) extracts raw data
-// Stage 2: LLM (Claude) generates narrative description
+// Screenshot Analysis with FASTVLM BACKEND
+// Primary: FastVLM Python server for VLM analysis
+// Fallback: Swift Vision Framework + on-device AI
 ipcMain.handle('analyze-screenshot', async (event, imagePath, requestId) => {
     console.log('[Main] analyze-screenshot requested for:', imagePath);
-    console.log('[Main] Using two-stage architecture: Vision Framework → Claude LLM');
-    if (process.platform !== 'darwin') {
-        console.log('[Main] analyze-screenshot: Not macOS, skipping Vision Framework analysis');
-        return {
-            success: false,
-            error: 'Vision Framework analysis only available on macOS',
-            description: 'Screenshot captured', // Fallback description
-            rawVisionData: null,
-            aiDescription: null
-        };
-    }
-    // Path to our Swift helper - relative to app root
-    // In development: native/screenshot-analyzer/build/screenshot-analyzer
-    // In production: bundled with the app in resources
-    const helperPath = app.isPackaged
-        ? path.join(process.resourcesPath, 'screenshot-analyzer')
-        : path.join(app.getAppPath(), 'native', 'screenshot-analyzer', 'build', 'screenshot-analyzer');
-    console.log('[Main] Looking for Swift helper at:', helperPath);
-    // Check if the helper exists
-    if (!fs.existsSync(helperPath)) {
-        console.log('[Main] analyze-screenshot: Swift helper not found at:', helperPath);
-        return {
-            success: false,
-            error: 'Vision Framework helper not built. Run: cd native/screenshot-analyzer && ./build.sh',
-            description: 'Screenshot captured', // Fallback description
-            rawVisionData: null,
-            aiDescription: null
-        };
-    }
+    console.log('[Main] Using FastVLM backend with Swift fallback');
     // Check if the image file exists
     if (!fs.existsSync(imagePath)) {
         console.log('[Main] analyze-screenshot: Image file not found:', imagePath);
@@ -782,6 +757,159 @@ ipcMain.handle('analyze-screenshot', async (event, imagePath, requestId) => {
             success: false,
             error: 'Image file not found',
             description: 'Screenshot captured', // Fallback description
+            rawVisionData: null,
+            aiDescription: null
+        };
+    }
+    // Decrypt screenshot if encrypted (analyzers need raw PNG data)
+    let analyzeImagePath = imagePath;
+    let tempDecryptedPath = null;
+    try {
+        if (isFileEncrypted(imagePath)) {
+            console.log('[Main] Screenshot is encrypted, decrypting for analysis...');
+            const decryptedData = await decryptFile(imagePath);
+            // Write to temp file for analyzers
+            // Preserve original filename so they can extract app info from it
+            const originalFilename = path.basename(imagePath);
+            tempDecryptedPath = path.join(app.getPath('temp'), originalFilename);
+            await fs.promises.writeFile(tempDecryptedPath, decryptedData);
+            analyzeImagePath = tempDecryptedPath;
+            console.log('[Main] Decrypted screenshot to temp file:', tempDecryptedPath);
+        }
+    }
+    catch (decryptError) {
+        console.error('[Main] Failed to decrypt screenshot:', decryptError);
+        // Continue with original path - might be unencrypted
+    }
+    // Helper function to generate fallback description from filename
+    const generateFallbackFromFilename = (filepath) => {
+        try {
+            const filename = path.basename(filepath, '.png');
+            // Try new format first (timestamp|||AppName|||WindowTitle)
+            if (filename.includes('|||')) {
+                const parts = filename.split('|||');
+                if (parts.length >= 3) {
+                    const appName = parts[1];
+                    const windowTitle = parts[2];
+                    if (windowTitle && windowTitle !== appName && windowTitle !== 'Unknown') {
+                        return `Viewing ${windowTitle} in ${appName}.`;
+                    }
+                    return `Working in ${appName}.`;
+                }
+            }
+            // Fallback to legacy format (timestamp_AppName_WindowTitle)
+            const parts = filename.split('_');
+            if (parts.length >= 3) {
+                const appName = parts[1].replace(/_/g, ' ');
+                const windowTitle = parts.slice(2).join(' ').replace(/_/g, ' ').replace(/\s+/g, ' ').trim();
+                if (windowTitle && windowTitle !== appName && windowTitle !== 'Unknown') {
+                    return `Viewing ${windowTitle} in ${appName}.`;
+                }
+                return `Working in ${appName}.`;
+            }
+        }
+        catch (e) {
+            console.log('[Main] Could not parse filename for fallback:', e);
+        }
+        return 'Screenshot captured';
+    };
+    // TRY FASTVLM FIRST (PRIMARY METHOD)
+    // Note: analyzeScreenshot() will start the server on-demand if not running
+    console.log('[Main] Attempting analysis with FastVLM (will start server if needed)...');
+    // Parse app name and window title from filename
+    // Filename format: {timestamp}|||{app_name}|||{window_title}.png
+    let appName;
+    let windowTitle;
+    try {
+        const filename = path.basename(analyzeImagePath, '.png');
+        if (filename.includes('|||')) {
+            const parts = filename.split('|||');
+            if (parts.length >= 3) {
+                appName = parts[1] || undefined;
+                windowTitle = parts[2] || undefined;
+                console.log('[Main] Parsed from filename - app:', appName, 'window:', windowTitle);
+            }
+        }
+    }
+    catch (parseError) {
+        console.log('[Main] Could not parse app info from filename:', parseError);
+    }
+    try {
+        const fastVLMResult = await fastVLMServer.analyzeScreenshot(analyzeImagePath, appName, windowTitle, requestId);
+        // Clean up temp decrypted file if we created one
+        if (tempDecryptedPath) {
+            try {
+                await fs.promises.unlink(tempDecryptedPath);
+                console.log('[Main] Cleaned up temp decrypted file');
+            }
+            catch (cleanupError) {
+                console.warn('[Main] Failed to cleanup temp file:', cleanupError);
+            }
+        }
+        if (fastVLMResult.success && fastVLMResult.description) {
+            console.log('[Main] FastVLM analysis successful');
+            console.log('[Main] Description:', fastVLMResult.description);
+            return {
+                success: true,
+                description: fastVLMResult.description,
+                confidence: fastVLMResult.confidence || 0.9,
+                requestId: fastVLMResult.requestId,
+                rawVisionData: null,
+                aiDescription: fastVLMResult.description,
+                llmError: null,
+                analyzer: 'fastvlm'
+            };
+        }
+        else {
+            console.warn('[Main] FastVLM analysis failed:', fastVLMResult.error);
+            console.log('[Main] Falling back to Swift analyzer...');
+        }
+    }
+    catch (fastVLMError) {
+        console.error('[Main] FastVLM error:', fastVLMError);
+        console.log('[Main] Falling back to Swift analyzer...');
+    }
+    // FALLBACK TO SWIFT ANALYZER
+    if (process.platform !== 'darwin') {
+        console.log('[Main] analyze-screenshot: Not macOS, Swift fallback not available');
+        // Clean up temp decrypted file if we created one
+        if (tempDecryptedPath) {
+            try {
+                await fs.promises.unlink(tempDecryptedPath);
+            }
+            catch (cleanupError) {
+                console.warn('[Main] Failed to cleanup temp file:', cleanupError);
+            }
+        }
+        return {
+            success: false,
+            error: 'Analysis not available: FastVLM not running and not on macOS',
+            description: generateFallbackFromFilename(imagePath),
+            rawVisionData: null,
+            aiDescription: null
+        };
+    }
+    // Path to our Swift helper - relative to app root
+    const helperPath = app.isPackaged
+        ? path.join(process.resourcesPath, 'screenshot-analyzer')
+        : path.join(app.getAppPath(), 'native', 'screenshot-analyzer', 'build', 'screenshot-analyzer');
+    console.log('[Main] Looking for Swift helper at:', helperPath);
+    // Check if the helper exists
+    if (!fs.existsSync(helperPath)) {
+        console.log('[Main] analyze-screenshot: Swift helper not found at:', helperPath);
+        // Clean up temp decrypted file if we created one
+        if (tempDecryptedPath) {
+            try {
+                await fs.promises.unlink(tempDecryptedPath);
+            }
+            catch (cleanupError) {
+                console.warn('[Main] Failed to cleanup temp file:', cleanupError);
+            }
+        }
+        return {
+            success: false,
+            error: 'Swift helper not found. Run: cd native/screenshot-analyzer && ./build.sh',
+            description: generateFallbackFromFilename(imagePath),
             rawVisionData: null,
             aiDescription: null
         };
@@ -823,13 +951,24 @@ ipcMain.handle('analyze-screenshot', async (event, imagePath, requestId) => {
                 reject(error);
             });
             // Send the request as JSON to stdin
+            // Use analyzeImagePath which is either the original or decrypted temp file
             const request = {
-                imagePath: imagePath,
+                imagePath: analyzeImagePath,
                 requestId: requestId || null
             };
             child.stdin.write(JSON.stringify(request) + '\n');
             child.stdin.end();
         });
+        // Clean up temp decrypted file if we created one
+        if (tempDecryptedPath) {
+            try {
+                await fs.promises.unlink(tempDecryptedPath);
+                console.log('[Main] Cleaned up temp decrypted file');
+            }
+            catch (cleanupError) {
+                console.warn('[Main] Failed to cleanup temp file:', cleanupError);
+            }
+        }
         console.log('[Main] Stage 1 complete - Vision Framework extraction successful');
         console.log('[Main] Extracted:', {
             textItems: visionResult.detectedText?.length || 0,
@@ -847,10 +986,15 @@ ipcMain.handle('analyze-screenshot', async (event, imagePath, requestId) => {
         // STAGE 2: On-device AI narrative (already generated by Swift)
         // The Swift analyzer now includes intelligent narrative generation using
         // Apple's NaturalLanguage framework combined with advanced heuristics
-        const aiDescription = visionResult.description || 'Screenshot captured';
-        console.log('[Main] Stage 2 complete - On-device AI narrative generated by Swift analyzer');
+        // Use Swift description if meaningful, otherwise generate from filename
+        let aiDescription = visionResult.description;
+        if (!aiDescription || aiDescription.length < 10 || aiDescription === 'Screenshot captured') {
+            console.log('[Main] Swift description empty/generic, using filename fallback');
+            aiDescription = generateFallbackFromFilename(imagePath);
+        }
+        console.log('[Main] Stage 2 complete - On-device AI narrative generated');
         console.log('[Main] Description length:', aiDescription.length, 'characters');
-        console.log('[Main] Using Apple Intelligence (NaturalLanguage framework + heuristics)');
+        console.log('[Main] Final description:', aiDescription);
         // Return both raw Vision data AND AI-generated description
         return {
             success: true,
@@ -861,24 +1005,70 @@ ipcMain.handle('analyze-screenshot', async (event, imagePath, requestId) => {
             objects: visionResult.objects,
             extraction: visionResult.extraction,
             requestId: visionResult.requestId,
-            // NEW: Separate fields for two-stage architecture
+            // Separate fields for two-stage architecture
             rawVisionData: rawVisionData,
             aiDescription: aiDescription,
-            llmError: null // No external LLM, so no errors
+            llmError: null, // No external LLM, so no errors
+            analyzer: 'swift' // Indicate which analyzer was used
         };
     }
     catch (error) {
-        console.error('[Main] analyze-screenshot failed:', error);
+        console.error('[Main] Swift analyzer failed:', error);
+        // Clean up temp decrypted file if we created one
+        if (tempDecryptedPath) {
+            try {
+                await fs.promises.unlink(tempDecryptedPath);
+            }
+            catch (cleanupError) {
+                console.warn('[Main] Failed to cleanup temp file:', cleanupError);
+            }
+        }
+        // Generate fallback from filename even on error
+        const fallbackDescription = generateFallbackFromFilename(imagePath);
         return {
             success: false,
             error: error instanceof Error ? error.message : 'Unknown error',
-            description: 'Screenshot captured', // Fallback description
+            description: fallbackDescription,
             rawVisionData: null,
-            aiDescription: null
+            aiDescription: null,
+            analyzer: 'fallback'
         };
     }
 });
 // Permission Handlers
+/**
+ * Tests if screen recording permission actually works by attempting to capture.
+ * This is critical for detecting "zombie" permissions - where macOS system settings
+ * show the app has permission, but the TCC database has stale entries from a previous
+ * app signature (common with ad-hoc signed apps during updates).
+ *
+ * @returns Object with { works: boolean, error?: string }
+ */
+async function testScreenRecordingWorks() {
+    try {
+        const sources = await desktopCapturer.getSources({
+            types: ['screen'],
+            thumbnailSize: { width: 100, height: 100 }
+        });
+        if (sources.length === 0) {
+            console.warn('[Main] Screen recording test: No sources returned (permission may be stale)');
+            return { works: false, error: 'no_sources' };
+        }
+        // Try to get a thumbnail - this will fail if permission is stale
+        const thumbnail = sources[0].thumbnail;
+        const size = thumbnail.getSize();
+        if (size.width === 0 || size.height === 0) {
+            console.warn('[Main] Screen recording test: Empty thumbnail (permission may be stale)');
+            return { works: false, error: 'empty_thumbnail' };
+        }
+        console.log('[Main] Screen recording test: SUCCESS - captured thumbnail', size);
+        return { works: true };
+    }
+    catch (error) {
+        console.error('[Main] Screen recording test: ERROR -', error);
+        return { works: false, error: String(error) };
+    }
+}
 ipcMain.handle('check-screen-permission', async () => {
     if (process.platform === 'darwin') {
         const status = systemPreferences.getMediaAccessStatus('screen');
@@ -891,6 +1081,19 @@ ipcMain.handle('check-screen-permission', async () => {
             }
             catch (e) {
                 console.warn('[Main] Trigger prompt catch (expected if denied/cancelled):', e);
+            }
+            return systemPreferences.getMediaAccessStatus('screen');
+        }
+        // CRITICAL: If status is 'granted', verify it actually works
+        // This detects "zombie" permissions from app updates with signature changes
+        if (status === 'granted') {
+            const testResult = await testScreenRecordingWorks();
+            if (!testResult.works) {
+                console.error('[Main] STALE PERMISSION DETECTED: System says granted but capture fails!');
+                console.error('[Main] This typically happens after app updates with ad-hoc signing');
+                console.error('[Main] User needs to remove and re-add the app in System Settings');
+                // Return 'stale' as a special status to trigger UI notification
+                return 'stale';
             }
         }
         return status;
@@ -967,6 +1170,57 @@ ipcMain.handle('open-accessibility-settings', async () => {
         }
     }
 });
+/**
+ * Shows instructions for resetting TCC permissions to fix stale permission issues.
+ * This is needed when macOS shows the app has permission but it doesn't actually work
+ * (common after app updates with ad-hoc signing).
+ */
+ipcMain.handle('show-permission-reset-instructions', async () => {
+    console.log('[Main] show-permission-reset-instructions requested');
+    if (process.platform === 'darwin') {
+        const appName = app.getName();
+        const message = `Permission Reset Required
+
+After an app update, macOS may have stale permission entries. To fix this:
+
+1. Open System Settings (or System Preferences)
+2. Go to "Privacy & Security" → "Screen Recording"
+3. Find "${appName}" in the list
+4. Click the toggle to DISABLE it
+5. Click the toggle again to ENABLE it
+6. Restart ${appName}
+
+Alternatively, you can reset using Terminal:
+tccutil reset ScreenCapture ${app.getPath('exe')}
+
+This is a known macOS issue with app updates. Your data is safe.`;
+        const result = await dialog.showMessageBox({
+            type: 'warning',
+            title: 'Permission Reset Required',
+            message: 'Screen Recording Permission Needs Reset',
+            detail: message,
+            buttons: ['Open System Settings', 'Copy Terminal Command', 'Cancel'],
+            defaultId: 0,
+            cancelId: 2
+        });
+        if (result.response === 0) {
+            // Open System Settings
+            await shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture');
+        }
+        else if (result.response === 1) {
+            // Copy terminal command to clipboard
+            const { clipboard } = await import('electron');
+            clipboard.writeText(`tccutil reset ScreenCapture "${app.getPath('exe')}"`);
+            await dialog.showMessageBox({
+                type: 'info',
+                title: 'Command Copied',
+                message: 'Terminal command copied to clipboard',
+                detail: 'Paste this command in Terminal and press Enter to reset permissions.',
+                buttons: ['OK']
+            });
+        }
+    }
+});
 // Get environment information
 ipcMain.handle('get-environment-info', async () => {
     // Check if we're in production mode based on BUILD_ENV or app.isPackaged
@@ -976,6 +1230,7 @@ ipcMain.handle('get-environment-info', async () => {
         isDevelopment: !isProduction,
         isPackaged: app.isPackaged,
         buildEnv: process.env.BUILD_ENV || 'not-set',
+        version: app.getVersion(),
     };
 });
 // Open external URL in default browser
@@ -2168,6 +2423,16 @@ ipcMain.handle('get-installed-apps', async () => {
             categoryName: AppDiscoveryService.getCategoryName(app.category),
             iconPath: app.iconPath
         }));
+        // Log icon statistics
+        const appsWithIcons = serializedApps.filter(app => app.iconPath);
+        console.log(`[Main] Apps with icons: ${appsWithIcons.length}/${apps.length}`);
+        // Log first 3 apps with icons for debugging
+        if (appsWithIcons.length > 0) {
+            console.log('[Main] Sample apps with icons:');
+            appsWithIcons.slice(0, 3).forEach(app => {
+                console.log(`  - ${app.name}: ${app.iconPath}`);
+            });
+        }
         return { success: true, data: serializedApps };
     }
     catch (error) {
@@ -2181,20 +2446,28 @@ ipcMain.handle('get-installed-apps', async () => {
 });
 // Convert .icns icon to base64 data URL for display in UI
 ipcMain.handle('get-app-icon-base64', async (_event, iconPath) => {
-    if (!iconPath || !fs.existsSync(iconPath)) {
+    console.log(`[Main] get-app-icon-base64 requested for: ${iconPath}`);
+    if (!iconPath) {
+        console.log('[Main] get-app-icon-base64: No icon path provided');
+        return { success: false, error: 'No icon path provided' };
+    }
+    if (!fs.existsSync(iconPath)) {
+        console.log(`[Main] get-app-icon-base64: Icon path does not exist: ${iconPath}`);
         return { success: false, error: 'Icon path does not exist' };
     }
     try {
         // Use nativeImage to convert .icns to PNG
         const image = nativeImage.createFromPath(iconPath);
         if (image.isEmpty()) {
-            return { success: false, error: 'Failed to load icon' };
+            console.log(`[Main] get-app-icon-base64: Failed to load icon (empty image): ${iconPath}`);
+            return { success: false, error: 'Failed to load icon (empty image)' };
         }
         // Resize to a reasonable size (64x64) to keep data URL small
         const resized = image.resize({ width: 64, height: 64 });
         const png = resized.toPNG();
         const base64 = png.toString('base64');
         const dataUrl = `data:image/png;base64,${base64}`;
+        console.log(`[Main] get-app-icon-base64: Successfully converted icon (${Math.round(dataUrl.length / 1024)}KB)`);
         return { success: true, dataUrl };
     }
     catch (error) {
@@ -2270,8 +2543,14 @@ function createTray() {
 function getWindowPosition() {
     const windowBounds = win?.getBounds();
     const trayBounds = tray?.getBounds();
-    if (!windowBounds || !trayBounds)
-        return { x: 0, y: 0 };
+    if (!windowBounds || !trayBounds) {
+        console.warn('[Main] Cannot calculate window position - missing bounds', {
+            hasWindowBounds: !!windowBounds,
+            hasTrayBounds: !!trayBounds,
+            trayBounds
+        });
+        return null;
+    }
     const x = Math.round(trayBounds.x + (trayBounds.width / 2) - (windowBounds.width / 2));
     const y = Math.round(trayBounds.y + trayBounds.height + 4);
     return { x, y };
@@ -2281,8 +2560,13 @@ function toggleWindow() {
         win.hide();
     }
     else {
-        const { x, y } = getWindowPosition();
-        win?.setPosition(x, y, false);
+        const position = getWindowPosition();
+        if (position) {
+            win?.setPosition(position.x, position.y, false);
+        }
+        else {
+            console.warn('[Main] Unable to position window, showing at last known position');
+        }
         win?.show();
         win?.focus();
     }
@@ -2292,11 +2576,19 @@ function showWindowBelowTray() {
         console.warn('[Main] Cannot show window - window or tray not initialized');
         return;
     }
-    const { x, y } = getWindowPosition();
-    win.setPosition(x, y, false);
+    const position = getWindowPosition();
+    if (!position) {
+        console.warn('[Main] Cannot show window - tray bounds not available yet, will retry');
+        // Retry after a short delay to allow tray to fully initialize
+        setTimeout(() => {
+            showWindowBelowTray();
+        }, 50);
+        return;
+    }
+    win.setPosition(position.x, position.y, false);
     win.show();
     win.focus();
-    console.log('[Main] Window shown below tray icon at position:', { x, y });
+    console.log('[Main] Window shown below tray icon at position:', position);
 }
 function createWindow() {
     const preloadPath = path.join(__dirname, 'preload.cjs');
@@ -2323,6 +2615,9 @@ function createWindow() {
             devTools: false // Disable devTools
         },
     });
+    // Position window off-screen initially to prevent flash at (0,0)
+    // This prevents the window from appearing in lower-left corner before repositioning
+    win.setPosition(-9999, -9999);
     if (!app.isPackaged) {
         win.loadURL('http://127.0.0.1:5173');
         // win.webContents.openDevTools({ mode: 'detach' });
@@ -2371,8 +2666,12 @@ app.on('window-all-closed', () => {
 // Note: Since dock icon is hidden, this mainly handles edge cases
 app.on('activate', () => {
     if (win === null) {
-        createWindow();
         createTray();
+        createWindow();
+        // Give tray time to initialize before showing window
+        setTimeout(() => {
+            showWindowBelowTray();
+        }, 150);
     }
     else {
         toggleWindow();
@@ -2414,19 +2713,26 @@ app.whenReady().then(() => {
         console.error('[Main] Failed to initialize subscription system:', error);
         console.warn('[Main] App will run without subscription features');
     }
-    createWindow();
+    // FastVLM server is now on-demand - it will start automatically when needed
+    // and shut down after 60 seconds of inactivity to save resources
+    console.log('[Main] FastVLM server configured for on-demand startup');
+    console.log('[Main] Server will start when first screenshot analysis is requested');
+    // Create tray first to ensure it's fully initialized before window positioning
     createTray();
+    // Create window (it will be positioned off-screen initially)
+    createWindow();
     // Hide dock icon on macOS - app only appears in menu bar
     // Do this before showing window to avoid visual glitches
     if (process.platform === 'darwin') {
         app.dock.hide();
         console.log('[Main] Dock icon hidden - app runs from menu bar only');
     }
-    // Now that both window and tray are created, show the window below the tray icon
-    // Use a small delay to ensure tray icon is fully rendered and positioned
+    // Now that both tray and window are created, show the window below the tray icon
+    // The showWindowBelowTray function has built-in retry logic if tray bounds aren't ready
+    // We use a small delay to ensure the tray icon is fully rendered by the OS
     setTimeout(() => {
         showWindowBelowTray();
-    }, 100);
+    }, 150);
     // Initialize auto-updater
     // Set main window reference so updater can send status updates
     updater.setMainWindow(win);

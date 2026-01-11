@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { TempoSettings, JiraSettings } from '../context/SettingsContext';
 import type { JiraProject } from '../services/jiraService';
 
@@ -26,10 +26,63 @@ export function IntegrationConfigModal({
     const [loadingProjects, setLoadingProjects] = useState(false);
     const [isDevelopment, setIsDevelopment] = useState(false);
 
+    // Track the initial state when modal opens to detect external changes
+    const initialJiraSettingsRef = useRef<JiraSettings>(currentJiraSettings);
+    const initialTempoSettingsRef = useRef<TempoSettings>(currentTempoSettings);
+
+    // Reset state when modal opens
     useEffect(() => {
         if (isOpen) {
             setTempTempoSettings(currentTempoSettings);
             setTempJiraSettings(currentJiraSettings);
+            // Capture the initial state for comparison
+            initialJiraSettingsRef.current = currentJiraSettings;
+            initialTempoSettingsRef.current = currentTempoSettings;
+        }
+    }, [isOpen, currentTempoSettings, currentJiraSettings]);
+
+    // Monitor for external settings changes while modal is open
+    // Only update if there's a meaningful change beyond lastSyncTimestamp
+    // This preserves user's unsaved changes when background Jira sync updates the timestamp
+    useEffect(() => {
+        if (!isOpen) {
+            return;
+        }
+
+        // Compare current settings with the initial settings when modal opened
+        // This detects if settings changed externally (not just from user edits in the modal)
+        const initialJira = initialJiraSettingsRef.current;
+        const initialTempo = initialTempoSettingsRef.current;
+
+        // Check if Jira settings changed externally (not just lastSyncTimestamp)
+        const hasExternalJiraChange = (
+            currentJiraSettings.enabled !== initialJira.enabled ||
+            currentJiraSettings.baseUrl !== initialJira.baseUrl ||
+            currentJiraSettings.email !== initialJira.email ||
+            currentJiraSettings.apiToken !== initialJira.apiToken ||
+            JSON.stringify(currentJiraSettings.selectedProjects) !== JSON.stringify(initialJira.selectedProjects) ||
+            currentJiraSettings.autoSync !== initialJira.autoSync ||
+            currentJiraSettings.syncInterval !== initialJira.syncInterval
+        );
+
+        // Check if Tempo settings changed externally
+        const hasExternalTempoChange = (
+            currentTempoSettings.enabled !== initialTempo.enabled ||
+            currentTempoSettings.baseUrl !== initialTempo.baseUrl ||
+            currentTempoSettings.apiToken !== initialTempo.apiToken ||
+            currentTempoSettings.defaultIssueKey !== initialTempo.defaultIssueKey
+        );
+
+        // Only reset if there's a meaningful external change
+        // This allows background sync to update lastSyncTimestamp without disrupting the user
+        if (hasExternalJiraChange) {
+            setTempJiraSettings(currentJiraSettings);
+            initialJiraSettingsRef.current = currentJiraSettings;
+        }
+
+        if (hasExternalTempoChange) {
+            setTempTempoSettings(currentTempoSettings);
+            initialTempoSettingsRef.current = currentTempoSettings;
         }
     }, [isOpen, currentTempoSettings, currentJiraSettings]);
 

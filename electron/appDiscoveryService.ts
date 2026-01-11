@@ -180,6 +180,7 @@ export class AppDiscoveryService {
         const resourcesDir = path.join(appPath, 'Contents', 'Resources');
 
         if (!fs.existsSync(resourcesDir)) {
+            console.log(`[AppDiscoveryService] Resources directory not found for ${path.basename(appPath)}`);
             return undefined;
         }
 
@@ -195,6 +196,7 @@ export class AppDiscoveryService {
                 }
 
                 if (fs.existsSync(iconPath)) {
+                    console.log(`[AppDiscoveryService] Found icon from Info.plist for ${path.basename(appPath)}: ${iconFile}`);
                     return iconPath;
                 }
             }
@@ -204,6 +206,7 @@ export class AppDiscoveryService {
             for (const iconName of commonIconNames) {
                 const iconPath = path.join(resourcesDir, iconName);
                 if (fs.existsSync(iconPath)) {
+                    console.log(`[AppDiscoveryService] Found icon via common name for ${path.basename(appPath)}: ${iconName}`);
                     return iconPath;
                 }
             }
@@ -212,8 +215,11 @@ export class AppDiscoveryService {
             const files = await fs.promises.readdir(resourcesDir);
             const icnsFile = files.find(f => f.toLowerCase().endsWith('.icns'));
             if (icnsFile) {
+                console.log(`[AppDiscoveryService] Found icon via directory scan for ${path.basename(appPath)}: ${icnsFile}`);
                 return path.join(resourcesDir, icnsFile);
             }
+
+            console.log(`[AppDiscoveryService] No icon found for ${path.basename(appPath)}`);
         } catch (error) {
             console.error(`[AppDiscoveryService] Error finding icon for ${appPath}:`, error);
         }

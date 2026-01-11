@@ -54,6 +54,7 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
     const checkPermissions = async () => {
         try {
             const screenStatus = await window.electron.ipcRenderer.checkScreenPermission();
+            // Treat 'stale' as not granted - requires user intervention
             setScreenRecordingGranted(screenStatus === 'granted');
 
             // Accessibility can't be checked programmatically on macOS, so we test it

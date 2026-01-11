@@ -367,42 +367,53 @@ export function JiraIssuesSection({ onIssueClick }: JiraIssuesSectionProps = {})
                     </div>
                 ) : (
                     <div className="space-y-1.5">
-                        {currentTabData.issues.map((issue) => (
-                            <div
-                                key={issue.id}
-                                onClick={() => onIssueClick?.(issue)}
-                                className="bg-gray-900/50 border border-gray-600 rounded-lg p-2.5 hover:bg-gray-800/50 transition-colors cursor-pointer"
-                            >
-                                <div className="flex items-start justify-between">
-                                    <div className="flex-1 min-w-0">
-                                        <div className="flex items-center gap-2 mb-1">
-                                            <span className="text-blue-400 font-mono text-sm font-medium">
-                                                {issue.key}
-                                            </span>
-                                            <span className="text-xs text-gray-500">
-                                                {issue.fields.project.name}
-                                            </span>
-                                            <span className="text-xs px-2 py-0.5 bg-gray-700 text-gray-300 rounded">
-                                                {issue.fields.issuetype.name}
-                                            </span>
-                                        </div>
-                                        <h4 className="text-white font-medium text-sm mb-2 line-clamp-2">
-                                            {issue.fields.summary}
-                                        </h4>
-                                        <div className="flex items-center gap-2">
-                                            <span className={`px-2 py-1 rounded text-xs ${getStatusColor(issue.fields.status.statusCategory.key)}`}>
-                                                {issue.fields.status.name}
-                                            </span>
-                                            {issue.fields.assignee && (
-                                                <span className="text-xs text-gray-400">
-                                                    → {issue.fields.assignee.displayName}
+                        {currentTabData.issues.map((issue) => {
+                            // Check if this is an Epic issue type
+                            const isEpic = issue.fields.issuetype.name.toLowerCase() === 'epic';
+
+                            return (
+                                <div
+                                    key={issue.id}
+                                    onClick={() => onIssueClick?.(issue)}
+                                    className={`bg-gray-900/50 border rounded-lg p-2.5 hover:bg-gray-800/50 transition-colors cursor-pointer ${
+                                        isEpic ? 'border-purple-600/50' : 'border-gray-600'
+                                    }`}
+                                >
+                                    <div className="flex items-start justify-between">
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex items-center gap-2 mb-1">
+                                                <span className="text-blue-400 font-mono text-sm font-medium">
+                                                    {issue.key}
                                                 </span>
-                                            )}
+                                                <span className="text-xs text-gray-500">
+                                                    {issue.fields.project.name}
+                                                </span>
+                                                <span className={`text-xs px-2 py-0.5 rounded ${
+                                                    isEpic
+                                                        ? 'bg-purple-900/40 text-purple-300 border border-purple-600/50 font-semibold'
+                                                        : 'bg-gray-700 text-gray-300'
+                                                }`}>
+                                                    {issue.fields.issuetype.name}
+                                                </span>
+                                            </div>
+                                            <h4 className="text-white font-medium text-sm mb-2 line-clamp-2">
+                                                {issue.fields.summary}
+                                            </h4>
+                                            <div className="flex items-center gap-2">
+                                                <span className={`px-2 py-1 rounded text-xs ${getStatusColor(issue.fields.status.statusCategory.key)}`}>
+                                                    {issue.fields.status.name}
+                                                </span>
+                                                {issue.fields.assignee && (
+                                                    <span className="text-xs text-gray-400">
+                                                        → {issue.fields.assignee.displayName}
+                                                    </span>
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 )}
             </div>

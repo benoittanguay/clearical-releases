@@ -183,32 +183,35 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
                         parsedSettings.jira.email = '';
                     }
 
-                    // NOTE: We load credentials from secure storage for migration purposes,
-                    // but continue using hardcoded defaults for testing until final release.
-                    // When ready for production, uncomment the lines below to use secure credentials.
+                    // Load credentials from secure storage
+                    const tempoTokenResult = await window.electron.ipcRenderer.secureGetCredential('tempo-api-token');
+                    const jiraTokenResult = await window.electron.ipcRenderer.secureGetCredential('jira-api-token');
+                    const jiraEmailResult = await window.electron.ipcRenderer.secureGetCredential('jira-email');
 
-                    // const tempoTokenResult = await window.electron.ipcRenderer.secureGetCredential('tempo-api-token');
-                    // const jiraTokenResult = await window.electron.ipcRenderer.secureGetCredential('jira-api-token');
-                    // const jiraEmailResult = await window.electron.ipcRenderer.secureGetCredential('jira-email');
+                    console.log('[SettingsContext] Loaded credentials from secure storage:', {
+                        tempoToken: tempoTokenResult.success && tempoTokenResult.value ? 'present' : 'absent',
+                        jiraToken: jiraTokenResult.success && jiraTokenResult.value ? 'present' : 'absent',
+                        jiraEmail: jiraEmailResult.success && jiraEmailResult.value ? 'present' : 'absent',
+                    });
 
-                    // Build settings with hardcoded defaults for testing
+                    // Build settings with credentials from secure storage
                     const mergedSettings: AppSettings = {
                         ...defaultSettings,
                         ...parsedSettings,
                         tempo: {
                             ...parsedSettings.tempo,
-                            // Use hardcoded default for testing, or secure storage value if available
-                            apiToken: defaultSettings.tempo.apiToken, // Keep hardcoded default
+                            // Use secure storage value if available, otherwise use default
+                            apiToken: (tempoTokenResult.success && tempoTokenResult.value) || parsedSettings.tempo?.apiToken || defaultSettings.tempo.apiToken,
                             baseUrl: parsedSettings.tempo?.baseUrl || defaultSettings.tempo.baseUrl,
                             defaultIssueKey: parsedSettings.tempo?.defaultIssueKey || '',
                             enabled: parsedSettings.tempo?.enabled ?? defaultSettings.tempo.enabled,
                         },
                         jira: {
                             ...parsedSettings.jira,
-                            // Use hardcoded defaults for testing, or secure storage values if available
+                            // Use secure storage values if available, otherwise use defaults
                             baseUrl: parsedSettings.jira?.baseUrl || defaultSettings.jira.baseUrl,
-                            email: defaultSettings.jira.email, // Keep hardcoded default
-                            apiToken: defaultSettings.jira.apiToken, // Keep hardcoded default
+                            email: (jiraEmailResult.success && jiraEmailResult.value) || parsedSettings.jira?.email || defaultSettings.jira.email,
+                            apiToken: (jiraTokenResult.success && jiraTokenResult.value) || parsedSettings.jira?.apiToken || defaultSettings.jira.apiToken,
                             enabled: parsedSettings.jira?.enabled ?? defaultSettings.jira.enabled,
                             selectedProjects: parsedSettings.jira?.selectedProjects || defaultSettings.jira.selectedProjects,
                             autoSync: parsedSettings.jira?.autoSync ?? defaultSettings.jira.autoSync,
@@ -226,51 +229,34 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
                     console.log('[SettingsContext] Settings loaded and migration complete');
                 } catch (error) {
                     console.error('[SettingsContext] Failed to load from secure storage:', error);
-                    // Fallback to localStorage values with hardcoded testing defaults
+                    // Fallback to database values (which may have credentials from older versions)
                     const mergedSettings = {
                         ...defaultSettings,
                         ...parsedSettings,
                         tempo: {
+                            ...defaultSettings.tempo,
                             ...parsedSettings.tempo,
-                            apiToken: defaultSettings.tempo.apiToken,
-                            baseUrl: defaultSettings.tempo.baseUrl,
-                            enabled: true,
                         },
                         jira: {
+                            ...defaultSettings.jira,
                             ...parsedSettings.jira,
-                            baseUrl: defaultSettings.jira.baseUrl,
-                            email: defaultSettings.jira.email,
-                            apiToken: defaultSettings.jira.apiToken,
-                            enabled: true,
-                            selectedProjects: defaultSettings.jira.selectedProjects,
-                            autoSync: parsedSettings.jira?.autoSync ?? defaultSettings.jira.autoSync,
-                            syncInterval: parsedSettings.jira?.syncInterval || defaultSettings.jira.syncInterval,
-                            lastSyncTimestamp: parsedSettings.jira?.lastSyncTimestamp || defaultSettings.jira.lastSyncTimestamp,
                         },
                     };
                     setSettings(mergedSettings);
                 }
             } else {
-                // Secure storage not available, use localStorage with hardcoded testing defaults
+                // Secure storage not available, use database values
+                console.warn('[SettingsContext] Secure storage not available, using database values');
                 const mergedSettings = {
                     ...defaultSettings,
                     ...parsedSettings,
                     tempo: {
+                        ...defaultSettings.tempo,
                         ...parsedSettings.tempo,
-                        apiToken: defaultSettings.tempo.apiToken,
-                        baseUrl: defaultSettings.tempo.baseUrl,
-                        enabled: true,
                     },
                     jira: {
+                        ...defaultSettings.jira,
                         ...parsedSettings.jira,
-                        baseUrl: defaultSettings.jira.baseUrl,
-                        email: defaultSettings.jira.email,
-                        apiToken: defaultSettings.jira.apiToken,
-                        enabled: true,
-                        selectedProjects: defaultSettings.jira.selectedProjects,
-                        autoSync: parsedSettings.jira?.autoSync ?? defaultSettings.jira.autoSync,
-                        syncInterval: parsedSettings.jira?.syncInterval || defaultSettings.jira.syncInterval,
-                        lastSyncTimestamp: parsedSettings.jira?.lastSyncTimestamp || defaultSettings.jira.lastSyncTimestamp,
                     },
                 };
                 setSettings(mergedSettings);

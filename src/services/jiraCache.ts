@@ -1,3 +1,51 @@
+/**
+ * JiraCache - Persistent caching layer for Jira issues
+ *
+ * PERSISTENCE ARCHITECTURE:
+ * ========================
+ *
+ * This service provides TWO layers of persistence:
+ *
+ * 1. CACHE METADATA (jira_cache_meta table in SQLite)
+ *    - Stores query results with timestamps for cache validation
+ *    - Used to determine if cached data is fresh or stale
+ *    - Contains the actual issue data as JSON for quick access
+ *    - Survives app restarts and updates
+ *
+ * 2. INDIVIDUAL ISSUES (jira_issues table in SQLite)
+ *    - Each issue is stored separately with full data
+ *    - Indexed by project_key for efficient queries
+ *    - Used by the crawler to build comprehensive issue lists
+ *    - Persists across app restarts and updates
+ *
+ * CACHE STRATEGY (Stale-While-Revalidate):
+ * ========================================
+ *
+ * - Cache TTL: 24 hours (was 5 minutes, now much more generous)
+ * - On cache hit: Return cached data immediately
+ * - On cache miss (expired):
+ *   - If we have stale data: Return it immediately + refresh in background
+ *   - If no data at all: Fetch fresh data (blocking)
+ * - This ensures the UI shows data instantly on app startup
+ *
+ * DATA FLOW ON APP STARTUP:
+ * ==========================
+ *
+ * 1. User opens app
+ * 2. JiraIssuesSection loads active tab
+ * 3. jiraCache.getAssignedIssues() called
+ * 4. Check cache metadata (jira_cache_meta table)
+ * 5. If cached data exists (even if stale): Return it immediately
+ * 6. Trigger background refresh to update with fresh data from Jira API
+ * 7. UI updates when fresh data arrives
+ *
+ * This approach ensures:
+ * - Instant UI feedback (no loading spinners on startup)
+ * - Data persists across app restarts and updates
+ * - Fresh data is fetched in background
+ * - Reduced API calls (24h cache vs 5min)
+ */
+
 import { JiraService } from './jiraService';
 import type { JiraIssue } from './jiraService';
 import { JiraIssueCrawler } from './jiraIssueCrawler';
@@ -12,7 +60,9 @@ interface CacheEntry {
 }
 
 export class JiraCache {
-    private static readonly CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+    // Increase cache duration to 24 hours - data persists in SQLite anyway
+    // This prevents unnecessary API calls on every app restart
+    private static readonly CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours
 
     private jiraService: JiraService | null = null;
     private crawler: JiraIssueCrawler;
@@ -159,18 +209,66 @@ export class JiraCache {
     public async getAssignedIssues(forceRefresh: boolean = false): Promise<JiraIssue[]> {
         const cacheEntry = await this.getCachedData('assignedIssues');
 
+        // If cache is valid, return it immediately
         if (!forceRefresh && !this.isExpired(cacheEntry) && Array.isArray(cacheEntry?.data)) {
             console.log('[JiraCache] Returning cached assigned issues:', cacheEntry.data.length);
             return cacheEntry.data;
         }
 
+        // If cache is expired but we have data, return it while refreshing in background
+        // This provides instant UI feedback on app startup
+        if (!forceRefresh && Array.isArray(cacheEntry?.data) && cacheEntry.data.length > 0) {
+            console.log('[JiraCache] Returning stale cache while refreshing in background:', cacheEntry.data.length);
+
+            // Trigger background refresh (non-blocking)
+            this.refreshAssignedIssuesInBackground();
+
+            return cacheEntry.data;
+        }
+
+        // No cache available - need to fetch fresh data
         if (!this.jiraService) {
             console.log('[JiraCache] No Jira service available for assigned issues');
             return Array.isArray(cacheEntry?.data) ? cacheEntry.data : [];
         }
 
         try {
-            console.log('[JiraCache] Fetching fresh assigned issues from API, filtered by projects:', this.selectedProjects);
+            console.log('[JiraCache] Fetching fresh assigned issues (including Epics) from API, filtered by projects:', this.selectedProjects);
+
+            // Fetch ALL issue types assigned to current user, including Epics
+            // Note: No issuetype filter, so this includes Stories, Tasks, Bugs, Epics, etc.
+            let jql = 'assignee = currentUser()';
+            if (this.selectedProjects.length > 0) {
+                const projectFilter = this.selectedProjects.map(p => `"${p}"`).join(', ');
+                jql = `assignee = currentUser() AND project in (${projectFilter})`;
+            }
+            jql += ' ORDER BY updated DESC';
+
+            const response = await this.jiraService.searchIssues(jql);
+
+            // Store issues in database
+            for (const issue of response.issues) {
+                await window.electron.ipcRenderer.db.upsertJiraIssue(issue);
+            }
+
+            await this.setCachedData('assignedIssues', response.issues, jql);
+
+            console.log('[JiraCache] Cached', response.issues.length, 'assigned issues (including Epics) from selected projects');
+            return response.issues;
+        } catch (error) {
+            console.error('[JiraCache] Failed to fetch assigned issues:', error);
+            return Array.isArray(cacheEntry?.data) ? cacheEntry.data : [];
+        }
+    }
+
+    /**
+     * Refresh assigned issues in the background without blocking the UI
+     */
+    private async refreshAssignedIssuesInBackground(): Promise<void> {
+        if (!this.jiraService) return;
+
+        try {
+            console.log('[JiraCache] Background refresh: Fetching assigned issues from API');
 
             let jql = 'assignee = currentUser()';
             if (this.selectedProjects.length > 0) {
@@ -188,50 +286,66 @@ export class JiraCache {
 
             await this.setCachedData('assignedIssues', response.issues, jql);
 
-            console.log('[JiraCache] Cached', response.issues.length, 'assigned issues from selected projects');
-            return response.issues;
+            console.log('[JiraCache] Background refresh complete:', response.issues.length, 'assigned issues');
         } catch (error) {
-            console.error('[JiraCache] Failed to fetch assigned issues:', error);
-            return Array.isArray(cacheEntry?.data) ? cacheEntry.data : [];
+            console.error('[JiraCache] Background refresh failed:', error);
         }
     }
 
     public async getProjectIssues(projectKey: string, forceRefresh: boolean = false): Promise<JiraIssue[]> {
         // If crawler is enabled and has data, prefer that over JQL queries
+        // Crawler automatically includes ALL issue types including Epics
         const crawlerEnabled = await this.isCrawlerEnabled();
         if (crawlerEnabled) {
             const crawlerIssues = await this.crawler.getProjectIssuesAsync(projectKey);
             if (crawlerIssues.length > 0) {
-                console.log(`[JiraCache] Returning ${crawlerIssues.length} issues from crawler for ${projectKey}`);
+                console.log(`[JiraCache] Returning ${crawlerIssues.length} issues (including Epics) from crawler for ${projectKey}`);
                 return crawlerIssues;
             }
         }
 
         // Fallback to traditional JQL-based caching
+        // When using JQL, we need to explicitly include Epics
         const cacheEntry = await this.getCachedData(`projectIssues:${projectKey}`);
 
+        // If cache is valid, return it immediately
         if (!forceRefresh && !this.isExpired(cacheEntry) && Array.isArray(cacheEntry?.data)) {
             console.log(`[JiraCache] Returning cached ${projectKey} issues:`, cacheEntry.data.length);
             return cacheEntry.data;
         }
 
+        // If cache is expired but we have data, return it while refreshing in background
+        if (!forceRefresh && Array.isArray(cacheEntry?.data) && cacheEntry.data.length > 0) {
+            console.log(`[JiraCache] Returning stale cache for ${projectKey} while refreshing:`, cacheEntry.data.length);
+
+            // Trigger background refresh (non-blocking)
+            this.refreshProjectIssuesInBackground(projectKey);
+
+            return cacheEntry.data;
+        }
+
+        // No cache available - need to fetch fresh data
         if (!this.jiraService) {
             console.log(`[JiraCache] No Jira service available for ${projectKey} issues`);
             return Array.isArray(cacheEntry?.data) ? cacheEntry.data : [];
         }
 
         try {
-            console.log(`[JiraCache] Fetching fresh ${projectKey} issues from API`);
-            const response = await this.jiraService.getProjectIssues(projectKey);
+            console.log(`[JiraCache] Fetching fresh ${projectKey} issues (including Epics) from API`);
+
+            // Fetch ALL issues including Epics
+            // Note: We don't filter by issue type, so this includes Stories, Tasks, Bugs, Epics, etc.
+            const jql = `project = "${projectKey}" ORDER BY updated DESC`;
+            const response = await this.jiraService.searchIssues(jql);
 
             // Store issues in database
             for (const issue of response.issues) {
                 await window.electron.ipcRenderer.db.upsertJiraIssue(issue);
             }
 
-            await this.setCachedData(`projectIssues:${projectKey}`, response.issues, `project = "${projectKey}"`);
+            await this.setCachedData(`projectIssues:${projectKey}`, response.issues, jql);
 
-            console.log(`[JiraCache] Cached ${response.issues.length} issues for project ${projectKey}`);
+            console.log(`[JiraCache] Cached ${response.issues.length} issues (including Epics) for project ${projectKey}`);
             return response.issues;
         } catch (error) {
             console.error(`[JiraCache] Failed to fetch ${projectKey} issues:`, error);
@@ -239,14 +353,51 @@ export class JiraCache {
         }
     }
 
+    /**
+     * Refresh project issues in the background without blocking the UI
+     */
+    private async refreshProjectIssuesInBackground(projectKey: string): Promise<void> {
+        if (!this.jiraService) return;
+
+        try {
+            console.log(`[JiraCache] Background refresh: Fetching ${projectKey} issues from API`);
+
+            const jql = `project = "${projectKey}" ORDER BY updated DESC`;
+            const response = await this.jiraService.searchIssues(jql);
+
+            // Store issues in database
+            for (const issue of response.issues) {
+                await window.electron.ipcRenderer.db.upsertJiraIssue(issue);
+            }
+
+            await this.setCachedData(`projectIssues:${projectKey}`, response.issues, jql);
+
+            console.log(`[JiraCache] Background refresh complete: ${response.issues.length} issues for ${projectKey}`);
+        } catch (error) {
+            console.error(`[JiraCache] Background refresh failed for ${projectKey}:`, error);
+        }
+    }
+
     public async getProjectEpics(projectKey: string, forceRefresh: boolean = false): Promise<JiraIssue[]> {
         const cacheEntry = await this.getCachedData(`epics:${projectKey}`);
 
+        // If cache is valid, return it immediately
         if (!forceRefresh && !this.isExpired(cacheEntry) && Array.isArray(cacheEntry?.data)) {
             console.log(`[JiraCache] Returning cached ${projectKey} epics:`, cacheEntry.data.length);
             return cacheEntry.data;
         }
 
+        // If cache is expired but we have data, return it while refreshing in background
+        if (!forceRefresh && Array.isArray(cacheEntry?.data) && cacheEntry.data.length > 0) {
+            console.log(`[JiraCache] Returning stale cache for ${projectKey} epics while refreshing:`, cacheEntry.data.length);
+
+            // Trigger background refresh (non-blocking)
+            this.refreshProjectEpicsInBackground(projectKey);
+
+            return cacheEntry.data;
+        }
+
+        // No cache available - need to fetch fresh data
         if (!this.jiraService) {
             console.log(`[JiraCache] No Jira service available for ${projectKey} epics`);
             return Array.isArray(cacheEntry?.data) ? cacheEntry.data : [];
@@ -270,6 +421,31 @@ export class JiraCache {
         } catch (error) {
             console.error(`[JiraCache] Failed to fetch ${projectKey} epics:`, error);
             return Array.isArray(cacheEntry?.data) ? cacheEntry.data : [];
+        }
+    }
+
+    /**
+     * Refresh project epics in the background without blocking the UI
+     */
+    private async refreshProjectEpicsInBackground(projectKey: string): Promise<void> {
+        if (!this.jiraService) return;
+
+        try {
+            console.log(`[JiraCache] Background refresh: Fetching ${projectKey} epics from API`);
+
+            const jql = `project = "${projectKey}" AND issuetype = Epic ORDER BY updated DESC`;
+            const response = await this.jiraService.searchIssues(jql);
+
+            // Store issues in database
+            for (const issue of response.issues) {
+                await window.electron.ipcRenderer.db.upsertJiraIssue(issue);
+            }
+
+            await this.setCachedData(`epics:${projectKey}`, response.issues, jql);
+
+            console.log(`[JiraCache] Background refresh complete: ${response.issues.length} epics for ${projectKey}`);
+        } catch (error) {
+            console.error(`[JiraCache] Background refresh failed for ${projectKey} epics:`, error);
         }
     }
 

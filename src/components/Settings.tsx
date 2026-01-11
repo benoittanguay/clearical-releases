@@ -7,8 +7,9 @@ import { TrialBanner } from './TrialBanner';
 import { AppBlacklistManager } from './AppBlacklistManager';
 import { getTimeIncrementOptions } from '../utils/timeRounding';
 import type { SyncStatus } from '../services/jiraSyncScheduler';
+import type { UpdateStatus } from '../types/electron';
 
-type PermissionStatus = 'not-determined' | 'granted' | 'denied' | 'restricted' | 'unknown';
+type PermissionStatus = 'not-determined' | 'granted' | 'denied' | 'restricted' | 'unknown' | 'stale';
 
 interface SettingsProps {
     onOpenIntegrationModal?: () => void;
@@ -25,6 +26,9 @@ export function Settings({ onOpenIntegrationModal }: SettingsProps = {}) {
     const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
     const [isSyncing, setIsSyncing] = useState(false);
     const [isOpeningPortal, setIsOpeningPortal] = useState(false);
+    const [appVersion, setAppVersion] = useState<string>('');
+    const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null);
+    const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
 
     const handleOpenIntegrationModal = () => {
         if (onOpenIntegrationModal) {
@@ -54,6 +58,41 @@ export function Settings({ onOpenIntegrationModal }: SettingsProps = {}) {
         // Poll every few seconds in case user changed it
         const interval = setInterval(checkPermission, 2000);
         return () => clearInterval(interval);
+    }, []);
+
+    // Get app version and update status on mount
+    useEffect(() => {
+        const getVersionAndUpdateStatus = async () => {
+            // Get version from Electron app
+            try {
+                const envInfo = await window.electron.ipcRenderer.getEnvironmentInfo();
+                setAppVersion(envInfo.version);
+            } catch (error) {
+                console.error('[Settings] Failed to load version:', error);
+                setAppVersion('Unknown');
+            }
+
+            // Get current update status
+            try {
+                const result = await window.electron.ipcRenderer.updater.getStatus();
+                if (result.success && result.status) {
+                    setUpdateStatus(result.status);
+                }
+            } catch (error) {
+                console.error('[Settings] Failed to get update status:', error);
+            }
+        };
+
+        getVersionAndUpdateStatus();
+
+        // Subscribe to update status changes
+        const unsubscribe = window.electron.ipcRenderer.updater.onStatusUpdate((status) => {
+            setUpdateStatus(status);
+        });
+
+        return () => {
+            if (unsubscribe) unsubscribe();
+        };
     }, []);
 
     // Update tempSettings when settings change
@@ -219,11 +258,41 @@ export function Settings({ onOpenIntegrationModal }: SettingsProps = {}) {
         }
     };
 
+    // Handle manual update check
+    const handleCheckForUpdates = async () => {
+        setIsCheckingUpdate(true);
+        try {
+            const result = await window.electron.ipcRenderer.updater.checkForUpdates();
+            if (result.success && result.status) {
+                setUpdateStatus(result.status);
+                // If no update available, show a message
+                if (!result.status.available) {
+                    alert('You are running the latest version!');
+                }
+            }
+        } catch (error) {
+            console.error('[Settings] Failed to check for updates:', error);
+            alert('Failed to check for updates. Please try again later.');
+        } finally {
+            setIsCheckingUpdate(false);
+        }
+    };
+
+    // Handle download latest version
+    const handleDownloadLatest = async () => {
+        const downloadUrl = 'https://github.com/benoittanguay/clearical-releases/releases/latest/download/Clearical-arm64.dmg';
+        try {
+            await window.electron.ipcRenderer.openExternal(downloadUrl);
+        } catch (error) {
+            console.error('[Settings] Failed to open download URL:', error);
+        }
+    };
+
     const hasJiraAccess = hasFeature('jira');
     const hasTempoAccess = hasFeature('tempo');
 
     return (
-        <div className="w-full flex-1 flex flex-col p-4">
+        <div className="w-full flex-1 flex flex-col px-4 pb-4">
             {/* Trial Banner - Shows prominently when on trial */}
             <TrialBanner />
 
@@ -722,14 +791,53 @@ export function Settings({ onOpenIntegrationModal }: SettingsProps = {}) {
                         <div className="text-xs text-gray-500">Required for Screenshots</div>
                     </div>
                     <div className="flex items-center gap-2">
-                        <span className={`text-xs px-2 py-1 rounded ${permissionStatus === 'granted' ? 'bg-green-900 text-green-400' :
-                            permissionStatus === 'denied' ? 'bg-red-900 text-red-400' : 'bg-yellow-900 text-yellow-400'
+                        <span className={`text-xs px-2 py-1 rounded ${
+                            permissionStatus === 'granted' ? 'bg-green-900 text-green-400' :
+                            permissionStatus === 'denied' ? 'bg-red-900 text-red-400' :
+                            permissionStatus === 'stale' ? 'bg-orange-900 text-orange-400' :
+                            'bg-yellow-900 text-yellow-400'
                             }`}>
-                            {permissionStatus.toUpperCase()}
+                            {permissionStatus === 'stale' ? 'NEEDS RESET' : permissionStatus.toUpperCase()}
                         </span>
                     </div>
                 </div>
-                {permissionStatus !== 'granted' && (
+
+                {/* Stale Permission Warning */}
+                {permissionStatus === 'stale' && (
+                    <div className="mt-2 bg-orange-900/30 border border-orange-700 rounded-lg p-3">
+                        <div className="flex items-start gap-3 mb-3">
+                            <svg className="w-5 h-5 text-orange-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                            </svg>
+                            <div>
+                                <h4 className="text-sm font-semibold text-orange-300 mb-1">Permission Needs Reset</h4>
+                                <p className="text-xs text-orange-200/80 mb-2">
+                                    After updating the app, macOS may have stale permission entries. System Settings shows the permission is granted, but it doesn't actually work.
+                                </p>
+                                <p className="text-xs text-orange-200/80 font-medium">
+                                    This is a known macOS issue with app updates. Your data is safe.
+                                </p>
+                            </div>
+                        </div>
+                        <button
+                            onClick={async () => {
+                                // @ts-ignore
+                                if (window.electron?.ipcRenderer?.showPermissionResetInstructions) {
+                                    // @ts-ignore
+                                    await window.electron.ipcRenderer.showPermissionResetInstructions();
+                                    // Recheck after showing instructions
+                                    setTimeout(checkPermission, 1000);
+                                }
+                            }}
+                            className="w-full px-4 py-2 bg-orange-600 hover:bg-orange-500 text-white text-sm font-semibold rounded-lg transition-all"
+                        >
+                            Fix Permission Issue
+                        </button>
+                    </div>
+                )}
+
+                {/* Regular permission prompts for other states */}
+                {permissionStatus !== 'granted' && permissionStatus !== 'stale' && (
                     <button
                         onClick={openSettings}
                         className="mt-2 w-full text-xs bg-blue-600 hover:bg-blue-500 text-white py-1.5 rounded transition-colors"
@@ -754,9 +862,97 @@ export function Settings({ onOpenIntegrationModal }: SettingsProps = {}) {
                 </button>
             </div>
 
+            {/* App Version & Updates */}
+            <div className="bg-gray-800 p-3 rounded-lg mb-3">
+                <h3 className="text-xs font-semibold text-gray-400 uppercase mb-2">App Version & Updates</h3>
+
+                <div className="space-y-2">
+                    {/* Current Version */}
+                    <div className="flex items-center justify-between bg-gray-900 p-2.5 rounded border border-gray-700">
+                        <div>
+                            <div className="text-sm font-medium text-white">Current Version</div>
+                            <div className="text-xs text-gray-500">Clearical</div>
+                        </div>
+                        <span className="text-sm font-mono text-green-400">
+                            v{appVersion || '...'}
+                        </span>
+                    </div>
+
+                    {/* Update Status */}
+                    {updateStatus && updateStatus.available && (
+                        <div className="bg-blue-900/30 border border-blue-700 rounded-lg p-2.5">
+                            <div className="flex items-start gap-2">
+                                <svg className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                </svg>
+                                <div className="flex-1">
+                                    <div className="text-sm font-medium text-blue-300 mb-0.5">
+                                        Update Available
+                                    </div>
+                                    <div className="text-xs text-blue-200/80">
+                                        Version {updateStatus.version} is available for download
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Update Buttons */}
+                    <div className="grid grid-cols-2 gap-2">
+                        <button
+                            onClick={handleCheckForUpdates}
+                            disabled={isCheckingUpdate}
+                            className={`px-3 py-2 text-sm rounded transition-colors flex items-center justify-center gap-2 ${
+                                isCheckingUpdate
+                                    ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
+                                    : 'bg-blue-600 hover:bg-blue-500 text-white'
+                            }`}
+                        >
+                            {isCheckingUpdate ? (
+                                <>
+                                    <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                    </svg>
+                                    Checking...
+                                </>
+                            ) : (
+                                <>
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                    </svg>
+                                    Check for Updates
+                                </>
+                            )}
+                        </button>
+
+                        <button
+                            onClick={handleDownloadLatest}
+                            className="px-3 py-2 text-sm rounded transition-colors flex items-center justify-center gap-2 bg-green-600 hover:bg-green-500 text-white"
+                        >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                            </svg>
+                            Download Latest
+                        </button>
+                    </div>
+
+                    {/* Update error message */}
+                    {updateStatus?.error && (
+                        <div className="bg-red-900/30 border border-red-700 rounded-lg p-2.5">
+                            <div className="text-xs text-red-300">
+                                {updateStatus.error}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </div>
+
             <div className="bg-gray-800 p-3 rounded-lg">
                 <h3 className="text-xs font-semibold text-gray-400 uppercase mb-2">About</h3>
-                <p className="text-xs text-gray-500">Clearical v0.1.0</p>
+                <p className="text-xs text-gray-500">
+                    Clearical is an intelligent time tracking application that helps you log and manage your work activities.
+                </p>
             </div>
         </div>
     );

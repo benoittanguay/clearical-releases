@@ -29,9 +29,11 @@ electron_1.contextBridge.exposeInMainWorld('electron', {
         requestScreenPermission: () => electron_1.ipcRenderer.invoke('request-screen-permission'),
         openScreenPermissionSettings: () => electron_1.ipcRenderer.invoke('open-screen-permission-settings'),
         openAccessibilitySettings: () => electron_1.ipcRenderer.invoke('open-accessibility-settings'),
+        showPermissionResetInstructions: () => electron_1.ipcRenderer.invoke('show-permission-reset-instructions'),
         getAppIcon: (appName) => electron_1.ipcRenderer.invoke('get-app-icon', appName),
         getScreenshot: (filePath) => electron_1.ipcRenderer.invoke('get-screenshot', filePath),
         showItemInFolder: (filePath) => electron_1.ipcRenderer.invoke('show-item-in-folder', filePath),
+        openExternal: (url) => electron_1.ipcRenderer.invoke('open-external-url', url),
         tempoApiRequest: (requestParams) => electron_1.ipcRenderer.invoke('tempo-api-request', requestParams),
         jiraApiRequest: (requestParams) => electron_1.ipcRenderer.invoke('jira-api-request', requestParams),
         // Secure credential storage

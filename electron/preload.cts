@@ -35,9 +35,11 @@ contextBridge.exposeInMainWorld('electron', {
         requestScreenPermission: () => ipcRenderer.invoke('request-screen-permission'),
         openScreenPermissionSettings: () => ipcRenderer.invoke('open-screen-permission-settings'),
         openAccessibilitySettings: () => ipcRenderer.invoke('open-accessibility-settings'),
+        showPermissionResetInstructions: () => ipcRenderer.invoke('show-permission-reset-instructions'),
         getAppIcon: (appName: string) => ipcRenderer.invoke('get-app-icon', appName),
         getScreenshot: (filePath: string) => ipcRenderer.invoke('get-screenshot', filePath),
         showItemInFolder: (filePath: string) => ipcRenderer.invoke('show-item-in-folder', filePath),
+        openExternal: (url: string) => ipcRenderer.invoke('open-external-url', url),
         tempoApiRequest: (requestParams: { url: string, method?: string, headers?: Record<string, string>, body?: any }) =>
             ipcRenderer.invoke('tempo-api-request', requestParams),
         jiraApiRequest: (requestParams: { url: string, method?: string, headers?: Record<string, string>, body?: any }) =>

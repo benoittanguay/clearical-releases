@@ -262,15 +262,36 @@ class ScreenshotAnalyzer {
 
         // STAGE 2: Generate on-device AI narrative using Apple Intelligence
         // This uses Apple's NaturalLanguage framework + advanced heuristics
-        let aiDescription = self.generateOnDeviceAINarrative(
+        FileHandle.standardError.write("[DEBUG] STAGE 2: Calling generateOnDeviceAINarrative\n".data(using: .utf8)!)
+        var aiDescription = self.generateOnDeviceAINarrative(
             extraction: extraction,
             imagePath: path
         )
 
+        FileHandle.standardError.write("[DEBUG] AI description returned: '\(aiDescription)' (length: \(aiDescription.count))\n".data(using: .utf8)!)
+
+        // Ensure we always have a meaningful description
+        // If the AI narrative is empty or too short, create a fallback using app info
+        if aiDescription.isEmpty || aiDescription.count < 10 {
+            FileHandle.standardError.write("[DEBUG] AI description too short, using fallback\n".data(using: .utf8)!)
+            let appName = extraction.visualContext.application
+            let windowTitle = extraction.visualContext.activeTab ?? ""
+            FileHandle.standardError.write("[DEBUG] Fallback - appName: '\(appName)', windowTitle: '\(windowTitle)'\n".data(using: .utf8)!)
+            if !windowTitle.isEmpty && windowTitle != "Unknown" {
+                aiDescription = "Viewing \(windowTitle) in \(appName)."
+                FileHandle.standardError.write("[DEBUG] Using fallback with window: '\(aiDescription)'\n".data(using: .utf8)!)
+            } else {
+                aiDescription = "Working in \(appName)."
+                FileHandle.standardError.write("[DEBUG] Using fallback without window: '\(aiDescription)'\n".data(using: .utf8)!)
+            }
+        }
+
+        FileHandle.standardError.write("[DEBUG] Final aiDescription: '\(aiDescription)'\n".data(using: .utf8)!)
+
         completion(AnalysisResponse(
             success: true,
             requestId: nil,
-            description: aiDescription,  // On-device AI-generated narrative
+            description: aiDescription,  // On-device AI-generated narrative (with fallback)
             confidence: confidenceScore > 0 ? confidenceScore : 0.8,
             error: nil,
             detectedText: detectedText.isEmpty ? nil : detectedText,
@@ -741,8 +762,16 @@ class ScreenshotAnalyzer {
      * 3. Natural Language Generation - Create coherent, varied descriptions
      */
     private func generateOnDeviceAINarrative(extraction: StructuredExtraction, imagePath: String) -> String {
+        // DEBUG: Log extraction data
+        FileHandle.standardError.write("[DEBUG] Starting AI narrative generation\n".data(using: .utf8)!)
+        FileHandle.standardError.write("[DEBUG] App: \(extraction.visualContext.application)\n".data(using: .utf8)!)
+        FileHandle.standardError.write("[DEBUG] Window: \(extraction.visualContext.activeTab ?? "nil")\n".data(using: .utf8)!)
+
         // Analyze the semantic content using Apple's NaturalLanguage framework
         let semanticContext = analyzeSemanticContext(extraction: extraction)
+
+        FileHandle.standardError.write("[DEBUG] Intent: \(semanticContext.primaryIntent)\n".data(using: .utf8)!)
+        FileHandle.standardError.write("[DEBUG] Domain: \(semanticContext.contentDomain)\n".data(using: .utf8)!)
 
         // Build narrative components
         var narrative: [String] = []
@@ -752,6 +781,7 @@ class ScreenshotAnalyzer {
             extraction: extraction,
             semanticContext: semanticContext
         )
+        FileHandle.standardError.write("[DEBUG] Activity statement: '\(activityStatement)'\n".data(using: .utf8)!)
         narrative.append(activityStatement)
 
         // PART 2: Context and Details
@@ -759,6 +789,7 @@ class ScreenshotAnalyzer {
             extraction: extraction,
             semanticContext: semanticContext
         ) {
+            FileHandle.standardError.write("[DEBUG] Context statement: '\(contextStatement)'\n".data(using: .utf8)!)
             narrative.append(contextStatement)
         }
 
@@ -767,10 +798,14 @@ class ScreenshotAnalyzer {
             extraction: extraction,
             semanticContext: semanticContext
         ) {
+            FileHandle.standardError.write("[DEBUG] Tech statement: '\(techStatement)'\n".data(using: .utf8)!)
             narrative.append(techStatement)
         }
 
-        return narrative.joined(separator: " ")
+        let finalNarrative = narrative.joined(separator: " ")
+        FileHandle.standardError.write("[DEBUG] Final narrative (\(finalNarrative.count) chars): '\(finalNarrative)'\n".data(using: .utf8)!)
+
+        return finalNarrative
     }
 
     /**
@@ -966,14 +1001,43 @@ class ScreenshotAnalyzer {
 
     /**
      * Generate the primary activity statement (first sentence)
+     * Always includes window title for meaningful descriptions
      */
     private func generateActivityStatement(extraction: StructuredExtraction, semanticContext: SemanticContext) -> String {
         let intent = semanticContext.primaryIntent
-        let domain = semanticContext.contentDomain
         let appName = extraction.visualContext.application
-        let file = extraction.fileContext?.filename
+        let windowTitle = extraction.visualContext.activeTab
 
-        // Build activity verb phrase based on intent - neutral, observable language
+        // Always try to include the window title for context
+        // This is the most reliable source of what the user is viewing
+        if let title = windowTitle, !title.isEmpty && title != "Unknown" && title != appName {
+            let cleanTitle = cleanupFilename(title)
+            if !cleanTitle.isEmpty && cleanTitle.count > 1 {
+                // Generate description with window title
+                let verb: String
+                switch intent {
+                case .editing:
+                    verb = "Editing"
+                case .troubleshooting:
+                    verb = "Troubleshooting"
+                case .reviewing:
+                    verb = "Viewing"
+                case .configuring:
+                    verb = "Configuring"
+                case .communicating:
+                    verb = "Reading"
+                case .presenting:
+                    verb = "Presenting"
+                case .analyzing:
+                    verb = "Analyzing"
+                case .unknown:
+                    verb = "Viewing"
+                }
+                return "\(verb) \(cleanTitle) in \(appName)."
+            }
+        }
+
+        // Fallback: no window title available, use generic description
         let activityPhrase: String
         switch intent {
         case .editing:
@@ -995,97 +1059,97 @@ class ScreenshotAnalyzer {
             activityPhrase = "Using \(appName)"
         }
 
-        // Add content type context
-        var contextParts: [String] = []
-
-        switch domain {
-        case .textDocument:
-            contextParts.append("with a text document")
-        case .spreadsheet:
-            contextParts.append("with a spreadsheet")
-        case .presentation:
-            contextParts.append("with presentation slides")
-        case .communication:
-            contextParts.append("viewing messages")
-        case .webBrowser:
-            contextParts.append("viewing web content")
-        case .graphics:
-            contextParts.append("with graphics or images")
-        case .codeEditor:
-            contextParts.append("with a code editor")
-        case .general:
-            break
-        }
-
-        // Add file/document name if meaningful
-        if let filename = file, !filename.isEmpty && filename != "Unknown" {
-            let cleanName = cleanupFilename(filename)
-            if !cleanName.isEmpty && cleanName.count > 2 && !cleanName.contains("untitled") {
-                contextParts.append("file '\(cleanName)'")
-            }
-        }
-
-        if !contextParts.isEmpty {
-            return "\(activityPhrase), \(contextParts.joined(separator: ", "))."
-        } else {
-            return "\(activityPhrase)."
-        }
+        return "\(activityPhrase)."
     }
 
     /**
-     * Generate contextual details (second sentence)
+     * Generate contextual details (second sentence) - Stage 2 interpretation
+     * This interprets the extracted visual elements into meaningful context
      */
     private func generateContextStatement(extraction: StructuredExtraction, semanticContext: SemanticContext) -> String? {
         var details: [String] = []
 
-        // Add observable details based on what's visible
-        switch semanticContext.primaryIntent {
-        case .troubleshooting:
-            // Describe error messages
-            let errors = extraction.extractedText.errors
-            if !errors.isEmpty {
-                let errorTypes = categorizeErrors(errors)
+        // INTERPRET HEADINGS - These tell us what the user is looking at
+        if !extraction.extractedText.headings.isEmpty {
+            let topHeadings = extraction.extractedText.headings.prefix(2)
+            let cleanHeadings = topHeadings.compactMap { heading -> String? in
+                let cleaned = heading.trimmingCharacters(in: .whitespacesAndNewlines)
+                return cleaned.count > 2 && cleaned.count < 50 ? cleaned : nil
+            }
+            if !cleanHeadings.isEmpty {
+                details.append("viewing '\(cleanHeadings.joined(separator: "' and '"))'")
+            }
+        }
+
+        // INTERPRET BODY TEXT - Describe what content is visible
+        if !extraction.extractedText.bodyText.isEmpty {
+            let bodyCount = extraction.extractedText.bodyText.count
+            if bodyCount > 10 {
+                details.append("multiple paragraphs of text visible")
+            } else if bodyCount > 3 {
+                details.append("text content visible")
+            }
+        }
+
+        // INTERPRET LABELS/NAVIGATION - What UI elements are visible
+        if !extraction.extractedText.labels.isEmpty {
+            let labelCount = extraction.extractedText.labels.count
+            if labelCount > 5 {
+                details.append("multiple UI elements and options")
+            }
+        }
+
+        // INTERPRET VALUES - Statistics, dates, counts
+        if !extraction.extractedText.values.isEmpty {
+            let hasNumbers = extraction.extractedText.values.contains { $0.contains(where: { $0.isNumber }) }
+            if hasNumbers {
+                details.append("data and metrics displayed")
+            }
+        }
+
+        // INTERPRET NOTIFICATIONS/ERRORS
+        if !extraction.extractedText.notifications.isEmpty || !extraction.extractedText.errors.isEmpty {
+            let errorCount = extraction.extractedText.errors.count
+            let notifCount = extraction.extractedText.notifications.count
+            if errorCount > 0 {
+                let errorTypes = categorizeErrors(extraction.extractedText.errors)
                 if !errorTypes.isEmpty {
-                    details.append("\(errorTypes.joined(separator: " and ")) visible")
+                    details.append("\(errorTypes.joined(separator: " and ")) shown")
                 }
+            } else if notifCount > 0 {
+                details.append("notifications present")
             }
+        }
 
-        case .editing:
-            // Describe content being edited
-            if !extraction.extractedText.code.isEmpty {
-                details.append("structured text content")
-            } else if extraction.extractedText.documentText.count > 5 {
-                details.append("multiple sections of text")
+        // INTERPRET FILENAMES - What files are being worked on
+        if !extraction.extractedText.filenames.isEmpty {
+            let fileCount = extraction.extractedText.filenames.count
+            if fileCount > 3 {
+                details.append("\(fileCount) files referenced")
+            } else if fileCount > 0 {
+                let files = extraction.extractedText.filenames.prefix(2).joined(separator: ", ")
+                details.append("working with \(files)")
             }
+        }
 
-        case .analyzing:
-            // Describe data visible
-            if !extraction.extractedText.filenames.isEmpty {
-                let fileCount = extraction.extractedText.filenames.count
-                if fileCount > 1 {
-                    details.append("\(fileCount) files or data sources referenced")
-                }
+        // INTERPRET IDENTIFIERS - Issue numbers, ticket IDs, etc.
+        if !extraction.extractedText.identifiers.isEmpty {
+            let ids = extraction.extractedText.identifiers.prefix(2)
+            let jiraIds = ids.filter { $0.contains("-") && $0.count < 15 }
+            if !jiraIds.isEmpty {
+                details.append("referencing \(jiraIds.joined(separator: ", "))")
             }
-
-        default:
-            break
         }
 
         // Add visible UI panels for context
         if !extraction.visualContext.visiblePanels.isEmpty {
             let panels = extraction.visualContext.visiblePanels.prefix(2).joined(separator: " and ")
-            details.append("with \(panels) visible")
+            details.append("\(panels) open")
         }
 
-        // Add window title if it provides meaningful context
-        if let windowTitle = extraction.visualContext.activeTab, !windowTitle.isEmpty && windowTitle != "Unknown" {
-            let cleanTitle = cleanupFilename(windowTitle)
-            if !cleanTitle.isEmpty && cleanTitle.count > 2 && !details.contains(where: { $0.contains(cleanTitle) }) {
-                details.append("viewing '\(cleanTitle)'")
-            }
-        }
-
-        return details.isEmpty ? nil : "The screen shows \(details.joined(separator: ", "))."
+        // Limit to 3 most relevant details
+        let topDetails = Array(details.prefix(3))
+        return topDetails.isEmpty ? nil : "The screen shows \(topDetails.joined(separator: ", "))."
     }
 
     /**
@@ -1583,13 +1647,59 @@ class ScreenshotAnalyzer {
     }
 
     private func extractAppInfoFromFilename(_ filename: String) -> (appName: String?, windowTitle: String?) {
-        // Parse filename format: timestamp_AppName_WindowTitle.png
-        let components = filename.replacingOccurrences(of: ".png", with: "").components(separatedBy: "_")
+        // Remove file extension
+        let nameWithoutExt = filename.replacingOccurrences(of: ".png", with: "")
 
+        // Try new format first: timestamp|||AppName|||WindowTitle
+        if nameWithoutExt.contains("|||") {
+            let components = nameWithoutExt.components(separatedBy: "|||")
+            guard components.count >= 3 else { return (nil, nil) }
+
+            let appName = components[1]
+            let windowTitle = components[2]
+
+            return (appName.isEmpty ? nil : appName,
+                    windowTitle.isEmpty ? nil : windowTitle)
+        }
+
+        // Fallback to legacy format: timestamp_AppName_WindowTitle
+        // This is a best-effort parser for old filenames
+        let components = nameWithoutExt.components(separatedBy: "_")
         guard components.count >= 3 else { return (nil, nil) }
 
+        // Known multi-word app names (most common)
+        let multiWordApps = [
+            "Google Chrome", "Visual Studio Code", "Microsoft Edge",
+            "Adobe Photoshop", "Final Cut Pro", "Logic Pro",
+            "Microsoft Word", "Microsoft Excel", "Microsoft PowerPoint",
+            "Android Studio", "IntelliJ IDEA", "PyCharm",
+            "Adobe Illustrator", "Adobe Premiere Pro"
+        ]
+
+        // Try to match known multi-word apps
+        for knownApp in multiWordApps {
+            let appWords = knownApp.components(separatedBy: " ")
+            if components.count >= 1 + appWords.count + 1 { // timestamp + app words + at least 1 window word
+                let potentialAppParts = components[1...(appWords.count)].joined(separator: " ")
+                let normalized = potentialAppParts.replacingOccurrences(of: "_", with: " ")
+                if normalized.lowercased() == knownApp.lowercased() {
+                    let windowTitle = components.dropFirst(1 + appWords.count)
+                        .joined(separator: " ")
+                        .replacingOccurrences(of: "_", with: " ")
+                        .replacingOccurrences(of: "  +", with: " ", options: .regularExpression)
+                        .trimmingCharacters(in: .whitespaces)
+                    return (knownApp, windowTitle)
+                }
+            }
+        }
+
+        // If no known app matched, assume single-word app name
         let appName = components[1].replacingOccurrences(of: "_", with: " ")
-        let windowTitle = components.dropFirst(2).joined(separator: " ").replacingOccurrences(of: "_", with: " ")
+        let windowTitle = components.dropFirst(2)
+            .joined(separator: " ")
+            .replacingOccurrences(of: "_", with: " ")
+            .replacingOccurrences(of: "  +", with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespaces)
 
         return (appName, windowTitle)
     }

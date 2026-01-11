@@ -70,6 +70,15 @@ export interface JiraIssue {
                 summary: string;
             };
         };
+        // Epic-specific fields (these may be null for non-Epic issue types)
+        // Field names vary by Jira instance configuration, but these are common
+        customfield_10011?: string; // Epic Name (common custom field ID)
+        customfield_10014?: string; // Epic Link (common custom field ID)
+        customfield_10015?: string; // Epic Color (common custom field ID)
+        // Some Jira instances use different field names
+        epicName?: string;  // Alternative epic name field
+        epicLink?: string;  // Alternative epic link field
+        epicColor?: string; // Alternative epic color field
     };
 }
 
@@ -167,13 +176,15 @@ export class JiraService {
     }
 
     async searchIssues(
-        jql: string, 
-        startAt: number = 0, 
+        jql: string,
+        startAt: number = 0,
         maxResults: number = 100
     ): Promise<JiraSearchResponse> {
         const encodedJql = encodeURIComponent(jql);
-        const fields = 'summary,status,issuetype,project,assignee,reporter,priority,parent,created,updated,resolutiondate,description';
-        
+        // Include Epic-specific custom fields (customfield_10011, etc.) along with standard fields
+        // These custom field IDs are common defaults but may vary by Jira instance
+        const fields = 'summary,status,issuetype,project,assignee,reporter,priority,parent,created,updated,resolutiondate,description,customfield_10011,customfield_10014,customfield_10015';
+
         return this.makeRequest<JiraSearchResponse>(
             `/rest/api/3/search/jql?jql=${encodedJql}&startAt=${startAt}&maxResults=${maxResults}&fields=${fields}`
         );
@@ -207,7 +218,8 @@ export class JiraService {
     }
 
     async getIssue(issueKeyOrId: string): Promise<JiraIssue> {
-        const fields = 'summary,status,issuetype,project,assignee,reporter,priority,parent,created,updated,resolutiondate,description';
+        // Include Epic-specific custom fields along with standard fields
+        const fields = 'summary,status,issuetype,project,assignee,reporter,priority,parent,created,updated,resolutiondate,description,customfield_10011,customfield_10014,customfield_10015';
         return this.makeRequest<JiraIssue>(
             `/rest/api/3/issue/${issueKeyOrId}?fields=${fields}`
         );

@@ -8,6 +8,7 @@ import { SubscriptionProvider } from './context/SubscriptionContext.tsx'
 import { ToastProvider } from './context/ToastContext.tsx'
 import { JiraCacheProvider } from './context/JiraCacheContext.tsx'
 import { CrawlerProgressProvider } from './context/CrawlerProgressContext.tsx'
+import { ScreenshotAnalysisProvider } from './context/ScreenshotAnalysisContext.tsx'
 import { AuthProvider } from './context/AuthContext.tsx'
 import { ErrorBoundary } from './components/ErrorBoundary.tsx'
 import { AuthGate } from './components/AuthGate.tsx'
@@ -28,7 +29,9 @@ createRoot(document.getElementById('root')!).render(
                 <ToastProvider>
                   <JiraCacheProvider>
                     <CrawlerProgressProvider>
-                      <App />
+                      <ScreenshotAnalysisProvider>
+                        <App />
+                      </ScreenshotAnalysisProvider>
                     </CrawlerProgressProvider>
                   </JiraCacheProvider>
                 </ToastProvider>

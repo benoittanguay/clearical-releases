@@ -162,6 +162,27 @@ export class AutoUpdater {
                 return;
             }
 
+            // Check if this is a code signing error
+            const isCodeSignError =
+                error.message.includes('code signature') ||
+                error.message.includes('Code signature') ||
+                error.message.includes('signature indicates they must be present') ||
+                error.message.includes('code has no resources');
+
+            if (isCodeSignError) {
+                // Code signing errors happen with unsigned/dev builds
+                log.warn('[AutoUpdater] Code signing validation failed - this is expected for unsigned builds');
+                const userFriendlyMessage = 'Update cannot be installed automatically due to code signing. Please download the latest version manually from the releases page.';
+                this.updateStatus = {
+                    ...this.updateStatus,
+                    downloading: false,
+                    downloaded: false, // Mark as not downloaded since it can't be installed
+                    error: userFriendlyMessage,
+                };
+                this.sendStatusToRenderer();
+                return;
+            }
+
             // For other errors, update status and notify renderer
             this.updateStatus = {
                 ...this.updateStatus,
@@ -299,17 +320,39 @@ export class AutoUpdater {
      */
     public quitAndInstall(): void {
         if (!this.updateStatus.downloaded) {
-            log.warn('[AutoUpdater] No update downloaded to install');
-            return;
+            const errorMsg = 'No update downloaded to install';
+            log.warn('[AutoUpdater]', errorMsg);
+            throw new Error(errorMsg);
         }
 
         log.info('[AutoUpdater] Installing update and restarting...');
 
         // setImmediate ensures the renderer process has time to handle the event
         setImmediate(() => {
-            // false = don't force close windows (allows cleanup)
-            // true = quit after install
-            autoUpdater.quitAndInstall(false, true);
+            try {
+                // false = don't force close windows (allows cleanup)
+                // true = quit after install
+                log.info('[AutoUpdater] Calling autoUpdater.quitAndInstall()...');
+                autoUpdater.quitAndInstall(false, true);
+            } catch (error) {
+                // Catch errors that occur during the actual quit and install
+                log.error('[AutoUpdater] Failed to quit and install:', error);
+
+                // Update status with error
+                this.updateStatus = {
+                    ...this.updateStatus,
+                    downloaded: false, // Mark as not downloaded since install failed
+                    error: error instanceof Error ? error.message : 'Failed to install update',
+                };
+                this.sendStatusToRenderer();
+
+                // Show dialog to user if possible
+                if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+                    this.mainWindow.webContents.send('update-install-failed', {
+                        error: error instanceof Error ? error.message : 'Failed to install update'
+                    });
+                }
+            }
         });
     }
 
