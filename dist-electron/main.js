@@ -2017,6 +2017,38 @@ ipcMain.handle('suggest-assignment', async (event, request) => {
         };
     }
 });
+// AI Activity Summary Generation Handler
+ipcMain.handle('generate-activity-summary', async (event, context) => {
+    console.log('[Main] generate-activity-summary requested');
+    console.log('[Main] Screenshot descriptions:', context.screenshotDescriptions.length);
+    console.log('[Main] App names:', context.appNames);
+    try {
+        // Use the Qwen3 reasoning model via FastVLM server to generate narrative summary
+        const result = await fastVLMServer.summarizeActivities(context.screenshotDescriptions, context.appNames);
+        if (result.success && result.summary) {
+            console.log('[Main] Summary generated successfully:', result.summary.substring(0, 100));
+            // Return the narrative summary
+            return {
+                success: true,
+                summary: result.summary,
+                metadata: {
+                    technologies: [],
+                    activities: []
+                }
+            };
+        }
+        else {
+            throw new Error(result.error || 'Failed to generate summary');
+        }
+    }
+    catch (error) {
+        console.error('[Main] generate-activity-summary failed:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error'
+        };
+    }
+});
 // AI Tempo Account Selection Handler
 ipcMain.handle('select-tempo-account', async (event, request) => {
     console.log('[Main] select-tempo-account requested');

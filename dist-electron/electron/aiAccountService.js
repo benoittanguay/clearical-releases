@@ -1,4 +1,5 @@
 import { HistoricalMatchingService } from './historicalMatchingService.js';
+import { fastVLMServer } from './fastvlm.js';
 /**
  * Common stop words to exclude from keyword matching
  */
@@ -49,21 +50,46 @@ export class AIAccountService {
                 reason: 'Only one account available for this project'
             };
         }
-        // Case 3: Multiple accounts - use scoring logic
+        // Case 3: Multiple accounts - PRIMARY: use AI, FALLBACK: use scoring
         console.log('[AIAccountService] Multiple accounts, analyzing...');
+        // Get AI classification from Qwen3 reasoning model
+        const aiClassification = await this.getAIAccountClassification(issue, availableAccounts, context);
+        // PRIMARY PATH: If AI made a selection, use it directly
+        if (aiClassification.available && aiClassification.selectedKey) {
+            console.log('[AIAccountService] Using AI direct selection:', aiClassification.selectedKey);
+            // Find the selected account
+            const selectedAccount = availableAccounts.find(a => a.key === aiClassification.selectedKey);
+            if (selectedAccount) {
+                const reason = `AI selected (${Math.round(aiClassification.confidence * 100)}% confidence)`;
+                console.log('[AIAccountService] AI selection successful:', reason);
+                // Still calculate alternatives using scoring for context
+                const alternatives = this.calculateAccountAlternatives(availableAccounts, issue, context, aiClassification.selectedKey);
+                return {
+                    account: selectedAccount,
+                    confidence: aiClassification.confidence,
+                    reason,
+                    suggestions: alternatives.slice(0, 2)
+                };
+            }
+            console.log('[AIAccountService] Warning: AI selected account not found, falling back to scoring');
+        }
+        else {
+            console.log('[AIAccountService] AI unavailable or no selection, using fallback scoring');
+        }
+        // FALLBACK PATH: Use scoring system when AI is unavailable
         const scores = availableAccounts.map(account => ({
             account,
-            score: this.calculateAccountScore(account, issue, context),
-            reason: this.explainAccountScore(account, issue, context)
+            score: this.calculateAccountScore(account, issue, context, aiClassification),
+            reason: this.explainAccountScore(account, issue, context, aiClassification)
         }));
         // Sort by score descending
         scores.sort((a, b) => b.score - a.score);
-        console.log('[AIAccountService] Account scores:');
+        console.log('[AIAccountService] Fallback account scores:');
         scores.forEach((s, idx) => {
             console.log(`  ${idx + 1}. ${s.account.name}: ${(s.score * 100).toFixed(1)}% - ${s.reason}`);
         });
         const best = scores[0];
-        console.log('[AIAccountService] Selecting best account:', best.account.name);
+        console.log('[AIAccountService] Selecting fallback account:', best.account.name);
         return {
             account: best.account,
             confidence: best.score,
@@ -76,28 +102,93 @@ export class AIAccountService {
         };
     }
     /**
-     * Calculate score for an account based on various factors
-     * Enhanced with context-aware historical matching
+     * Calculate alternative account suggestions using scoring system
+     * Excludes the AI-selected account to provide different choices
      */
-    calculateAccountScore(account, issue, context) {
+    calculateAccountAlternatives(availableAccounts, issue, context, excludeAccountKey) {
+        // Create a dummy aiClassification since we're in fallback mode
+        const aiClassification = { selectedKey: null, confidence: 0, available: false };
+        const scores = availableAccounts
+            .filter(a => a.key !== excludeAccountKey)
+            .map(account => ({
+            account,
+            score: this.calculateAccountScore(account, issue, context, aiClassification),
+            reason: this.explainAccountScore(account, issue, context, aiClassification)
+        }));
+        return scores.sort((a, b) => b.score - a.score);
+    }
+    /**
+     * Get AI classification from Qwen3 reasoning model
+     * Returns the top choice with confidence
+     */
+    async getAIAccountClassification(issue, availableAccounts, context) {
+        try {
+            // Build options list from available accounts
+            const options = availableAccounts.map(account => ({
+                id: account.key,
+                name: account.name
+            }));
+            if (options.length === 0) {
+                console.log('[AIAccountService] No options available for AI classification');
+                return { selectedKey: null, confidence: 0, available: false };
+            }
+            // Build context string from issue metadata
+            const contextParts = [];
+            contextParts.push(`Project: ${issue.projectName} (${issue.projectKey})`);
+            contextParts.push(`Issue Type: ${issue.issueType}`);
+            contextParts.push(`Status: ${issue.status}`);
+            const contextStr = contextParts.join('. ');
+            // Build the text to classify: issue summary + description
+            const textToClassify = context.description
+                ? `${issue.summary}. ${context.description}`
+                : issue.summary;
+            console.log('[AIAccountService] Calling AI classification with', options.length, 'accounts');
+            console.log('[AIAccountService] Issue:', issue.key, '-', issue.summary.substring(0, 80));
+            // Call the Qwen3 classify endpoint
+            const result = await fastVLMServer.classifyActivity(textToClassify, options, contextStr);
+            if (result.success && result.selected_id) {
+                console.log('[AIAccountService] AI selected:', result.selected_name, 'confidence:', result.confidence);
+                return {
+                    selectedKey: result.selected_id,
+                    confidence: result.confidence || 0.8,
+                    available: true
+                };
+            }
+            console.log('[AIAccountService] AI classification failed or returned no selection');
+            return { selectedKey: null, confidence: 0, available: false };
+        }
+        catch (error) {
+            console.error('[AIAccountService] AI classification error:', error);
+            return { selectedKey: null, confidence: 0, available: false };
+        }
+    }
+    /**
+     * Calculate score for an account based on various factors (FALLBACK ONLY)
+     * Used only when AI is unavailable:
+     * - 60% Historical usage pattern
+     * - 25% Keyword match on issue summary
+     * - 10% Project name match
+     * - 5% Description match
+     */
+    calculateAccountScore(account, issue, context, aiClassification) {
         let score = 0;
-        // 1. Historical usage - strongest signal (60%)
+        // 1. Historical usage - strong signal (60%)
         // Use enhanced matching if full entries available, otherwise fall back to basic
         const historicalScore = context.historicalEntries
             ? this.calculateEnhancedHistoricalScore(account.key, issue, context)
             : this.calculateHistoricalScore(account.key, issue.projectKey, context.historicalAccounts);
         score += historicalScore * 0.6;
-        // 2. Account name matches issue summary (20%)
+        // 2. Account name matches issue summary (25%)
         const keywordScore = this.keywordMatch(account.name, issue.summary);
-        score += keywordScore * 0.2;
+        score += keywordScore * 0.25;
         // 3. Account name matches project name (10%)
         if (this.containsKeywords(account.name, issue.projectName)) {
             score += 0.1;
         }
-        // 4. Account name matches description (10%)
+        // 4. Account name matches description (5%)
         if (context.description) {
             const descScore = this.keywordMatch(account.name, context.description);
-            score += descScore * 0.1;
+            score += descScore * 0.05;
         }
         return Math.min(score, 1.0);
     }
@@ -165,10 +256,9 @@ export class AIAccountService {
             .filter(word => word.length > 2 && !STOP_WORDS.has(word));
     }
     /**
-     * Generate human-readable explanation for account score
-     * Enhanced with historical pattern insights
+     * Generate human-readable explanation for account score (FALLBACK mode)
      */
-    explainAccountScore(account, issue, context) {
+    explainAccountScore(account, issue, context, aiClassification) {
         const reasons = [];
         // Check enhanced historical usage if available
         if (context.historicalEntries && context.historicalEntries.length > 0) {
@@ -177,7 +267,7 @@ export class AIAccountService {
             if (accountPattern && accountPattern.matchScore > 0.3) {
                 // Use the learned reasons from pattern matching
                 if (accountPattern.reasons.length > 0) {
-                    reasons.push(...accountPattern.reasons.slice(0, 2)); // Top 2 reasons
+                    reasons.push(`learned from history: ${accountPattern.reasons[0]}`);
                 }
             }
         }

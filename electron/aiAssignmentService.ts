@@ -90,7 +90,8 @@ export class AIAssignmentService {
 
     /**
      * Suggest the best assignment based on activity context
-     * Uses Qwen3 reasoning model for semantic understanding + historical patterns
+     * PRIMARY: Uses Qwen3 reasoning model for direct selection
+     * FALLBACK: Uses scoring system when AI is unavailable
      */
     async suggestAssignment(context: ActivityContext): Promise<AssignmentSuggestion> {
         console.log('[AIAssignmentService] Analyzing context for assignment suggestion');
@@ -100,7 +101,34 @@ export class AIAssignmentService {
         // Get AI classification from Qwen3 reasoning model
         const aiClassification = await this.getAIClassification(context);
 
-        // Calculate scores for all candidates (now with AI boost)
+        // PRIMARY PATH: If AI made a selection, use it directly
+        if (aiClassification.available && aiClassification.selectedId) {
+            console.log('[AIAssignmentService] Using AI direct selection:', aiClassification.selectedId);
+
+            // Find the selected assignment
+            const assignment = this.findAssignmentById(aiClassification.selectedId);
+
+            if (assignment) {
+                const reason = `AI selected (${Math.round(aiClassification.confidence * 100)}% confidence)`;
+                console.log('[AIAssignmentService] AI selection successful:', reason);
+
+                // Still calculate alternatives using scoring for context
+                const alternatives = this.calculateAlternatives(context, aiClassification);
+
+                return {
+                    assignment,
+                    confidence: aiClassification.confidence,
+                    reason,
+                    alternatives: alternatives.slice(0, 3)
+                };
+            }
+
+            console.log('[AIAssignmentService] Warning: AI selected ID not found, falling back to scoring');
+        } else {
+            console.log('[AIAssignmentService] AI unavailable or no selection, using fallback scoring');
+        }
+
+        // FALLBACK PATH: Use scoring system when AI is unavailable
         const bucketScores = this.buckets
             .filter(b => !b.isFolder)  // Only consider actual buckets, not folders
             .map(bucket => ({
@@ -119,7 +147,7 @@ export class AIAssignmentService {
         const allCandidates = [...bucketScores, ...jiraScores]
             .sort((a, b) => b.score - a.score);
 
-        console.log('[AIAssignmentService] Top 3 candidates:');
+        console.log('[AIAssignmentService] Top 3 fallback candidates:');
         allCandidates.slice(0, 3).forEach((candidate, idx) => {
             const name = candidate.assignment.type === 'bucket'
                 ? candidate.assignment.bucket?.name
@@ -138,7 +166,7 @@ export class AIAssignmentService {
 
         const best = allCandidates[0];
 
-        console.log('[AIAssignmentService] Suggesting best assignment with confidence:', (best.score * 100).toFixed(1) + '%');
+        console.log('[AIAssignmentService] Suggesting fallback assignment with confidence:', (best.score * 100).toFixed(1) + '%');
         return {
             assignment: best.assignment,
             confidence: best.score,
@@ -149,6 +177,55 @@ export class AIAssignmentService {
                 reason: c.reason
             }))
         };
+    }
+
+    /**
+     * Find assignment by its ID (bucket:id or jira:key)
+     */
+    private findAssignmentById(id: string): WorkAssignment | null {
+        if (id.startsWith('bucket:')) {
+            const bucketId = id.replace('bucket:', '');
+            const bucket = this.buckets.find(b => b.id === bucketId && !b.isFolder);
+            return bucket ? this.bucketToAssignment(bucket) : null;
+        } else if (id.startsWith('jira:')) {
+            const issueKey = id.replace('jira:', '');
+            const issue = this.jiraIssues.find(i => i.key === issueKey);
+            return issue ? this.jiraToAssignment(issue) : null;
+        }
+        return null;
+    }
+
+    /**
+     * Calculate alternative suggestions using scoring system
+     * Excludes the AI-selected option to provide different choices
+     */
+    private calculateAlternatives(
+        context: ActivityContext,
+        aiClassification: { selectedId: string | null; confidence: number; available: boolean }
+    ): Array<{ assignment: WorkAssignment; confidence: number; reason: string }> {
+        const bucketScores = this.buckets
+            .filter(b => !b.isFolder && `bucket:${b.id}` !== aiClassification.selectedId)
+            .map(bucket => ({
+                assignment: this.bucketToAssignment(bucket),
+                score: this.calculateBucketScore(bucket, context, aiClassification),
+                reason: this.explainBucketScore(bucket, context, aiClassification)
+            }));
+
+        const jiraScores = this.jiraIssues
+            .filter(i => `jira:${i.key}` !== aiClassification.selectedId)
+            .map(issue => ({
+                assignment: this.jiraToAssignment(issue),
+                score: this.calculateJiraScore(issue, context, aiClassification),
+                reason: this.explainJiraScore(issue, context, aiClassification)
+            }));
+
+        return [...bucketScores, ...jiraScores]
+            .sort((a, b) => b.score - a.score)
+            .map(c => ({
+                assignment: c.assignment,
+                confidence: c.score,
+                reason: c.reason
+            }));
     }
 
     /**
@@ -231,12 +308,11 @@ export class AIAssignmentService {
     }
 
     /**
-     * Calculate score for a bucket assignment
-     * New scoring with AI classification:
-     * - 40% AI classification (semantic understanding)
-     * - 35% Historical usage pattern
-     * - 15% Keyword matching in bucket name
-     * - 10% Linked Jira issue relevance
+     * Calculate score for a bucket assignment (FALLBACK ONLY)
+     * Used only when AI is unavailable:
+     * - 60% Historical usage pattern
+     * - 25% Keyword matching in bucket name
+     * - 15% Linked Jira issue relevance
      */
     private calculateBucketScore(
         bucket: TimeBucket,
@@ -245,39 +321,33 @@ export class AIAssignmentService {
     ): number {
         let score = 0;
 
-        // 1. AI classification (40%) - semantic understanding
-        if (aiClassification.available && aiClassification.selectedId === `bucket:${bucket.id}`) {
-            score += aiClassification.confidence * 0.4;
-        }
-
-        // 2. Historical usage pattern (35%)
+        // 1. Historical usage pattern (60%) - strongest signal in fallback mode
         const historicalMatch = this.calculateHistoricalBucketMatch(bucket.id, context);
-        score += historicalMatch * 0.35;
+        score += historicalMatch * 0.6;
 
-        // 3. Keyword matching in bucket name (15%)
+        // 2. Keyword matching in bucket name (25%)
         const nameMatch = this.keywordMatch(bucket.name, context.description);
-        score += nameMatch * 0.15;
+        score += nameMatch * 0.25;
 
-        // 4. Linked Jira issue relevance (10%)
+        // 3. Linked Jira issue relevance (15%)
         if (bucket.linkedIssue) {
             const issueMatch = this.keywordMatch(
                 bucket.linkedIssue.summary,
                 context.description
             );
-            score += issueMatch * 0.1;
+            score += issueMatch * 0.15;
         }
 
         return Math.min(score, 1.0);
     }
 
     /**
-     * Calculate score for a Jira issue assignment
-     * New scoring with AI classification:
-     * - 40% AI classification (semantic understanding)
-     * - 35% Historical usage pattern
-     * - 15% Summary keyword match
-     * - 5% Technology/domain match
-     * - 5% Project affinity
+     * Calculate score for a Jira issue assignment (FALLBACK ONLY)
+     * Used only when AI is unavailable:
+     * - 60% Historical usage pattern
+     * - 20% Summary keyword match
+     * - 10% Technology/domain match
+     * - 10% Project affinity
      */
     private calculateJiraScore(
         issue: LinkedJiraIssue,
@@ -286,26 +356,21 @@ export class AIAssignmentService {
     ): number {
         let score = 0;
 
-        // 1. AI classification (40%) - semantic understanding
-        if (aiClassification.available && aiClassification.selectedId === `jira:${issue.key}`) {
-            score += aiClassification.confidence * 0.4;
-        }
-
-        // 2. Historical usage (35%)
+        // 1. Historical usage (60%) - strongest signal in fallback mode
         const historicalMatch = this.calculateHistoricalJiraMatch(issue.key, context);
-        score += historicalMatch * 0.35;
+        score += historicalMatch * 0.6;
 
-        // 3. Summary keyword match (15%)
+        // 2. Summary keyword match (20%)
         const summaryMatch = this.keywordMatch(issue.summary, context.description);
-        score += summaryMatch * 0.15;
+        score += summaryMatch * 0.2;
 
-        // 4. Technology/domain match (5%)
+        // 3. Technology/domain match (10%)
         const techMatch = this.technologyMatch(issue, context.detectedTechnologies);
-        score += techMatch * 0.05;
+        score += techMatch * 0.1;
 
-        // 5. Project affinity (5%) - prefer recently used projects
+        // 4. Project affinity (10%) - prefer recently used projects
         const projectMatch = this.projectAffinityMatch(issue.projectKey);
-        score += projectMatch * 0.05;
+        score += projectMatch * 0.1;
 
         return Math.min(score, 1.0);
     }
@@ -447,7 +512,7 @@ export class AIAssignmentService {
     }
 
     /**
-     * Explain why a bucket was scored a certain way
+     * Explain why a bucket was scored a certain way (FALLBACK mode)
      */
     private explainBucketScore(
         bucket: TimeBucket,
@@ -455,23 +520,6 @@ export class AIAssignmentService {
         aiClassification: { selectedId: string | null; confidence: number; available: boolean }
     ): string {
         const reasons: string[] = [];
-
-        // AI classification reason (primary)
-        if (aiClassification.available && aiClassification.selectedId === `bucket:${bucket.id}`) {
-            reasons.push(`AI selected (${Math.round(aiClassification.confidence * 100)}% confidence)`);
-        }
-
-        const nameMatch = this.keywordMatch(bucket.name, context.description);
-        if (nameMatch > 0.5) {
-            reasons.push(`matches bucket name keywords`);
-        }
-
-        if (bucket.linkedIssue) {
-            const issueMatch = this.keywordMatch(bucket.linkedIssue.summary, context.description);
-            if (issueMatch > 0.3) {
-                reasons.push(`similar to linked Jira issue ${bucket.linkedIssue.key}`);
-            }
-        }
 
         // Enhanced historical matching with detailed reasons
         const historicalMatch = this.calculateHistoricalBucketMatch(bucket.id, context);
@@ -497,13 +545,25 @@ export class AIAssignmentService {
             reasons.push(`sometimes used for similar work`);
         }
 
+        const nameMatch = this.keywordMatch(bucket.name, context.description);
+        if (nameMatch > 0.5) {
+            reasons.push(`matches bucket name keywords`);
+        }
+
+        if (bucket.linkedIssue) {
+            const issueMatch = this.keywordMatch(bucket.linkedIssue.summary, context.description);
+            if (issueMatch > 0.3) {
+                reasons.push(`similar to linked Jira issue ${bucket.linkedIssue.key}`);
+            }
+        }
+
         return reasons.length > 0
             ? reasons.join(', ')
             : 'no strong indicators';
     }
 
     /**
-     * Explain why a Jira issue was scored a certain way
+     * Explain why a Jira issue was scored a certain way (FALLBACK mode)
      */
     private explainJiraScore(
         issue: LinkedJiraIssue,
@@ -511,23 +571,6 @@ export class AIAssignmentService {
         aiClassification: { selectedId: string | null; confidence: number; available: boolean }
     ): string {
         const reasons: string[] = [];
-
-        // AI classification reason (primary)
-        if (aiClassification.available && aiClassification.selectedId === `jira:${issue.key}`) {
-            reasons.push(`AI selected (${Math.round(aiClassification.confidence * 100)}% confidence)`);
-        }
-
-        const summaryMatch = this.keywordMatch(issue.summary, context.description);
-        if (summaryMatch > 0.4) {
-            reasons.push(`high keyword match with issue summary`);
-        }
-
-        if (context.detectedTechnologies.length > 0) {
-            const techMatch = this.technologyMatch(issue, context.detectedTechnologies);
-            if (techMatch > 0.3) {
-                reasons.push(`matches detected technologies`);
-            }
-        }
 
         // Enhanced historical matching with detailed reasons
         const historicalMatch = this.calculateHistoricalJiraMatch(issue.key, context);
@@ -551,6 +594,18 @@ export class AIAssignmentService {
             }
         } else if (historicalMatch > 0.2) {
             reasons.push(`used before for similar work`);
+        }
+
+        const summaryMatch = this.keywordMatch(issue.summary, context.description);
+        if (summaryMatch > 0.4) {
+            reasons.push(`high keyword match with issue summary`);
+        }
+
+        if (context.detectedTechnologies.length > 0) {
+            const techMatch = this.technologyMatch(issue, context.detectedTechnologies);
+            if (techMatch > 0.3) {
+                reasons.push(`matches detected technologies`);
+            }
         }
 
         const projectMatch = this.projectAffinityMatch(issue.projectKey);

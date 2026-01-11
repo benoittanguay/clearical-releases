@@ -437,6 +437,64 @@ class FastVLMServer {
     }
 
     /**
+     * Summarize multiple activity descriptions into a cohesive narrative
+     * Uses the Qwen3-0.6B reasoning model to create story-like summaries
+     */
+    async summarizeActivities(
+        descriptions: string[],
+        appNames?: string[]
+    ): Promise<{ success: boolean; summary?: string; error?: string }> {
+        // Ensure server is running before attempting summarization
+        console.log('[FastVLM] Ensuring server is running for summarization...');
+        const serverReady = await this.ensureRunning();
+
+        if (!serverReady) {
+            return {
+                success: false,
+                error: 'Failed to start FastVLM server'
+            };
+        }
+
+        try {
+            const requestBody = {
+                descriptions,
+                app_names: appNames
+            };
+
+            console.log('[FastVLM] Sending summarization request with', descriptions.length, 'descriptions');
+
+            const response = await fetch(`${this.serverUrl}/summarize`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(requestBody),
+                signal: AbortSignal.timeout(20000) // 20 second timeout for summarization
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Server returned ${response.status}: ${errorText}`);
+            }
+
+            const result = await response.json() as { success: boolean; summary: string; error?: string };
+            console.log('[FastVLM] Summarization complete:', result.summary?.substring(0, 100));
+
+            // Reset idle timer after successful summarization
+            this.resetIdleTimer();
+
+            return result;
+
+        } catch (error) {
+            console.error('[FastVLM] Summarization request failed:', error);
+            return {
+                success: false,
+                error: error instanceof Error ? error.message : String(error)
+            };
+        }
+    }
+
+    /**
      * Wait for the server to be ready by polling the health endpoint
      */
     private async waitForServerReady(): Promise<boolean> {

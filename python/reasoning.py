@@ -114,15 +114,15 @@ def summarize_activities(descriptions: List[str], app_names: List[str] = None) -
     apps_context = ""
     if app_names:
         unique_apps = list(set(app_names))[:5]
-        apps_context = f"\nApplications used: {', '.join(unique_apps)}"
+        apps_context = f"\n\nApplications used: {', '.join(unique_apps)}"
 
-    prompt = f"""Summarize these work activities into a brief, cohesive narrative (2-3 sentences):
+    prompt = f"""Create a natural, story-like summary of these work activities. Write 2-3 sentences describing what the user did, focusing on the workflow and context. Start with "The user..." and make it read like a narrative, not a list.
 
 Activities:
 {context}
 {apps_context}
 
-Summary:"""
+Natural narrative summary:"""
 
     try:
         summary = generate_text(prompt, max_tokens=150, temperature=0.5)
