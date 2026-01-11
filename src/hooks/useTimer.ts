@@ -262,7 +262,11 @@ export function useTimer() {
 
             try {
                 // @ts-ignore
-                if (window.electron && window.electron.ipcRenderer && window.electron.ipcRenderer.getActiveWindow) {
+                if (!window.electron?.ipcRenderer?.getActiveWindow) {
+                    console.log('[Renderer] ❌ getActiveWindow not available');
+                    return;
+                }
+
                 // @ts-ignore
                 const result = await window.electron.ipcRenderer.getActiveWindow();
                 const now = Date.now();
@@ -368,7 +372,6 @@ export function useTimer() {
                     // We just continue tracking the same window without any action needed.
                     console.log('[Renderer] Same window, continuing activity tracking');
                 }
-            }
             } finally {
                 pollingActiveRef.current = false;
             }

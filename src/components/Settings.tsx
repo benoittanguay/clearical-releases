@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { useSettings } from '../context/SettingsContext';
 import { useSubscription } from '../context/SubscriptionContext';
 import { useAuth } from '../context/AuthContext';
-import { IntegrationConfigModal } from './IntegrationConfigModal';
 import { useJiraCache } from '../context/JiraCacheContext';
 import { TrialBanner } from './TrialBanner';
 import { AppBlacklistManager } from './AppBlacklistManager';
@@ -12,11 +11,10 @@ import type { SyncStatus } from '../services/jiraSyncScheduler';
 type PermissionStatus = 'not-determined' | 'granted' | 'denied' | 'restricted' | 'unknown';
 
 interface SettingsProps {
-    externalShowIntegrationModal?: boolean;
-    onCloseIntegrationModal?: () => void;
+    onOpenIntegrationModal?: () => void;
 }
 
-export function Settings({ externalShowIntegrationModal, onCloseIntegrationModal }: SettingsProps = {}) {
+export function Settings({ onOpenIntegrationModal }: SettingsProps = {}) {
     const { settings, updateSettings, resetSettings } = useSettings();
     const { subscription, hasFeature } = useSubscription();
     const { user, openCustomerPortal, signOut } = useAuth();
@@ -24,21 +22,14 @@ export function Settings({ externalShowIntegrationModal, onCloseIntegrationModal
     const [permissionStatus, setPermissionStatus] = useState<PermissionStatus>('unknown');
     const [tempSettings, setTempSettings] = useState(settings);
     const [saveTimeoutId, setSaveTimeoutId] = useState<ReturnType<typeof setTimeout> | null>(null);
-    const [internalShowIntegrationModal, setInternalShowIntegrationModal] = useState(false);
     const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
     const [isSyncing, setIsSyncing] = useState(false);
     const [isOpeningPortal, setIsOpeningPortal] = useState(false);
 
-    // Use external state if provided, otherwise use internal state
-    const showIntegrationModal = externalShowIntegrationModal !== undefined
-        ? externalShowIntegrationModal
-        : internalShowIntegrationModal;
-
-    const setShowIntegrationModal = (value: boolean) => {
-        if (onCloseIntegrationModal && !value) {
-            onCloseIntegrationModal();
+    const handleOpenIntegrationModal = () => {
+        if (onOpenIntegrationModal) {
+            onOpenIntegrationModal();
         }
-        setInternalShowIntegrationModal(value);
     };
 
     const checkPermission = async () => {
@@ -594,7 +585,7 @@ export function Settings({ externalShowIntegrationModal, onCloseIntegrationModal
                     {/* Configure or Upgrade Button */}
                     {hasJiraAccess || hasTempoAccess ? (
                         <button
-                            onClick={() => setShowIntegrationModal(true)}
+                            onClick={handleOpenIntegrationModal}
                             className="w-full px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-sm rounded transition-colors"
                         >
                             Configure Integration
@@ -767,27 +758,6 @@ export function Settings({ externalShowIntegrationModal, onCloseIntegrationModal
                 <h3 className="text-xs font-semibold text-gray-400 uppercase mb-2">About</h3>
                 <p className="text-xs text-gray-500">Clearical v0.1.0</p>
             </div>
-
-            {/* Integration Configuration Modal */}
-            <IntegrationConfigModal
-                isOpen={showIntegrationModal}
-                onClose={() => setShowIntegrationModal(false)}
-                currentTempoSettings={tempSettings.tempo || { enabled: false, apiToken: '', baseUrl: 'https://api.tempo.io' }}
-                currentJiraSettings={tempSettings.jira || { enabled: false, apiToken: '', baseUrl: '', email: '', selectedProjects: [], autoSync: true, syncInterval: 30, lastSyncTimestamp: 0 }}
-                onSave={(tempoSettings, jiraSettings) => {
-                    setTempSettings(prev => ({
-                        ...prev,
-                        tempo: tempoSettings,
-                        jira: {
-                            ...jiraSettings,
-                            // Preserve sync settings when updating integration config
-                            autoSync: prev.jira?.autoSync ?? true,
-                            syncInterval: prev.jira?.syncInterval || 30,
-                            lastSyncTimestamp: prev.jira?.lastSyncTimestamp || 0,
-                        }
-                    }));
-                }}
-            />
         </div>
     );
 }

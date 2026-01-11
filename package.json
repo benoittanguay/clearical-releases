@@ -1,7 +1,7 @@
 {
   "name": "clearical",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.2.1",
   "type": "module",
   "build": {
     "appId": "io.clearical.app",
@@ -140,7 +140,7 @@
     "publish": {
       "provider": "github",
       "owner": "benoittanguay",
-      "repo": "Clearical",
+      "repo": "timeportal",
       "releaseType": "release"
     }
   },

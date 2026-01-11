@@ -465,8 +465,7 @@ function App() {
               {/* Scrollable Content */}
               <div className="flex-1 overflow-y-auto">
                 <Settings
-                  externalShowIntegrationModal={showIntegrationModal}
-                  onCloseIntegrationModal={() => setShowIntegrationModal(false)}
+                  onOpenIntegrationModal={() => setShowIntegrationModal(true)}
                 />
               </div>
             </>
@@ -723,7 +722,13 @@ function App() {
         onSave={(tempoSettings, jiraSettings) => {
           updateSettings({
             tempo: tempoSettings,
-            jira: jiraSettings,
+            jira: {
+              ...jiraSettings,
+              // Preserve sync settings when updating integration config
+              autoSync: settings.jira?.autoSync ?? true,
+              syncInterval: settings.jira?.syncInterval || 30,
+              lastSyncTimestamp: settings.jira?.lastSyncTimestamp || 0,
+            }
           });
           setShowIntegrationModal(false);
         }}

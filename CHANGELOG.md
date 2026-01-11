@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-01-10
+
+### Fixed
+- **Auto-updater**: Fixed GitHub repo name in publish config (`Clearical` → `timeportal`)
+- **Activity recording**: Fixed conditional check that prevented recording from capturing data
+- **Jira/Tempo config button**: Fixed duplicate modal conflict - button now works correctly
+
+---
+
 ## [0.2.0] - 2026-01-10
 
 ### Added
@@ -144,6 +153,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version       | Date       | Type    | Notes |
 |---------------|------------|---------|-------|
+| 0.2.1         | 2026-01-10 | Release | Fix auto-updater, recording, and config button |
 | 0.2.0         | 2026-01-10 | Release | Add auto-updater test modal |
 | 0.1.7         | 2026-01-10 | Release | Fix corrupted display (keep dist unpacked) |
 | 0.1.6         | 2026-01-10 | Release | Fix corrupted display (loadFile for asar support) |
