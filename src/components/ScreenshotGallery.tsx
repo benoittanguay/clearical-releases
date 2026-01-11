@@ -328,10 +328,34 @@ export function ScreenshotGallery({ screenshotPaths, metadata, onClose, onScreen
                                 <span className="text-white">{currentMetadata.appName}</span>
                             </div>
                         )}
-                        {currentMetadata.windowTitle && (
-                            <div>
-                                <span className="text-gray-300">Window:</span>{' '}
+                        <div>
+                            <span className="text-gray-300">Window:</span>{' '}
+                            {currentMetadata.windowTitle && currentMetadata.windowTitle !== 'Unknown' ? (
                                 <span className="text-white break-words">{currentMetadata.windowTitle}</span>
+                            ) : (
+                                <span className="text-gray-500 italic">(No window title available)</span>
+                            )}
+                        </div>
+
+                        {/* Permission issue warning - shown when window title is missing */}
+                        {(!currentMetadata.windowTitle || currentMetadata.windowTitle === 'Unknown') && (
+                            <div className="bg-amber-900/20 border border-amber-700/50 rounded-lg p-3 mt-2">
+                                <div className="flex items-start gap-2">
+                                    <svg className="w-4 h-4 text-amber-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                    </svg>
+                                    <div className="flex-1">
+                                        <p className="text-xs text-amber-300">
+                                            Window title not captured. This may be due to accessibility permission issues.
+                                        </p>
+                                        <button
+                                            onClick={() => window.electron.ipcRenderer.openAccessibilitySettings()}
+                                            className="mt-2 text-xs px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-md font-medium transition-colors"
+                                        >
+                                            Reset Permissions
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
                         )}
                         

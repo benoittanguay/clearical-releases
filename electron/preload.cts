@@ -165,6 +165,14 @@ contextBridge.exposeInMainWorld('electron', {
             // Jira Cache Metadata
             getJiraCacheMeta: (key: string) => ipcRenderer.invoke('db:get-jira-cache-meta', key),
             setJiraCacheMeta: (key: string, data: any, query?: string) => ipcRenderer.invoke('db:set-jira-cache-meta', key, data, query),
+            // Tempo Cache Metadata
+            getTempoCacheMeta: (key: string) => ipcRenderer.invoke('db:get-tempo-cache-meta', key),
+            setTempoCacheMeta: (key: string, data: any, query?: string) => ipcRenderer.invoke('db:set-tempo-cache-meta', key, data, query),
+            // Tempo Accounts Cache
+            getAllTempoAccounts: () => ipcRenderer.invoke('db:get-all-tempo-accounts'),
+            getTempoAccountsByStatus: (status: string) => ipcRenderer.invoke('db:get-tempo-accounts-by-status', status),
+            upsertTempoAccount: (account: any) => ipcRenderer.invoke('db:upsert-tempo-account', account),
+            clearTempoCache: () => ipcRenderer.invoke('db:clear-tempo-cache'),
             // Crawler State
             getCrawlerState: (projectKey: string) => ipcRenderer.invoke('db:get-crawler-state', projectKey),
             setCrawlerState: (projectKey: string, state: any) => ipcRenderer.invoke('db:set-crawler-state', projectKey, state),
@@ -187,6 +195,16 @@ contextBridge.exposeInMainWorld('electron', {
             refreshBlacklist: () => ipcRenderer.invoke('refresh-blacklist'),
             getInstalledApps: () => ipcRenderer.invoke('get-installed-apps'),
             getAppIconBase64: (iconPath: string) => ipcRenderer.invoke('get-app-icon-base64', iconPath),
+        },
+        // Tempo Account Blacklist operations
+        tempoAccountBlacklist: {
+            getBlacklistedAccounts: () => ipcRenderer.invoke('get-blacklisted-tempo-accounts'),
+            addBlacklistedAccount: (accountKey: string, accountId: string, name: string) =>
+                ipcRenderer.invoke('add-blacklisted-tempo-account', accountKey, accountId, name),
+            removeBlacklistedAccount: (accountKey: string) =>
+                ipcRenderer.invoke('remove-blacklisted-tempo-account', accountKey),
+            isAccountBlacklisted: (accountKey: string) =>
+                ipcRenderer.invoke('is-tempo-account-blacklisted', accountKey),
         },
     },
 });

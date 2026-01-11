@@ -4,6 +4,7 @@
 
 import type { WorkAssignment, TimeBucket, LinkedJiraIssue, TimeEntry } from './shared';
 import type { JiraIssue } from '../services/jiraService';
+import type { TempoAccount } from '../services/tempoService';
 
 // Structured screenshot analysis types
 export interface ExtractedText {
@@ -81,6 +82,12 @@ export interface BlacklistedApp {
     bundleId: string;
     name: string;
     category?: string;
+}
+
+export interface BlacklistedTempoAccount {
+    accountKey: string;
+    accountId: string;
+    name: string;
 }
 
 export interface InstalledApp {
@@ -292,6 +299,14 @@ export interface ElectronAPI {
             // Jira Cache Metadata
             getJiraCacheMeta: (key: string) => Promise<{ success: boolean; data: any; error?: string }>;
             setJiraCacheMeta: (key: string, data: any, query?: string) => Promise<{ success: boolean; error?: string }>;
+            // Tempo Cache Metadata
+            getTempoCacheMeta: (key: string) => Promise<{ success: boolean; data: any; error?: string }>;
+            setTempoCacheMeta: (key: string, data: any, query?: string) => Promise<{ success: boolean; error?: string }>;
+            // Tempo Accounts Cache
+            getAllTempoAccounts: () => Promise<{ success: boolean; data: TempoAccount[]; error?: string }>;
+            getTempoAccountsByStatus: (status: string) => Promise<{ success: boolean; data: TempoAccount[]; error?: string }>;
+            upsertTempoAccount: (account: TempoAccount) => Promise<{ success: boolean; error?: string }>;
+            clearTempoCache: () => Promise<{ success: boolean; error?: string }>;
             // Crawler State
             getCrawlerState: (projectKey: string) => Promise<{ success: boolean; data: any; error?: string }>;
             setCrawlerState: (projectKey: string, state: any) => Promise<{ success: boolean; error?: string }>;
@@ -310,6 +325,13 @@ export interface ElectronAPI {
             isAppBlacklisted: (bundleId: string) => Promise<{ success: boolean; isBlacklisted: boolean; error?: string }>;
             getInstalledApps: () => Promise<{ success: boolean; data: InstalledApp[]; error?: string }>;
             getAppIconBase64: (iconPath: string) => Promise<{ success: boolean; dataUrl?: string; error?: string }>;
+        };
+        // Tempo Account Blacklist operations
+        tempoAccountBlacklist: {
+            getBlacklistedAccounts: () => Promise<{ success: boolean; data: BlacklistedTempoAccount[]; error?: string }>;
+            addBlacklistedAccount: (accountKey: string, accountId: string, name: string) => Promise<{ success: boolean; error?: string }>;
+            removeBlacklistedAccount: (accountKey: string) => Promise<{ success: boolean; error?: string }>;
+            isAccountBlacklisted: (accountKey: string) => Promise<{ success: boolean; isBlacklisted: boolean; error?: string }>;
         };
     };
 }

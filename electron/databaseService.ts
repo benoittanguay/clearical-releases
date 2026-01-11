@@ -180,6 +180,44 @@ export class DatabaseService {
             CREATE INDEX IF NOT EXISTS idx_blacklisted_apps_name ON blacklisted_apps(name);
         `);
 
+        // Create blacklisted_tempo_accounts table
+        this.db.exec(`
+            CREATE TABLE IF NOT EXISTS blacklisted_tempo_accounts (
+                account_key TEXT PRIMARY KEY,
+                account_id TEXT NOT NULL,
+                name TEXT NOT NULL,
+                created_at INTEGER NOT NULL
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_blacklisted_tempo_accounts_name ON blacklisted_tempo_accounts(name);
+        `);
+
+        // Create tempo_cache_meta table for cache metadata
+        this.db.exec(`
+            CREATE TABLE IF NOT EXISTS tempo_cache_meta (
+                key TEXT PRIMARY KEY,
+                data TEXT NOT NULL,
+                timestamp INTEGER NOT NULL,
+                query TEXT
+            );
+        `);
+
+        // Create tempo_accounts table for individual account caching
+        this.db.exec(`
+            CREATE TABLE IF NOT EXISTS tempo_accounts (
+                id TEXT PRIMARY KEY,
+                key TEXT NOT NULL,
+                name TEXT NOT NULL,
+                status TEXT NOT NULL,
+                global INTEGER DEFAULT 0,
+                data TEXT NOT NULL,
+                cached_at INTEGER NOT NULL
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_tempo_accounts_status ON tempo_accounts(status);
+            CREATE INDEX IF NOT EXISTS idx_tempo_accounts_cached_at ON tempo_accounts(cached_at);
+        `);
+
         console.log('[DatabaseService] Schema initialized');
     }
 
@@ -598,6 +636,140 @@ export class DatabaseService {
 
     public clearBlacklistedApps(): void {
         this.db.exec('DELETE FROM blacklisted_apps');
+    }
+
+    // ========================================================================
+    // BLACKLISTED TEMPO ACCOUNTS CRUD
+    // ========================================================================
+
+    public getAllBlacklistedTempoAccounts(): Array<{ accountKey: string; accountId: string; name: string }> {
+        const stmt = this.db.prepare('SELECT account_key, account_id, name FROM blacklisted_tempo_accounts ORDER BY name ASC');
+        const rows = stmt.all() as any[];
+        return rows.map(row => ({
+            accountKey: row.account_key,
+            accountId: row.account_id,
+            name: row.name
+        }));
+    }
+
+    public isTempoAccountBlacklisted(accountKey: string): boolean {
+        const stmt = this.db.prepare('SELECT 1 FROM blacklisted_tempo_accounts WHERE account_key = ?');
+        const row = stmt.get(accountKey);
+        return !!row;
+    }
+
+    public addBlacklistedTempoAccount(accountKey: string, accountId: string, name: string): void {
+        const stmt = this.db.prepare(`
+            INSERT OR IGNORE INTO blacklisted_tempo_accounts (account_key, account_id, name, created_at)
+            VALUES (?, ?, ?, ?)
+        `);
+
+        stmt.run(accountKey, accountId, name, Date.now());
+    }
+
+    public removeBlacklistedTempoAccount(accountKey: string): void {
+        const stmt = this.db.prepare('DELETE FROM blacklisted_tempo_accounts WHERE account_key = ?');
+        stmt.run(accountKey);
+    }
+
+    public clearBlacklistedTempoAccounts(): void {
+        this.db.exec('DELETE FROM blacklisted_tempo_accounts');
+    }
+
+    // ========================================================================
+    // TEMPO CACHE METADATA
+    // ========================================================================
+
+    public getTempoCacheMeta(key: string): any | null {
+        const stmt = this.db.prepare('SELECT * FROM tempo_cache_meta WHERE key = ?');
+        const row: any = stmt.get(key);
+        if (!row) return null;
+
+        return {
+            data: JSON.parse(row.data),
+            timestamp: row.timestamp,
+            query: row.query
+        };
+    }
+
+    public setTempoCacheMeta(key: string, data: any, query?: string): void {
+        const stmt = this.db.prepare(`
+            INSERT INTO tempo_cache_meta (key, data, timestamp, query)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(key) DO UPDATE SET
+                data = excluded.data,
+                timestamp = excluded.timestamp,
+                query = excluded.query
+        `);
+
+        stmt.run(key, JSON.stringify(data), Date.now(), query || null);
+    }
+
+    public deleteTempoCacheMeta(key: string): void {
+        const stmt = this.db.prepare('DELETE FROM tempo_cache_meta WHERE key = ?');
+        stmt.run(key);
+    }
+
+    // ========================================================================
+    // TEMPO ACCOUNTS CACHE
+    // ========================================================================
+
+    public getAllTempoAccounts(): any[] {
+        const stmt = this.db.prepare('SELECT * FROM tempo_accounts ORDER BY name ASC');
+        const rows = stmt.all();
+        return rows.map((row: any) => JSON.parse(row.data));
+    }
+
+    public getTempoAccountsByStatus(status: string): any[] {
+        const stmt = this.db.prepare('SELECT * FROM tempo_accounts WHERE status = ? ORDER BY name ASC');
+        const rows = stmt.all(status);
+        return rows.map((row: any) => JSON.parse(row.data));
+    }
+
+    public getTempoAccount(id: string): any | null {
+        const stmt = this.db.prepare('SELECT * FROM tempo_accounts WHERE id = ?');
+        const row: any = stmt.get(id);
+        return row ? JSON.parse(row.data) : null;
+    }
+
+    public upsertTempoAccount(account: any): void {
+        const stmt = this.db.prepare(`
+            INSERT INTO tempo_accounts (id, key, name, status, global, data, cached_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                key = excluded.key,
+                name = excluded.name,
+                status = excluded.status,
+                global = excluded.global,
+                data = excluded.data,
+                cached_at = excluded.cached_at
+        `);
+
+        stmt.run(
+            account.id,
+            account.key || '',
+            account.name || '',
+            account.status || 'OPEN',
+            account.global ? 1 : 0,
+            JSON.stringify(account),
+            Date.now()
+        );
+    }
+
+    public deleteTempoAccount(id: string): void {
+        const stmt = this.db.prepare('DELETE FROM tempo_accounts WHERE id = ?');
+        stmt.run(id);
+    }
+
+    public clearTempoCache(): void {
+        this.db.exec('DELETE FROM tempo_accounts');
+        this.db.exec('DELETE FROM tempo_cache_meta');
+    }
+
+    public cleanOldTempoCache(olderThanMs: number): void {
+        const cutoff = Date.now() - olderThanMs;
+        const stmt = this.db.prepare('DELETE FROM tempo_accounts WHERE cached_at < ?');
+        stmt.run(cutoff);
     }
 
     // ========================================================================

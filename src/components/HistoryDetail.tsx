@@ -16,6 +16,48 @@ import { useScreenshotAnalysis } from '../context/ScreenshotAnalysisContext';
 import { TempoService, type TempoAccount } from '../services/tempoService';
 import { JiraService } from '../services/jiraService';
 
+/**
+ * Extract window title from screenshot path as a fallback.
+ * Screenshot filename format: {timestamp}|||{app_name}|||{window_title}.png
+ */
+function extractWindowTitleFromScreenshot(screenshotPaths?: string[]): string | undefined {
+    if (!screenshotPaths || screenshotPaths.length === 0) return undefined;
+
+    // Try to extract from the first screenshot path
+    const firstPath = screenshotPaths[0];
+    const filename = firstPath.split('/').pop() || firstPath.split('\\').pop() || '';
+
+    if (filename.includes('|||')) {
+        const parts = filename.replace('.png', '').split('|||');
+        if (parts.length >= 3 && parts[2] && parts[2] !== 'Unknown') {
+            // Clean up underscore replacements back to original characters
+            return parts[2];
+        }
+    }
+
+    return undefined;
+}
+
+/**
+ * Get the best available window title for an activity.
+ * Priority: activity.windowTitle > extracted from screenshot > fallback message
+ */
+function getWindowTitle(activity: { windowTitle?: string; screenshotPaths?: string[] }): string {
+    // If we have a valid window title, use it
+    if (activity.windowTitle && activity.windowTitle !== 'Unknown' && activity.windowTitle !== '') {
+        return activity.windowTitle;
+    }
+
+    // Try to extract from screenshot filename
+    const extractedTitle = extractWindowTitleFromScreenshot(activity.screenshotPaths);
+    if (extractedTitle) {
+        return extractedTitle;
+    }
+
+    // Fallback
+    return '(No window title available)';
+}
+
 interface HistoryDetailProps {
     entry: TimeEntry;
     buckets: TimeBucket[];
@@ -389,7 +431,7 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                     path,
                     timestamp: activity?.timestamp || Date.now(),
                     appName: activity?.appName,
-                    windowTitle: activity?.windowTitle,
+                    windowTitle: activity ? getWindowTitle(activity) : undefined,
                     aiDescription: activity?.screenshotDescriptions?.[path],
                     rawVisionData: activity?.screenshotVisionData?.[path],
                     visionData: activity?.screenshotVisionData?.[path] // Legacy fallback
@@ -635,8 +677,9 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                 if (activity.appName && !appNames.includes(activity.appName)) {
                     appNames.push(activity.appName);
                 }
-                if (activity.windowTitle && !windowTitles.includes(activity.windowTitle)) {
-                    windowTitles.push(activity.windowTitle);
+                const resolvedTitle = getWindowTitle(activity);
+                if (resolvedTitle && resolvedTitle !== '(No window title available)' && !windowTitles.includes(resolvedTitle)) {
+                    windowTitles.push(resolvedTitle);
                 }
 
                 // Collect screenshot descriptions
@@ -1156,7 +1199,7 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                                                     <div className="flex items-start justify-between gap-3">
                                                         <div className="flex-1 min-w-0">
                                                             <div className="text-sm font-medium text-gray-200 truncate mb-1">
-                                                                {activity.windowTitle || '(No window title available)'}
+                                                                {getWindowTitle(activity)}
                                                             </div>
                                                             <div className="text-xs text-gray-500 mb-1">
                                                                 {new Date(activity.timestamp).toLocaleTimeString()}
@@ -1168,11 +1211,12 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                                                                         console.log('[HistoryDetail] Opening screenshots:', activity.screenshotPaths);
 
                                                                         const screenshots = activity.screenshotPaths || [];
+                                                                        const resolvedWindowTitle = getWindowTitle(activity);
                                                                         const metadata = screenshots.map(path => ({
                                                                             path,
                                                                             timestamp: activity.timestamp,
                                                                             appName: activity.appName,
-                                                                            windowTitle: activity.windowTitle,
+                                                                            windowTitle: resolvedWindowTitle,
                                                                             aiDescription: activity.screenshotDescriptions?.[path],
                                                                             rawVisionData: activity.screenshotVisionData?.[path],
                                                                             visionData: activity.screenshotVisionData?.[path] // Legacy fallback

@@ -2,10 +2,11 @@
 FastVLM Inference Module
 
 This module provides core inference functionality for screenshot analysis using
-the FastVLM-0.5B model via mlx-vlm. It handles model loading, image processing,
-and description generation.
+the nanoLLaVA-1.5-4bit quantized model via mlx-vlm. It handles model loading,
+image processing, and description generation.
 
 Features:
+- 4-bit quantized model for smaller size and faster inference
 - Model caching for efficient reuse
 - Base64 and file path image input support
 - Structured prompt for screenshot analysis
@@ -33,14 +34,16 @@ DEFAULT_PROMPT = """<image>
 App: {app_name}
 Window: {window_title}
 
-Analyze this screenshot and determine what the user is working on.
+Analyze this screenshot and provide a detailed description of what the user is working on.
 
-Focus on:
-- The specific task or goal (not just "using an app")
-- Any identifiable project, file, document, or topic
-- The current action (writing, reading, debugging, designing, etc.)
+Describe in 3-5 sentences:
+1. The specific task or goal the user is focused on
+2. Visible content details: code snippets, text, file names, error messages, or document content
+3. UI elements and layout: panels, tabs, toolbars, terminal windows, or sidebars visible
+4. The current action: writing, reading, debugging, designing, browsing, communicating, etc.
+5. Any identifiable project, technology, or topic being worked on
 
-Respond with ONE concise sentence describing the user's work activity."""
+Be specific about what you can actually see on screen. Include visible file paths, function names, variable names, error text, or other readable content when present. Describe the visual layout and which areas of the screen contain what information."""
 
 
 def get_model_path() -> str:
@@ -58,16 +61,16 @@ def get_model_path() -> str:
     import sys
     import os
 
-    # Model ID for HuggingFace fallback
-    model_id = "qnguyen3/nanoLLaVA"
+    # Model ID for HuggingFace fallback (4-bit quantized version)
+    model_id = "mlx-community/nanoLLaVA-1.5-4bit"
 
     # Check if running as a PyInstaller bundle
     if getattr(sys, 'frozen', False):
         # Running as compiled executable
         # PyInstaller sets sys._MEIPASS to the temporary directory with bundled files
         bundle_dir = Path(sys._MEIPASS)
-        # Model is bundled directly at nanoLLaVA (not models/nanoLLaVA)
-        bundled_model = bundle_dir / "nanoLLaVA"
+        # Model is bundled directly at nanoLLaVA-1.5-4bit (not models/nanoLLaVA-1.5-4bit)
+        bundled_model = bundle_dir / "nanoLLaVA-1.5-4bit"
 
         if bundled_model.exists():
             logger.info(f"Using bundled model from: {bundled_model}")
@@ -78,7 +81,7 @@ def get_model_path() -> str:
         # Running in development mode
         # Check for local model directory (relative to this file)
         script_dir = Path(__file__).parent
-        local_model = script_dir / "models" / "nanoLLaVA"
+        local_model = script_dir / "models" / "nanoLLaVA-1.5-4bit"
 
         if local_model.exists():
             logger.info(f"Using local model from: {local_model}")
@@ -206,7 +209,7 @@ def analyze_screenshot(
     prompt: Optional[str] = None,
     app_name: Optional[str] = None,
     window_title: Optional[str] = None,
-    max_tokens: int = 200,
+    max_tokens: int = 400,
     temperature: float = 0.7
 ) -> Dict[str, Any]:
     """
@@ -218,7 +221,7 @@ def analyze_screenshot(
         prompt: Custom prompt for analysis (optional, uses DEFAULT_PROMPT if not provided)
         app_name: Name of the application being captured (optional)
         window_title: Title of the window being captured (optional)
-        max_tokens: Maximum tokens to generate (default: 200)
+        max_tokens: Maximum tokens to generate (default: 400)
         temperature: Sampling temperature (default: 0.7)
 
     Returns:
@@ -376,12 +379,12 @@ def get_model_info() -> Dict[str, Any]:
         Dict containing model information
     """
     return {
-        "model_name": "FastVLM-0.5B (nanoLLaVA)",
-        "model_id": "qnguyen3/nanoLLaVA",
+        "model_name": "nanoLLaVA-1.5-4bit",
+        "model_id": "mlx-community/nanoLLaVA-1.5-4bit",
         "framework": "mlx-vlm",
         "loaded": _model_cache is not None,
         "device": "Apple Silicon (MLX)",
-        "description": "Compact vision-language model optimized for Apple Silicon"
+        "description": "4-bit quantized vision-language model optimized for Apple Silicon"
     }
 
 

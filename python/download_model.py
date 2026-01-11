@@ -1,13 +1,19 @@
 """
-Download nanoLLaVA Model Script
+Download MLX Models Script
 
-This script downloads the qnguyen3/nanoLLaVA model from HuggingFace
-and saves it to a local directory for bundling with PyInstaller.
+This script downloads the required MLX models from HuggingFace
+and saves them to a local directory for bundling with PyInstaller.
+
+Models downloaded:
+  - mlx-community/nanoLLaVA-1.5-4bit (vision model)
+  - mlx-community/Qwen3-0.6B-4bit (reasoning model)
 
 Usage:
     python download_model.py
 
-The model will be saved to: python/models/nanoLLaVA/
+The models will be saved to:
+  - python/models/nanoLLaVA-1.5-4bit/
+  - python/models/Qwen3-0.6B-4bit/
 """
 
 import sys
@@ -21,14 +27,35 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Model configurations
+MODELS = [
+    {
+        "id": "mlx-community/nanoLLaVA-1.5-4bit",
+        "target_dir": "models/nanoLLaVA-1.5-4bit",
+        "description": "Vision model (4-bit quantized)",
+        "size_estimate": "~200-400MB"
+    },
+    {
+        "id": "mlx-community/Qwen3-0.6B-4bit",
+        "target_dir": "models/Qwen3-0.6B-4bit",
+        "description": "Reasoning model (4-bit quantized)",
+        "size_estimate": "~400-600MB"
+    }
+]
 
-def download_model(model_id: str = "qnguyen3/nanoLLaVA", target_dir: str = "models/nanoLLaVA"):
+
+def download_model(model_id: str, target_dir: str, description: str = "", size_estimate: str = ""):
     """
-    Download the nanoLLaVA model from HuggingFace.
+    Download a model from HuggingFace.
 
     Args:
         model_id: HuggingFace model identifier
         target_dir: Local directory to save the model
+        description: Human-readable description of the model
+        size_estimate: Estimated download size
+
+    Returns:
+        str: Path to the downloaded model
     """
     try:
         from huggingface_hub import snapshot_download
@@ -37,8 +64,11 @@ def download_model(model_id: str = "qnguyen3/nanoLLaVA", target_dir: str = "mode
         script_dir = Path(__file__).parent
         model_path = script_dir / target_dir
 
-        logger.info(f"Downloading model '{model_id}' to '{model_path}'...")
-        logger.info("This may take several minutes (model size: ~500MB-1GB)")
+        logger.info(f"Downloading '{model_id}' to '{model_path}'...")
+        if description:
+            logger.info(f"  Description: {description}")
+        if size_estimate:
+            logger.info(f"  Estimated size: {size_estimate}")
 
         # Create target directory if it doesn't exist
         model_path.mkdir(parents=True, exist_ok=True)
@@ -53,13 +83,17 @@ def download_model(model_id: str = "qnguyen3/nanoLLaVA", target_dir: str = "mode
         )
 
         logger.info(f"Model downloaded successfully to: {downloaded_path}")
-        logger.info("\nDownloaded files:")
+        logger.info("Downloaded files:")
 
         # List downloaded files
+        total_size = 0
         for item in sorted(model_path.rglob("*")):
             if item.is_file():
                 size_mb = item.stat().st_size / (1024 * 1024)
+                total_size += size_mb
                 logger.info(f"  {item.relative_to(model_path)} ({size_mb:.2f} MB)")
+
+        logger.info(f"Total size: {total_size:.2f} MB")
 
         return str(model_path)
 
@@ -73,12 +107,13 @@ def download_model(model_id: str = "qnguyen3/nanoLLaVA", target_dir: str = "mode
         raise RuntimeError(f"Model download failed: {str(e)}") from e
 
 
-def verify_model(model_dir: str = "models/nanoLLaVA"):
+def verify_model(model_dir: str, model_id: str = ""):
     """
-    Verify that the downloaded model is valid and complete.
+    Verify that a downloaded model is valid and complete.
 
     Args:
         model_dir: Directory containing the model
+        model_id: Model identifier for logging
 
     Returns:
         bool: True if model is valid
@@ -86,14 +121,15 @@ def verify_model(model_dir: str = "models/nanoLLaVA"):
     script_dir = Path(__file__).parent
     model_path = script_dir / model_dir
 
-    logger.info(f"Verifying model at: {model_path}")
+    display_name = model_id or model_dir
+    logger.info(f"Verifying model '{display_name}' at: {model_path}")
 
     # Check if directory exists
     if not model_path.exists():
-        logger.error("Model directory does not exist")
+        logger.error(f"Model directory does not exist: {model_path}")
         return False
 
-    # Check for required files (nanoLLaVA doesn't include preprocessor_config.json)
+    # Check for required files
     required_files = [
         "config.json",
     ]
@@ -113,39 +149,87 @@ def verify_model(model_dir: str = "models/nanoLLaVA"):
         logger.error("No model weight files found (.safetensors or .bin)")
         return False
 
-    logger.info("Model verification passed")
+    logger.info(f"Model '{display_name}' verification passed")
     logger.info(f"Found {len(weight_files)} weight file(s)")
 
     return True
 
 
+def download_all_models():
+    """
+    Download all required models.
+
+    Returns:
+        dict: Dictionary mapping model IDs to their local paths
+    """
+    downloaded_paths = {}
+
+    for model_config in MODELS:
+        logger.info("\n" + "-" * 60)
+        path = download_model(
+            model_id=model_config["id"],
+            target_dir=model_config["target_dir"],
+            description=model_config["description"],
+            size_estimate=model_config["size_estimate"]
+        )
+        downloaded_paths[model_config["id"]] = path
+
+    return downloaded_paths
+
+
+def verify_all_models():
+    """
+    Verify all downloaded models.
+
+    Returns:
+        bool: True if all models are valid
+    """
+    all_valid = True
+
+    for model_config in MODELS:
+        logger.info("\n" + "-" * 60)
+        if not verify_model(model_config["target_dir"], model_config["id"]):
+            all_valid = False
+
+    return all_valid
+
+
 def main():
     """Main entry point."""
     logger.info("=" * 60)
-    logger.info("nanoLLaVA Model Downloader")
+    logger.info("MLX Models Downloader")
     logger.info("=" * 60)
+    logger.info(f"Models to download: {len(MODELS)}")
+    for model_config in MODELS:
+        logger.info(f"  - {model_config['id']} ({model_config['description']})")
 
     try:
-        # Download the model
-        model_path = download_model()
+        # Download all models
+        downloaded_paths = download_all_models()
 
-        # Verify the download
-        if verify_model():
+        # Verify all downloads
+        logger.info("\n" + "=" * 60)
+        logger.info("Verifying downloaded models...")
+        logger.info("=" * 60)
+
+        if verify_all_models():
             logger.info("\n" + "=" * 60)
-            logger.info("SUCCESS: Model downloaded and verified")
-            logger.info(f"Model location: {model_path}")
+            logger.info("SUCCESS: All models downloaded and verified")
             logger.info("=" * 60)
+            logger.info("\nModel locations:")
+            for model_id, path in downloaded_paths.items():
+                logger.info(f"  {model_id}: {path}")
             logger.info("\nYou can now run the build script:")
             logger.info("  python build_server.py")
             return 0
         else:
             logger.error("\n" + "=" * 60)
-            logger.error("ERROR: Model verification failed")
+            logger.error("ERROR: One or more model verifications failed")
             logger.error("=" * 60)
             return 1
 
     except Exception as e:
-        logger.error(f"\nFailed to download model: {str(e)}", exc_info=True)
+        logger.error(f"\nFailed to download models: {str(e)}", exc_info=True)
         return 1
 
 

@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.4] - 2026-01-11
+
+### Added
+- **Qwen3-0.6B Reasoning Model**: New on-device text reasoning for summarization and classification
+- API endpoints: `/summarize` for activity narratives, `/classify` for categorization
+- **Tempo Account Blacklisting**: Exclude specific Tempo accounts from dropdowns and AI suggestions
+- New TempoAccountBlacklistManager component in Integration Config
+- **Tempo Account Caching**: 24-hour SQLite persistence with stale-while-revalidate pattern
+- Instant UI feedback with background refresh for Tempo accounts
+
+### Improved
+- **Quantized Vision Model**: Switched to nanoLLaVA-1.5-4bit for smaller size
+- **More Verbose Descriptions**: FastVLM prompt now requests 3-5 detailed sentences
+- **Window Title Capture**: Added 4 fallback strategies for Electron apps (Cursor, VS Code)
+- **Reset Permissions Button**: Shows in Screenshot Info when window title is missing
+
+### Changed
+- Total model size reduced from ~2GB to ~917MB while adding reasoning capabilities
+- Vision model: nanoLLaVA-1.5-4bit (582 MB)
+- Reasoning model: Qwen3-0.6B-4bit (335 MB)
+
+### Technical
+- New `reasoning.py` module for Qwen3 text generation
+- New `tempoCache.ts` service mirroring Jira caching pattern
+- Database tables: `blacklisted_tempo_accounts`, `tempo_cache_meta`, `tempo_accounts`
+- IPC handlers for Tempo blacklist and cache operations
+
+---
+
 ## [0.3.3] - 2026-01-11
 
 ### Improved
@@ -415,6 +444,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version       | Date       | Type    | Notes |
 |---------------|------------|---------|-------|
+| 0.3.4         | 2026-01-11 | Minor   | Qwen3 reasoning model, Tempo blacklist & caching, quantized models |
 | 0.3.3         | 2026-01-11 | Patch   | Context-aware FastVLM prompts for narrative descriptions |
 | 0.3.2         | 2026-01-11 | Patch   | Permission UX, Chrono navigation, FastVLM fixes, UI gap removed |
 | 0.3.1         | 2026-01-11 | Patch   | On-demand FastVLM server with auto-shutdown |

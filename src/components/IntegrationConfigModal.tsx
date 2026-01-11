@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import type { TempoSettings, JiraSettings } from '../context/SettingsContext';
 import type { JiraProject } from '../services/jiraService';
+import { TempoAccountBlacklistManager } from './TempoAccountBlacklistManager';
 
 interface IntegrationConfigModalProps {
     isOpen: boolean;
@@ -508,6 +509,14 @@ export function IntegrationConfigModal({
                                             </div>
                                         </div>
                                     </div>
+                                </div>
+
+                                {/* Account Blacklist Manager */}
+                                <div className="mt-6 pt-6 border-t border-gray-700">
+                                    <TempoAccountBlacklistManager
+                                        tempoApiToken={tempTempoSettings.apiToken}
+                                        tempoBaseUrl={tempTempoSettings.baseUrl}
+                                    />
                                 </div>
                             </>
                         )}

@@ -1,14 +1,19 @@
 """
 FastVLM Inference Server
 
-A FastAPI server that provides screenshot analysis endpoints using the FastVLM-0.5B model.
-The model is loaded once at startup and reused for all requests.
+A FastAPI server that provides screenshot analysis endpoints using the FastVLM-0.5B model
+and text reasoning capabilities using the Qwen3-0.6B-4bit model.
+The models are loaded on-demand and cached for reuse.
 
 Endpoints:
-    POST /analyze - Analyze a screenshot and return a description
-    GET /health - Check if the server is ready
-    POST /shutdown - Gracefully shutdown the server
     GET / - Server information
+    GET /health - Check if the server is ready
+    POST /analyze - Analyze a screenshot and return a description
+    POST /summarize - Summarize multiple activity descriptions
+    POST /classify - Classify an activity to one of provided options
+    GET /reasoning/health - Health check for reasoning model
+    GET /reasoning/info - Get reasoning model information
+    POST /shutdown - Gracefully shutdown the server
 
 Usage:
     python server.py [--port PORT] [--host HOST]
@@ -21,7 +26,7 @@ import asyncio
 import signal
 import sys
 from contextlib import asynccontextmanager
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 import logging
 
 from fastapi import FastAPI, HTTPException, BackgroundTasks
@@ -30,6 +35,12 @@ from pydantic import BaseModel, Field, validator
 import uvicorn
 
 from inference import analyze_screenshot, get_model_info, load_model
+from reasoning import (
+    summarize_activities,
+    classify_activity,
+    get_reasoning_model_info,
+    load_reasoning_model
+)
 
 # Configure logging
 logging.basicConfig(
@@ -132,6 +143,72 @@ class ServerInfo(BaseModel):
     endpoints: Dict[str, str]
 
 
+# Reasoning Request/Response Models
+class ClassifyOption(BaseModel):
+    """Option for classification."""
+
+    id: str = Field(..., description="Unique identifier for the option")
+    name: str = Field(..., description="Display name of the option")
+
+
+class SummarizeRequest(BaseModel):
+    """Request model for activity summarization."""
+
+    descriptions: List[str] = Field(
+        ...,
+        description="List of activity descriptions to summarize",
+        min_items=1
+    )
+    app_names: Optional[List[str]] = Field(
+        None,
+        description="Optional list of application names used"
+    )
+
+
+class SummarizeResponse(BaseModel):
+    """Response model for summarization."""
+
+    success: bool = Field(..., description="Whether summarization was successful")
+    summary: str = Field(..., description="Generated summary")
+    error: Optional[str] = Field(None, description="Error message if failed")
+
+
+class ClassifyRequest(BaseModel):
+    """Request model for activity classification."""
+
+    description: str = Field(
+        ...,
+        description="Activity description to classify"
+    )
+    options: List[ClassifyOption] = Field(
+        ...,
+        description="List of classification options",
+        min_items=1
+    )
+    context: Optional[str] = Field(
+        None,
+        description="Additional context (window titles, app names, etc.)"
+    )
+
+
+class ClassifyResponse(BaseModel):
+    """Response model for classification."""
+
+    success: bool = Field(..., description="Whether classification was successful")
+    selected_id: Optional[str] = Field(None, description="ID of the selected option")
+    selected_name: Optional[str] = Field(None, description="Name of the selected option")
+    confidence: Optional[float] = Field(None, description="Confidence score (0.0-1.0)")
+    error: Optional[str] = Field(None, description="Error message if failed")
+
+
+class ReasoningHealthResponse(BaseModel):
+    """Response model for reasoning health check."""
+
+    status: str = Field(..., description="Reasoning model status")
+    model_loaded: bool = Field(..., description="Whether the reasoning model is loaded")
+    model_info: Dict[str, Any] = Field(..., description="Reasoning model information")
+
+
 # Lifespan context manager for startup/shutdown
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -182,6 +259,10 @@ async def root():
             "/": "Server information",
             "/health": "Health check endpoint",
             "/analyze": "Screenshot analysis endpoint (POST)",
+            "/summarize": "Activity summarization endpoint (POST)",
+            "/classify": "Activity classification endpoint (POST)",
+            "/reasoning/health": "Reasoning model health check (GET)",
+            "/reasoning/info": "Reasoning model info (GET)",
             "/shutdown": "Graceful shutdown endpoint (POST)"
         }
     )
@@ -251,6 +332,117 @@ async def analyze(request: AnalyzeRequest):
             status_code=500,
             detail=f"Unexpected error: {str(e)}"
         )
+
+
+# Reasoning Endpoints
+@app.post("/summarize", response_model=SummarizeResponse)
+async def summarize(request: SummarizeRequest):
+    """
+    Summarize multiple activity descriptions into a cohesive narrative.
+
+    Args:
+        request: SummarizeRequest with list of descriptions
+
+    Returns:
+        SummarizeResponse: Generated summary
+    """
+    try:
+        logger.info(f"Received summarization request with {len(request.descriptions)} descriptions")
+
+        result = summarize_activities(
+            descriptions=request.descriptions,
+            app_names=request.app_names
+        )
+
+        if not result["success"]:
+            logger.error(f"Summarization failed: {result.get('error', 'Unknown error')}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Summarization failed: {result.get('error', 'Unknown error')}"
+            )
+
+        logger.info("Summarization completed successfully")
+        return SummarizeResponse(**result)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error during summarization: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Unexpected error: {str(e)}"
+        )
+
+
+@app.post("/classify", response_model=ClassifyResponse)
+async def classify(request: ClassifyRequest):
+    """
+    Classify an activity to one of the provided options.
+
+    Args:
+        request: ClassifyRequest with description and options
+
+    Returns:
+        ClassifyResponse: Selected classification with confidence
+    """
+    try:
+        logger.info(f"Received classification request with {len(request.options)} options")
+
+        # Convert Pydantic models to dicts for the reasoning module
+        options_dicts = [{"id": opt.id, "name": opt.name} for opt in request.options]
+
+        result = classify_activity(
+            description=request.description,
+            options=options_dicts,
+            context=request.context or ""
+        )
+
+        if not result["success"]:
+            logger.error(f"Classification failed: {result.get('error', 'Unknown error')}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Classification failed: {result.get('error', 'Unknown error')}"
+            )
+
+        logger.info("Classification completed successfully")
+        return ClassifyResponse(**result)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error during classification: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Unexpected error: {str(e)}"
+        )
+
+
+@app.get("/reasoning/health", response_model=ReasoningHealthResponse)
+async def reasoning_health():
+    """
+    Health check endpoint for the reasoning model.
+
+    Returns:
+        ReasoningHealthResponse: Reasoning model health status
+    """
+    model_info = get_reasoning_model_info()
+
+    return ReasoningHealthResponse(
+        status="healthy" if model_info["loaded"] else "model_not_loaded",
+        model_loaded=model_info["loaded"],
+        model_info=model_info
+    )
+
+
+@app.get("/reasoning/info")
+async def reasoning_info():
+    """
+    Get information about the reasoning model.
+
+    Returns:
+        Dict with reasoning model details
+    """
+    return get_reasoning_model_info()
 
 
 @app.post("/shutdown")

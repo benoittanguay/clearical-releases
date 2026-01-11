@@ -232,16 +232,82 @@ ipcMain.handle('capture-screenshot', async () => {
                 const execAsync = promisify(exec);
 
                 // Get active app name, window title, and bundle ID
+                // Enhanced to handle empty titles, missing values, and apps with no windows
+                // Uses multiple strategies for Electron apps (Cursor, VS Code, etc.) which may not expose window titles via standard API
                 const result = await execAsync(`osascript -e '
                     tell application "System Events"
                         set frontApp to first application process whose frontmost is true
                         set appName to name of frontApp
                         set bundleId to bundle identifier of frontApp
+                        set windowTitle to ""
+
+                        -- Strategy 1: Try to get title from front window (standard approach)
+                        set windowCount to 0
                         try
-                            set windowTitle to title of front window of frontApp
-                        on error
-                            set windowTitle to "(No window title available)"
+                            set windowCount to count of windows of frontApp
                         end try
+
+                        if windowCount > 0 then
+                            try
+                                set windowTitle to title of front window of frontApp
+                                if windowTitle is missing value then
+                                    set windowTitle to ""
+                                end if
+                            on error
+                                set windowTitle to ""
+                            end try
+                        end if
+
+                        -- Strategy 2: For Electron apps, try AXTitle from UI elements
+                        -- Electron apps often have the title in a different accessibility element
+                        if windowTitle is "" then
+                            try
+                                set uiElements to UI elements of frontApp
+                                repeat with elem in uiElements
+                                    try
+                                        set elemRole to role of elem
+                                        if elemRole is "AXWindow" then
+                                            set axTitle to value of attribute "AXTitle" of elem
+                                            if axTitle is not missing value and axTitle is not "" then
+                                                set windowTitle to axTitle
+                                                exit repeat
+                                            end if
+                                        end if
+                                    end try
+                                end repeat
+                            end try
+                        end if
+
+                        -- Strategy 3: Try getting title from the first window directly via AXTitle attribute
+                        if windowTitle is "" and windowCount > 0 then
+                            try
+                                set firstWindow to window 1 of frontApp
+                                set axTitle to value of attribute "AXTitle" of firstWindow
+                                if axTitle is not missing value and axTitle is not "" then
+                                    set windowTitle to axTitle
+                                end if
+                            end try
+                        end if
+
+                        -- Strategy 4: For Electron apps, the document title is sometimes in AXDocument
+                        if windowTitle is "" then
+                            try
+                                set firstWindow to window 1 of frontApp
+                                set docTitle to value of attribute "AXDocument" of firstWindow
+                                if docTitle is not missing value and docTitle is not "" then
+                                    -- Extract filename from path if it looks like a path
+                                    if docTitle contains "/" then
+                                        set AppleScript'"'"'s text item delimiters to "/"
+                                        set pathParts to text items of docTitle
+                                        set windowTitle to last item of pathParts
+                                        set AppleScript'"'"'s text item delimiters to ""
+                                    else
+                                        set windowTitle to docTitle
+                                    end if
+                                end if
+                            end try
+                        end if
+
                         return appName & "|||" & windowTitle & "|||" & bundleId
                     end tell
                 '`);
@@ -1448,16 +1514,79 @@ ipcMain.handle('get-active-window', async () => {
             const execAsync = promisify(exec);
 
             // Get app name, window title, and bundle ID in a single AppleScript call to avoid race conditions
+            // Enhanced with multiple strategies for Electron apps (Cursor, VS Code, etc.)
             const result = await execAsync(`osascript -e '
                 tell application "System Events"
                     set frontApp to first application process whose frontmost is true
                     set appName to name of frontApp
                     set bundleId to bundle identifier of frontApp
+                    set windowTitle to ""
+
+                    -- Strategy 1: Try to get title from front window (standard approach)
+                    set windowCount to 0
                     try
-                        set windowTitle to title of front window of frontApp
-                    on error
-                        set windowTitle to "(No window title available)"
+                        set windowCount to count of windows of frontApp
                     end try
+
+                    if windowCount > 0 then
+                        try
+                            set windowTitle to title of front window of frontApp
+                            if windowTitle is missing value then
+                                set windowTitle to ""
+                            end if
+                        on error
+                            set windowTitle to ""
+                        end try
+                    end if
+
+                    -- Strategy 2: For Electron apps, try AXTitle from UI elements
+                    if windowTitle is "" then
+                        try
+                            set uiElements to UI elements of frontApp
+                            repeat with elem in uiElements
+                                try
+                                    set elemRole to role of elem
+                                    if elemRole is "AXWindow" then
+                                        set axTitle to value of attribute "AXTitle" of elem
+                                        if axTitle is not missing value and axTitle is not "" then
+                                            set windowTitle to axTitle
+                                            exit repeat
+                                        end if
+                                    end if
+                                end try
+                            end repeat
+                        end try
+                    end if
+
+                    -- Strategy 3: Try AXTitle attribute directly on first window
+                    if windowTitle is "" and windowCount > 0 then
+                        try
+                            set firstWindow to window 1 of frontApp
+                            set axTitle to value of attribute "AXTitle" of firstWindow
+                            if axTitle is not missing value and axTitle is not "" then
+                                set windowTitle to axTitle
+                            end if
+                        end try
+                    end if
+
+                    -- Strategy 4: For Electron apps, try AXDocument attribute
+                    if windowTitle is "" then
+                        try
+                            set firstWindow to window 1 of frontApp
+                            set docTitle to value of attribute "AXDocument" of firstWindow
+                            if docTitle is not missing value and docTitle is not "" then
+                                if docTitle contains "/" then
+                                    set AppleScript'"'"'s text item delimiters to "/"
+                                    set pathParts to text items of docTitle
+                                    set windowTitle to last item of pathParts
+                                    set AppleScript'"'"'s text item delimiters to ""
+                                else
+                                    set windowTitle to docTitle
+                                end if
+                            end if
+                        end try
+                    end if
+
                     return appName & "|||" & windowTitle & "|||" & bundleId
                 end tell
             '`);
@@ -2397,6 +2526,71 @@ ipcMain.handle('db:set-jira-cache-meta', async (event, key: string, data: any, q
     }
 });
 
+// Tempo Cache Metadata
+ipcMain.handle('db:get-tempo-cache-meta', async (event, key: string) => {
+    try {
+        const db = DatabaseService.getInstance();
+        return { success: true, data: db.getTempoCacheMeta(key) };
+    } catch (error) {
+        console.error('[Main] db:get-tempo-cache-meta failed:', error);
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error', data: null };
+    }
+});
+
+ipcMain.handle('db:set-tempo-cache-meta', async (event, key: string, data: any, query?: string) => {
+    try {
+        const db = DatabaseService.getInstance();
+        db.setTempoCacheMeta(key, data, query);
+        return { success: true };
+    } catch (error) {
+        console.error('[Main] db:set-tempo-cache-meta failed:', error);
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+});
+
+// Tempo Accounts Cache
+ipcMain.handle('db:upsert-tempo-account', async (event, account: any) => {
+    try {
+        const db = DatabaseService.getInstance();
+        db.upsertTempoAccount(account);
+        return { success: true };
+    } catch (error) {
+        console.error('[Main] db:upsert-tempo-account failed:', error);
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+});
+
+ipcMain.handle('db:get-all-tempo-accounts', async () => {
+    try {
+        const db = DatabaseService.getInstance();
+        return { success: true, data: db.getAllTempoAccounts() };
+    } catch (error) {
+        console.error('[Main] db:get-all-tempo-accounts failed:', error);
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error', data: [] };
+    }
+});
+
+ipcMain.handle('db:get-tempo-accounts-by-status', async (event, status: string) => {
+    try {
+        const db = DatabaseService.getInstance();
+        return { success: true, data: db.getTempoAccountsByStatus(status) };
+    } catch (error) {
+        console.error('[Main] db:get-tempo-accounts-by-status failed:', error);
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error', data: [] };
+    }
+});
+
+ipcMain.handle('db:clear-tempo-cache', async () => {
+    try {
+        const db = DatabaseService.getInstance();
+        db.clearTempoCache();
+        return { success: true };
+    } catch (error) {
+        console.error('[Main] db:clear-tempo-cache failed:', error);
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+});
+
 // ========================================================================
 // AUTO-UPDATE IPC HANDLERS
 // ========================================================================
@@ -2735,6 +2929,76 @@ ipcMain.handle('get-app-icon-base64', async (_event, iconPath: string) => {
         return {
             success: false,
             error: error instanceof Error ? error.message : 'Unknown error'
+        };
+    }
+});
+
+// ========================================================================
+// TEMPO ACCOUNT BLACKLIST IPC HANDLERS
+// ========================================================================
+
+// Get all blacklisted Tempo accounts
+ipcMain.handle('get-blacklisted-tempo-accounts', async () => {
+    console.log('[Main] get-blacklisted-tempo-accounts requested');
+    try {
+        const dbService = DatabaseService.getInstance();
+        const accounts = dbService.getAllBlacklistedTempoAccounts();
+        return { success: true, data: accounts };
+    } catch (error) {
+        console.error('[Main] get-blacklisted-tempo-accounts failed:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error',
+            data: []
+        };
+    }
+});
+
+// Add Tempo account to blacklist
+ipcMain.handle('add-blacklisted-tempo-account', async (event, accountKey: string, accountId: string, name: string) => {
+    console.log('[Main] add-blacklisted-tempo-account requested:', { accountKey, accountId, name });
+    try {
+        const dbService = DatabaseService.getInstance();
+        dbService.addBlacklistedTempoAccount(accountKey, accountId, name);
+        return { success: true };
+    } catch (error) {
+        console.error('[Main] add-blacklisted-tempo-account failed:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error'
+        };
+    }
+});
+
+// Remove Tempo account from blacklist
+ipcMain.handle('remove-blacklisted-tempo-account', async (event, accountKey: string) => {
+    console.log('[Main] remove-blacklisted-tempo-account requested:', accountKey);
+    try {
+        const dbService = DatabaseService.getInstance();
+        dbService.removeBlacklistedTempoAccount(accountKey);
+        return { success: true };
+    } catch (error) {
+        console.error('[Main] remove-blacklisted-tempo-account failed:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error'
+        };
+    }
+});
+
+// Check if Tempo account is blacklisted
+ipcMain.handle('is-tempo-account-blacklisted', async (event, accountKey: string) => {
+    console.log('[Main] is-tempo-account-blacklisted requested:', accountKey);
+    try {
+        const dbService = DatabaseService.getInstance();
+        const isBlacklisted = dbService.isTempoAccountBlacklisted(accountKey);
+        return { success: true, isBlacklisted };
+    } catch (error) {
+        console.error('[Main] is-tempo-account-blacklisted failed:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error',
+            isBlacklisted: false
         };
     }
 });

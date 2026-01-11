@@ -3,7 +3,9 @@
 PyInstaller Spec File for FastVLM Server
 
 This spec file configures PyInstaller to create a standalone macOS executable
-that bundles the FastVLM server with all dependencies and the nanoLLaVA model.
+that bundles the FastVLM server with all dependencies and the models:
+- nanoLLaVA-1.5-4bit (quantized vision-language model)
+- Qwen3-0.6B-4bit (quantized reasoning model)
 
 Build command:
     pyinstaller python/fastvlm.spec
@@ -20,27 +22,50 @@ from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 # Get the directory containing this spec file
 spec_dir = Path(SPECPATH)
 
-# Model directory (relative to spec file)
-model_dir = spec_dir / "models" / "nanoLLaVA"
+# Model directories (relative to spec file)
+vlm_model_dir = spec_dir / "models" / "nanoLLaVA-1.5-4bit"
+reasoning_model_dir = spec_dir / "models" / "Qwen3-0.6B-4bit"
 
-# Verify model exists
-if not model_dir.exists():
+# Verify VLM model exists
+if not vlm_model_dir.exists():
     print("=" * 60)
-    print("ERROR: Model directory not found!")
-    print(f"Expected location: {model_dir}")
+    print("ERROR: VLM model directory not found!")
+    print(f"Expected location: {vlm_model_dir}")
     print("\nPlease run the download script first:")
     print("  python python/download_model.py")
     print("=" * 60)
     sys.exit(1)
 
-print(f"Building with model from: {model_dir}")
+# Verify reasoning model exists
+if not reasoning_model_dir.exists():
+    print("=" * 60)
+    print("ERROR: Reasoning model directory not found!")
+    print(f"Expected location: {reasoning_model_dir}")
+    print("\nPlease run the download script first:")
+    print("  python python/download_model.py")
+    print("=" * 60)
+    sys.exit(1)
 
-# Collect all model files
+print(f"Building with VLM model from: {vlm_model_dir}")
+print(f"Building with reasoning model from: {reasoning_model_dir}")
+
+# Collect all model files from both models
 model_data = []
-for item in model_dir.rglob("*"):
+
+# Collect VLM model files
+for item in vlm_model_dir.rglob("*"):
     if item.is_file():
         # Get relative path from model_dir
-        rel_path = item.relative_to(model_dir.parent)
+        rel_path = item.relative_to(vlm_model_dir.parent)
+        # Add to data files (source, destination)
+        model_data.append((str(item), str(rel_path.parent)))
+        print(f"  Including: {rel_path}")
+
+# Collect reasoning model files
+for item in reasoning_model_dir.rglob("*"):
+    if item.is_file():
+        # Get relative path from model_dir
+        rel_path = item.relative_to(reasoning_model_dir.parent)
         # Add to data files (source, destination)
         model_data.append((str(item), str(rel_path.parent)))
         print(f"  Including: {rel_path}")
@@ -78,6 +103,7 @@ hiddenimports += [
     'pydantic.deprecated.decorator',
     'pydantic.json_schema',
     'pydantic_core',
+    'reasoning',  # Local reasoning module for Qwen3 model
 ]
 
 # Analysis step - scan all Python dependencies

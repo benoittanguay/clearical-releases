@@ -4,7 +4,7 @@ FastVLM Server Build Script
 
 This script builds a standalone macOS executable of the FastVLM server
 using PyInstaller. It bundles the server code, all dependencies, and
-the nanoLLaVA model into a single-folder distribution.
+the models (nanoLLaVA-1.5-4bit and Qwen3-0.6B-4bit) into a single-folder distribution.
 
 Prerequisites:
     1. Run download_model.py first to download the model
@@ -81,37 +81,56 @@ def check_prerequisites():
         except ImportError:
             errors.append(f"{install_name} not installed. Install with: pip install {install_name}")
 
-    # 4. Check for model directory
-    model_dir = script_dir / "models" / "nanoLLaVA"
-    if not model_dir.exists():
+    # 4. Check for VLM model directory (nanoLLaVA-1.5-4bit)
+    vlm_model_dir = script_dir / "models" / "nanoLLaVA-1.5-4bit"
+    if not vlm_model_dir.exists():
         errors.append(
-            f"Model directory not found: {model_dir}\n"
+            f"VLM model directory not found: {vlm_model_dir}\n"
             "    Run: python download_model.py"
         )
     else:
         # Check model size
-        total_size = sum(f.stat().st_size for f in model_dir.rglob('*') if f.is_file())
+        total_size = sum(f.stat().st_size for f in vlm_model_dir.rglob('*') if f.is_file())
         size_mb = total_size / (1024 * 1024)
-        logger.info(f"  Model directory: {model_dir} ({size_mb:.1f} MB)")
+        logger.info(f"  VLM model directory: {vlm_model_dir} ({size_mb:.1f} MB)")
 
         # Check for required model files (nanoLLaVA doesn't include preprocessor_config.json)
         required_files = ['config.json']
         for file in required_files:
-            if not (model_dir / file).exists():
-                warnings.append(f"Model file missing: {file}")
+            if not (vlm_model_dir / file).exists():
+                warnings.append(f"VLM model file missing: {file}")
 
-    # 5. Check for spec file
+    # 5. Check for reasoning model directory (Qwen3-0.6B-4bit)
+    reasoning_model_dir = script_dir / "models" / "Qwen3-0.6B-4bit"
+    if not reasoning_model_dir.exists():
+        errors.append(
+            f"Reasoning model directory not found: {reasoning_model_dir}\n"
+            "    Run: python download_model.py"
+        )
+    else:
+        # Check model size
+        total_size = sum(f.stat().st_size for f in reasoning_model_dir.rglob('*') if f.is_file())
+        size_mb = total_size / (1024 * 1024)
+        logger.info(f"  Reasoning model directory: {reasoning_model_dir} ({size_mb:.1f} MB)")
+
+        # Check for required model files
+        required_files = ['config.json']
+        for file in required_files:
+            if not (reasoning_model_dir / file).exists():
+                warnings.append(f"Reasoning model file missing: {file}")
+
+    # 6. Check for spec file
     spec_file = script_dir / "fastvlm.spec"
     if not spec_file.exists():
         errors.append(f"PyInstaller spec file not found: {spec_file}")
     else:
         logger.info(f"  Spec file: {spec_file}")
 
-    # 6. Check platform
+    # 7. Check platform
     if sys.platform != 'darwin':
         warnings.append(f"This build is designed for macOS, but running on: {sys.platform}")
 
-    # 7. Check architecture
+    # 8. Check architecture
     import platform
     arch = platform.machine()
     logger.info(f"  Architecture: {arch}")
@@ -252,14 +271,23 @@ def verify_build():
     logger.info(f"  Executable: {executable}")
     logger.info(f"  Total size: {size_mb:.1f} MB")
 
-    # Check for bundled model
-    bundled_model = dist_dir / "models" / "nanoLLaVA"
-    if bundled_model.exists():
-        model_files = list(bundled_model.rglob('*'))
-        logger.info(f"  Bundled model: {bundled_model} ({len(model_files)} files)")
+    # Check for bundled VLM model (PyInstaller puts data in _internal/)
+    bundled_vlm_model = dist_dir / "_internal" / "nanoLLaVA-1.5-4bit"
+    if bundled_vlm_model.exists():
+        model_files = list(bundled_vlm_model.rglob('*'))
+        logger.info(f"  Bundled VLM model: {bundled_vlm_model} ({len(model_files)} files)")
     else:
-        logger.warning(f"  Bundled model not found: {bundled_model}")
-        logger.warning("  Model will need to be downloaded on first run")
+        logger.warning(f"  Bundled VLM model not found: {bundled_vlm_model}")
+        logger.warning("  VLM model will need to be downloaded on first run")
+
+    # Check for bundled reasoning model (PyInstaller puts data in _internal/)
+    bundled_reasoning_model = dist_dir / "_internal" / "Qwen3-0.6B-4bit"
+    if bundled_reasoning_model.exists():
+        model_files = list(bundled_reasoning_model.rglob('*'))
+        logger.info(f"  Bundled reasoning model: {bundled_reasoning_model} ({len(model_files)} files)")
+    else:
+        logger.warning(f"  Bundled reasoning model not found: {bundled_reasoning_model}")
+        logger.warning("  Reasoning model will need to be downloaded on first run")
 
     logger.info("Build verification passed")
     return True
