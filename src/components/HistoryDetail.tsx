@@ -75,7 +75,7 @@ interface AppGroup {
 }
 
 export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSettings, formatTime }: HistoryDetailProps) {
-    const { removeActivityFromEntry, removeAllActivitiesForApp, removeScreenshotFromEntry, addManualActivityToEntry, setEntryAssignment, entries } = useStorage();
+    const { removeActivityFromEntry, removeAllActivitiesForApp, removeScreenshotFromEntry, addManualActivityToEntry, setEntryAssignment, createEntryFromActivity, entries } = useStorage();
     const { settings } = useSettings();
     const { hasFeature } = useSubscription();
     const { showToast } = useToast();
@@ -472,6 +472,39 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
             });
         }
         // If activities remain but no screenshots, keep the existing description
+    };
+
+    const handleCreateEntryFromActivity = async (activityIndex: number) => {
+        const activity = entry.windowActivity?.[activityIndex];
+        if (!activity) return;
+
+        const activityTitle = activity.appName === 'Manual Entry' ? activity.windowTitle : getWindowTitle(activity);
+
+        try {
+            const newEntryId = await createEntryFromActivity(entry.id, activityIndex);
+
+            if (newEntryId) {
+                showToast({
+                    type: 'success',
+                    title: 'Entry Created',
+                    message: `Created new entry from "${activityTitle}"`,
+                    duration: 3000
+                });
+
+                // Navigate back to reload the entries list with the new entry
+                onBack();
+            } else {
+                throw new Error('Failed to create entry');
+            }
+        } catch (error) {
+            console.error('Failed to create entry from activity:', error);
+            showToast({
+                type: 'error',
+                title: 'Creation Failed',
+                message: `Failed to create entry from "${activityTitle}"`,
+                duration: 5000
+            });
+        }
     };
 
     const handleDeleteApp = async (appName: string) => {
@@ -1241,12 +1274,28 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                                                             <div className="font-mono text-green-400 font-semibold text-sm">
                                                                 {formatTime(activity.duration)}
                                                             </div>
-                                                            <DeleteButton
-                                                                onDelete={() => handleDeleteActivity(group.activities.findIndex(act => 
-                                                                    act.timestamp === activity.timestamp && 
-                                                                    act.appName === activity.appName && 
+                                                            <button
+                                                                onClick={() => handleCreateEntryFromActivity(entry.windowActivity?.findIndex(act =>
+                                                                    act.timestamp === activity.timestamp &&
+                                                                    act.appName === activity.appName &&
                                                                     act.windowTitle === activity.windowTitle
-                                                                ))}
+                                                                ) ?? -1)}
+                                                                className="p-1.5 hover:bg-blue-500/20 active:bg-blue-500/30 rounded text-blue-400 hover:text-blue-300 active:text-blue-200 transition-all active:scale-95"
+                                                                style={{ transitionDuration: 'var(--duration-fast)', transitionTimingFunction: 'var(--ease-out)' }}
+                                                                title="Create new entry from this activity"
+                                                            >
+                                                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                                                    <polyline points="7 10 12 15 17 10" />
+                                                                    <line x1="12" y1="15" x2="12" y2="3" />
+                                                                </svg>
+                                                            </button>
+                                                            <DeleteButton
+                                                                onDelete={() => handleDeleteActivity(entry.windowActivity?.findIndex(act =>
+                                                                    act.timestamp === activity.timestamp &&
+                                                                    act.appName === activity.appName &&
+                                                                    act.windowTitle === activity.windowTitle
+                                                                ) ?? -1)}
                                                                 confirmMessage="Delete this activity?"
                                                                 size="sm"
                                                                 variant="subtle"

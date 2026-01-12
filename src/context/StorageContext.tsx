@@ -39,6 +39,7 @@ interface StorageContextType {
     removeAllActivitiesForApp: (entryId: string, appName: string) => void;
     removeScreenshotFromEntry: (screenshotPath: string) => void;
     addManualActivityToEntry: (entryId: string, description: string, duration: number) => void;
+    createEntryFromActivity: (sourceEntryId: string, activityIndex: number) => Promise<string | null>;
 }
 
 const StorageContext = createContext<StorageContextType | undefined>(undefined);
@@ -465,6 +466,74 @@ export const StorageProvider: React.FC<{ children: React.ReactNode }> = ({ child
         }
     };
 
+    /**
+     * Create a new TimeEntry from an existing activity and remove it from the source entry.
+     * This allows users to split an activity into its own separate worklog entry.
+     *
+     * @param sourceEntryId - The ID of the entry containing the activity
+     * @param activityIndex - The index of the activity in the windowActivity array
+     * @returns The ID of the newly created entry, or null if failed
+     */
+    const createEntryFromActivity = async (sourceEntryId: string, activityIndex: number): Promise<string | null> => {
+        const sourceEntry = entries.find(e => e.id === sourceEntryId);
+        if (!sourceEntry || !sourceEntry.windowActivity || !sourceEntry.windowActivity[activityIndex]) {
+            console.error('[StorageContext] Cannot create entry from activity: source entry or activity not found');
+            return null;
+        }
+
+        const activity = sourceEntry.windowActivity[activityIndex];
+
+        // Create new entry with this activity
+        const newEntryId = crypto.randomUUID();
+
+        const newEntry: TimeEntry = {
+            id: newEntryId,
+            startTime: activity.timestamp,
+            endTime: activity.timestamp + activity.duration,
+            duration: activity.duration,
+            windowActivity: [activity],
+            // Don't copy assignment - let user set it
+            // Don't copy description - let user set it or generate
+        };
+
+        // Insert new entry to database
+        const insertResult = await window.electron.ipcRenderer.db.insertEntry(newEntry);
+        if (!insertResult.success) {
+            console.error('[StorageContext] Failed to insert new entry from activity');
+            return null;
+        }
+
+        // Remove activity from source entry
+        const updatedSourceActivity = [...sourceEntry.windowActivity];
+        updatedSourceActivity.splice(activityIndex, 1);
+
+        // Recalculate source entry duration
+        const newSourceDuration = updatedSourceActivity.reduce((sum, act) => sum + act.duration, 0);
+
+        const sourceUpdates = {
+            windowActivity: updatedSourceActivity,
+            duration: newSourceDuration
+        };
+
+        const updateResult = await window.electron.ipcRenderer.db.updateEntry(sourceEntryId, sourceUpdates);
+        if (!updateResult.success) {
+            console.error('[StorageContext] Failed to update source entry after removing activity');
+            // Note: New entry was already created - we could try to delete it, but leaving it is safer
+        }
+
+        // Update local state
+        setEntries(prevEntries => {
+            // Add new entry and update source entry
+            const updated = prevEntries.map(e =>
+                e.id === sourceEntryId ? { ...e, ...sourceUpdates } : e
+            );
+            return [...updated, newEntry];
+        });
+
+        console.log(`[StorageContext] Created new entry ${newEntryId} from activity in ${sourceEntryId}`);
+        return newEntryId;
+    };
+
     return (
         <StorageContext.Provider value={{
             buckets,
@@ -488,7 +557,8 @@ export const StorageProvider: React.FC<{ children: React.ReactNode }> = ({ child
             removeActivityFromEntry,
             removeAllActivitiesForApp,
             removeScreenshotFromEntry,
-            addManualActivityToEntry
+            addManualActivityToEntry,
+            createEntryFromActivity
         }}>
             {children}
         </StorageContext.Provider>
