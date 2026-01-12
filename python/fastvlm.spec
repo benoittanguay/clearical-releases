@@ -106,6 +106,7 @@ hiddenimports += [
     'pydantic.json_schema',
     'pydantic_core',
     'reasoning',  # Local reasoning module for Qwen2.5 model
+    'image_preprocessing',  # Local module for screenshot border removal
     'mlx_lm.models.qwen2',  # Explicitly include qwen2 model support
     'mlx_lm.models.base',
     'mlx_lm.utils',

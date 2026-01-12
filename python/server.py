@@ -93,6 +93,10 @@ class AnalyzeRequest(BaseModel):
         le=2.0,
         description="Sampling temperature (0.0-2.0)"
     )
+    preprocess: bool = Field(
+        True,
+        description="Whether to auto-crop black borders from the image (default: True)"
+    )
 
     @validator('image_path', 'image_base64')
     def check_at_least_one_image(cls, v, values):
@@ -122,6 +126,10 @@ class AnalyzeResponse(BaseModel):
     error: Optional[str] = Field(
         None,
         description="Error message if analysis failed"
+    )
+    preprocessed: Optional[bool] = Field(
+        None,
+        description="Whether the image was preprocessed (cropped)"
     )
 
 
@@ -333,7 +341,8 @@ async def analyze(request: AnalyzeRequest):
             window_title=request.window_title,
             prompt=request.prompt,
             max_tokens=request.max_tokens,
-            temperature=request.temperature
+            temperature=request.temperature,
+            preprocess=request.preprocess
         )
 
         # Check if analysis was successful

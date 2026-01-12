@@ -12,6 +12,10 @@ mlx-vlm>=0.0.9
 # Model download and management
 huggingface_hub>=0.20.0
 
+# Image preprocessing
+Pillow>=10.0.0
+numpy>=1.24.0
+
 # Build dependencies
 pyinstaller>=6.0.0
 

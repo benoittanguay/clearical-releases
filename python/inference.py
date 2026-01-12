@@ -34,16 +34,21 @@ DEFAULT_PROMPT = """<image>
 App: {app_name}
 Window: {window_title}
 
-Analyze this screenshot and provide a detailed description of what the user is working on.
+Describe what work is being done in this screenshot. Be specific and concise (2-3 sentences maximum).
 
-Describe in 3-5 sentences:
-1. The specific task or goal the user is focused on
-2. Visible content details: code snippets, text, file names, error messages, or document content
-3. UI elements and layout: panels, tabs, toolbars, terminal windows, or sidebars visible
-4. The current action: writing, reading, debugging, designing, browsing, communicating, etc.
-5. Any identifiable project, technology, or topic being worked on
+What to include:
+- The specific file, document, or webpage name visible in tabs or title bars
+- Specific content you can read: function names, class names, error messages, document sections, data being edited
+- The specific task: editing code, reviewing documents, debugging errors, designing UI, analyzing data, etc.
 
-Be specific about what you can actually see on screen. Include visible file paths, function names, variable names, error text, or other readable content when present. Describe the visual layout and which areas of the screen contain what information."""
+What to avoid:
+- Generic phrases like "working on a project", "code snippets", "development process"
+- Vague descriptions that apply to any screenshot
+- Listing UI elements unless directly relevant to the task
+
+Example good output: "Editing the ScreenshotAnalyzer.swift file in Xcode. Working on the processScreenshot() function that handles image compression. Several build warnings visible in the issues navigator."
+
+Example bad output: "The user is working on a project using code. There are various UI elements visible including panels and toolbars. The specific task is not clear from this image."
 
 
 def get_model_path() -> str:
@@ -210,7 +215,8 @@ def analyze_screenshot(
     app_name: Optional[str] = None,
     window_title: Optional[str] = None,
     max_tokens: int = 400,
-    temperature: float = 0.7
+    temperature: float = 0.7,
+    preprocess: bool = True
 ) -> Dict[str, Any]:
     """
     Analyze a screenshot and generate a description.
@@ -223,6 +229,7 @@ def analyze_screenshot(
         window_title: Title of the window being captured (optional)
         max_tokens: Maximum tokens to generate (default: 400)
         temperature: Sampling temperature (default: 0.7)
+        preprocess: Whether to auto-crop black borders (default: True)
 
     Returns:
         Dict containing:
@@ -230,6 +237,7 @@ def analyze_screenshot(
             - confidence: Confidence score (0.0-1.0)
             - success: Boolean indicating success
             - error: Error message if failed (optional)
+            - preprocessed: Whether the image was preprocessed (optional)
 
     Raises:
         ValueError: If neither image_path nor image_base64 is provided
@@ -255,6 +263,10 @@ def analyze_screenshot(
         if '<image>' not in prompt:
             prompt = f'<image>\n{prompt}'
 
+    # Track temporary files for cleanup
+    temp_files_to_cleanup = []
+    was_preprocessed = False
+
     try:
         # Load model (uses cache if already loaded)
         model, processor = load_model()
@@ -275,8 +287,30 @@ def analyze_screenshot(
             with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp:
                 tmp.write(img_data)
                 image_source = tmp.name
+                temp_files_to_cleanup.append(image_source)
 
             logger.info("Analyzing image from base64 data")
+
+        # Preprocess image to remove black borders
+        if preprocess:
+            try:
+                from image_preprocessing import preprocess_screenshot
+                logger.info("Preprocessing image to remove black borders...")
+                processed_path, was_cropped = preprocess_screenshot(image_source)
+
+                if was_cropped:
+                    logger.info("Image was cropped to remove borders")
+                    # Add the temp file to cleanup list
+                    temp_files_to_cleanup.append(processed_path)
+                    image_source = processed_path
+                    was_preprocessed = True
+                else:
+                    logger.info("No significant borders detected, using original image")
+
+            except ImportError as e:
+                logger.warning(f"Preprocessing not available (missing dependencies): {e}")
+            except Exception as e:
+                logger.warning(f"Preprocessing failed, using original image: {e}")
 
         # Run inference
         # nanoLLaVA uses a ChatML-style format. The prompt should already contain <image>
@@ -316,13 +350,6 @@ def analyze_screenshot(
             verbose=False
         )
 
-        # Clean up temporary file if we created one
-        if image_path is None:
-            try:
-                Path(image_source).unlink()
-            except:
-                pass
-
         # Extract description from output
         # mlx-vlm returns a string that includes the prompt + generated text
         # We need to extract only the generated portion after the prompt
@@ -355,11 +382,16 @@ def analyze_screenshot(
         logger.info(f"Generated description: {description[:100]}...")
         logger.info(f"Confidence: {confidence:.2f}")
 
-        return {
+        result = {
             "description": description,
             "confidence": round(confidence, 2),
             "success": True
         }
+
+        if was_preprocessed:
+            result["preprocessed"] = True
+
+        return result
 
     except Exception as e:
         logger.error(f"Screenshot analysis failed: {str(e)}", exc_info=True)
@@ -369,6 +401,13 @@ def analyze_screenshot(
             "success": False,
             "error": str(e)
         }
+    finally:
+        # Clean up all temporary files
+        for temp_file in temp_files_to_cleanup:
+            try:
+                Path(temp_file).unlink()
+            except Exception as cleanup_error:
+                logger.warning(f"Failed to cleanup temp file {temp_file}: {cleanup_error}")
 
 
 def get_model_info() -> Dict[str, Any]:
