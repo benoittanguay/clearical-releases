@@ -574,6 +574,350 @@ ipcMain.handle('capture-screenshot', async () => {
     return null;
 });
 
+// Activity Summary Generation with Apple Intelligence
+ipcMain.handle('generate-activity-summary', async (event, context: {
+    screenshotDescriptions: string[];
+    windowTitles: string[];
+    appNames: string[];
+    duration: number;
+    startTime: number;
+    endTime: number;
+}) => {
+    console.log('[Main] generate-activity-summary requested');
+    console.log('[Main] Context:', {
+        descriptionsCount: context.screenshotDescriptions.length,
+        windowTitlesCount: context.windowTitles.length,
+        appNamesCount: context.appNames.length,
+        duration: context.duration
+    });
+
+    if (process.platform !== 'darwin') {
+        console.log('[Main] generate-activity-summary: Not macOS, returning fallback');
+        return {
+            success: false,
+            error: 'AI summary generation only available on macOS',
+            summary: null
+        };
+    }
+
+    // Path to our Swift helper - relative to app root
+    // In development: native/screenshot-analyzer/build/screenshot-analyzer
+    // In production: bundled with the app in resources
+    const helperPath = app.isPackaged
+        ? path.join(process.resourcesPath, 'screenshot-analyzer')
+        : path.join(app.getAppPath(), 'native', 'screenshot-analyzer', 'build', 'screenshot-analyzer');
+
+    // Check if the helper exists
+    if (!fs.existsSync(helperPath)) {
+        console.log('[Main] generate-activity-summary: Swift helper not found at:', helperPath);
+        return {
+            success: false,
+            error: 'Vision Framework helper not built. Run: cd native/screenshot-analyzer && ./build.sh',
+            summary: null
+        };
+    }
+
+    try {
+        // Build a comprehensive context string for analysis
+        const durationMinutes = Math.round(context.duration / 1000 / 60);
+        const startDate = new Date(context.startTime);
+        const endDate = new Date(context.endTime);
+
+        // Create a text-based context that simulates what we'd extract from screenshots
+        const contextLines: string[] = [];
+
+        // Add temporal context
+        contextLines.push(`Time Session: ${startDate.toLocaleTimeString()} - ${endDate.toLocaleTimeString()}`);
+        contextLines.push(`Duration: ${durationMinutes} minutes`);
+        contextLines.push('');
+
+        // Add app context
+        if (context.appNames.length > 0) {
+            contextLines.push('Applications Used:');
+            context.appNames.forEach(app => contextLines.push(`- ${app}`));
+            contextLines.push('');
+        }
+
+        // Add window titles context
+        if (context.windowTitles.length > 0) {
+            contextLines.push('Window Titles:');
+            context.windowTitles.forEach(title => contextLines.push(`- ${title}`));
+            contextLines.push('');
+        }
+
+        // Add screenshot analysis context
+        if (context.screenshotDescriptions.length > 0) {
+            contextLines.push('Activity Analysis from Screenshots:');
+            context.screenshotDescriptions.forEach((desc, idx) => {
+                contextLines.push(`${idx + 1}. ${desc}`);
+            });
+        }
+
+        const fullContext = contextLines.join('\n');
+
+        // Create a summarization prompt
+        const summarizationRequest = {
+            mode: 'summarize',
+            context: fullContext,
+            appNames: context.appNames,
+            windowTitles: context.windowTitles,
+            screenshotDescriptions: context.screenshotDescriptions,
+            duration: context.duration
+        };
+
+        console.log('[Main] Generating summary with context length:', fullContext.length);
+
+        // For now, we'll create a simple heuristic-based summary since we're using text-only
+        // In a future iteration, this could call a local LLM or use more sophisticated analysis
+        const result = generateTextBasedSummary(context);
+
+        console.log('[Main] generate-activity-summary success:', result.summary.substring(0, 100) + '...');
+        console.log('[Main] Detected activities:', result.metadata.detectedActivities);
+        console.log('[Main] Detected technologies:', result.metadata.detectedTechnologies);
+
+        return {
+            success: true,
+            summary: result.summary,
+            metadata: result.metadata,
+            error: null
+        };
+
+    } catch (error) {
+        console.error('[Main] generate-activity-summary failed:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error',
+            summary: null
+        };
+    }
+});
+
+/**
+ * Helper function to generate a narrative-focused activity summary
+ *
+ * This function analyzes screenshot descriptions, window titles, and app context
+ * to build a cohesive narrative about what the user worked on. The summary focuses
+ * on the "what" rather than the "how long", creating a work log entry style description.
+ */
+function generateTextBasedSummary(context: {
+    screenshotDescriptions: string[];
+    windowTitles: string[];
+    appNames: string[];
+    duration: number;
+    startTime: number;
+    endTime: number;
+}): { summary: string; metadata: { detectedActivities: string[]; detectedTechnologies: string[]; confidence: number } } {
+
+    // Combine all available text for comprehensive analysis
+    const allText = [
+        ...context.screenshotDescriptions,
+        ...context.windowTitles,
+        ...context.appNames
+    ].join(' ').toLowerCase();
+
+    // Detect primary activities with more granular patterns
+    const activities: string[] = [];
+    const activityPatterns = [
+        { patterns: ['implement', 'build', 'creat', 'develop', 'add', 'writing', 'coding'], label: 'implementing' },
+        { patterns: ['debug', 'fix', 'error', 'troubleshoot', 'resolv'], label: 'debugging' },
+        { patterns: ['refactor', 'restructur', 'reorganiz', 'clean'], label: 'refactoring' },
+        { patterns: ['test', 'qa', 'quality'], label: 'testing' },
+        { patterns: ['document', 'readme', 'comment', 'annotation'], label: 'documenting' },
+        { patterns: ['design', 'ui', 'ux', 'interface', 'layout'], label: 'designing' },
+        { patterns: ['research', 'investigat', 'explor', 'learn'], label: 'researching' },
+        { patterns: ['review', 'audit', 'inspect', 'analyz'], label: 'reviewing' },
+        { patterns: ['deploy', 'release', 'ship', 'publish'], label: 'deploying' },
+        { patterns: ['configur', 'setup', 'install'], label: 'configuring' }
+    ];
+
+    activityPatterns.forEach(({ patterns, label }) => {
+        if (patterns.some(p => allText.includes(p)) && !activities.includes(label)) {
+            activities.push(label);
+        }
+    });
+
+    // Enhanced technology detection with common frameworks and tools
+    const technologies: string[] = [];
+    const techPatterns = [
+        { pattern: /\b(react|reactjs|react\.js)\b/i, name: 'React' },
+        { pattern: /\btypescript\b/i, name: 'TypeScript' },
+        { pattern: /\bjavascript\b/i, name: 'JavaScript' },
+        { pattern: /\belectron\b/i, name: 'Electron' },
+        { pattern: /\b(swift|swiftui)\b/i, name: 'Swift' },
+        { pattern: /\bpython\b/i, name: 'Python' },
+        { pattern: /\b(node|nodejs|node\.js)\b/i, name: 'Node.js' },
+        { pattern: /\b(git|github|gitlab)\b/i, name: 'Git' },
+        { pattern: /\bdocker\b/i, name: 'Docker' },
+        { pattern: /\bjira\b/i, name: 'Jira' },
+        { pattern: /\b(api|rest|graphql)\b/i, name: 'API' },
+        { pattern: /\b(vue|vuejs)\b/i, name: 'Vue' },
+        { pattern: /\bangular\b/i, name: 'Angular' },
+        { pattern: /\b(postgres|postgresql|mysql|mongodb)\b/i, name: 'Database' },
+        { pattern: /\b(aws|azure|gcp|cloud)\b/i, name: 'Cloud' },
+        { pattern: /\b(kubernetes|k8s)\b/i, name: 'Kubernetes' }
+    ];
+
+    techPatterns.forEach(({ pattern, name }) => {
+        if (pattern.test(allText) && !technologies.includes(name)) {
+            technologies.push(name);
+        }
+    });
+
+    // Extract project name from descriptions and window titles
+    let projectName: string | null = null;
+    const projectPatterns = [
+        /\b(timeportal|time[\s-]?portal|clearical)\b/gi,
+        /\bthe\s+([A-Z][a-zA-Z]{3,20})\s+(?:app|application|project|system)\b/g,
+        /\b([A-Z][a-zA-Z]{3,20})\s+(?:application|project)\b/g
+    ];
+
+    for (const pattern of projectPatterns) {
+        const matches = allText.match(pattern);
+        if (matches && matches.length > 0) {
+            const match = matches[0].trim();
+            if (match.toLowerCase().includes('timeportal') || match.toLowerCase().includes('time portal') || match.toLowerCase().includes('clearical')) {
+                projectName = 'Clearical';
+                break;
+            }
+            // Extract project name from pattern captures
+            const cleanMatch = match.replace(/\b(the|app|application|project|system)\b/gi, '').trim();
+            if (cleanMatch.length > 3 && cleanMatch.length < 30) {
+                projectName = cleanMatch.charAt(0).toUpperCase() + cleanMatch.slice(1).toLowerCase();
+                break;
+            }
+        }
+    }
+
+    // Extract file and directory context from descriptions
+    const fileMatches = allText.match(/\b([a-zA-Z0-9_-]+\.(ts|tsx|js|jsx|py|swift|java|go|rs|cpp|c|h|json|yaml|yml))\b/gi);
+    const dirMatches = allText.match(/\b(electron|native|components|services|handlers|api|utils|lib|src)(?:\s+(?:directory|folder|module))?/gi);
+
+    const files = fileMatches ? [...new Set(fileMatches.slice(0, 3))].map(f => f.toLowerCase()) : [];
+    const directories = dirMatches ? [...new Set(dirMatches.slice(0, 2))].map(d =>
+        d.replace(/\s+(directory|folder|module)$/i, '').trim()
+    ) : [];
+
+    // Extract specific work context from screenshot descriptions
+    const workContext: string[] = [];
+    context.screenshotDescriptions.forEach(desc => {
+        const descLower = desc.toLowerCase();
+
+        // Extract main action/focus from descriptions
+        if (descLower.includes('main process') || descLower.includes('main.ts') || descLower.includes('main.js')) {
+            workContext.push('the Electron main process');
+        }
+        if (descLower.includes('build') && (descLower.includes('config') || descLower.includes('output'))) {
+            workContext.push('build configuration');
+        }
+        if (descLower.includes('terminal') && descLower.includes('compil')) {
+            workContext.push('compilation issues');
+        }
+        if (descLower.includes('problems panel') || descLower.includes('error') || descLower.includes('debug')) {
+            workContext.push('troubleshooting errors');
+        }
+        if (descLower.includes('file explorer') || descLower.includes('file tree')) {
+            workContext.push('project structure');
+        }
+    });
+
+    // Build a narrative summary (3-5 sentences)
+    const sentences: string[] = [];
+
+    // Sentence 1: Main activity + project context
+    let firstSentence = '';
+    if (projectName) {
+        if (activities.length > 0) {
+            const primaryActivity = activities[0].charAt(0).toUpperCase() + activities[0].slice(1);
+            firstSentence = `${primaryActivity} the ${projectName} application`;
+        } else {
+            firstSentence = `Worked on the ${projectName} application`;
+        }
+    } else if (activities.length > 0) {
+        const primaryActivity = activities[0].charAt(0).toUpperCase() + activities[0].slice(1);
+        firstSentence = `${primaryActivity} work on a software project`;
+    } else {
+        firstSentence = 'Worked on software development tasks';
+    }
+
+    // Add technology stack to first sentence
+    if (technologies.length > 0) {
+        const techStack = technologies.slice(0, 2).join(' and ');
+        firstSentence += `, utilizing ${techStack}`;
+    }
+    sentences.push(firstSentence + '.');
+
+    // Sentence 2: Specific focus area (files, directories, features)
+    const focusElements: string[] = [];
+    if (workContext.length > 0) {
+        focusElements.push(...workContext.slice(0, 2));
+    }
+    if (directories.length > 0 && workContext.length === 0) {
+        const dirList = directories.slice(0, 2).join(' and ');
+        focusElements.push(`the ${dirList} ${directories.length === 1 ? 'directory' : 'directories'}`);
+    }
+    if (files.length > 0 && focusElements.length === 0) {
+        const fileList = files.slice(0, 2).join(', ');
+        focusElements.push(fileList);
+    }
+
+    if (focusElements.length > 0) {
+        const focusDescription = focusElements.join(', focusing on ');
+        if (focusDescription.includes('the ') || focusDescription.includes('.ts') || focusDescription.includes('.js')) {
+            sentences.push(`Focused on ${focusDescription}.`);
+        } else {
+            sentences.push(`Worked primarily on ${focusDescription}.`);
+        }
+    }
+
+    // Sentence 3: IDE and tools used
+    const uniqueApps = [...new Set(context.appNames)].filter(app =>
+        app && !['Electron', 'Time-Portal', 'TimePortal', 'Clearical', 'Unknown'].includes(app)
+    );
+
+    if (uniqueApps.length > 0) {
+        const toolsDesc = uniqueApps.length === 1
+            ? uniqueApps[0]
+            : `${uniqueApps.slice(0, -1).join(', ')} and ${uniqueApps[uniqueApps.length - 1]}`;
+
+        // Check if debugging or terminal work was mentioned
+        if (allText.includes('debug') || allText.includes('problems panel')) {
+            sentences.push(`Used ${toolsDesc} with debugging tools and error panels for troubleshooting.`);
+        } else if (allText.includes('terminal') || allText.includes('command')) {
+            sentences.push(`Used ${toolsDesc} with integrated terminal for development tasks.`);
+        } else {
+            sentences.push(`Development environment: ${toolsDesc}.`);
+        }
+    }
+
+    // Sentence 4: Additional activities
+    if (activities.length > 1) {
+        const secondaryActivities = activities.slice(1, 3);
+        const activityList = secondaryActivities.join(' and ');
+        sentences.push(`Additional work included ${activityList}.`);
+    }
+
+    // Calculate confidence based on richness of context
+    let confidence = 0.3;  // Base confidence
+    if (context.screenshotDescriptions.length > 0) confidence += 0.2;
+    if (context.screenshotDescriptions.length > 2) confidence += 0.1;
+    if (activities.length > 0) confidence += 0.15;
+    if (technologies.length > 0) confidence += 0.15;
+    if (workContext.length > 0 || files.length > 0) confidence += 0.1;
+
+    // Join sentences with proper spacing
+    const summary = sentences.join(' ');
+
+    return {
+        summary,
+        metadata: {
+            detectedActivities: activities,
+            detectedTechnologies: technologies,
+            confidence: Math.min(confidence, 1.0)
+        }
+    };
+}
+
+// Screenshot Analysis with FASTVLM BACKEND
 // Primary: FastVLM Python server for VLM analysis
 // Fallback: Swift Vision Framework + on-device AI
 ipcMain.handle('analyze-screenshot', async (event, imagePath: string, requestId?: string) => {
