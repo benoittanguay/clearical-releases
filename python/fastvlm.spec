@@ -72,14 +72,16 @@ for item in reasoning_model_dir.rglob("*"):
 
 print(f"Total model files: {len(model_data)}")
 
-# Collect mlx and mlx-vlm data files
+# Collect mlx, mlx-vlm, and mlx-lm data files
 mlx_data = collect_data_files('mlx')
 mlx_vlm_data = collect_data_files('mlx_vlm')
+mlx_lm_data = collect_data_files('mlx_lm')
 
 # Collect all submodules for critical packages
 hiddenimports = []
 hiddenimports += collect_submodules('mlx')
 hiddenimports += collect_submodules('mlx_vlm')
+hiddenimports += collect_submodules('mlx_lm')
 hiddenimports += collect_submodules('fastapi')
 hiddenimports += collect_submodules('uvicorn')
 hiddenimports += collect_submodules('pydantic')
@@ -104,6 +106,10 @@ hiddenimports += [
     'pydantic.json_schema',
     'pydantic_core',
     'reasoning',  # Local reasoning module for Qwen2.5 model
+    'mlx_lm.models.qwen2',  # Explicitly include qwen2 model support
+    'mlx_lm.models.base',
+    'mlx_lm.utils',
+    'mlx_lm.tokenizer_utils',
 ]
 
 # Analysis step - scan all Python dependencies
@@ -111,9 +117,9 @@ a = Analysis(
     ['server.py'],  # Main script
     pathex=[str(spec_dir)],  # Additional paths to search
     binaries=[],
-    datas=model_data + mlx_data + mlx_vlm_data,  # Include model and library data
+    datas=model_data + mlx_data + mlx_vlm_data + mlx_lm_data,  # Include model and library data
     hiddenimports=hiddenimports,
-    hookspath=[],
+    hookspath=[str(spec_dir / 'hooks')],  # Use local hooks directory for custom hooks
     hooksconfig={},
     runtime_hooks=[],
     excludes=[
