@@ -366,6 +366,13 @@ async def summarize(request: SummarizeRequest):
 
     except HTTPException:
         raise
+    except BrokenPipeError:
+        # Client disconnected before we could send the response
+        logger.warning("Client disconnected during summarization (broken pipe)")
+        raise HTTPException(
+            status_code=499,  # Client Closed Request (non-standard but widely used)
+            detail="Client disconnected before response could be sent"
+        )
     except Exception as e:
         logger.error(f"Unexpected error during summarization: {str(e)}", exc_info=True)
         raise HTTPException(
@@ -497,7 +504,8 @@ async def run_server(host: str, port: int):
         host=host,
         port=port,
         log_level="info",
-        access_log=True
+        access_log=True,
+        timeout_keep_alive=75  # Keep connection alive for 75s (longer than client timeout of 60s)
     )
     server = uvicorn.Server(config)
 

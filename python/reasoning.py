@@ -65,19 +65,48 @@ def load_reasoning_model():
         logger.info("Using cached reasoning model")
         return _reasoning_model_cache
 
+    import sys
+    import os
+
+    # Redirect stdout/stderr during model loading to prevent potential broken pipe errors
+    # from HuggingFace download progress bars or other output
+    original_stdout = sys.stdout
+    original_stderr = sys.stderr
+    devnull = None
+
     try:
         model_path = get_reasoning_model_path()
         logger.info(f"Loading reasoning model from: {model_path}")
+
+        # Redirect stdout/stderr to devnull during model loading
+        devnull = open(os.devnull, 'w')
+        sys.stdout = devnull
+        sys.stderr = devnull
+
         from mlx_lm import load
-
         model, tokenizer = load(model_path)
-        _reasoning_model_cache = (model, tokenizer)
 
+        # Restore before caching and logging
+        sys.stdout = original_stdout
+        sys.stderr = original_stderr
+        if devnull is not None:
+            devnull.close()
+            devnull = None
+
+        _reasoning_model_cache = (model, tokenizer)
         logger.info("Reasoning model loaded successfully")
         return model, tokenizer
     except Exception as e:
+        # Restore stderr first so we can log the error
+        sys.stderr = original_stderr
         logger.error(f"Failed to load reasoning model: {e}")
         raise
+    finally:
+        # Always restore stdout/stderr and close devnull
+        sys.stdout = original_stdout
+        sys.stderr = original_stderr
+        if devnull is not None:
+            devnull.close()
 
 def generate_text(prompt: str, max_tokens: int = 200, temperature: float = 0.7) -> str:
     """
@@ -86,20 +115,49 @@ def generate_text(prompt: str, max_tokens: int = 200, temperature: float = 0.7) 
     Note: temperature parameter is currently not supported by mlx-lm Python API.
     The model will use default temperature (deterministic generation).
     """
+    import sys
+    import os
+
     model, tokenizer = load_reasoning_model()
 
     from mlx_lm import generate
 
-    # Note: mlx-lm's generate function doesn't currently support temperature parameter
-    # in the Python API, so we omit it for compatibility
-    response = generate(
-        model,
-        tokenizer,
-        prompt=prompt,
-        max_tokens=max_tokens
-    )
+    # Suppress any stdout/stderr output from mlx-lm to prevent broken pipe errors
+    # when running in FastAPI/uvicorn async context.
+    # mlx-lm may write progress bars or other output to stdout/stderr, which causes
+    # "[Errno 32] Broken pipe" when the parent process (Electron) isn't consuming
+    # the output fast enough or the pipe buffer fills up.
+    original_stdout = sys.stdout
+    original_stderr = sys.stderr
+    devnull = None
 
-    return response
+    try:
+        # Redirect stdout/stderr to devnull
+        devnull = open(os.devnull, 'w')
+        sys.stdout = devnull
+        sys.stderr = devnull
+
+        # Note: mlx-lm's generate function doesn't currently support temperature parameter
+        # in the Python API, so we omit it for compatibility
+        response = generate(
+            model,
+            tokenizer,
+            prompt=prompt,
+            max_tokens=max_tokens,
+            verbose=False  # Explicitly disable verbose output
+        )
+        return response
+    except Exception as e:
+        # Restore stderr first so we can log the error
+        sys.stderr = original_stderr
+        logger.error(f"Error during text generation: {e}")
+        raise
+    finally:
+        # Always restore stdout/stderr and close devnull
+        sys.stdout = original_stdout
+        sys.stderr = original_stderr
+        if devnull is not None:
+            devnull.close()
 
 def summarize_activities(descriptions: List[str], app_names: List[str] = None) -> Dict[str, Any]:
     """
@@ -131,10 +189,15 @@ Activities:
 Natural narrative summary:"""
 
     try:
+        logger.info("Starting summarization...")
         summary = generate_text(prompt, max_tokens=150)
+        logger.info("Summarization completed successfully")
         return {"success": True, "summary": summary.strip()}
+    except BrokenPipeError as e:
+        logger.error(f"Broken pipe error during summarization: {e}", exc_info=True)
+        return {"success": False, "error": f"Broken pipe error: {str(e)}", "summary": ""}
     except Exception as e:
-        logger.error(f"Summarization failed: {e}")
+        logger.error(f"Summarization failed: {e}", exc_info=True)
         return {"success": False, "error": str(e), "summary": ""}
 
 def classify_activity(
@@ -169,7 +232,9 @@ Options:
 Reply with ONLY the number of the best matching option."""
 
     try:
+        logger.info("Starting classification...")
         response = generate_text(prompt, max_tokens=10)
+        logger.info("Classification generation completed")
 
         # Parse the number from response
         import re
@@ -191,8 +256,11 @@ Reply with ONLY the number of the best matching option."""
             "selected_name": options[0]['name'],
             "confidence": 0.5
         }
+    except BrokenPipeError as e:
+        logger.error(f"Broken pipe error during classification: {e}", exc_info=True)
+        return {"success": False, "error": f"Broken pipe error: {str(e)}"}
     except Exception as e:
-        logger.error(f"Classification failed: {e}")
+        logger.error(f"Classification failed: {e}", exc_info=True)
         return {"success": False, "error": str(e)}
 
 def get_reasoning_model_info() -> Dict[str, Any]:

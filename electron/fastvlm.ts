@@ -368,10 +368,19 @@ class FastVLMServer {
 
         } catch (error) {
             console.error('[FastVLM] Analysis request failed:', error);
+
+            // Provide more context for timeout errors
+            let errorMessage = error instanceof Error ? error.message : String(error);
+            if (error instanceof Error && error.name === 'TimeoutError') {
+                errorMessage = 'Analysis timed out after 30 seconds. The model may be taking longer than expected.';
+            } else if (error instanceof Error && (error.message.includes('EPIPE') || error.message.includes('Broken pipe'))) {
+                errorMessage = 'Connection lost during analysis. The server may still be processing the request.';
+            }
+
             return {
                 success: false,
                 description: null,
-                error: error instanceof Error ? error.message : String(error)
+                error: errorMessage
             };
         }
     }
@@ -429,9 +438,18 @@ class FastVLMServer {
 
         } catch (error) {
             console.error('[FastVLM] Classification request failed:', error);
+
+            // Provide more context for timeout errors
+            let errorMessage = error instanceof Error ? error.message : String(error);
+            if (error instanceof Error && error.name === 'TimeoutError') {
+                errorMessage = 'Classification timed out after 15 seconds. The model may be taking longer than expected.';
+            } else if (error instanceof Error && (error.message.includes('EPIPE') || error.message.includes('Broken pipe'))) {
+                errorMessage = 'Connection lost during classification. The server may still be processing the request.';
+            }
+
             return {
                 success: false,
-                error: error instanceof Error ? error.message : String(error)
+                error: errorMessage
             };
         }
     }
@@ -469,7 +487,7 @@ class FastVLMServer {
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify(requestBody),
-                signal: AbortSignal.timeout(20000) // 20 second timeout for summarization
+                signal: AbortSignal.timeout(60000) // 60 second timeout for summarization (generates longer text than classification)
             });
 
             if (!response.ok) {
@@ -487,9 +505,18 @@ class FastVLMServer {
 
         } catch (error) {
             console.error('[FastVLM] Summarization request failed:', error);
+
+            // Provide more context for timeout errors
+            let errorMessage = error instanceof Error ? error.message : String(error);
+            if (error instanceof Error && error.name === 'TimeoutError') {
+                errorMessage = 'Summarization timed out after 60 seconds. The model may be taking longer than expected to generate the summary.';
+            } else if (error instanceof Error && (error.message.includes('EPIPE') || error.message.includes('Broken pipe'))) {
+                errorMessage = 'Connection lost during summarization. The server may still be processing the request.';
+            }
+
             return {
                 success: false,
-                error: error instanceof Error ? error.message : String(error)
+                error: errorMessage
             };
         }
     }
