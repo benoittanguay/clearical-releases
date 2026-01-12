@@ -314,69 +314,271 @@ function App() {
   }, [isRunning]);
 
   return (
-    <div className="flex h-screen bg-gray-900 text-white overflow-hidden font-sans w-full flex-col">
+    <div className="flex h-screen overflow-hidden font-sans w-full flex-col" style={{ backgroundColor: 'var(--color-bg-primary)', color: 'var(--color-text-primary)' }}>
       {/* Global Crawler Progress Bar - Fixed at top */}
       <CrawlerProgressBar />
 
       {/* Main app content */}
       <div className="flex flex-1 overflow-hidden">
-        {/* Sidebar */}
-        <nav className="w-20 bg-gray-950 flex flex-col items-center py-4 border-r border-gray-800 z-50 drag-handle">
-        <div className="mb-8 text-green-500 font-bold text-xl tracking-tighter">CL</div>
+        {/* Sidebar - Dark sidebar for contrast against light content */}
+        <nav
+          className="flex flex-col items-center py-6 border-r z-50 drag-handle"
+          style={{
+            width: 'var(--sidebar-width)',
+            backgroundColor: 'var(--color-surface-dark)',
+            borderColor: 'var(--color-border-primary)',
+          }}
+        >
+        {/* Logo */}
+        <div
+          className="mb-10 font-bold tracking-tighter select-none"
+          style={{
+            fontFamily: 'var(--font-display)',
+            fontSize: 'var(--text-lg)',
+            color: 'var(--color-accent)',
+            letterSpacing: 'var(--tracking-tight)',
+          }}
+        >
+          clearical
+        </div>
 
-        <div className="flex flex-col gap-6 w-full items-center no-drag">
-          <button onClick={() => setCurrentView('chrono')} className={`flex flex-col items-center gap-1 group w-full`}>
-            <div className={`p-2 rounded-lg transition-colors ${currentView === 'chrono' ? 'bg-gray-800 text-green-400' : 'text-gray-500 group-hover:text-gray-300'}`}>
-              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>
+        {/* Navigation Items */}
+        <div className="flex flex-col gap-4 w-full items-center no-drag">
+          {/* Chrono */}
+          <button
+            onClick={() => setCurrentView('chrono')}
+            className="flex flex-col items-center gap-1.5 group w-full px-4 relative"
+            style={{
+              transition: 'var(--transition-colors)',
+            }}
+          >
+            <div
+              className="p-2.5 rounded-xl relative"
+              style={{
+                backgroundColor: currentView === 'chrono' ? 'var(--color-accent-muted)' : 'transparent',
+                color: currentView === 'chrono' ? 'var(--color-accent)' : 'var(--color-text-secondary)',
+                transition: 'all var(--duration-base) var(--ease-out)',
+                boxShadow: currentView === 'chrono' ? 'var(--glow-accent)' : 'none',
+              }}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" />
+                <polyline points="12 6 12 12 16 14" />
+              </svg>
+              {currentView === 'chrono' && (
+                <div
+                  className="absolute inset-0 rounded-xl"
+                  style={{
+                    background: 'var(--color-accent-muted)',
+                    filter: 'blur(8px)',
+                    zIndex: -1,
+                  }}
+                />
+              )}
             </div>
-            <span className={`text-[10px] font-medium ${currentView === 'chrono' ? 'text-green-400' : 'text-gray-500'}`}>Chrono</span>
+            <span
+              className="text-[10px] font-medium uppercase tracking-wider"
+              style={{
+                fontFamily: 'var(--font-display)',
+                color: currentView === 'chrono' ? 'var(--color-accent)' : 'var(--color-text-secondary)',
+                transition: 'var(--transition-colors)',
+              }}
+            >
+              Chrono
+            </span>
           </button>
 
-          <button onClick={() => setCurrentView('worklog')} className={`flex flex-col items-center gap-1 group w-full`}>
-            <div className={`p-2 rounded-lg transition-colors ${currentView === 'worklog' ? 'bg-gray-800 text-green-400' : 'text-gray-500 group-hover:text-gray-300'}`}>
-              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+          {/* Worklog */}
+          <button
+            onClick={() => setCurrentView('worklog')}
+            className="flex flex-col items-center gap-1.5 group w-full px-4 relative"
+            style={{
+              transition: 'var(--transition-colors)',
+            }}
+          >
+            <div
+              className="p-2.5 rounded-xl relative"
+              style={{
+                backgroundColor: currentView === 'worklog' ? 'var(--color-accent-muted)' : 'transparent',
+                color: currentView === 'worklog' ? 'var(--color-accent)' : 'var(--color-text-secondary)',
+                transition: 'all var(--duration-base) var(--ease-out)',
+                boxShadow: currentView === 'worklog' ? 'var(--glow-accent)' : 'none',
+              }}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="2" y="7" width="20" height="14" rx="2" ry="2"/>
+                <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>
+              </svg>
+              {currentView === 'worklog' && (
+                <div
+                  className="absolute inset-0 rounded-xl"
+                  style={{
+                    background: 'var(--color-accent-muted)',
+                    filter: 'blur(8px)',
+                    zIndex: -1,
+                  }}
+                />
+              )}
             </div>
-            <span className={`text-[10px] font-medium ${currentView === 'worklog' ? 'text-green-400' : 'text-gray-500'}`}>Worklog</span>
+            <span
+              className="text-[10px] font-medium uppercase tracking-wider"
+              style={{
+                fontFamily: 'var(--font-display)',
+                color: currentView === 'worklog' ? 'var(--color-accent)' : 'var(--color-text-secondary)',
+                transition: 'var(--transition-colors)',
+              }}
+            >
+              Worklog
+            </span>
           </button>
 
-          <button onClick={() => setCurrentView('buckets')} className={`flex flex-col items-center gap-1 group w-full`}>
-            <div className={`p-2 rounded-lg transition-colors ${currentView === 'buckets' ? 'bg-gray-800 text-green-400' : 'text-gray-500 group-hover:text-gray-300'}`}>
-              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="3" width="20" height="18" rx="2"/><path d="M2 12h20"/><path d="M10 7h4"/><path d="M10 16h4"/></svg>
+          {/* Buckets */}
+          <button
+            onClick={() => setCurrentView('buckets')}
+            className="flex flex-col items-center gap-1.5 group w-full px-4 relative"
+            style={{
+              transition: 'var(--transition-colors)',
+            }}
+          >
+            <div
+              className="p-2.5 rounded-xl relative"
+              style={{
+                backgroundColor: currentView === 'buckets' ? 'var(--color-accent-muted)' : 'transparent',
+                color: currentView === 'buckets' ? 'var(--color-accent)' : 'var(--color-text-secondary)',
+                transition: 'all var(--duration-base) var(--ease-out)',
+                boxShadow: currentView === 'buckets' ? 'var(--glow-accent)' : 'none',
+              }}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="2" y="3" width="20" height="18" rx="2"/>
+                <path d="M2 12h20"/>
+                <path d="M10 7h4"/>
+                <path d="M10 16h4"/>
+              </svg>
+              {currentView === 'buckets' && (
+                <div
+                  className="absolute inset-0 rounded-xl"
+                  style={{
+                    background: 'var(--color-accent-muted)',
+                    filter: 'blur(8px)',
+                    zIndex: -1,
+                  }}
+                />
+              )}
             </div>
-            <span className={`text-[10px] font-medium ${currentView === 'buckets' ? 'text-green-400' : 'text-gray-500'}`}>Buckets</span>
+            <span
+              className="text-[10px] font-medium uppercase tracking-wider"
+              style={{
+                fontFamily: 'var(--font-display)',
+                color: currentView === 'buckets' ? 'var(--color-accent)' : 'var(--color-text-secondary)',
+                transition: 'var(--transition-colors)',
+              }}
+            >
+              Buckets
+            </span>
           </button>
 
-          <button onClick={() => setCurrentView('settings')} className={`flex flex-col items-center gap-1 group w-full`}>
-            <div className={`p-2 rounded-lg transition-colors ${currentView === 'settings' ? 'bg-gray-800 text-green-400' : 'text-gray-500 group-hover:text-gray-300'}`}>
-              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.1a2 2 0 0 1-1-1.72v-.51a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" /><circle cx="12" cy="12" r="3" /></svg>
+          {/* Settings */}
+          <button
+            onClick={() => setCurrentView('settings')}
+            className="flex flex-col items-center gap-1.5 group w-full px-4 relative"
+            style={{
+              transition: 'var(--transition-colors)',
+            }}
+          >
+            <div
+              className="p-2.5 rounded-xl relative"
+              style={{
+                backgroundColor: currentView === 'settings' ? 'var(--color-accent-muted)' : 'transparent',
+                color: currentView === 'settings' ? 'var(--color-accent)' : 'var(--color-text-secondary)',
+                transition: 'all var(--duration-base) var(--ease-out)',
+                boxShadow: currentView === 'settings' ? 'var(--glow-accent)' : 'none',
+              }}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.1a2 2 0 0 1-1-1.72v-.51a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+                <circle cx="12" cy="12" r="3" />
+              </svg>
+              {currentView === 'settings' && (
+                <div
+                  className="absolute inset-0 rounded-xl"
+                  style={{
+                    background: 'var(--color-accent-muted)',
+                    filter: 'blur(8px)',
+                    zIndex: -1,
+                  }}
+                />
+              )}
             </div>
-            <span className={`text-[10px] font-medium ${currentView === 'settings' ? 'text-green-400' : 'text-gray-500'}`}>Settings</span>
+            <span
+              className="text-[10px] font-medium uppercase tracking-wider"
+              style={{
+                fontFamily: 'var(--font-display)',
+                color: currentView === 'settings' ? 'var(--color-accent)' : 'var(--color-text-secondary)',
+                transition: 'var(--transition-colors)',
+              }}
+            >
+              Settings
+            </span>
           </button>
         </div>
       </nav>
 
-      <div className="flex-1 flex flex-col h-full bg-gray-900 border-l border-gray-800 min-w-0">
+      <div className="flex-1 flex flex-col h-full min-w-0" style={{ backgroundColor: 'var(--color-bg-primary)', borderLeft: '1px solid var(--color-border-primary)' }}>
         {/* Title Bar - Drag region for window movement */}
-        <header className="h-0 bg-gray-950 drag-handle select-none shrink-0"></header>
+        <header className="h-0 drag-handle select-none shrink-0" style={{ backgroundColor: 'var(--color-bg-primary)' }}></header>
 
         {/* content */}
         <div className="flex-1 flex flex-col w-full relative overflow-hidden">
           {currentView === 'chrono' && (
-            <div className="flex flex-col items-center justify-center h-full w-full px-4 pb-4">
-              {/* Stopping overlay */}
+            <div className="relative flex flex-col items-center justify-center h-full w-full px-4 pb-4 overflow-hidden" style={{ backgroundColor: 'var(--color-bg-primary)' }}>
+              {/* Stopping overlay with redesigned aesthetic */}
               {isStopping && (
-                <div className="absolute inset-0 bg-gray-900/95 flex flex-col items-center justify-center z-50">
-                  <div className="flex flex-col items-center gap-4">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-400"></div>
-                    <div className="text-green-400 font-medium text-lg">Finalizing activity...</div>
-                    <div className="text-gray-400 text-sm">Processing screenshots and analysis</div>
+                <div className="absolute inset-0 flex flex-col items-center justify-center z-50" style={{ backgroundColor: 'rgba(242, 240, 237, 0.9)', backdropFilter: 'blur(8px)' }}>
+                  <div className="flex flex-col items-center gap-6">
+                    <div className="relative">
+                      <div className="animate-spin rounded-full h-16 w-16 border-2 border-transparent border-t-[var(--color-accent)] border-r-[var(--color-accent)]"
+                           style={{ boxShadow: 'var(--shadow-accent)' }}></div>
+                      <div className="absolute inset-0 rounded-full"
+                           style={{
+                             background: 'radial-gradient(circle, rgba(255, 72, 0, 0.1) 0%, transparent 70%)',
+                             animation: 'pulse 2s ease-in-out infinite'
+                           }}></div>
+                    </div>
+                    <div style={{
+                      color: 'var(--color-accent)',
+                      fontFamily: 'var(--font-display)',
+                      fontSize: 'var(--text-2xl)',
+                      fontWeight: 'var(--font-bold)',
+                      letterSpacing: 'var(--tracking-tight)'
+                    }}>
+                      Finalizing activity
+                    </div>
+                    <div style={{
+                      color: 'var(--color-text-secondary)',
+                      fontSize: 'var(--text-sm)',
+                      fontFamily: 'var(--font-mono)'
+                    }}>
+                      Processing screenshots and analysis
+                    </div>
                   </div>
                 </div>
               )}
 
               {/* Assignment Picker - Above the counter */}
-              <div className="w-full max-w-xs mb-6">
-                <label className="text-xs text-gray-500 uppercase font-bold mb-1.5 block tracking-wider">Assignment</label>
+              <div className="w-full max-w-sm mb-12">
+                <label style={{
+                  fontSize: 'var(--text-xs)',
+                  color: 'var(--color-text-secondary)',
+                  textTransform: 'uppercase',
+                  fontWeight: 'var(--font-bold)',
+                  letterSpacing: 'var(--tracking-wider)',
+                  fontFamily: 'var(--font-display)',
+                  display: 'block',
+                  marginBottom: 'var(--space-2)'
+                }}>
+                  Assignment
+                </label>
                 <AssignmentPicker
                   value={selectedAssignment}
                   onChange={setSelectedAssignment}
@@ -385,36 +587,90 @@ function App() {
                 />
               </div>
 
-              {/* Timer Display */}
-              <div className="relative mb-6">
-                <div className={`text-6xl font-mono font-bold tabular-nums tracking-wider text-shadow-glow transition-colors ${
-                  isPaused ? 'text-yellow-400' : 'text-green-400'
-                }`}>
+              {/* Timer Display - Prominent with glow effect */}
+              <div className="relative mb-16">
+                <div
+                  className="tabular-nums transition-all duration-300"
+                  style={{
+                    fontSize: 'var(--text-timer)',
+                    fontFamily: 'var(--font-mono)',
+                    fontWeight: 'var(--font-bold)',
+                    letterSpacing: 'var(--tracking-tight)',
+                    color: isPaused ? 'var(--color-warning)' : 'var(--color-accent)',
+                    textShadow: isPaused
+                      ? '0 0 30px rgba(254, 188, 46, 0.6), 0 0 60px rgba(254, 188, 46, 0.3)'
+                      : '0 0 30px rgba(255, 72, 0, 0.6), 0 0 60px rgba(255, 72, 0, 0.3)',
+                    filter: isPaused
+                      ? 'drop-shadow(0 4px 12px rgba(254, 188, 46, 0.4))'
+                      : 'drop-shadow(0 4px 12px rgba(255, 72, 0, 0.4))'
+                  }}
+                >
                   {formatTime(elapsed)}
                 </div>
                 {isPaused && (
-                  <div className="absolute -top-7 left-1/2 transform -translate-x-1/2">
-                    <div className="bg-yellow-500/20 text-yellow-400 text-xs font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full border border-yellow-500/30">
+                  <div className="absolute -top-10 left-1/2 transform -translate-x-1/2 animate-fade-in">
+                    <div style={{
+                      backgroundColor: 'var(--color-warning-muted)',
+                      color: 'var(--color-warning)',
+                      fontSize: 'var(--text-xs)',
+                      fontWeight: 'var(--font-bold)',
+                      textTransform: 'uppercase',
+                      letterSpacing: 'var(--tracking-wider)',
+                      fontFamily: 'var(--font-display)',
+                      padding: 'var(--space-1) var(--space-3)',
+                      borderRadius: 'var(--radius-full)',
+                      border: '1px solid var(--color-warning)',
+                      boxShadow: '0 0 20px rgba(254, 188, 46, 0.3)'
+                    }}>
                       Paused
                     </div>
                   </div>
                 )}
               </div>
 
-              {/* Buttons - Side by side with stable layout */}
-              <div className="w-full max-w-md flex gap-2.5 min-h-[52px]">
+              {/* Buttons - Pill style with design system colors */}
+              <div className="w-full max-w-lg flex gap-3 min-h-[56px]">
                 <button
                   onClick={handleStartStop}
                   disabled={isStopping}
-                  className={`
-                    flex-1 py-3 rounded-lg text-lg font-bold transition-all transform hover:-translate-y-0.5 active:scale-95 shadow-lg
-                    ${isStopping
-                      ? 'bg-gray-700 text-gray-500 cursor-not-allowed opacity-50'
+                  className="flex-1 transition-all duration-200 transform active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+                  style={{
+                    backgroundColor: isStopping
+                      ? 'var(--color-bg-tertiary)'
                       : isRunning
-                        ? 'bg-red-500 hover:bg-red-600 shadow-red-500/30'
-                        : 'bg-green-500 hover:bg-green-600 shadow-green-500/30'
+                        ? 'var(--color-error)'
+                        : 'var(--color-accent)',
+                    color: isStopping ? 'var(--color-text-tertiary)' : 'white',
+                    fontSize: 'var(--text-lg)',
+                    fontWeight: 'var(--font-bold)',
+                    fontFamily: 'var(--font-display)',
+                    letterSpacing: 'var(--tracking-wide)',
+                    padding: 'var(--space-3) var(--space-8)',
+                    borderRadius: 'var(--radius-full)',
+                    border: 'none',
+                    boxShadow: isStopping
+                      ? 'none'
+                      : isRunning
+                        ? 'var(--shadow-error)'
+                        : 'var(--shadow-accent)',
+                    cursor: isStopping ? 'not-allowed' : 'pointer'
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isStopping) {
+                      e.currentTarget.style.transform = 'translateY(-2px)';
+                      e.currentTarget.style.boxShadow = isRunning
+                        ? '0 12px 32px -8px rgba(239, 68, 68, 0.6)'
+                        : '0 12px 32px -8px rgba(255, 72, 0, 0.6)';
                     }
-                  `}
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isStopping) {
+                      e.currentTarget.style.transform = 'translateY(0)';
+                      e.currentTarget.style.boxShadow = isRunning
+                        ? 'var(--shadow-error)'
+                        : 'var(--shadow-accent)';
+                    }
+                  }}
                 >
                   {isRunning ? 'STOP' : 'START'}
                 </button>
@@ -423,15 +679,44 @@ function App() {
                 <button
                   onClick={handlePauseResume}
                   disabled={!isRunning || isStopping}
-                  className={`
-                    flex-1 py-3 rounded-lg text-lg font-bold transition-all transform shadow-lg
-                    ${!isRunning || isStopping
-                      ? 'bg-gray-700 text-gray-500 cursor-not-allowed opacity-50'
+                  className="flex-1 transition-all duration-200 transform active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+                  style={{
+                    backgroundColor: (!isRunning || isStopping)
+                      ? 'var(--color-bg-tertiary)'
                       : isPaused
-                        ? 'bg-blue-500 hover:bg-blue-600 shadow-blue-500/30 hover:-translate-y-0.5 active:scale-95'
-                        : 'bg-yellow-500 hover:bg-yellow-600 shadow-yellow-500/30 hover:-translate-y-0.5 active:scale-95'
+                        ? 'var(--color-accent)'
+                        : 'var(--color-warning)',
+                    color: (!isRunning || isStopping) ? 'var(--color-text-tertiary)' : 'white',
+                    fontSize: 'var(--text-lg)',
+                    fontWeight: 'var(--font-bold)',
+                    fontFamily: 'var(--font-display)',
+                    letterSpacing: 'var(--tracking-wide)',
+                    padding: 'var(--space-3) var(--space-8)',
+                    borderRadius: 'var(--radius-full)',
+                    border: 'none',
+                    boxShadow: (!isRunning || isStopping)
+                      ? 'none'
+                      : isPaused
+                        ? 'var(--shadow-accent)'
+                        : '0 8px 24px -8px rgba(254, 188, 46, 0.5)',
+                    cursor: (!isRunning || isStopping) ? 'not-allowed' : 'pointer'
+                  }}
+                  onMouseEnter={(e) => {
+                    if (isRunning && !isStopping) {
+                      e.currentTarget.style.transform = 'translateY(-2px)';
+                      e.currentTarget.style.boxShadow = isPaused
+                        ? '0 12px 32px -8px rgba(255, 72, 0, 0.6)'
+                        : '0 12px 32px -8px rgba(254, 188, 46, 0.6)';
                     }
-                  `}
+                  }}
+                  onMouseLeave={(e) => {
+                    if (isRunning && !isStopping) {
+                      e.currentTarget.style.transform = 'translateY(0)';
+                      e.currentTarget.style.boxShadow = isPaused
+                        ? 'var(--shadow-accent)'
+                        : '0 8px 24px -8px rgba(254, 188, 46, 0.5)';
+                    }
+                  }}
                 >
                   {isPaused ? 'RESUME' : 'PAUSE'}
                 </button>
@@ -442,21 +727,39 @@ function App() {
           {currentView === 'buckets' && (
             <>
               {/* Sticky Header */}
-              <div className="flex-shrink-0 bg-gray-900 border-b border-gray-800 px-4 py-3 z-20 drag-handle">
+              <div className="flex-shrink-0 px-6 py-5 z-20 drag-handle" style={{ backgroundColor: 'var(--color-bg-primary)', borderBottom: '1px solid var(--color-border-primary)' }}>
                 <div className="flex justify-between items-center">
-                  <h2 className="text-xl font-bold">Manage Buckets</h2>
+                  <h2
+                    className="text-2xl font-bold tracking-tight"
+                    style={{
+                      fontFamily: 'var(--font-display)',
+                      color: 'var(--color-text-primary)'
+                    }}
+                  >
+                    Manage Buckets
+                  </h2>
                 </div>
               </div>
 
               {/* Scrollable Content */}
-              <div className="flex-1 overflow-y-auto px-4 pb-4">
+              <div className="flex-1 overflow-y-auto px-6 pb-6 pt-4" style={{ backgroundColor: 'var(--color-bg-primary)' }}>
                 {/* Action Buttons */}
-                <div className="flex gap-2 mb-4">
+                <div className="flex gap-3 mb-6">
                   <button
                     onClick={() => setShowCreateBucketModal(true)}
-                    className="flex items-center gap-2 bg-green-600 hover:bg-green-500 px-4 py-2 rounded-lg text-sm font-medium transition-all hover:shadow-lg hover:shadow-green-500/20"
+                    className="flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-semibold transition-all hover:-translate-y-0.5 active:scale-95"
+                    style={{
+                      backgroundColor: 'var(--color-accent)',
+                      color: 'white',
+                      fontFamily: 'var(--font-body)',
+                      transitionDuration: 'var(--duration-base)',
+                      transitionTimingFunction: 'var(--ease-out)',
+                      boxShadow: 'var(--shadow-accent)'
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--color-accent-hover)'}
+                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'var(--color-accent)'}
                   >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                       <line x1="12" y1="5" x2="12" y2="19" />
                       <line x1="5" y1="12" x2="19" y2="12" />
                     </svg>
@@ -465,9 +768,26 @@ function App() {
 
                   <button
                     onClick={() => setShowCreateFolderModal(true)}
-                    className="flex items-center gap-2 bg-yellow-600 hover:bg-yellow-500 px-4 py-2 rounded-lg text-sm font-medium transition-all hover:shadow-lg hover:shadow-yellow-500/20"
+                    className="flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-semibold transition-all hover:-translate-y-0.5 active:scale-95"
+                    style={{
+                      backgroundColor: 'var(--color-bg-tertiary)',
+                      color: 'var(--color-warning)',
+                      fontFamily: 'var(--font-body)',
+                      transitionDuration: 'var(--duration-base)',
+                      transitionTimingFunction: 'var(--ease-out)',
+                      border: '1px solid var(--color-warning)',
+                      boxShadow: '0 4px 12px -2px rgba(254, 188, 46, 0.15)'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = 'var(--color-warning)';
+                      e.currentTarget.style.color = 'var(--color-bg-primary)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)';
+                      e.currentTarget.style.color = 'var(--color-warning)';
+                    }}
                   >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z" />
                     </svg>
                     New Folder
@@ -485,7 +805,7 @@ function App() {
 
                 {/* Jira Issues Section */}
                 {(settings.jira?.enabled || settings.tempo?.enabled) && (
-                  <div className="mt-6">
+                  <div className="mt-8">
                     <JiraIssuesSection />
                   </div>
                 )}
@@ -496,11 +816,11 @@ function App() {
           {currentView === 'settings' && (
             <>
               {/* Sticky Header */}
-              <div className="flex-shrink-0 bg-gray-900 border-b border-gray-800 px-4 py-3 z-20 drag-handle">
-                <h2 className="text-xl font-bold">Settings</h2>
+              <div className="flex-shrink-0 px-4 py-3 z-20 drag-handle" style={{ backgroundColor: 'var(--color-bg-primary)', borderBottom: '1px solid var(--color-border-primary)' }}>
+                <h2 className="text-xl font-bold" style={{ color: 'var(--color-text-primary)' }}>Settings</h2>
               </div>
               {/* Scrollable Content */}
-              <div className="flex-1 overflow-y-auto">
+              <div className="flex-1 overflow-y-auto" style={{ backgroundColor: 'var(--color-bg-primary)' }}>
                 <Settings
                   onOpenIntegrationModal={() => setShowIntegrationModal(true)}
                 />
@@ -513,9 +833,9 @@ function App() {
             if (!entry) {
               // Entry not found yet - show loading state while state updates
               return (
-                <div className="flex flex-col items-center justify-center h-full gap-4">
-                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-400"></div>
-                  <div className="text-green-400 font-medium text-lg">Loading activity...</div>
+                <div className="flex flex-col items-center justify-center h-full gap-4" style={{ backgroundColor: 'var(--color-bg-primary)' }}>
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2" style={{ borderBottomColor: 'var(--color-success)' }}></div>
+                  <div className="font-medium text-lg" style={{ color: 'var(--color-success)' }}>Loading activity...</div>
                 </div>
               );
             }
@@ -534,9 +854,9 @@ function App() {
           {currentView === 'worklog' && (
             <>
               {/* Fixed Header */}
-              <div className="flex-shrink-0 bg-gray-900 border-b border-gray-800 px-6 py-4 z-20 drag-handle">
+              <div className="flex-shrink-0 px-6 py-4 z-20 drag-handle" style={{ backgroundColor: 'var(--color-bg-primary)', borderBottom: '1px solid var(--color-border-primary)' }}>
                 <div className="flex items-center justify-between">
-                  <h2 className="text-2xl font-bold">Worklog</h2>
+                  <h2 className="text-2xl font-bold" style={{ color: 'var(--color-text-primary)' }}>Worklog</h2>
                   {entries.length > 0 && (
                     <div className="flex items-center gap-3 no-drag">
                       <button
@@ -570,9 +890,9 @@ function App() {
               </div>
 
               {/* Scrollable Content Area */}
-              <div className="flex-1 overflow-y-auto px-4 pb-4">
+              <div className="flex-1 overflow-y-auto px-4 pb-4" style={{ backgroundColor: 'var(--color-bg-primary)' }}>
                 {entries.length === 0 ? (
-                  <div className="text-gray-500 text-sm">No activities recorded yet.</div>
+                  <div className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>No activities recorded yet.</div>
                 ) : (
                   <div>
                     {(() => {
@@ -614,11 +934,11 @@ function App() {
                         return (
                           <div key={dateKey} className="mb-4 last:mb-0">
                             {/* Date Separator Header - Sticky with solid background */}
-                            <div className="sticky top-0 z-10 bg-gray-900 border-b border-gray-700 px-3 py-2 mb-2 -mx-4 flex items-center justify-between shadow-sm">
-                              <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400">
+                            <div className="sticky top-0 z-10 px-3 py-2 mb-2 -mx-4 flex items-center justify-between shadow-sm" style={{ backgroundColor: 'var(--color-bg-secondary)', borderBottom: '1px solid var(--color-border-primary)' }}>
+                              <h3 className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>
                                 {formatDateLabel(parseInt(dateKey))}
                               </h3>
-                              <span className="text-xs font-mono text-gray-500">
+                              <span className="text-xs font-mono" style={{ color: 'var(--color-text-tertiary)' }}>
                                 {formatTime(totalDuration)}
                               </span>
                             </div>
@@ -643,7 +963,20 @@ function App() {
                                       setSelectedEntry(entry.id);
                                       setCurrentView('worklog-detail');
                                     }}
-                                    className="flex justify-between items-center bg-gray-800/50 p-2.5 rounded-lg border border-gray-800 hover:bg-gray-800/80 transition-colors cursor-pointer"
+                                    className="flex justify-between items-center p-2.5 rounded-lg transition-colors cursor-pointer"
+                                    style={{
+                                      backgroundColor: 'var(--color-bg-secondary)',
+                                      border: '1px solid var(--color-border-primary)',
+                                      transition: 'all 0.2s ease-out'
+                                    }}
+                                    onMouseEnter={(e) => {
+                                      e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)';
+                                      e.currentTarget.style.borderColor = 'var(--color-border-secondary)';
+                                    }}
+                                    onMouseLeave={(e) => {
+                                      e.currentTarget.style.backgroundColor = 'var(--color-bg-secondary)';
+                                      e.currentTarget.style.borderColor = 'var(--color-border-primary)';
+                                    }}
                                   >
                                     <div className="flex flex-col flex-1 min-w-0">
                                       {/* Display assignment info */}
@@ -657,7 +990,7 @@ function App() {
                                                 : '#3b82f6' // Blue for Jira issues
                                             }}
                                           />
-                                          <span className="text-sm font-medium text-gray-200">
+                                          <span className="text-sm font-medium" style={{ color: 'var(--color-text-primary)' }}>
                                             {assignment.type === 'bucket'
                                               ? assignment.bucket?.name || 'Unknown Bucket'
                                               : assignment.jiraIssue?.key || 'Unknown Issue'
@@ -665,10 +998,10 @@ function App() {
                                           </span>
                                           {assignment.type === 'jira' && assignment.jiraIssue && (
                                             <>
-                                              <span className="text-xs text-gray-500">
+                                              <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
                                                 {assignment.jiraIssue.projectName}
                                               </span>
-                                              <span className="text-xs px-1 py-0.5 bg-gray-700 text-gray-300 rounded">
+                                              <span className="text-xs px-1 py-0.5 rounded" style={{ backgroundColor: 'var(--color-bg-tertiary)', color: 'var(--color-text-secondary)' }}>
                                                 {assignment.jiraIssue.issueType}
                                               </span>
                                             </>
@@ -677,20 +1010,20 @@ function App() {
                                       )}
                                       {/* Secondary info for Jira issues */}
                                       {assignment?.type === 'jira' && assignment.jiraIssue && (
-                                        <div className="text-xs text-gray-400 mb-1 truncate">
+                                        <div className="text-xs mb-1 truncate" style={{ color: 'var(--color-text-secondary)' }}>
                                           {assignment.jiraIssue.summary}
                                         </div>
                                       )}
                                       {entry.description && (
-                                        <p className="text-xs text-gray-400 mb-1 truncate">{entry.description}</p>
+                                        <p className="text-xs mb-1 truncate" style={{ color: 'var(--color-text-secondary)' }}>{entry.description}</p>
                                       )}
-                                      <span className="text-xs text-gray-500">{new Date(entry.startTime).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true })} - {new Date(entry.startTime + entry.duration).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true })}</span>
+                                      <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{new Date(entry.startTime).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true })} - {new Date(entry.startTime + entry.duration).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true })}</span>
                                     </div>
                                     <div className="flex items-center gap-3">
                                       {entry.windowActivity && entry.windowActivity.length > 0 && (
-                                        <span className="text-xs text-gray-500">{entry.windowActivity.length} activities</span>
+                                        <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{entry.windowActivity.length} activities</span>
                                       )}
-                                      <div className="font-mono text-green-400 font-bold">
+                                      <div className="font-mono font-bold" style={{ color: 'var(--color-success)' }}>
                                         {formatTime(entry.duration)}
                                       </div>
                                       <DeleteButton

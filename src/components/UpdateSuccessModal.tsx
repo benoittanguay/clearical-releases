@@ -10,9 +10,9 @@ export function UpdateSuccessModal({ isOpen, onClose }: UpdateSuccessModalProps)
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 backdrop-blur-sm">
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 animate-fade-in">
             <div
-                className="bg-gradient-to-b from-gray-800 to-gray-900 rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden border border-gray-700"
+                className="bg-[var(--color-bg-secondary)] rounded-[32px] shadow-2xl w-full max-w-md mx-4 overflow-hidden border border-[var(--color-border-primary)]"
                 style={{
                     animation: 'fadeInScale 0.3s ease-out',
                 }}
@@ -21,14 +21,14 @@ export function UpdateSuccessModal({ isOpen, onClose }: UpdateSuccessModalProps)
                 <div className="p-8">
                     {/* Success Icon and Header */}
                     <div className="text-center mb-6">
-                        <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-green-500 to-green-600 rounded-full mb-4 shadow-lg shadow-green-500/30">
+                        <div className="inline-flex items-center justify-center w-20 h-20 bg-[var(--color-success-muted)] rounded-full mb-4 shadow-lg">
                             <svg
                                 xmlns="http://www.w3.org/2000/svg"
                                 width="48"
                                 height="48"
                                 viewBox="0 0 24 24"
                                 fill="none"
-                                stroke="white"
+                                stroke="var(--color-success)"
                                 strokeWidth="3"
                                 strokeLinecap="round"
                                 strokeLinejoin="round"
@@ -36,25 +36,25 @@ export function UpdateSuccessModal({ isOpen, onClose }: UpdateSuccessModalProps)
                                 <path d="M5 13l4 4L19 7" />
                             </svg>
                         </div>
-                        <h2 className="text-3xl font-bold text-white mb-2">
+                        <h2 className="text-3xl font-bold text-[var(--color-text-primary)] mb-2 font-['Syne']">
                             Auto-Updater Worked!
                         </h2>
-                        <p className="text-gray-400 text-lg">
+                        <p className="text-[var(--color-text-secondary)] text-lg">
                             Your app has been successfully updated
                         </p>
                     </div>
 
                     {/* Version Info */}
-                    <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-4 mb-6">
+                    <div className="bg-[var(--color-bg-tertiary)] border border-[var(--color-border-primary)] rounded-xl p-4 mb-6">
                         <div className="flex items-center justify-between">
                             <div>
-                                <h4 className="text-sm font-semibold text-gray-300 mb-1">Current Version</h4>
-                                <p className="text-2xl font-mono font-bold text-green-400">
+                                <h4 className="text-sm font-semibold text-[var(--color-text-secondary)] mb-1 font-['Syne']">Current Version</h4>
+                                <p className="text-2xl font-mono font-bold text-[var(--color-success)]">
                                     v{appVersion}
                                 </p>
                             </div>
                             <div className="flex-shrink-0">
-                                <div className="w-12 h-12 bg-gradient-to-br from-green-500/20 to-green-600/20 rounded-lg flex items-center justify-center border border-green-500/30">
+                                <div className="w-12 h-12 bg-[var(--color-success-muted)] rounded-lg flex items-center justify-center border border-[var(--color-success)]/30">
                                     <svg
                                         xmlns="http://www.w3.org/2000/svg"
                                         width="24"
@@ -65,7 +65,7 @@ export function UpdateSuccessModal({ isOpen, onClose }: UpdateSuccessModalProps)
                                         strokeWidth="2"
                                         strokeLinecap="round"
                                         strokeLinejoin="round"
-                                        className="text-green-400"
+                                        className="text-[var(--color-success)]"
                                     >
                                         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                                         <polyline points="7 10 12 15 17 10" />
@@ -77,10 +77,10 @@ export function UpdateSuccessModal({ isOpen, onClose }: UpdateSuccessModalProps)
                     </div>
 
                     {/* Success Message */}
-                    <div className="bg-green-900/20 border border-green-700/50 rounded-lg px-4 py-3 mb-6">
-                        <div className="flex items-start gap-2 text-sm text-green-300">
+                    <div className="bg-[var(--color-success-muted)] border border-[var(--color-success)]/30 rounded-lg px-4 py-3 mb-6">
+                        <div className="flex items-start gap-2 text-sm text-[var(--color-text-primary)]">
                             <svg
-                                className="w-5 h-5 flex-shrink-0 mt-0.5"
+                                className="w-5 h-5 flex-shrink-0 mt-0.5 text-[var(--color-success)]"
                                 fill="none"
                                 stroke="currentColor"
                                 viewBox="0 0 24 24"
@@ -101,7 +101,7 @@ export function UpdateSuccessModal({ isOpen, onClose }: UpdateSuccessModalProps)
                     {/* Dismiss Button */}
                     <button
                         onClick={onClose}
-                        className="w-full px-6 py-3 bg-gradient-to-r from-green-600 to-green-500 hover:from-green-500 hover:to-green-400 text-white text-lg font-semibold rounded-lg transition-all transform hover:scale-105 active:scale-95 shadow-lg shadow-green-600/30"
+                        className="w-full px-6 py-3 bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white text-lg font-semibold rounded-full transition-all transform hover:scale-105 active:scale-95 shadow-lg"
                     >
                         Dismiss
                     </button>

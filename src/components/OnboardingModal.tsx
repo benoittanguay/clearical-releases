@@ -155,17 +155,17 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
     const progressPercentage = ((currentStep + 1) / totalSteps) * 100;
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 backdrop-blur-sm">
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 animate-fade-in">
             <div
-                className="bg-gradient-to-b from-gray-800 to-gray-900 rounded-2xl shadow-2xl w-full max-w-2xl mx-4 overflow-hidden border border-gray-700"
+                className="bg-[var(--color-bg-secondary)] rounded-[32px] shadow-2xl w-full max-w-2xl mx-4 overflow-hidden border border-[var(--color-border-primary)]"
                 style={{
                     animation: 'fadeInScale 0.3s ease-out',
                 }}
             >
                 {/* Progress Bar */}
-                <div className="h-1.5 bg-gray-950">
+                <div className="h-1.5 bg-[var(--color-bg-tertiary)]">
                     <div
-                        className="h-full bg-gradient-to-r from-green-500 to-green-400 transition-all duration-500 ease-out"
+                        className="h-full bg-[var(--color-accent)] transition-all duration-500 ease-out"
                         style={{ width: `${progressPercentage}%` }}
                     />
                 </div>
@@ -182,27 +182,27 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                             <div className="p-8">
                                 {/* Header */}
                                 <div className="text-center mb-8">
-                                    <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-amber-500 to-amber-600 rounded-2xl mb-4 shadow-lg shadow-amber-500/30">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <div className="inline-flex items-center justify-center w-16 h-16 bg-[var(--color-warning-muted)] rounded-2xl mb-4 shadow-lg">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--color-warning)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                             <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
                                             <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
                                         </svg>
                                     </div>
-                                    <h2 className="text-3xl font-bold text-white mb-2">System Permissions</h2>
-                                    <p className="text-gray-400 text-lg">Clearical needs access to track your activity</p>
+                                    <h2 className="text-3xl font-bold text-[var(--color-text-primary)] mb-2 font-['Syne']">System Permissions</h2>
+                                    <p className="text-[var(--color-text-secondary)] text-lg">Clearical needs access to track your activity</p>
                                 </div>
 
                                 {/* Info Box */}
-                                <div className="bg-blue-900/20 border border-blue-700/50 rounded-xl p-4 mb-6">
+                                <div className="bg-[var(--color-accent-muted)] border border-[var(--color-accent)]/30 rounded-xl p-4 mb-6">
                                     <div className="flex gap-3">
                                         <div className="flex-shrink-0 mt-0.5">
-                                            <svg className="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <svg className="w-5 h-5 text-[var(--color-accent)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                                             </svg>
                                         </div>
                                         <div>
-                                            <h4 className="text-sm font-semibold text-blue-300 mb-1">Why these permissions?</h4>
-                                            <p className="text-sm text-blue-200/80">
+                                            <h4 className="text-sm font-semibold text-[var(--color-text-primary)] mb-1 font-['Syne']">Why these permissions?</h4>
+                                            <p className="text-sm text-[var(--color-text-secondary)]">
                                                 These permissions allow Clearical to automatically track your work and capture screenshots. All data stays on your device.
                                             </p>
                                         </div>
@@ -212,20 +212,20 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                                 {/* Permissions List */}
                                 <div className="space-y-4 mb-6">
                                     {/* Accessibility Permission */}
-                                    <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-5">
+                                    <div className="bg-[var(--color-bg-tertiary)] border border-[var(--color-border-primary)] rounded-xl p-5">
                                         <div className="flex items-start gap-4">
                                             <div className="flex-shrink-0">
                                                 <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
                                                     accessibilityGranted
-                                                        ? 'bg-gradient-to-br from-green-500 to-green-600'
-                                                        : 'bg-gradient-to-br from-gray-600 to-gray-700'
+                                                        ? 'bg-[var(--color-success-muted)]'
+                                                        : 'bg-[var(--color-bg-quaternary)]'
                                                 }`}>
                                                     {accessibilityGranted ? (
-                                                        <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <svg className="w-5 h-5 text-[var(--color-success)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
                                                         </svg>
                                                     ) : (
-                                                        <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <svg className="w-5 h-5 text-[var(--color-text-tertiary)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                                                         </svg>
                                                     )}
@@ -233,21 +233,21 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                                             </div>
                                             <div className="flex-1">
                                                 <div className="flex items-center justify-between mb-2">
-                                                    <h3 className="text-lg font-semibold text-white">Accessibility</h3>
+                                                    <h3 className="text-lg font-semibold text-[var(--color-text-primary)] font-['Syne']">Accessibility</h3>
                                                     {accessibilityGranted && (
-                                                        <span className="text-xs px-2.5 py-1 rounded-full font-medium bg-green-900 text-green-400">
+                                                        <span className="text-xs px-2.5 py-1 rounded-full font-medium bg-[var(--color-success-muted)] text-[var(--color-success)] border border-[var(--color-success)]/30">
                                                             Granted
                                                         </span>
                                                     )}
                                                 </div>
-                                                <p className="text-sm text-gray-400 mb-3">
+                                                <p className="text-sm text-[var(--color-text-secondary)] mb-3">
                                                     Required to detect which app and window you're currently using
                                                 </p>
                                                 {!accessibilityGranted && (
                                                     <button
                                                         onClick={requestAccessibility}
                                                         disabled={checkingPermissions}
-                                                        className="px-4 py-2 bg-amber-600 hover:bg-amber-500 disabled:bg-gray-700 disabled:text-gray-500 text-white text-sm font-semibold rounded-lg transition-all"
+                                                        className="px-4 py-2 bg-[var(--color-warning)] hover:bg-[var(--color-warning)]/90 disabled:bg-[var(--color-bg-tertiary)] disabled:text-[var(--color-text-tertiary)] text-[var(--color-bg-primary)] text-sm font-semibold rounded-lg transition-all"
                                                     >
                                                         {checkingPermissions ? 'Opening Settings...' : 'Grant Permission'}
                                                     </button>
@@ -257,20 +257,20 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                                     </div>
 
                                     {/* Screen Recording Permission */}
-                                    <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-5">
+                                    <div className="bg-[var(--color-bg-tertiary)] border border-[var(--color-border-primary)] rounded-xl p-5">
                                         <div className="flex items-start gap-4">
                                             <div className="flex-shrink-0">
                                                 <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
                                                     screenRecordingGranted
-                                                        ? 'bg-gradient-to-br from-green-500 to-green-600'
-                                                        : 'bg-gradient-to-br from-gray-600 to-gray-700'
+                                                        ? 'bg-[var(--color-success-muted)]'
+                                                        : 'bg-[var(--color-bg-quaternary)]'
                                                 }`}>
                                                     {screenRecordingGranted ? (
-                                                        <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <svg className="w-5 h-5 text-[var(--color-success)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
                                                         </svg>
                                                     ) : (
-                                                        <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <svg className="w-5 h-5 text-[var(--color-text-tertiary)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
                                                         </svg>
                                                     )}
@@ -278,21 +278,21 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                                             </div>
                                             <div className="flex-1">
                                                 <div className="flex items-center justify-between mb-2">
-                                                    <h3 className="text-lg font-semibold text-white">Screen Recording</h3>
+                                                    <h3 className="text-lg font-semibold text-[var(--color-text-primary)] font-['Syne']">Screen Recording</h3>
                                                     {screenRecordingGranted && (
-                                                        <span className="text-xs px-2.5 py-1 rounded-full font-medium bg-green-900 text-green-400">
+                                                        <span className="text-xs px-2.5 py-1 rounded-full font-medium bg-[var(--color-success-muted)] text-[var(--color-success)] border border-[var(--color-success)]/30">
                                                             Granted
                                                         </span>
                                                     )}
                                                 </div>
-                                                <p className="text-sm text-gray-400 mb-3">
+                                                <p className="text-sm text-[var(--color-text-secondary)] mb-3">
                                                     Required to capture screenshots of your work for AI-powered summaries
                                                 </p>
                                                 {!screenRecordingGranted && (
                                                     <button
                                                         onClick={requestScreenRecording}
                                                         disabled={checkingPermissions}
-                                                        className="px-4 py-2 bg-amber-600 hover:bg-amber-500 disabled:bg-gray-700 disabled:text-gray-500 text-white text-sm font-semibold rounded-lg transition-all"
+                                                        className="px-4 py-2 bg-[var(--color-warning)] hover:bg-[var(--color-warning)]/90 disabled:bg-[var(--color-bg-tertiary)] disabled:text-[var(--color-text-tertiary)] text-[var(--color-bg-primary)] text-sm font-semibold rounded-lg transition-all"
                                                     >
                                                         {checkingPermissions ? 'Opening Settings...' : 'Grant Permission'}
                                                     </button>
@@ -304,9 +304,9 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
 
                                 {/* Warning if permissions not granted */}
                                 {(!accessibilityGranted || !screenRecordingGranted) && (
-                                    <div className="bg-yellow-900/20 border border-yellow-700/50 rounded-lg px-4 py-3 mb-6">
-                                        <div className="flex items-start gap-2 text-sm text-yellow-300">
-                                            <svg className="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <div className="bg-[var(--color-warning-muted)] border border-[var(--color-warning)]/30 rounded-lg px-4 py-3 mb-6">
+                                        <div className="flex items-start gap-2 text-sm text-[var(--color-text-primary)]">
+                                            <svg className="w-4 h-4 flex-shrink-0 mt-0.5 text-[var(--color-warning)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                                             </svg>
                                             <span>
@@ -317,16 +317,16 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                                 )}
 
                                 {/* Actions */}
-                                <div className="flex justify-between gap-3 pt-6 border-t border-gray-700">
+                                <div className="flex justify-between gap-3 pt-6 border-t border-[var(--color-border-primary)]">
                                     <button
                                         onClick={handleSkipAll}
-                                        className="px-5 py-2.5 text-gray-400 hover:text-white text-sm font-medium transition-colors"
+                                        className="px-5 py-2.5 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] text-sm font-medium transition-colors"
                                     >
                                         Skip Setup
                                     </button>
                                     <button
                                         onClick={handleNext}
-                                        className="px-6 py-2.5 bg-gradient-to-r from-green-600 to-green-500 hover:from-green-500 hover:to-green-400 text-white text-sm font-semibold rounded-lg transition-all transform hover:scale-105 active:scale-95 shadow-lg shadow-green-600/30"
+                                        className="px-6 py-2.5 bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white text-sm font-semibold rounded-full transition-all transform hover:scale-105 active:scale-95 shadow-lg"
                                     >
                                         Continue
                                     </button>
@@ -339,29 +339,29 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                             <div className="p-8">
                                 {/* Header */}
                                 <div className="text-center mb-8">
-                                    <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-green-500 to-green-600 rounded-2xl mb-4 shadow-lg shadow-green-500/30">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <div className="inline-flex items-center justify-center w-16 h-16 bg-[var(--color-accent-muted)] rounded-2xl mb-4 shadow-lg">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--color-accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                             <rect x="2" y="3" width="20" height="18" rx="2"/>
                                             <path d="M2 12h20"/>
                                             <path d="M10 7h4"/>
                                             <path d="M10 16h4"/>
                                         </svg>
                                     </div>
-                                    <h2 className="text-3xl font-bold text-white mb-2">Welcome to Clearical</h2>
-                                    <p className="text-gray-400 text-lg">Let's get you started with your first bucket</p>
+                                    <h2 className="text-3xl font-bold text-[var(--color-text-primary)] mb-2 font-['Syne']">Welcome to Clearical</h2>
+                                    <p className="text-[var(--color-text-secondary)] text-lg">Let's get you started with your first bucket</p>
                                 </div>
 
                                 {/* Info Box */}
-                                <div className="bg-blue-900/20 border border-blue-700/50 rounded-xl p-4 mb-6">
+                                <div className="bg-[var(--color-accent-muted)] border border-[var(--color-accent)]/30 rounded-xl p-4 mb-6">
                                     <div className="flex gap-3">
                                         <div className="flex-shrink-0 mt-0.5">
-                                            <svg className="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <svg className="w-5 h-5 text-[var(--color-accent)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                                             </svg>
                                         </div>
                                         <div>
-                                            <h4 className="text-sm font-semibold text-blue-300 mb-1">What are buckets?</h4>
-                                            <p className="text-sm text-blue-200/80">
+                                            <h4 className="text-sm font-semibold text-[var(--color-text-primary)] mb-1 font-['Syne']">What are buckets?</h4>
+                                            <p className="text-sm text-[var(--color-text-secondary)]">
                                                 Buckets are categories that help you organize your time entries.
                                                 Think of them as projects, clients, or types of work you want to track separately.
                                             </p>
@@ -372,7 +372,7 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                                 {/* Form */}
                                 <div className="space-y-5">
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-300 mb-2">
+                                        <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-2 font-['Syne']">
                                             Bucket Name
                                         </label>
                                         <input
@@ -385,13 +385,13 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                                                 }
                                             }}
                                             autoFocus
-                                            className="w-full bg-gray-950 border border-gray-700 text-white text-base rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all"
+                                            className="w-full bg-[var(--color-bg-tertiary)] border border-[var(--color-border-primary)] text-[var(--color-text-primary)] text-base rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:border-transparent transition-all"
                                             placeholder="e.g., Client Work, Deep Focus, Meetings"
                                         />
                                     </div>
 
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-300 mb-2">
+                                        <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-2 font-['Syne']">
                                             Choose a Color
                                         </label>
                                         <div className="grid grid-cols-8 gap-2.5">
@@ -402,7 +402,7 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                                                     onClick={() => setSelectedColor(color.value)}
                                                     className={`aspect-square rounded-lg transition-all transform ${
                                                         selectedColor === color.value
-                                                            ? 'ring-2 ring-white ring-offset-2 ring-offset-gray-900 scale-110 shadow-lg'
+                                                            ? 'ring-2 ring-[var(--color-accent)] ring-offset-2 ring-offset-[var(--color-bg-secondary)] scale-110 shadow-lg'
                                                             : 'hover:scale-105 opacity-70 hover:opacity-100'
                                                     }`}
                                                     style={{ backgroundColor: color.value }}
@@ -414,24 +414,24 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                                 </div>
 
                                 {/* Actions */}
-                                <div className="flex justify-between gap-3 mt-8 pt-6 border-t border-gray-700">
+                                <div className="flex justify-between gap-3 mt-8 pt-6 border-t border-[var(--color-border-primary)]">
                                     <button
                                         onClick={handleSkipAll}
-                                        className="px-5 py-2.5 text-gray-400 hover:text-white text-sm font-medium transition-colors"
+                                        className="px-5 py-2.5 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] text-sm font-medium transition-colors"
                                     >
                                         Skip Setup
                                     </button>
                                     <div className="flex gap-3">
                                         <button
                                             onClick={handleSkipBucket}
-                                            className="px-5 py-2.5 text-gray-300 hover:text-white text-sm font-medium transition-colors rounded-lg hover:bg-gray-800"
+                                            className="px-5 py-2.5 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] text-sm font-medium transition-colors rounded-lg hover:bg-[var(--color-bg-tertiary)]"
                                         >
                                             Skip
                                         </button>
                                         <button
                                             onClick={handleCreateBucket}
                                             disabled={!bucketName.trim()}
-                                            className="px-6 py-2.5 bg-gradient-to-r from-green-600 to-green-500 hover:from-green-500 hover:to-green-400 disabled:from-gray-700 disabled:to-gray-700 disabled:text-gray-500 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-lg transition-all transform hover:scale-105 active:scale-95 shadow-lg shadow-green-600/30 disabled:shadow-none"
+                                            className="px-6 py-2.5 bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] disabled:bg-[var(--color-bg-tertiary)] disabled:text-[var(--color-text-tertiary)] disabled:cursor-not-allowed text-white text-sm font-semibold rounded-full transition-all transform hover:scale-105 active:scale-95 shadow-lg disabled:shadow-none"
                                         >
                                             Create & Continue
                                         </button>

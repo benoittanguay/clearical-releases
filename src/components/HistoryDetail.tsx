@@ -194,13 +194,13 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
         if (saveTimeoutId) {
             clearTimeout(saveTimeoutId);
         }
-        
+
         const timeoutId = setTimeout(() => {
             onUpdate(entry.id, {
                 description: description.trim() || undefined
             });
         }, 500); // 500ms debounce
-        
+
         setSaveTimeoutId(timeoutId);
     };
 
@@ -210,7 +210,7 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
         if (description !== (entry.description || '')) {
             autoSave();
         }
-        
+
         return () => {
             if (saveTimeoutId) {
                 clearTimeout(saveTimeoutId);
@@ -547,7 +547,7 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
         if (selectedScreenshots) {
             const updatedScreenshots = selectedScreenshots.filter(path => path !== screenshotPath);
             const updatedMetadata = selectedScreenshotMetadata?.filter(meta => meta.path !== screenshotPath);
-            
+
             if (updatedScreenshots.length === 0) {
                 setSelectedScreenshots(null);
                 setSelectedScreenshotMetadata(null);
@@ -560,13 +560,13 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
 
     const handleAddManualEntry = () => {
         if (!manualDescription.trim() || !manualDuration.trim()) return;
-        
+
         // Parse duration from user input (supports formats like "1h 30m", "90m", "1.5h", "90")
         const duration = parseDuration(manualDuration);
         if (duration <= 0) return;
-        
+
         addManualActivityToEntry(entry.id, manualDescription.trim(), duration);
-        
+
         // Reset form
         setManualDescription('');
         setManualDuration('');
@@ -781,7 +781,7 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
 
         entry.windowActivity.forEach(activity => {
             const appName = activity.appName;
-            
+
             if (!groups.has(appName)) {
                 groups.set(appName, {
                     appName,
@@ -849,29 +849,67 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
     };
 
     return (
-        <div className="w-full h-full flex flex-col">
+        <div className="w-full h-full flex flex-col" style={{ backgroundColor: 'var(--color-bg-primary)' }}>
             {/* Sticky Header with Back Button and Log to Tempo Button */}
-            <div className="flex-shrink-0 bg-gray-900 border-b border-gray-800 px-4 py-3 z-20 drag-handle">
+            <div className="flex-shrink-0 border-b px-4 py-3 z-20 drag-handle" style={{ backgroundColor: 'var(--color-bg-primary)', borderColor: 'var(--color-border-primary)' }}>
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2 no-drag">
                         <button
                             onClick={onBack}
-                            className="p-1.5 hover:bg-gray-800 active:bg-gray-700 rounded-lg transition-all text-gray-400 hover:text-white active:scale-95"
-                            style={{ transitionDuration: 'var(--duration-fast)', transitionTimingFunction: 'var(--ease-out)' }}
+                            className="p-1.5 rounded-lg transition-all active:scale-95"
+                            style={{
+                                backgroundColor: 'var(--color-bg-secondary)',
+                                color: 'var(--color-text-secondary)',
+                                transitionDuration: 'var(--duration-fast)',
+                                transitionTimingFunction: 'var(--ease-out)',
+                                border: '1px solid var(--color-border-primary)'
+                            }}
+                            onMouseEnter={(e) => {
+                                e.currentTarget.style.borderColor = 'var(--color-accent)';
+                                e.currentTarget.style.color = 'var(--color-text-primary)';
+                            }}
+                            onMouseLeave={(e) => {
+                                e.currentTarget.style.borderColor = 'var(--color-border-primary)';
+                                e.currentTarget.style.color = 'var(--color-text-secondary)';
+                            }}
                         >
                             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                 <path d="M19 12H5M12 19l-7-7 7-7" />
                             </svg>
                         </button>
-                        <h2 className="text-xl font-bold">Activity Details</h2>
+                        <h2 className="text-xl font-bold" style={{ fontFamily: 'var(--font-display)', color: 'var(--color-text-primary)' }}>Activity Details</h2>
                     </div>
 
                     {/* Log to Tempo Button - moved to header */}
                     <div className="no-drag">
                         <button
                             onClick={handleOpenTempoModal}
-                            className={`px-3 py-1.5 ${hasTempoAccess ? 'bg-blue-600 hover:bg-blue-700 active:bg-blue-800' : 'bg-gray-600 hover:bg-gray-500 active:bg-gray-400'} text-white text-sm rounded-lg transition-all active:scale-[0.99] flex items-center justify-center gap-1.5`}
-                            style={{ transitionDuration: 'var(--duration-fast)', transitionTimingFunction: 'var(--ease-out)' }}
+                            className={`px-3 py-1.5 text-sm flex items-center justify-center gap-1.5 transition-all active:scale-95`}
+                            style={{
+                                backgroundColor: hasTempoAccess ? 'var(--color-accent)' : 'var(--color-bg-secondary)',
+                                color: hasTempoAccess ? '#FFFFFF' : 'var(--color-text-secondary)',
+                                borderRadius: 'var(--btn-radius)',
+                                transitionDuration: 'var(--duration-fast)',
+                                transitionTimingFunction: 'var(--ease-out)',
+                                boxShadow: hasTempoAccess ? 'var(--shadow-accent)' : 'var(--shadow-sm)',
+                                border: hasTempoAccess ? 'none' : '1px solid var(--color-border-primary)'
+                            }}
+                            onMouseEnter={(e) => {
+                                if (hasTempoAccess) {
+                                    e.currentTarget.style.backgroundColor = '#E64000';
+                                } else {
+                                    e.currentTarget.style.borderColor = 'var(--color-accent)';
+                                    e.currentTarget.style.color = 'var(--color-text-primary)';
+                                }
+                            }}
+                            onMouseLeave={(e) => {
+                                if (hasTempoAccess) {
+                                    e.currentTarget.style.backgroundColor = 'var(--color-accent)';
+                                } else {
+                                    e.currentTarget.style.borderColor = 'var(--color-border-primary)';
+                                    e.currentTarget.style.color = 'var(--color-text-secondary)';
+                                }
+                            }}
                         >
                             {hasTempoAccess ? (
                                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -892,14 +930,14 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
 
             <div className="flex-1 overflow-y-auto px-4 pb-4">
                 {/* Entry Summary - Reorganized */}
-                <div className="bg-gray-800/50 rounded-lg border border-gray-700">
+                <div className="border rounded-lg mt-4" style={{ backgroundColor: 'var(--color-bg-secondary)', borderColor: 'var(--color-border-primary)', borderRadius: 'var(--radius-2xl)', boxShadow: 'var(--shadow-md)' }}>
                     {/* Time Summary Section - Start/End times and Duration counter */}
-                    <div className="flex items-center justify-between p-3 border-b border-gray-700">
-                        <div className="flex flex-col gap-0.5">
-                            <div className="text-xs text-gray-400">
+                    <div className="flex items-center justify-between p-4 border-b" style={{ borderColor: 'var(--color-border-secondary)' }}>
+                        <div className="flex flex-col gap-1">
+                            <div className="text-xs" style={{ color: 'var(--color-text-secondary)', fontFamily: 'var(--font-mono)' }}>
                                 <span className="font-semibold">Start:</span> {new Date(entry.startTime).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true })}
                             </div>
-                            <div className="text-xs text-gray-400">
+                            <div className="text-xs" style={{ color: 'var(--color-text-secondary)', fontFamily: 'var(--font-mono)' }}>
                                 <span className="font-semibold">End:</span> {new Date(entry.startTime + entry.duration).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true })}
                             </div>
                         </div>
@@ -910,24 +948,24 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                                 formatTime={formatTime}
                             />
                             {isRoundingEnabled && roundTime(entry.duration).isRounded && (
-                                <div className="flex items-center gap-1.5 text-xs text-gray-400">
-                                    <span className="text-gray-500">{formatTime(entry.duration)}</span>
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-500">
+                                <div className="flex items-center gap-1.5 text-xs" style={{ color: 'var(--color-text-secondary)' }}>
+                                    <span style={{ color: 'var(--color-text-tertiary)' }}>{formatTime(entry.duration)}</span>
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--color-text-tertiary)' }}>
                                         <polyline points="9 18 15 12 9 6" />
                                     </svg>
-                                    <span className="text-green-400 font-semibold">{formatTime(roundTime(entry.duration).rounded)}</span>
-                                    <span className="text-purple-400">({roundTime(entry.duration).formattedDifference})</span>
+                                    <span style={{ color: 'var(--color-accent)', fontWeight: 'var(--font-semibold)' }}>{formatTime(roundTime(entry.duration).rounded)}</span>
+                                    <span style={{ color: 'var(--color-info)' }}>({roundTime(entry.duration).formattedDifference})</span>
                                 </div>
                             )}
                         </div>
                     </div>
 
                     {/* Assignment Section */}
-                    <div className="p-3 border-b border-gray-700">
-                        <div className="flex items-center justify-between mb-1.5">
-                            <label className="text-xs text-gray-400 uppercase font-semibold">Assignment</label>
+                    <div className="p-4 border-b" style={{ borderColor: 'var(--color-border-secondary)' }}>
+                        <div className="flex items-center justify-between mb-2">
+                            <label className="text-xs uppercase font-semibold" style={{ color: 'var(--color-text-secondary)', letterSpacing: 'var(--tracking-wider)' }}>Assignment</label>
                             {entry.assignmentAutoSelected && currentAssignment && (
-                                <span className="text-xs text-purple-400 flex items-center gap-1">
+                                <span className="text-xs flex items-center gap-1" style={{ color: 'var(--color-info)' }}>
                                     <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                         <path d="M12 2L2 7l10 5 10-5-10-5z"/>
                                         <path d="M2 17l10 5 10-5"/>
@@ -947,13 +985,13 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
 
                     {/* Tempo Account Section - Only visible when Jira assignment + Tempo enabled */}
                     {currentAssignment?.type === 'jira' && settings.tempo?.enabled && (
-                        <div className="p-3 border-b border-gray-700">
-                            <div className="flex items-center justify-between mb-1.5">
-                                <label className="text-xs text-gray-400 uppercase font-semibold">
+                        <div className="p-4 border-b" style={{ borderColor: 'var(--color-border-secondary)' }}>
+                            <div className="flex items-center justify-between mb-2">
+                                <label className="text-xs uppercase font-semibold" style={{ color: 'var(--color-text-secondary)', letterSpacing: 'var(--tracking-wider)' }}>
                                     Tempo Account
                                 </label>
                                 {entry.tempoAccountAutoSelected && entry.tempoAccount && (
-                                    <span className="text-xs text-purple-400 flex items-center gap-1">
+                                    <span className="text-xs flex items-center gap-1" style={{ color: 'var(--color-info)' }}>
                                         <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                             <path d="M12 2L2 7l10 5 10-5-10-5z"/>
                                             <path d="M2 17l10 5 10-5"/>
@@ -965,30 +1003,44 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                             </div>
 
                             {isLoadingAccounts ? (
-                                <div className="flex items-center gap-2 text-sm text-gray-400 py-2">
-                                    <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
+                                <div className="flex items-center gap-2 text-sm py-2" style={{ color: 'var(--color-text-secondary)' }}>
+                                    <div className="w-4 h-4 border-2 rounded-full animate-spin" style={{ borderColor: 'var(--color-text-secondary)', borderTopColor: 'transparent' }}></div>
                                     <span>Loading accounts...</span>
                                 </div>
                             ) : availableAccounts.length === 0 ? (
-                                <div className="text-sm text-gray-500 py-2">
+                                <div className="text-sm py-2" style={{ color: 'var(--color-text-tertiary)' }}>
                                     No accounts available for this issue
                                 </div>
                             ) : entry.tempoAccount ? (
                                 <div className="flex items-center justify-between">
                                     <div className="flex-1 min-w-0">
-                                        <div className="bg-gray-700 border border-gray-600 rounded-lg px-3 py-2">
-                                            <div className="text-sm text-white font-medium">
+                                        <div className="border rounded-lg px-3 py-2" style={{ backgroundColor: 'var(--color-bg-primary)', borderColor: 'var(--color-border-primary)' }}>
+                                            <div className="text-sm font-medium" style={{ color: 'var(--color-text-primary)' }}>
                                                 {entry.tempoAccount.name}
                                             </div>
-                                            <div className="text-xs text-gray-400 font-mono">
+                                            <div className="text-xs font-mono" style={{ color: 'var(--color-text-secondary)', fontFamily: 'var(--font-mono)' }}>
                                                 {entry.tempoAccount.key}
                                             </div>
                                         </div>
                                     </div>
                                     <button
                                         onClick={() => setShowAccountPicker(true)}
-                                        className="ml-2 px-2.5 py-1.5 text-xs bg-gray-700 hover:bg-gray-600 active:bg-gray-500 text-gray-300 hover:text-white rounded-md transition-all active:scale-95"
-                                        style={{ transitionDuration: 'var(--duration-fast)', transitionTimingFunction: 'var(--ease-out)' }}
+                                        className="ml-2 px-2.5 py-1.5 text-xs rounded-md transition-all active:scale-95 border"
+                                        style={{
+                                            backgroundColor: 'var(--color-bg-primary)',
+                                            color: 'var(--color-text-secondary)',
+                                            borderColor: 'var(--color-border-primary)',
+                                            transitionDuration: 'var(--duration-fast)',
+                                            transitionTimingFunction: 'var(--ease-out)'
+                                        }}
+                                        onMouseEnter={(e) => {
+                                            e.currentTarget.style.borderColor = 'var(--color-accent)';
+                                            e.currentTarget.style.color = 'var(--color-text-primary)';
+                                        }}
+                                        onMouseLeave={(e) => {
+                                            e.currentTarget.style.borderColor = 'var(--color-border-primary)';
+                                            e.currentTarget.style.color = 'var(--color-text-secondary)';
+                                        }}
                                     >
                                         Change
                                     </button>
@@ -996,8 +1048,22 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                             ) : (
                                 <button
                                     onClick={() => setShowAccountPicker(true)}
-                                    className="w-full bg-gray-700 border border-gray-600 hover:border-gray-500 active:border-gray-400 text-gray-400 hover:text-gray-300 active:text-gray-200 text-sm rounded-lg px-3 py-2 text-left transition-all"
-                                    style={{ transitionDuration: 'var(--duration-fast)', transitionTimingFunction: 'var(--ease-out)' }}
+                                    className="w-full border text-sm rounded-lg px-3 py-2 text-left transition-all"
+                                    style={{
+                                        backgroundColor: 'var(--color-bg-primary)',
+                                        borderColor: 'var(--color-border-primary)',
+                                        color: 'var(--color-text-secondary)',
+                                        transitionDuration: 'var(--duration-fast)',
+                                        transitionTimingFunction: 'var(--ease-out)'
+                                    }}
+                                    onMouseEnter={(e) => {
+                                        e.currentTarget.style.borderColor = 'var(--color-accent)';
+                                        e.currentTarget.style.color = 'var(--color-text-primary)';
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        e.currentTarget.style.borderColor = 'var(--color-border-primary)';
+                                        e.currentTarget.style.color = 'var(--color-text-secondary)';
+                                    }}
                                 >
                                     Select account...
                                 </button>
@@ -1006,12 +1072,12 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                     )}
 
                     {/* Description Section */}
-                    <div className="p-3">
-                        <div className="flex items-center justify-between mb-1.5">
+                    <div className="p-4">
+                        <div className="flex items-center justify-between mb-2">
                             <div className="flex items-center gap-2">
-                                <label className="text-xs text-gray-400 uppercase font-semibold">Description</label>
+                                <label className="text-xs uppercase font-semibold" style={{ color: 'var(--color-text-secondary)', letterSpacing: 'var(--tracking-wider)' }}>Description</label>
                                 {entry.description && entry.descriptionAutoGenerated && (
-                                    <span className="text-xs text-purple-400 flex items-center gap-1">
+                                    <span className="text-xs flex items-center gap-1" style={{ color: 'var(--color-info)' }}>
                                         <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                             <path d="M12 2L2 7l10 5 10-5-10-5z"/>
                                             <path d="M2 17l10 5 10-5"/>
@@ -1022,11 +1088,11 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                                 )}
                                 {screenshotStats.total > 0 && (
                                     <div className="flex items-center gap-2">
-                                        <div className="text-xs text-gray-500">
+                                        <div className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
                                             {screenshotStats.analyzed}/{screenshotStats.total} screenshots analyzed
                                         </div>
                                         {totalAnalyzing > 0 && (
-                                            <div className="flex items-center gap-1.5 text-xs bg-blue-900/20 text-blue-300 px-2 py-1 rounded-full border border-blue-500/30 animate-pulse">
+                                            <div className="flex items-center gap-1.5 text-xs px-2 py-1 rounded-full border animate-pulse" style={{ backgroundColor: 'rgba(59, 130, 246, 0.1)', color: 'var(--color-info)', borderColor: 'rgba(59, 130, 246, 0.3)' }}>
                                                 <svg className="animate-spin h-3 w-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                                                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                                                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
@@ -1041,8 +1107,13 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                                 <button
                                     onClick={() => handleGenerateSummary(false)}
                                     disabled={isGeneratingSummary}
-                                    className="px-2.5 py-1 bg-purple-600 hover:bg-purple-700 active:bg-purple-800 disabled:bg-gray-600 disabled:cursor-not-allowed text-white text-xs rounded-md transition-all active:scale-[0.98] flex items-center gap-1"
-                                    style={{ transitionDuration: 'var(--duration-fast)', transitionTimingFunction: 'var(--ease-out)' }}
+                                    className="px-2.5 py-1 text-white text-xs rounded-md transition-all active:scale-95 flex items-center gap-1 disabled:cursor-not-allowed"
+                                    style={{
+                                        backgroundColor: isGeneratingSummary ? 'var(--color-bg-tertiary)' : 'var(--color-info)',
+                                        transitionDuration: 'var(--duration-fast)',
+                                        transitionTimingFunction: 'var(--ease-out)',
+                                        opacity: isGeneratingSummary ? 0.6 : 1
+                                    }}
                                 >
                                     {isGeneratingSummary ? (
                                         <>
@@ -1066,20 +1137,40 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                             value={description}
                             onChange={(e) => setDescription(e.target.value)}
                             placeholder="Add a description for this time entry..."
-                            className="w-full bg-gray-700 border border-gray-600 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 resize-none"
+                            className="w-full border text-sm rounded-lg px-3 py-2 focus:outline-none resize-none"
+                            style={{
+                                backgroundColor: 'var(--color-bg-primary)',
+                                borderColor: 'var(--color-border-primary)',
+                                color: 'var(--color-text-primary)',
+                                fontFamily: 'var(--font-body)',
+                                transitionDuration: 'var(--duration-fast)',
+                                transitionTimingFunction: 'var(--ease-out)'
+                            }}
+                            onFocus={(e) => {
+                                e.currentTarget.style.borderColor = 'var(--color-accent)';
+                                e.currentTarget.style.boxShadow = 'var(--focus-ring)';
+                            }}
+                            onBlur={(e) => {
+                                e.currentTarget.style.borderColor = 'var(--color-border-primary)';
+                                e.currentTarget.style.boxShadow = 'none';
+                            }}
                             rows={3}
                         />
                     </div>
                 </div>
 
                 {/* Window Activity - Grouped by App */}
-                <div className="mt-4">
-                    <div className="flex items-center justify-between mb-2">
-                        <h3 className="text-base font-semibold text-gray-300">Window Activity</h3>
+                <div className="mt-6">
+                    <div className="flex items-center justify-between mb-3">
+                        <h3 className="text-base font-semibold" style={{ color: 'var(--color-text-primary)' }}>Window Activity</h3>
                         <button
                             onClick={() => setShowManualEntryForm(!showManualEntryForm)}
-                            className="px-2.5 py-1 bg-green-600 hover:bg-green-700 active:bg-green-800 text-white text-xs rounded-md transition-all active:scale-95 flex items-center gap-1"
-                            style={{ transitionDuration: 'var(--duration-fast)', transitionTimingFunction: 'var(--ease-out)' }}
+                            className="px-2.5 py-1 text-white text-xs rounded-md transition-all active:scale-95 flex items-center gap-1"
+                            style={{
+                                backgroundColor: 'var(--color-accent)',
+                                transitionDuration: 'var(--duration-fast)',
+                                transitionTimingFunction: 'var(--ease-out)'
+                            }}
                         >
                             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                 <line x1="12" y1="5" x2="12" y2="19" />
@@ -1090,27 +1181,58 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                     </div>
                 {/* Manual Entry Form */}
                 {showManualEntryForm && (
-                    <div className="bg-gray-800/50 rounded-lg p-3 border border-gray-700 mb-3">
-                        <h4 className="text-sm font-semibold text-gray-300 mb-2">Add Manual Entry</h4>
-                        <div className="space-y-2">
+                    <div className="rounded-lg p-4 border mb-4" style={{ backgroundColor: 'var(--color-bg-secondary)', borderColor: 'var(--color-border-primary)', borderRadius: 'var(--radius-xl)', boxShadow: 'var(--shadow-sm)' }}>
+                        <h4 className="text-sm font-semibold mb-3" style={{ color: 'var(--color-text-primary)' }}>Add Manual Entry</h4>
+                        <div className="space-y-3">
                             <div>
-                                <label className="block text-xs text-gray-400 mb-1">Description</label>
+                                <label className="block text-xs mb-1" style={{ color: 'var(--color-text-secondary)' }}>Description</label>
                                 <input
                                     type="text"
                                     value={manualDescription}
                                     onChange={(e) => setManualDescription(e.target.value)}
                                     placeholder="Enter activity description..."
-                                    className="w-full bg-gray-700 border border-gray-600 text-white text-sm rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
+                                    className="w-full border text-sm rounded px-3 py-2 focus:outline-none"
+                                    style={{
+                                        backgroundColor: 'var(--color-bg-primary)',
+                                        borderColor: 'var(--color-border-primary)',
+                                        color: 'var(--color-text-primary)',
+                                        transitionDuration: 'var(--duration-fast)',
+                                        transitionTimingFunction: 'var(--ease-out)'
+                                    }}
+                                    onFocus={(e) => {
+                                        e.currentTarget.style.borderColor = 'var(--color-accent)';
+                                        e.currentTarget.style.boxShadow = 'var(--focus-ring)';
+                                    }}
+                                    onBlur={(e) => {
+                                        e.currentTarget.style.borderColor = 'var(--color-border-primary)';
+                                        e.currentTarget.style.boxShadow = 'none';
+                                    }}
                                 />
                             </div>
                             <div>
-                                <label className="block text-xs text-gray-400 mb-1">Duration</label>
+                                <label className="block text-xs mb-1" style={{ color: 'var(--color-text-secondary)' }}>Duration</label>
                                 <input
                                     type="text"
                                     value={manualDuration}
                                     onChange={(e) => setManualDuration(e.target.value)}
                                     placeholder="e.g. 30m, 1h 30m, 90"
-                                    className="w-full bg-gray-700 border border-gray-600 text-white text-sm rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
+                                    className="w-full border text-sm rounded px-3 py-2 focus:outline-none"
+                                    style={{
+                                        backgroundColor: 'var(--color-bg-primary)',
+                                        borderColor: 'var(--color-border-primary)',
+                                        color: 'var(--color-text-primary)',
+                                        fontFamily: 'var(--font-mono)',
+                                        transitionDuration: 'var(--duration-fast)',
+                                        transitionTimingFunction: 'var(--ease-out)'
+                                    }}
+                                    onFocus={(e) => {
+                                        e.currentTarget.style.borderColor = 'var(--color-accent)';
+                                        e.currentTarget.style.boxShadow = 'var(--focus-ring)';
+                                    }}
+                                    onBlur={(e) => {
+                                        e.currentTarget.style.borderColor = 'var(--color-border-primary)';
+                                        e.currentTarget.style.boxShadow = 'none';
+                                    }}
                                 />
                             </div>
                             <div className="flex items-center gap-2 justify-end">
@@ -1120,14 +1242,45 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                                         setManualDescription('');
                                         setManualDuration('');
                                     }}
-                                    className="px-3 py-1 text-gray-400 hover:text-white text-sm transition-colors"
+                                    className="px-3 py-1.5 text-sm transition-all active:scale-95 border rounded"
+                                    style={{
+                                        color: 'var(--color-text-secondary)',
+                                        backgroundColor: 'var(--color-bg-primary)',
+                                        borderColor: 'var(--color-border-primary)',
+                                        transitionDuration: 'var(--duration-fast)',
+                                        transitionTimingFunction: 'var(--ease-out)'
+                                    }}
+                                    onMouseEnter={(e) => {
+                                        e.currentTarget.style.borderColor = 'var(--color-accent)';
+                                        e.currentTarget.style.color = 'var(--color-text-primary)';
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        e.currentTarget.style.borderColor = 'var(--color-border-primary)';
+                                        e.currentTarget.style.color = 'var(--color-text-secondary)';
+                                    }}
                                 >
                                     Cancel
                                 </button>
                                 <button
                                     onClick={handleAddManualEntry}
                                     disabled={!manualDescription.trim() || !manualDuration.trim()}
-                                    className="px-3 py-1 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white text-sm rounded transition-colors"
+                                    className="px-3 py-1.5 text-white text-sm rounded transition-all active:scale-95 disabled:cursor-not-allowed"
+                                    style={{
+                                        backgroundColor: (!manualDescription.trim() || !manualDuration.trim()) ? 'var(--color-bg-tertiary)' : 'var(--color-accent)',
+                                        opacity: (!manualDescription.trim() || !manualDuration.trim()) ? 0.5 : 1,
+                                        transitionDuration: 'var(--duration-fast)',
+                                        transitionTimingFunction: 'var(--ease-out)'
+                                    }}
+                                    onMouseEnter={(e) => {
+                                        if (manualDescription.trim() && manualDuration.trim()) {
+                                            e.currentTarget.style.backgroundColor = '#E64000';
+                                        }
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        if (manualDescription.trim() && manualDuration.trim()) {
+                                            e.currentTarget.style.backgroundColor = 'var(--color-accent)';
+                                        }
+                                    }}
                                 >
                                     Add Entry
                                 </button>
@@ -1138,51 +1291,62 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
 
 
                 {appGroups.length === 0 ? (
-                    <div className="text-gray-500 text-sm py-6 text-center animate-fade-in">
-                        <svg className="w-12 h-12 mx-auto mb-2 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div className="text-sm py-8 text-center animate-fade-in" style={{ color: 'var(--color-text-tertiary)' }}>
+                        <svg className="w-12 h-12 mx-auto mb-2" style={{ color: 'var(--color-text-tertiary)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                         </svg>
                         <p>No window activity recorded for this session</p>
-                        <p className="text-xs text-gray-600 mt-1">Click "Add Manual Entry" to add time manually</p>
+                        <p className="text-xs mt-1" style={{ color: 'var(--color-text-tertiary)' }}>Click "Add Manual Entry" to add time manually</p>
                     </div>
                 ) : (
-                    <div className="space-y-2">
+                    <div className="space-y-3">
                         {appGroups.map(group => {
                             const isExpanded = expandedApps.has(group.appName);
                             const icon = appIcons.get(group.appName);
 
                             return (
-                                <div key={group.appName} className="bg-gray-800/50 rounded-lg border border-gray-700 overflow-hidden">
+                                <div key={group.appName} className="border rounded-lg overflow-hidden" style={{ backgroundColor: 'var(--color-bg-secondary)', borderColor: 'var(--color-border-primary)', borderRadius: 'var(--radius-xl)', boxShadow: 'var(--shadow-sm)' }}>
                                     {/* App Header */}
                                     <button
                                         onClick={() => toggleApp(group.appName)}
-                                        className="w-full flex items-center justify-between p-2.5 hover:bg-gray-800/80 active:bg-gray-800 transition-all"
-                                        style={{ transitionDuration: 'var(--duration-fast)', transitionTimingFunction: 'var(--ease-out)' }}
+                                        className="w-full flex items-center justify-between p-3 transition-all"
+                                        style={{
+                                            transitionDuration: 'var(--duration-fast)',
+                                            transitionTimingFunction: 'var(--ease-out)',
+                                            backgroundColor: 'transparent'
+                                        }}
+                                        onMouseEnter={(e) => {
+                                            e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)';
+                                        }}
+                                        onMouseLeave={(e) => {
+                                            e.currentTarget.style.backgroundColor = 'transparent';
+                                        }}
                                     >
                                         <div className="flex items-center gap-3 flex-1 min-w-0">
-                                            <svg 
-                                                xmlns="http://www.w3.org/2000/svg" 
-                                                width="16" 
-                                                height="16" 
-                                                viewBox="0 0 24 24" 
-                                                fill="none" 
-                                                stroke="currentColor" 
-                                                strokeWidth="2" 
-                                                strokeLinecap="round" 
+                                            <svg
+                                                xmlns="http://www.w3.org/2000/svg"
+                                                width="16"
+                                                height="16"
+                                                viewBox="0 0 24 24"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                strokeWidth="2"
+                                                strokeLinecap="round"
                                                 strokeLinejoin="round"
-                                                className={`text-gray-400 transition-transform flex-shrink-0 ${isExpanded ? 'rotate-180' : ''}`}
+                                                className="flex-shrink-0 transition-transform"
+                                                style={{ color: 'var(--color-text-secondary)', transform: isExpanded ? 'rotate(180deg)' : 'none', transition: 'transform var(--duration-base) var(--ease-out)' }}
                                             >
                                                 <polyline points="6 9 12 15 18 9" />
                                             </svg>
                                             {group.appName === 'Manual Entry' ? (
-                                                <div className="w-6 h-6 rounded bg-gray-700 flex items-center justify-center flex-shrink-0">
-                                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-green-400">
+                                                <div className="w-6 h-6 rounded flex items-center justify-center flex-shrink-0" style={{ backgroundColor: 'var(--color-bg-primary)' }}>
+                                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--color-accent)' }}>
                                                         <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
                                                     </svg>
                                                 </div>
                                             ) : icon ? (
-                                                <img 
-                                                    src={icon} 
+                                                <img
+                                                    src={icon}
                                                     alt={group.appName}
                                                     className="w-6 h-6 rounded flex-shrink-0"
                                                     onError={(e) => {
@@ -1194,22 +1358,22 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                                                     }}
                                                 />
                                             ) : (
-                                                <div className="w-6 h-6 rounded bg-gray-700 flex items-center justify-center flex-shrink-0">
-                                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-400">
+                                                <div className="w-6 h-6 rounded flex items-center justify-center flex-shrink-0" style={{ backgroundColor: 'var(--color-bg-primary)' }}>
+                                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--color-text-secondary)' }}>
                                                         <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
                                                         <line x1="9" y1="3" x2="9" y2="21" />
                                                     </svg>
                                                 </div>
                                             )}
                                             <div className="flex-1 min-w-0">
-                                                <div className="font-semibold text-white truncate">{group.appName}</div>
-                                                <div className="text-xs text-gray-400">
+                                                <div className="font-semibold truncate" style={{ color: 'var(--color-text-primary)' }}>{group.appName}</div>
+                                                <div className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
                                                     {group.activities.length} {group.activities.length === 1 ? 'activity' : 'activities'}
                                                 </div>
                                             </div>
                                         </div>
                                         <div className="flex items-center gap-3 ml-4">
-                                            <div className="font-mono text-green-400 font-bold">
+                                            <div className="font-mono font-bold" style={{ fontFamily: 'var(--font-mono)', color: 'var(--color-accent)' }}>
                                                 {formatTime(group.totalDuration)}
                                             </div>
                                             <DeleteButton
@@ -1223,18 +1387,26 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
 
                                     {/* Activities List */}
                                     {isExpanded && (
-                                        <div className="border-t border-gray-700">
+                                        <div className="border-t" style={{ borderColor: 'var(--color-border-primary)' }}>
                                             {group.activities.map((activity, index) => (
                                                 <div
                                                     key={`${activity.timestamp}-${index}`}
-                                                    className="p-2.5 border-b border-gray-800/50 last:border-b-0 hover:bg-gray-800/30 transition-colors"
+                                                    className="p-3 border-b last:border-b-0 transition-colors"
+                                                    style={{
+                                                        borderColor: 'var(--color-border-primary)',
+                                                        backgroundColor: 'transparent',
+                                                        transitionDuration: 'var(--duration-fast)',
+                                                        transitionTimingFunction: 'var(--ease-out)'
+                                                    }}
+                                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)'}
+                                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                                                 >
                                                     <div className="flex items-start justify-between gap-3">
                                                         <div className="flex-1 min-w-0">
-                                                            <div className="text-sm font-medium text-gray-200 truncate mb-1">
+                                                            <div className="text-sm font-medium truncate mb-1" style={{ color: 'var(--color-text-primary)' }}>
                                                                 {getWindowTitle(activity)}
                                                             </div>
-                                                            <div className="text-xs text-gray-500 mb-1">
+                                                            <div className="text-xs mb-1" style={{ color: 'var(--color-text-tertiary)', fontFamily: 'var(--font-mono)' }}>
                                                                 {new Date(activity.timestamp).toLocaleTimeString()}
                                                             </div>
                                                             {activity.screenshotPaths && activity.screenshotPaths.length > 0 && (
@@ -1258,8 +1430,20 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                                                                         setSelectedScreenshots(screenshots);
                                                                         setSelectedScreenshotMetadata(metadata);
                                                                     }}
-                                                                    className="text-xs text-green-400 hover:text-green-300 active:text-green-200 mt-1 flex items-center gap-1 hover:bg-green-500/10 active:bg-green-500/20 px-1.5 py-0.5 rounded transition-all"
-                                                                    style={{ transitionDuration: 'var(--duration-fast)', transitionTimingFunction: 'var(--ease-out)' }}
+                                                                    className="text-xs mt-1 flex items-center gap-1 px-1.5 py-0.5 rounded transition-all"
+                                                                    style={{
+                                                                        color: 'var(--color-accent)',
+                                                                        transitionDuration: 'var(--duration-fast)',
+                                                                        transitionTimingFunction: 'var(--ease-out)'
+                                                                    }}
+                                                                    onMouseEnter={(e) => {
+                                                                        e.currentTarget.style.backgroundColor = 'var(--color-accent-muted)';
+                                                                        e.currentTarget.style.color = 'var(--color-accent-light)';
+                                                                    }}
+                                                                    onMouseLeave={(e) => {
+                                                                        e.currentTarget.style.backgroundColor = 'transparent';
+                                                                        e.currentTarget.style.color = 'var(--color-accent)';
+                                                                    }}
                                                                 >
                                                                     <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                                                         <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
@@ -1271,7 +1455,7 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                                                             )}
                                                         </div>
                                                         <div className="flex items-center gap-2">
-                                                            <div className="font-mono text-green-400 font-semibold text-sm">
+                                                            <div className="font-mono font-semibold text-sm" style={{ fontFamily: 'var(--font-mono)', color: 'var(--color-accent)' }}>
                                                                 {formatTime(activity.duration)}
                                                             </div>
                                                             <button
@@ -1280,8 +1464,18 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                                                                     act.appName === activity.appName &&
                                                                     act.windowTitle === activity.windowTitle
                                                                 ) ?? -1)}
-                                                                className="p-1.5 hover:bg-blue-500/20 active:bg-blue-500/30 rounded text-blue-400 hover:text-blue-300 active:text-blue-200 transition-all active:scale-95"
-                                                                style={{ transitionDuration: 'var(--duration-fast)', transitionTimingFunction: 'var(--ease-out)' }}
+                                                                className="p-1.5 rounded transition-all active:scale-95"
+                                                                style={{
+                                                                    color: 'var(--color-info)',
+                                                                    transitionDuration: 'var(--duration-fast)',
+                                                                    transitionTimingFunction: 'var(--ease-out)'
+                                                                }}
+                                                                onMouseEnter={(e) => {
+                                                                    e.currentTarget.style.backgroundColor = 'var(--color-info-muted)';
+                                                                }}
+                                                                onMouseLeave={(e) => {
+                                                                    e.currentTarget.style.backgroundColor = 'transparent';
+                                                                }}
                                                                 title="Create new entry from this activity"
                                                             >
                                                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1357,26 +1551,30 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
 
             {/* Upgrade Modal for Free Users */}
             {showUpgradeModal && (
-                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
-                    <div className="bg-gray-800 rounded-xl border border-gray-700 p-6 max-w-sm w-full mx-4 shadow-2xl">
+                <div className="fixed inset-0 flex items-center justify-center z-50" style={{ backgroundColor: 'rgba(0, 0, 0, 0.7)', backdropFilter: 'blur(8px)' }}>
+                    <div className="rounded-xl border p-6 max-w-sm w-full mx-4 shadow-2xl" style={{ backgroundColor: 'var(--color-bg-secondary)', borderColor: 'var(--color-border-primary)', borderRadius: 'var(--radius-3xl)' }}>
                         <div className="text-center">
                             {/* Lock Icon */}
-                            <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full mx-auto mb-4 flex items-center justify-center">
+                            <div className="w-16 h-16 rounded-full mx-auto mb-4 flex items-center justify-center" style={{ background: 'linear-gradient(135deg, var(--color-info) 0%, var(--color-accent) 100%)' }}>
                                 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                     <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
                                     <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
                                 </svg>
                             </div>
 
-                            <h3 className="text-xl font-bold text-white mb-2">Premium Feature</h3>
-                            <p className="text-gray-400 mb-6">
+                            <h3 className="text-xl font-bold mb-2" style={{ color: 'var(--color-text-primary)' }}>Premium Feature</h3>
+                            <p className="mb-6" style={{ color: 'var(--color-text-secondary)' }}>
                                 Upgrade for Jira and Tempo integrations
                             </p>
 
                             <div className="flex flex-col gap-3">
                                 <button
                                     onClick={handleOpenUpgradeUrl}
-                                    className="w-full py-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white font-medium rounded-lg transition-all active:scale-[0.98] flex items-center justify-center gap-2"
+                                    className="w-full py-3 text-white font-medium rounded-lg transition-all active:scale-95 flex items-center justify-center gap-2"
+                                    style={{
+                                        background: 'linear-gradient(135deg, var(--color-info) 0%, var(--color-accent) 100%)',
+                                        borderRadius: 'var(--btn-radius)'
+                                    }}
                                 >
                                     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                         <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
@@ -1387,7 +1585,10 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                                 </button>
                                 <button
                                     onClick={() => setShowUpgradeModal(false)}
-                                    className="w-full py-2 text-gray-400 hover:text-white text-sm transition-colors"
+                                    className="w-full py-2 text-sm transition-colors"
+                                    style={{ color: 'var(--color-text-secondary)' }}
+                                    onMouseEnter={(e) => e.currentTarget.style.color = 'var(--color-text-primary)'}
+                                    onMouseLeave={(e) => e.currentTarget.style.color = 'var(--color-text-secondary)'}
                                 >
                                     Maybe Later
                                 </button>

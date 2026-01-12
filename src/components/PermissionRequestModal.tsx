@@ -118,14 +118,14 @@ export function PermissionRequestModal({ isOpen, onClose, onPermissionsGranted }
     const someGranted = permissions.accessibility || permissions.screenRecording;
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50 backdrop-blur-sm">
-            <div className="bg-gradient-to-b from-gray-800 to-gray-900 rounded-2xl shadow-2xl w-full max-w-2xl mx-4 overflow-hidden border border-gray-700">
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 animate-fade-in">
+            <div className="bg-[var(--color-bg-secondary)] rounded-[32px] shadow-2xl w-full max-w-2xl mx-4 overflow-hidden border border-[var(--color-border-primary)]">
                 {/* Header */}
-                <div className="bg-gradient-to-r from-red-900/30 to-orange-900/30 border-b border-gray-700 px-6 py-4">
+                <div className="bg-[var(--color-warning-muted)] border-b border-[var(--color-border-primary)] px-6 py-4">
                     <div className="flex items-center gap-3">
                         <div className="flex-shrink-0">
-                            <div className="w-12 h-12 bg-gradient-to-br from-amber-500 to-amber-600 rounded-xl flex items-center justify-center shadow-lg shadow-amber-500/30">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <div className="w-12 h-12 bg-[var(--color-warning)] rounded-xl flex items-center justify-center shadow-lg">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--color-bg-primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                     <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
                                     <line x1="12" y1="9" x2="12" y2="13"/>
                                     <line x1="12" y1="17" x2="12.01" y2="17"/>
@@ -133,8 +133,8 @@ export function PermissionRequestModal({ isOpen, onClose, onPermissionsGranted }
                             </div>
                         </div>
                         <div>
-                            <h2 className="text-2xl font-bold text-white">Permissions Required</h2>
-                            <p className="text-gray-400 text-sm">Clearical needs system permissions to track your activity</p>
+                            <h2 className="text-2xl font-bold text-[var(--color-text-primary)] font-['Syne']">Permissions Required</h2>
+                            <p className="text-[var(--color-text-secondary)] text-sm">Clearical needs system permissions to track your activity</p>
                         </div>
                     </div>
                 </div>
@@ -142,16 +142,16 @@ export function PermissionRequestModal({ isOpen, onClose, onPermissionsGranted }
                 {/* Content */}
                 <div className="p-6">
                     {/* Why Box */}
-                    <div className="bg-blue-900/20 border border-blue-700/50 rounded-xl p-4 mb-6">
+                    <div className="bg-[var(--color-accent-muted)] border border-[var(--color-accent)]/30 rounded-xl p-4 mb-6">
                         <div className="flex gap-3">
                             <div className="flex-shrink-0 mt-0.5">
-                                <svg className="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <svg className="w-5 h-5 text-[var(--color-accent)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                                 </svg>
                             </div>
                             <div>
-                                <h4 className="text-sm font-semibold text-blue-300 mb-1">Why these permissions?</h4>
-                                <p className="text-sm text-blue-200/80">
+                                <h4 className="text-sm font-semibold text-[var(--color-text-primary)] mb-1 font-['Syne']">Why these permissions?</h4>
+                                <p className="text-sm text-[var(--color-text-secondary)]">
                                     Clearical needs these permissions to automatically track which apps you're using and capture screenshots for AI-powered summaries. Without them, the timer cannot function properly.
                                 </p>
                             </div>

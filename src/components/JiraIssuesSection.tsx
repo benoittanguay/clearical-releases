@@ -155,13 +155,13 @@ export function JiraIssuesSection({ onIssueClick }: JiraIssuesSectionProps = {})
     const getStatusColor = (statusCategory: string) => {
         switch (statusCategory.toLowerCase()) {
             case 'new':
-                return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300';
+                return { backgroundColor: 'rgba(59, 130, 246, 0.15)', color: 'var(--color-info)', border: '1px solid rgba(59, 130, 246, 0.3)' };
             case 'indeterminate':
-                return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300';
+                return { backgroundColor: 'rgba(250, 204, 21, 0.15)', color: 'var(--color-warning)', border: '1px solid rgba(250, 204, 21, 0.3)' };
             case 'done':
-                return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300';
+                return { backgroundColor: 'rgba(34, 197, 94, 0.15)', color: 'var(--color-success)', border: '1px solid rgba(34, 197, 94, 0.3)' };
             default:
-                return 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300';
+                return { backgroundColor: 'var(--color-bg-tertiary)', color: 'var(--color-text-secondary)', border: '1px solid var(--color-border-primary)' };
         }
     };
 
@@ -173,22 +173,62 @@ export function JiraIssuesSection({ onIssueClick }: JiraIssuesSectionProps = {})
         return (
             <div className="mt-6">
                 <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-base font-semibold text-white">Jira Issues</h3>
-                    <span className="text-xs px-2 py-1 bg-yellow-900/30 text-yellow-400 rounded border border-yellow-700">
+                    <h3 className="text-base font-semibold"
+                        style={{
+                            color: 'var(--color-text-primary)',
+                            fontFamily: 'var(--font-display)'
+                        }}>
+                        Jira Issues
+                    </h3>
+                    <span className="text-xs px-2 py-1 rounded border"
+                          style={{
+                              backgroundColor: 'rgba(250, 204, 21, 0.1)',
+                              color: 'var(--color-warning)',
+                              borderColor: 'rgba(250, 204, 21, 0.3)',
+                              fontFamily: 'var(--font-body)'
+                          }}>
                         WORKPLACE ONLY
                     </span>
                 </div>
-                <div className="bg-gray-800/30 rounded-lg p-6 border border-gray-700">
+                <div className="rounded-xl p-6 border"
+                     style={{
+                         backgroundColor: 'var(--color-bg-secondary)',
+                         borderColor: 'var(--color-border-primary)',
+                         borderRadius: 'var(--radius-xl)'
+                     }}>
                     <div className="text-center">
-                        <svg className="w-12 h-12 mx-auto mb-3 text-yellow-500" fill="currentColor" viewBox="0 0 20 20">
+                        <svg className="w-12 h-12 mx-auto mb-3"
+                             style={{ color: 'var(--color-warning)' }}
+                             fill="currentColor"
+                             viewBox="0 0 20 20">
                             <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
                         </svg>
-                        <h4 className="text-lg font-semibold text-white mb-2">Jira Integration Locked</h4>
-                        <p className="text-sm text-gray-400 mb-4">
+                        <h4 className="text-lg font-semibold mb-2"
+                            style={{
+                                color: 'var(--color-text-primary)',
+                                fontFamily: 'var(--font-display)'
+                            }}>
+                            Jira Integration Locked
+                        </h4>
+                        <p className="text-sm mb-4"
+                           style={{
+                               color: 'var(--color-text-secondary)',
+                               fontFamily: 'var(--font-body)'
+                           }}>
                             Upgrade to Workplace Plan to connect your Jira account and track time to issues
                         </p>
                         <button
-                            className="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm rounded transition-colors"
+                            className="px-6 py-2 text-sm rounded transition-all"
+                            style={{
+                                backgroundColor: 'var(--color-accent)',
+                                color: 'var(--color-bg-primary)',
+                                fontFamily: 'var(--font-body)',
+                                fontWeight: 'var(--font-semibold)',
+                                transitionDuration: 'var(--duration-base)',
+                                transitionTimingFunction: 'var(--ease-out)'
+                            }}
+                            onMouseEnter={(e) => e.currentTarget.style.opacity = '0.9'}
+                            onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
                         >
                             Upgrade to Workplace
                         </button>
@@ -200,8 +240,16 @@ export function JiraIssuesSection({ onIssueClick }: JiraIssuesSectionProps = {})
 
     return (
         <div className="mt-6">
-            <div className="flex items-center justify-between mb-3">
-                <h3 className="text-base font-semibold text-white">Jira Issues</h3>
+            <div className="flex items-center justify-between mb-4">
+                <h3
+                    className="text-lg font-bold"
+                    style={{
+                        fontFamily: 'var(--font-display)',
+                        color: 'var(--color-text-primary)'
+                    }}
+                >
+                    Jira Issues
+                </h3>
                 <button
                     onClick={() => {
                         if (activeTab === 'assigned') {
@@ -221,7 +269,23 @@ export function JiraIssuesSection({ onIssueClick }: JiraIssuesSectionProps = {})
                             });
                         }
                     }}
-                    className="px-2.5 py-1 bg-gray-700 hover:bg-gray-600 text-white text-xs rounded transition-colors"
+                    className="px-3 py-1.5 text-xs font-medium rounded-lg transition-all"
+                    style={{
+                        backgroundColor: 'var(--color-bg-tertiary)',
+                        color: 'var(--color-text-primary)',
+                        fontFamily: 'var(--font-body)',
+                        border: '1px solid var(--color-border-primary)',
+                        transitionDuration: 'var(--duration-base)',
+                        transitionTimingFunction: 'var(--ease-out)'
+                    }}
+                    onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = 'var(--color-bg-quaternary)';
+                        e.currentTarget.style.borderColor = 'var(--color-accent-border)';
+                    }}
+                    onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)';
+                        e.currentTarget.style.borderColor = 'var(--color-border-primary)';
+                    }}
                     disabled={currentTabData.loading}
                 >
                     Refresh
@@ -230,12 +294,20 @@ export function JiraIssuesSection({ onIssueClick }: JiraIssuesSectionProps = {})
 
             {/* Crawler Status Section */}
             {Object.keys(projects).length > 0 && (
-                <div className="mb-3 bg-gray-800/30 rounded-lg p-3 border border-gray-700">
+                <div className="mb-4 rounded-xl p-4 border"
+                     style={{
+                         backgroundColor: 'var(--color-bg-secondary)',
+                         borderColor: 'var(--color-border-primary)',
+                         borderRadius: 'var(--radius-xl)'
+                     }}>
                     <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center gap-2">
                             <svg
-                                className={`w-4 h-4 text-green-400 ${isActive ? 'animate-spin' : ''}`}
-                                style={{ animationDuration: '2s' }}
+                                className={`w-4 h-4 ${isActive ? 'animate-spin' : ''}`}
+                                style={{
+                                    animationDuration: '2s',
+                                    color: 'var(--color-success)'
+                                }}
                                 xmlns="http://www.w3.org/2000/svg"
                                 fill="none"
                                 viewBox="0 0 24 24"
@@ -248,11 +320,19 @@ export function JiraIssuesSection({ onIssueClick }: JiraIssuesSectionProps = {})
                                     d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
                                 />
                             </svg>
-                            <span className="text-xs font-medium text-gray-300">
+                            <span className="text-xs font-medium"
+                                  style={{
+                                      color: 'var(--color-text-primary)',
+                                      fontFamily: 'var(--font-body)'
+                                  }}>
                                 {isActive ? 'Syncing projects...' : 'Projects synced'}
                             </span>
                         </div>
-                        <span className="text-xs text-gray-400">
+                        <span className="text-xs"
+                              style={{
+                                  color: 'var(--color-text-secondary)',
+                                  fontFamily: 'var(--font-body)'
+                              }}>
                             {totalIssuesFound} total issues discovered
                         </span>
                     </div>
@@ -261,13 +341,25 @@ export function JiraIssuesSection({ onIssueClick }: JiraIssuesSectionProps = {})
                     <div className="space-y-1.5">
                         {Object.values(projects).map(project => (
                             <div key={project.projectKey} className="flex items-center justify-between text-xs">
-                                <span className={`font-medium ${project.isComplete ? 'text-gray-400' : 'text-white'}`}>
+                                <span className="font-medium"
+                                      style={{
+                                          color: project.isComplete ? 'var(--color-text-secondary)' : 'var(--color-text-primary)',
+                                          fontFamily: 'var(--font-body)'
+                                      }}>
                                     {project.projectKey}
                                 </span>
                                 <div className="flex items-center gap-2">
-                                    <span className="text-gray-500">{project.issuesFound} issues</span>
+                                    <span style={{
+                                        color: 'var(--color-text-tertiary)',
+                                        fontFamily: 'var(--font-body)'
+                                    }}>
+                                        {project.issuesFound} issues
+                                    </span>
                                     {project.isComplete && (
-                                        <svg className="w-4 h-4 text-green-400" fill="currentColor" viewBox="0 0 20 20">
+                                        <svg className="w-4 h-4"
+                                             style={{ color: 'var(--color-success)' }}
+                                             fill="currentColor"
+                                             viewBox="0 0 20 20">
                                             <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                                         </svg>
                                     )}
@@ -277,8 +369,13 @@ export function JiraIssuesSection({ onIssueClick }: JiraIssuesSectionProps = {})
                     </div>
 
                     {isActive && (
-                        <div className="mt-2 pt-2 border-t border-gray-700">
-                            <p className="text-xs text-gray-500">
+                        <div className="mt-2 pt-2 border-t"
+                             style={{ borderColor: 'var(--color-border-primary)' }}>
+                            <p className="text-xs"
+                               style={{
+                                   color: 'var(--color-text-tertiary)',
+                                   fontFamily: 'var(--font-body)'
+                               }}>
                                 The crawler is discovering all issues in your projects. Check the top bar for detailed progress.
                             </p>
                         </div>
@@ -292,11 +389,25 @@ export function JiraIssuesSection({ onIssueClick }: JiraIssuesSectionProps = {})
                     <button
                         key={tab.key}
                         onClick={() => setActiveTab(tab.key)}
-                        className={`px-2.5 py-1.5 text-xs font-medium rounded-lg transition-colors flex items-center gap-1.5 whitespace-nowrap ${
-                            activeTab === tab.key
-                                ? 'bg-blue-600 text-white'
-                                : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                        }`}
+                        className="px-2.5 py-1.5 text-xs font-medium rounded-lg transition-all flex items-center gap-1.5 whitespace-nowrap"
+                        style={{
+                            backgroundColor: activeTab === tab.key ? 'var(--color-info)' : 'var(--color-bg-tertiary)',
+                            color: activeTab === tab.key ? '#FFFFFF' : 'var(--color-text-primary)',
+                            fontFamily: 'var(--font-body)',
+                            borderRadius: 'var(--radius-lg)',
+                            transitionDuration: 'var(--duration-base)',
+                            transitionTimingFunction: 'var(--ease-out)'
+                        }}
+                        onMouseEnter={(e) => {
+                            if (activeTab !== tab.key) {
+                                e.currentTarget.style.backgroundColor = 'var(--color-bg-quaternary)';
+                            }
+                        }}
+                        onMouseLeave={(e) => {
+                            if (activeTab !== tab.key) {
+                                e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)';
+                            }
+                        }}
                     >
                         {tab.label}
                         {tabData[tab.key]?.loading ? (
@@ -319,12 +430,50 @@ export function JiraIssuesSection({ onIssueClick }: JiraIssuesSectionProps = {})
                         onChange={(e) => setSearchQuery(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
                         placeholder="Search issues by text..."
-                        className="flex-1 bg-gray-900 border border-gray-700 text-white text-sm rounded px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        className="flex-1 text-sm rounded px-3 py-2 focus:outline-none transition-all"
+                        style={{
+                            backgroundColor: 'var(--color-bg-secondary)',
+                            border: '1px solid var(--color-border-primary)',
+                            color: 'var(--color-text-primary)',
+                            fontFamily: 'var(--font-body)',
+                            transitionDuration: 'var(--duration-base)',
+                            transitionTimingFunction: 'var(--ease-out)'
+                        }}
+                        onFocus={(e) => {
+                            e.currentTarget.style.borderColor = 'var(--color-accent)';
+                            e.currentTarget.style.boxShadow = 'var(--focus-ring)';
+                        }}
+                        onBlur={(e) => {
+                            e.currentTarget.style.borderColor = 'var(--color-border-primary)';
+                            e.currentTarget.style.boxShadow = 'none';
+                        }}
                     />
                     <button
                         onClick={handleSearch}
                         disabled={currentTabData.loading || !searchQuery.trim()}
-                        className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-600 disabled:cursor-not-allowed text-white text-sm rounded transition-colors"
+                        className="px-3 py-1.5 text-sm rounded transition-all"
+                        style={{
+                            backgroundColor: currentTabData.loading || !searchQuery.trim()
+                                ? 'var(--color-bg-tertiary)'
+                                : 'var(--color-info)',
+                            color: currentTabData.loading || !searchQuery.trim()
+                                ? 'var(--color-text-tertiary)'
+                                : '#FFFFFF',
+                            fontFamily: 'var(--font-body)',
+                            cursor: currentTabData.loading || !searchQuery.trim() ? 'not-allowed' : 'pointer',
+                            transitionDuration: 'var(--duration-base)',
+                            transitionTimingFunction: 'var(--ease-out)'
+                        }}
+                        onMouseEnter={(e) => {
+                            if (!currentTabData.loading && searchQuery.trim()) {
+                                e.currentTarget.style.opacity = '0.9';
+                            }
+                        }}
+                        onMouseLeave={(e) => {
+                            if (!currentTabData.loading && searchQuery.trim()) {
+                                e.currentTarget.style.opacity = '1';
+                            }
+                        }}
                     >
                         {currentTabData.loading ? 'Searching...' : 'Search'}
                     </button>
@@ -333,11 +482,29 @@ export function JiraIssuesSection({ onIssueClick }: JiraIssuesSectionProps = {})
 
             {/* Error State */}
             {currentTabData.error && (
-                <div className="bg-red-900/50 border border-red-700 rounded-lg p-2.5 mb-3">
-                    <p className="text-red-300 text-sm">{currentTabData.error}</p>
+                <div className="rounded-lg p-2.5 mb-3 border"
+                     style={{
+                         backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                         borderColor: 'rgba(239, 68, 68, 0.3)',
+                         borderRadius: 'var(--radius-lg)'
+                     }}>
+                    <p className="text-sm"
+                       style={{
+                           color: 'var(--color-error)',
+                           fontFamily: 'var(--font-body)'
+                       }}>
+                        {currentTabData.error}
+                    </p>
                     <button
                         onClick={() => loadTabData(activeTab)}
-                        className="mt-2 text-xs text-red-200 hover:text-white underline"
+                        className="mt-2 text-xs underline transition-colors"
+                        style={{
+                            color: 'var(--color-error)',
+                            fontFamily: 'var(--font-body)',
+                            transitionDuration: 'var(--duration-fast)'
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.color = 'var(--color-text-primary)'}
+                        onMouseLeave={(e) => e.currentTarget.style.color = 'var(--color-error)'}
                     >
                         Retry
                     </button>
@@ -345,66 +512,123 @@ export function JiraIssuesSection({ onIssueClick }: JiraIssuesSectionProps = {})
             )}
 
             {/* Issues List */}
-            <div className="bg-gray-800/30 rounded-lg p-3 border border-gray-700">
+            <div className="rounded-xl p-4 border"
+                 style={{
+                     backgroundColor: 'var(--color-bg-secondary)',
+                     borderColor: 'var(--color-border-primary)',
+                     borderRadius: 'var(--radius-xl)'
+                 }}>
                 {currentTabData.loading ? (
-                    <div className="flex items-center justify-center py-6">
-                        <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                        <span className="ml-2 text-gray-300">Loading issues...</span>
+                    <div className="flex items-center justify-center py-8">
+                        <div className="w-8 h-8 border-2 rounded-full animate-spin"
+                             style={{
+                                 borderColor: 'var(--color-accent)',
+                                 borderTopColor: 'transparent'
+                             }}></div>
+                        <span className="ml-3 font-medium"
+                              style={{
+                                  color: 'var(--color-text-secondary)',
+                                  fontFamily: 'var(--font-body)'
+                              }}>Loading issues...</span>
                     </div>
                 ) : currentTabData.issues.length === 0 ? (
-                    <div className="text-center py-6 text-gray-500">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mx-auto mb-2 opacity-50">
+                    <div className="text-center py-10"
+                         style={{ color: 'var(--color-text-tertiary)' }}>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="mx-auto mb-3" style={{ opacity: 0.4 }}>
                             <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
                             <circle cx="12" cy="12" r="4"/>
                         </svg>
-                        <p className="text-sm">No issues found</p>
-                        <p className="text-xs mt-1">
-                            {activeTab === 'search' 
+                        <p className="text-sm font-medium mb-1"
+                           style={{
+                               color: 'var(--color-text-secondary)',
+                               fontFamily: 'var(--font-body)'
+                           }}>No issues found</p>
+                        <p className="text-xs"
+                           style={{ fontFamily: 'var(--font-body)' }}>
+                            {activeTab === 'search'
                                 ? 'Try searching with different keywords'
                                 : 'Issues will appear here when available from your Jira instance'
                             }
                         </p>
                     </div>
                 ) : (
-                    <div className="space-y-1.5">
+                    <div className="space-y-2.5">
                         {currentTabData.issues.map((issue) => {
-                            // Check if this is an Epic issue type
                             const isEpic = issue.fields.issuetype.name.toLowerCase() === 'epic';
 
                             return (
                                 <div
                                     key={issue.id}
                                     onClick={() => onIssueClick?.(issue)}
-                                    className={`bg-gray-900/50 border rounded-lg p-2.5 hover:bg-gray-800/50 transition-colors cursor-pointer ${
-                                        isEpic ? 'border-purple-600/50' : 'border-gray-600'
-                                    }`}
+                                    className="rounded-lg p-3 border transition-all cursor-pointer"
+                                    style={{
+                                        backgroundColor: isEpic ? 'rgba(168, 85, 247, 0.05)' : 'var(--color-bg-tertiary)',
+                                        borderColor: isEpic ? 'rgba(168, 85, 247, 0.3)' : 'var(--color-border-secondary)',
+                                        borderRadius: 'var(--radius-lg)',
+                                        transitionDuration: 'var(--duration-base)',
+                                        transitionTimingFunction: 'var(--ease-out)'
+                                    }}
+                                    onMouseEnter={(e) => {
+                                        e.currentTarget.style.backgroundColor = isEpic ? 'rgba(168, 85, 247, 0.1)' : 'var(--color-bg-quaternary)';
+                                        e.currentTarget.style.borderColor = 'var(--color-accent-border)';
+                                        e.currentTarget.style.boxShadow = 'var(--shadow-sm)';
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        e.currentTarget.style.backgroundColor = isEpic ? 'rgba(168, 85, 247, 0.05)' : 'var(--color-bg-tertiary)';
+                                        e.currentTarget.style.borderColor = isEpic ? 'rgba(168, 85, 247, 0.3)' : 'var(--color-border-secondary)';
+                                        e.currentTarget.style.boxShadow = 'none';
+                                    }}
                                 >
                                     <div className="flex items-start justify-between">
                                         <div className="flex-1 min-w-0">
-                                            <div className="flex items-center gap-2 mb-1">
-                                                <span className="text-blue-400 font-mono text-sm font-medium">
+                                            <div className="flex items-center gap-2 mb-1.5">
+                                                <span className="font-mono text-sm font-semibold"
+                                                      style={{
+                                                          color: 'var(--color-info)',
+                                                          fontFamily: 'var(--font-mono)'
+                                                      }}>
                                                     {issue.key}
                                                 </span>
-                                                <span className="text-xs text-gray-500">
+                                                <span className="text-xs"
+                                                      style={{
+                                                          color: 'var(--color-text-tertiary)',
+                                                          fontFamily: 'var(--font-body)'
+                                                      }}>
                                                     {issue.fields.project.name}
                                                 </span>
-                                                <span className={`text-xs px-2 py-0.5 rounded ${
-                                                    isEpic
-                                                        ? 'bg-purple-900/40 text-purple-300 border border-purple-600/50 font-semibold'
-                                                        : 'bg-gray-700 text-gray-300'
-                                                }`}>
+                                                <span className="text-xs px-2 py-0.5 rounded"
+                                                      style={{
+                                                          backgroundColor: isEpic ? 'rgba(168, 85, 247, 0.2)' : 'var(--color-bg-quaternary)',
+                                                          color: isEpic ? '#c084fc' : 'var(--color-text-secondary)',
+                                                          border: isEpic ? '1px solid rgba(168, 85, 247, 0.4)' : 'none',
+                                                          fontFamily: 'var(--font-body)',
+                                                          fontWeight: isEpic ? 'var(--font-semibold)' : 'normal'
+                                                      }}>
                                                     {issue.fields.issuetype.name}
                                                 </span>
                                             </div>
-                                            <h4 className="text-white font-medium text-sm mb-2 line-clamp-2">
+                                            <h4 className="font-medium text-sm mb-2 line-clamp-2"
+                                                style={{
+                                                    color: 'var(--color-text-primary)',
+                                                    fontFamily: 'var(--font-body)'
+                                                }}>
                                                 {issue.fields.summary}
                                             </h4>
                                             <div className="flex items-center gap-2">
-                                                <span className={`px-2 py-1 rounded text-xs ${getStatusColor(issue.fields.status.statusCategory.key)}`}>
+                                                <span className="px-2 py-1 rounded text-xs"
+                                                      style={{
+                                                          ...getStatusColor(issue.fields.status.statusCategory.key),
+                                                          fontFamily: 'var(--font-body)',
+                                                          fontWeight: 'var(--font-medium)'
+                                                      }}>
                                                     {issue.fields.status.name}
                                                 </span>
                                                 {issue.fields.assignee && (
-                                                    <span className="text-xs text-gray-400">
+                                                    <span className="text-xs"
+                                                          style={{
+                                                              color: 'var(--color-text-tertiary)',
+                                                              fontFamily: 'var(--font-body)'
+                                                          }}>
                                                         → {issue.fields.assignee.displayName}
                                                     </span>
                                                 )}
@@ -419,7 +643,11 @@ export function JiraIssuesSection({ onIssueClick }: JiraIssuesSectionProps = {})
             </div>
 
             {currentTabData.issues.length > 0 && (
-                <p className="text-xs text-gray-500 mt-2 text-center">
+                <p className="text-xs mt-3 text-center"
+                   style={{
+                       color: 'var(--color-text-tertiary)',
+                       fontFamily: 'var(--font-body)'
+                   }}>
                     Click on any issue above to link it to a time entry
                 </p>
             )}

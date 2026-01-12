@@ -24,13 +24,13 @@ export function ExportDialog({ entries, buckets, onClose, onExport }: ExportDial
         const today = new Date();
         const thirtyDaysAgo = new Date();
         thirtyDaysAgo.setDate(today.getDate() - 30);
-        
+
         setDateTo(today.toISOString().split('T')[0]);
         setDateFrom(thirtyDaysAgo.toISOString().split('T')[0]);
     }, []);
 
     const handleBucketToggle = (bucketId: string) => {
-        setSelectedBucketIds(prev => 
+        setSelectedBucketIds(prev =>
             prev.includes(bucketId)
                 ? prev.filter(id => id !== bucketId)
                 : [...prev, bucketId]
@@ -47,23 +47,23 @@ export function ExportDialog({ entries, buckets, onClose, onExport }: ExportDial
 
     const getFilteredCount = () => {
         let filtered = entries;
-        
+
         if (dateFrom) {
             const fromDate = new Date(dateFrom + 'T00:00:00');
             fromDate.setHours(0, 0, 0, 0);
             filtered = filtered.filter(e => e.startTime >= fromDate.getTime());
         }
-        
+
         if (dateTo) {
             const toDate = new Date(dateTo + 'T23:59:59.999');
             toDate.setHours(23, 59, 59, 999);
             filtered = filtered.filter(e => e.startTime <= toDate.getTime());
         }
-        
+
         if (selectedBucketIds.length > 0) {
             filtered = filtered.filter(e => e.bucketId && selectedBucketIds.includes(e.bucketId));
         }
-        
+
         return filtered.length;
     };
 
@@ -80,14 +80,14 @@ export function ExportDialog({ entries, buckets, onClose, onExport }: ExportDial
             // Create dates properly - date input gives YYYY-MM-DD string
             let dateFromObj: Date | undefined;
             let dateToObj: Date | undefined;
-            
+
             if (dateFrom) {
                 dateFromObj = new Date(dateFrom + 'T00:00:00'); // Add time to avoid timezone issues
                 if (isNaN(dateFromObj.getTime())) {
                     throw new Error('Invalid start date');
                 }
             }
-            
+
             if (dateTo) {
                 dateToObj = new Date(dateTo + 'T23:59:59.999'); // End of day
                 if (isNaN(dateToObj.getTime())) {
@@ -149,16 +149,19 @@ export function ExportDialog({ entries, buckets, onClose, onExport }: ExportDial
     const filteredCount = getFilteredCount();
 
     return (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={onClose}>
-            <div 
-                className="bg-gray-800 rounded-lg p-6 w-full max-w-md border border-gray-700"
+        <div
+            className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 animate-fade-in"
+            onClick={onClose}
+        >
+            <div
+                className="bg-[var(--color-bg-secondary)] rounded-[32px] p-6 w-full max-w-md mx-4 border border-[var(--color-border-primary)] shadow-2xl animate-scale-in"
                 onClick={(e) => e.stopPropagation()}
             >
                 <div className="flex items-center justify-between mb-6">
-                    <h2 className="text-xl font-bold">Export Timesheet</h2>
+                    <h2 className="text-xl font-bold text-[var(--color-text-primary)] font-['Syne']">Export Timesheet</h2>
                     <button
                         onClick={onClose}
-                        className="text-gray-400 hover:text-white transition-colors"
+                        className="text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-all duration-200 hover:scale-110 active:scale-95"
                     >
                         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                             <line x1="18" y1="6" x2="6" y2="18" />
@@ -168,32 +171,32 @@ export function ExportDialog({ entries, buckets, onClose, onExport }: ExportDial
                 </div>
 
                 {error && (
-                    <div className="mb-4 p-3 bg-red-900/50 border border-red-700 rounded text-red-300 text-sm">
+                    <div className="mb-4 p-3 bg-[var(--color-error-muted)] border border-[var(--color-error)]/50 rounded-xl text-[var(--color-error)] text-sm font-mono">
                         {error}
                     </div>
                 )}
 
-                <div className="space-y-4 mb-6">
+                <div className="space-y-5 mb-6">
                     {/* Date Range */}
                     <div>
-                        <label className="text-sm font-semibold text-gray-300 mb-2 block">Date Range</label>
+                        <label className="block text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider mb-3 font-['Syne']">Date Range</label>
                         <div className="grid grid-cols-2 gap-3">
                             <div>
-                                <label className="text-xs text-gray-400 mb-1 block">From</label>
+                                <label className="block text-[10px] text-[var(--color-text-tertiary)] uppercase tracking-wider mb-1.5 font-mono">From</label>
                                 <input
                                     type="date"
                                     value={dateFrom}
                                     onChange={(e) => setDateFrom(e.target.value)}
-                                    className="w-full bg-gray-700 border border-gray-600 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
+                                    className="w-full bg-[var(--color-bg-tertiary)] border border-[var(--color-border-primary)] text-[var(--color-text-primary)] text-sm rounded-lg px-3 py-2.5 font-mono focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] transition-all duration-200"
                                 />
                             </div>
                             <div>
-                                <label className="text-xs text-gray-400 mb-1 block">To</label>
+                                <label className="block text-[10px] text-[var(--color-text-tertiary)] uppercase tracking-wider mb-1.5 font-mono">To</label>
                                 <input
                                     type="date"
                                     value={dateTo}
                                     onChange={(e) => setDateTo(e.target.value)}
-                                    className="w-full bg-gray-700 border border-gray-600 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
+                                    className="w-full bg-[var(--color-bg-tertiary)] border border-[var(--color-border-primary)] text-[var(--color-text-primary)] text-sm rounded-lg px-3 py-2.5 font-mono focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] transition-all duration-200"
                                 />
                             </div>
                         </div>
@@ -201,56 +204,56 @@ export function ExportDialog({ entries, buckets, onClose, onExport }: ExportDial
 
                     {/* Bucket Filter */}
                     <div>
-                        <div className="flex items-center justify-between mb-2">
-                            <label className="text-sm font-semibold text-gray-300">Buckets</label>
+                        <div className="flex items-center justify-between mb-3">
+                            <label className="text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider font-['Syne']">Buckets</label>
                             <button
                                 onClick={handleSelectAllBuckets}
-                                className="text-xs text-green-400 hover:text-green-300"
+                                className="text-xs text-[var(--color-accent)] hover:text-[var(--color-accent-hover)] font-semibold transition-colors duration-200"
                             >
                                 {selectedBucketIds.length === buckets.length ? 'Deselect All' : 'Select All'}
                             </button>
                         </div>
-                        <div className="max-h-32 overflow-y-auto space-y-2">
+                        <div className="max-h-32 overflow-y-auto space-y-2 bg-[var(--color-bg-tertiary)] rounded-lg p-3 border border-[var(--color-border-secondary)]">
                             {buckets.map(bucket => (
                                 <label
                                     key={bucket.id}
-                                    className="flex items-center gap-2 p-2 rounded hover:bg-gray-700/50 cursor-pointer"
+                                    className="flex items-center gap-2.5 p-2 rounded-lg hover:bg-[var(--color-bg-quaternary)] cursor-pointer transition-all duration-200 group"
                                 >
                                     <input
                                         type="checkbox"
                                         checked={selectedBucketIds.includes(bucket.id)}
                                         onChange={() => handleBucketToggle(bucket.id)}
-                                        className="w-4 h-4 text-green-600 bg-gray-700 border-gray-600 rounded focus:ring-green-500"
+                                        className="w-4 h-4 text-[var(--color-accent)] bg-[var(--color-bg-primary)] border-[var(--color-border-primary)] rounded focus:ring-[var(--color-accent)] transition-all duration-200"
                                     />
-                                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: bucket.color }}></div>
-                                    <span className="text-sm text-gray-300">{bucket.name}</span>
+                                    <div className="w-3 h-3 rounded-full transition-transform duration-200 group-hover:scale-110" style={{ backgroundColor: bucket.color }}></div>
+                                    <span className="text-sm text-[var(--color-text-primary)] font-mono">{bucket.name}</span>
                                 </label>
                             ))}
                         </div>
                     </div>
 
                     {/* Options */}
-                    <div className="space-y-2">
-                        <label className="text-sm font-semibold text-gray-300 block">Options</label>
-                        
-                        <label className="flex items-center gap-2 cursor-pointer">
+                    <div className="space-y-2.5">
+                        <label className="block text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider mb-3 font-['Syne']">Options</label>
+
+                        <label className="flex items-center gap-2.5 cursor-pointer group">
                             <input
                                 type="checkbox"
                                 checked={includeDescription}
                                 onChange={(e) => setIncludeDescription(e.target.checked)}
-                                className="w-4 h-4 text-green-600 bg-gray-700 border-gray-600 rounded focus:ring-green-500"
+                                className="w-4 h-4 text-[var(--color-accent)] bg-[var(--color-bg-tertiary)] border-[var(--color-border-primary)] rounded focus:ring-[var(--color-accent)]"
                             />
-                            <span className="text-sm text-gray-300">Include descriptions</span>
+                            <span className="text-sm text-[var(--color-text-primary)] font-mono group-hover:text-[var(--color-accent)] transition-colors duration-200">Include descriptions</span>
                         </label>
 
-                        <label className="flex items-center gap-2 cursor-pointer">
+                        <label className="flex items-center gap-2.5 cursor-pointer group">
                             <input
                                 type="checkbox"
                                 checked={includeIssueKey}
                                 onChange={(e) => setIncludeIssueKey(e.target.checked)}
-                                className="w-4 h-4 text-green-600 bg-gray-700 border-gray-600 rounded focus:ring-green-500"
+                                className="w-4 h-4 text-[var(--color-accent)] bg-[var(--color-bg-tertiary)] border-[var(--color-border-primary)] rounded focus:ring-[var(--color-accent)]"
                             />
-                            <span className="text-sm text-gray-300">Include issue key</span>
+                            <span className="text-sm text-[var(--color-text-primary)] font-mono group-hover:text-[var(--color-accent)] transition-colors duration-200">Include issue key</span>
                         </label>
 
                         {includeIssueKey && (
@@ -259,16 +262,16 @@ export function ExportDialog({ entries, buckets, onClose, onExport }: ExportDial
                                 value={issueKey}
                                 onChange={(e) => setIssueKey(e.target.value)}
                                 placeholder="Default issue key (e.g., PROJ-123)"
-                                className="w-full bg-gray-700 border border-gray-600 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500 mt-2"
+                                className="w-full bg-[var(--color-bg-tertiary)] border border-[var(--color-border-primary)] text-[var(--color-text-primary)] text-sm rounded-lg px-4 py-2.5 font-mono focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] mt-2 transition-all duration-200"
                             />
                         )}
                     </div>
 
                     {/* Preview */}
-                    <div className="bg-gray-900/50 rounded-lg p-3 border border-gray-700">
-                        <div className="text-xs text-gray-400 mb-1">Export Preview</div>
-                        <div className="text-sm text-gray-300">
-                            {filteredCount} {filteredCount === 1 ? 'activity' : 'activities'} will be exported
+                    <div className="bg-[var(--color-bg-tertiary)] rounded-xl p-4 border border-[var(--color-border-secondary)]">
+                        <div className="text-[10px] text-[var(--color-text-tertiary)] uppercase tracking-wider mb-1.5 font-['Syne'] font-bold">Export Preview</div>
+                        <div className="text-sm text-[var(--color-text-primary)] font-mono">
+                            <span className="text-[var(--color-accent)] font-bold">{filteredCount}</span> {filteredCount === 1 ? 'activity' : 'activities'} will be exported
                         </div>
                     </div>
                 </div>
@@ -278,14 +281,14 @@ export function ExportDialog({ entries, buckets, onClose, onExport }: ExportDial
                     <button
                         onClick={onClose}
                         disabled={isExporting}
-                        className="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
+                        className="flex-1 px-4 py-2.5 bg-[var(--color-bg-tertiary)] hover:bg-[var(--color-bg-quaternary)] text-[var(--color-text-primary)] text-sm font-medium rounded-full transition-all duration-200 disabled:opacity-50 hover:scale-105 active:scale-95 border border-[var(--color-border-primary)]"
                     >
                         Cancel
                     </button>
                     <button
                         onClick={handleExport}
                         disabled={isExporting || filteredCount === 0}
-                        className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-500 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                        className="flex-1 px-4 py-2.5 bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white text-sm font-semibold rounded-full transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 hover:scale-105 active:scale-95 shadow-lg hover:shadow-[var(--shadow-accent)]"
                     >
                         {isExporting ? (
                             <>

@@ -201,13 +201,13 @@ export function IntegrationConfigModal({
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-gray-800 rounded-lg p-6 w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 animate-fade-in">
+            <div className="bg-[var(--color-bg-secondary)] rounded-[32px] p-6 w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto border border-[var(--color-border-primary)] shadow-2xl animate-scale-in">
                 <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-lg font-semibold text-white">Configure Time Tracking Integration</h3>
+                    <h3 className="text-lg font-semibold text-[var(--color-text-primary)] font-['Syne']">Configure Time Tracking Integration</h3>
                     <button
                         onClick={onClose}
-                        className="text-gray-400 hover:text-white transition-colors"
+                        className="text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
                     >
                         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                             <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -218,33 +218,33 @@ export function IntegrationConfigModal({
 
                 {/* Testing Credentials Banner - Only show in development */}
                 {isDevelopment && (
-                    <div className="bg-orange-900/50 border border-orange-700 rounded-lg p-3 mb-4">
+                    <div className="bg-[var(--color-warning-muted)] border border-[var(--color-warning)]/30 rounded-lg p-3 mb-4">
                         <div className="flex items-center gap-2">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-orange-400">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[var(--color-warning)]">
                                 <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
                                 <line x1="12" y1="9" x2="12" y2="13"/>
                                 <line x1="12" y1="17" x2="12.01" y2="17"/>
                             </svg>
-                            <span className="text-orange-300 text-sm font-medium">Testing Mode</span>
+                            <span className="text-[var(--color-text-primary)] text-sm font-medium font-['Syne']">Testing Mode</span>
                         </div>
-                        <p className="text-orange-200 text-xs mt-1">
+                        <p className="text-[var(--color-text-secondary)] text-xs mt-1">
                             Development credentials are automatically loaded for testing purposes.
                         </p>
                     </div>
                 )}
 
-                <div className="mb-4 text-sm text-gray-400">
+                <div className="mb-4 text-sm text-[var(--color-text-secondary)]">
                     Both Jira and Tempo integrations work together to provide comprehensive time tracking capabilities.
                 </div>
 
                 {/* Tab Navigation */}
-                <div className="flex space-x-1 mb-6 bg-gray-900 rounded-lg p-1">
+                <div className="flex space-x-1 mb-6 bg-[var(--color-bg-tertiary)] rounded-lg p-1">
                     <button
                         onClick={() => setActiveTab('jira')}
                         className={`flex-1 px-4 py-2 text-sm font-medium rounded-md transition-colors ${
                             activeTab === 'jira'
-                                ? 'bg-blue-600 text-white'
-                                : 'text-gray-300 hover:bg-gray-700'
+                                ? 'bg-[var(--color-accent)] text-white'
+                                : 'text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-quaternary)]'
                         }`}
                     >
                         Jira Setup
@@ -253,8 +253,8 @@ export function IntegrationConfigModal({
                         onClick={() => setActiveTab('tempo')}
                         className={`flex-1 px-4 py-2 text-sm font-medium rounded-md transition-colors ${
                             activeTab === 'tempo'
-                                ? 'bg-blue-600 text-white'
-                                : 'text-gray-300 hover:bg-gray-700'
+                                ? 'bg-[var(--color-accent)] text-white'
+                                : 'text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-quaternary)]'
                         }`}
                     >
                         Tempo Setup
@@ -272,9 +272,9 @@ export function IntegrationConfigModal({
                                 onChange={(e) => {
                                     setTempJiraSettings(prev => ({ ...prev, enabled: e.target.checked }));
                                 }}
-                                className="w-4 h-4 text-blue-600 bg-gray-900 border border-gray-700 rounded focus:ring-blue-500 focus:ring-1"
+                                className="w-4 h-4 text-[var(--color-accent)] bg-[var(--color-bg-tertiary)] border border-[var(--color-border-primary)] rounded focus:ring-[var(--color-accent)] focus:ring-1"
                             />
-                            <label htmlFor="jira-enabled-unified" className="text-sm text-gray-300">
+                            <label htmlFor="jira-enabled-unified" className="text-sm text-[var(--color-text-primary)]">
                                 Enable Jira Integration
                             </label>
                         </div>
@@ -282,7 +282,7 @@ export function IntegrationConfigModal({
                         {tempJiraSettings.enabled && (
                             <>
                                 <div>
-                                    <label className="block text-sm text-gray-400 mb-2">
+                                    <label className="block text-sm text-[var(--color-text-secondary)] mb-2 font-['Syne']">
                                         Jira Base URL *
                                     </label>
                                     <input
@@ -291,7 +291,7 @@ export function IntegrationConfigModal({
                                         onChange={(e) => {
                                             setTempJiraSettings(prev => ({ ...prev, baseUrl: e.target.value }));
                                         }}
-                                        className="w-full bg-gray-900 border border-gray-700 text-white text-sm rounded px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                        className="w-full bg-[var(--color-bg-tertiary)] border border-[var(--color-border-primary)] text-[var(--color-text-primary)] text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]"
                                         placeholder="https://your-domain.atlassian.net"
                                     />
                                 </div>
@@ -526,13 +526,13 @@ export function IntegrationConfigModal({
                 <div className="flex justify-end gap-3 mt-8">
                     <button
                         onClick={onClose}
-                        className="px-4 py-2 text-gray-400 hover:text-white text-sm transition-colors"
+                        className="px-4 py-2 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] text-sm transition-colors"
                     >
                         Cancel
                     </button>
                     <button
                         onClick={handleSave}
-                        className="px-4 py-2 bg-green-600 hover:bg-green-500 text-white text-sm rounded transition-colors"
+                        className="px-6 py-2.5 bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white text-sm font-semibold rounded-full transition-all hover:scale-105 active:scale-95 shadow-lg"
                     >
                         Save Configuration
                     </button>

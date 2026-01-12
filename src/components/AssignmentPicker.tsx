@@ -114,22 +114,47 @@ export function AssignmentPicker({ value, onChange, placeholder = "Select assign
         <div className={`relative ${className}`}>
             <button
                 onClick={() => setIsOpen(!isOpen)}
-                className="w-full flex items-center justify-between px-3 py-2 bg-gray-900 border border-gray-700 text-white text-sm rounded hover:bg-gray-800 hover:border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 active:scale-[0.99] transition-all"
-                style={{ transitionDuration: 'var(--duration-base)', transitionTimingFunction: 'var(--ease-out)' }}
+                className="w-full flex items-center justify-between px-4 py-3 rounded-lg text-sm focus:outline-none active:scale-[0.98] transition-all"
+                style={{
+                    backgroundColor: 'var(--color-bg-secondary)',
+                    border: '1px solid var(--color-border-primary)',
+                    color: 'var(--color-text-primary)',
+                    fontFamily: 'var(--font-body)',
+                    transitionDuration: 'var(--duration-base)',
+                    transitionTimingFunction: 'var(--ease-out)',
+                    boxShadow: 'var(--shadow-sm)'
+                }}
+                onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)';
+                    e.currentTarget.style.borderColor = 'var(--color-accent-border)';
+                }}
+                onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = 'var(--color-bg-secondary)';
+                    e.currentTarget.style.borderColor = 'var(--color-border-primary)';
+                }}
             >
-                <div className="flex items-center gap-2 flex-1 min-w-0">
+                <div className="flex items-center gap-3 flex-1 min-w-0">
                     <div
-                        className="w-3 h-3 rounded-full flex-shrink-0 shadow-sm transition-shadow"
+                        className="rounded-full flex-shrink-0 transition-all"
                         style={{
+                            width: '12px',
+                            height: '12px',
                             backgroundColor: getDisplayColor(),
-                            boxShadow: value ? `0 0 8px ${getDisplayColor()}40` : 'none'
+                            boxShadow: value ? `0 0 12px ${getDisplayColor()}60, 0 2px 8px ${getDisplayColor()}40` : 'none',
+                            transitionDuration: 'var(--duration-base)',
+                            transitionTimingFunction: 'var(--ease-out)'
                         }}
                     />
-                    <span className="truncate">{getDisplayText()}</span>
+                    <span className="truncate font-medium">{getDisplayText()}</span>
                 </div>
                 <svg
-                    className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''}`}
-                    style={{ transitionDuration: 'var(--duration-base)', transitionTimingFunction: 'var(--ease-out)' }}
+                    className="w-4 h-4 flex-shrink-0 transition-transform"
+                    style={{
+                        transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                        transitionDuration: 'var(--duration-base)',
+                        transitionTimingFunction: 'var(--ease-out)',
+                        color: 'var(--color-text-secondary)'
+                    }}
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
@@ -139,16 +164,42 @@ export function AssignmentPicker({ value, onChange, placeholder = "Select assign
             </button>
 
             {isOpen && (
-                <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-gray-800 border border-gray-600 rounded-lg max-h-80 overflow-hidden flex flex-col dropdown-enter" style={{ boxShadow: 'var(--shadow-lg)' }}>
+                <div
+                    className="absolute top-full left-0 right-0 z-50 mt-2 rounded-xl max-h-80 overflow-hidden flex flex-col glass animate-scale-in"
+                    style={{
+                        backgroundColor: 'var(--color-bg-secondary)',
+                        border: '1px solid var(--color-border-primary)',
+                        borderRadius: 'var(--radius-xl)',
+                        boxShadow: 'var(--shadow-xl)',
+                        backdropFilter: 'blur(12px)',
+                        WebkitBackdropFilter: 'blur(12px)'
+                    }}
+                >
                     {/* Search and filter controls */}
-                    <div className="p-2 border-b border-gray-600 flex gap-2">
+                    <div className="p-3 border-b flex gap-2"
+                         style={{ borderColor: 'var(--color-border-primary)' }}>
                         <input
                             type="text"
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
                             placeholder="Search buckets and issues..."
-                            className="flex-1 bg-gray-700 border border-gray-600 text-white text-sm rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-colors"
-                            style={{ transitionDuration: 'var(--duration-base)', transitionTimingFunction: 'var(--ease-out)' }}
+                            className="flex-1 rounded-lg text-sm px-3 py-2 focus:outline-none transition-all"
+                            style={{
+                                backgroundColor: 'var(--color-bg-tertiary)',
+                                border: '1px solid var(--color-border-primary)',
+                                color: 'var(--color-text-primary)',
+                                fontFamily: 'var(--font-body)',
+                                transitionDuration: 'var(--duration-base)',
+                                transitionTimingFunction: 'var(--ease-out)'
+                            }}
+                            onFocus={(e) => {
+                                e.currentTarget.style.borderColor = 'var(--color-accent)';
+                                e.currentTarget.style.boxShadow = 'var(--focus-ring)';
+                            }}
+                            onBlur={(e) => {
+                                e.currentTarget.style.borderColor = 'var(--color-border-primary)';
+                                e.currentTarget.style.boxShadow = 'none';
+                            }}
                             autoFocus
                         />
                         {settings.jira?.enabled && settings.jira.selectedProjects && settings.jira.selectedProjects.length > 1 && (
@@ -156,11 +207,23 @@ export function AssignmentPicker({ value, onChange, placeholder = "Select assign
                                 <select
                                     value={selectedProject}
                                     onChange={(e) => setSelectedProject(e.target.value)}
-                                    className="appearance-none bg-gray-700 border border-gray-600 text-white text-sm rounded pl-2 pr-7 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500 hover:bg-gray-650 hover:border-gray-500 cursor-pointer transition-all"
+                                    className="appearance-none text-sm rounded pl-2 pr-7 py-1 focus:outline-none cursor-pointer transition-all"
                                     style={{
+                                        backgroundColor: 'var(--color-bg-tertiary)',
+                                        border: '1px solid var(--color-border-primary)',
+                                        color: 'var(--color-text-primary)',
+                                        fontFamily: 'var(--font-body)',
                                         transitionDuration: 'var(--duration-base)',
                                         transitionTimingFunction: 'var(--ease-out)',
                                         minWidth: '120px'
+                                    }}
+                                    onFocus={(e) => {
+                                        e.currentTarget.style.borderColor = 'var(--color-accent)';
+                                        e.currentTarget.style.boxShadow = 'var(--focus-ring)';
+                                    }}
+                                    onBlur={(e) => {
+                                        e.currentTarget.style.borderColor = 'var(--color-border-primary)';
+                                        e.currentTarget.style.boxShadow = 'none';
                                     }}
                                 >
                                     <option value="all">All Projects</option>
@@ -169,7 +232,8 @@ export function AssignmentPicker({ value, onChange, placeholder = "Select assign
                                     ))}
                                 </select>
                                 <svg
-                                    className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400 pointer-events-none"
+                                    className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 pointer-events-none"
+                                    style={{ color: 'var(--color-text-secondary)' }}
                                     fill="none"
                                     stroke="currentColor"
                                     viewBox="0 0 24 24"
@@ -184,8 +248,22 @@ export function AssignmentPicker({ value, onChange, placeholder = "Select assign
                         {/* Clear option */}
                         <button
                             onClick={handleClear}
-                            className="w-full px-3 py-2 text-left text-gray-400 hover:bg-gray-700 hover:text-gray-300 text-sm border-b border-gray-600 active:bg-gray-600 transition-all"
-                            style={{ transitionDuration: 'var(--duration-fast)', transitionTimingFunction: 'var(--ease-out)' }}
+                            className="w-full px-4 py-2.5 text-left text-sm border-b transition-all"
+                            style={{
+                                color: 'var(--color-text-secondary)',
+                                fontFamily: 'var(--font-body)',
+                                borderColor: 'var(--color-border-primary)',
+                                transitionDuration: 'var(--duration-fast)',
+                                transitionTimingFunction: 'var(--ease-out)'
+                            }}
+                            onMouseEnter={(e) => {
+                                e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)';
+                                e.currentTarget.style.color = 'var(--color-text-primary)';
+                            }}
+                            onMouseLeave={(e) => {
+                                e.currentTarget.style.backgroundColor = 'transparent';
+                                e.currentTarget.style.color = 'var(--color-text-secondary)';
+                            }}
                         >
                             <span className="italic">No assignment</span>
                         </button>
@@ -193,24 +271,37 @@ export function AssignmentPicker({ value, onChange, placeholder = "Select assign
                         {/* Manual buckets section */}
                         {filteredBuckets.length > 0 && (
                             <div>
-                                <div className="px-3 py-1 text-xs text-gray-500 bg-gray-750 font-medium">
+                                <div className="px-4 py-2 text-xs font-semibold uppercase tracking-wider"
+                                     style={{
+                                         color: 'var(--color-text-tertiary)',
+                                         backgroundColor: 'var(--color-bg-tertiary)',
+                                         fontFamily: 'var(--font-display)'
+                                     }}>
                                     Manual Categories {searchQuery && `(${filteredBuckets.length})`}
                                 </div>
                                 {filteredBuckets.map((bucket) => (
                                     <button
                                         key={bucket.id}
                                         onClick={() => handleSelectBucket(bucket)}
-                                        className="w-full px-3 py-2 text-left hover:bg-gray-700 active:bg-gray-600 text-sm flex items-center gap-2 transition-all"
-                                        style={{ transitionDuration: 'var(--duration-fast)', transitionTimingFunction: 'var(--ease-out)' }}
+                                        className="w-full px-4 py-2.5 text-left text-sm flex items-center gap-3 transition-all"
+                                        style={{
+                                            fontFamily: 'var(--font-body)',
+                                            transitionDuration: 'var(--duration-fast)',
+                                            transitionTimingFunction: 'var(--ease-out)'
+                                        }}
+                                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)'}
+                                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                                     >
                                         <div
-                                            className="w-3 h-3 rounded-full flex-shrink-0 shadow-sm"
+                                            className="rounded-full flex-shrink-0"
                                             style={{
+                                                width: '10px',
+                                                height: '10px',
                                                 backgroundColor: bucket.color,
-                                                boxShadow: `0 0 6px ${bucket.color}40`
+                                                boxShadow: `0 0 10px ${bucket.color}50`
                                             }}
                                         />
-                                        <span className="text-white">{bucket.name}</span>
+                                        <span style={{ color: 'var(--color-text-primary)' }}>{bucket.name}</span>
                                     </button>
                                 ))}
                             </div>
@@ -219,24 +310,42 @@ export function AssignmentPicker({ value, onChange, placeholder = "Select assign
                         {/* Jira issues section */}
                         {hasJiraAccess && settings.jira?.enabled && filteredJiraIssues.length > 0 && (
                             <div>
-                                <div className="px-3 py-1 text-xs text-gray-500 bg-gray-750 font-medium border-t border-gray-600">
+                                <div className="px-4 py-2 text-xs font-semibold uppercase tracking-wider border-t"
+                                     style={{
+                                         color: 'var(--color-text-tertiary)',
+                                         backgroundColor: 'var(--color-bg-tertiary)',
+                                         borderColor: 'var(--color-border-primary)',
+                                         fontFamily: 'var(--font-display)'
+                                     }}>
                                     Jira Issues {(searchQuery || selectedProject !== 'all') && `(${filteredJiraIssues.length})`}
                                 </div>
-                                {filteredJiraIssues.slice(0, 20).map((issue) => ( // Show more results when searching
+                                {filteredJiraIssues.slice(0, 20).map((issue) => (
                                     <button
                                         key={issue.id}
                                         onClick={() => handleSelectJiraIssue(issue)}
-                                        className="w-full px-3 py-2 text-left hover:bg-gray-700 active:bg-gray-600 text-sm transition-all"
-                                        style={{ transitionDuration: 'var(--duration-fast)', transitionTimingFunction: 'var(--ease-out)' }}
+                                        className="w-full px-4 py-2.5 text-left text-sm transition-all"
+                                        style={{
+                                            fontFamily: 'var(--font-body)',
+                                            transitionDuration: 'var(--duration-fast)',
+                                            transitionTimingFunction: 'var(--ease-out)'
+                                        }}
+                                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)'}
+                                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                                     >
-                                        <div className="flex items-center gap-2">
-                                            <div className="w-3 h-3 rounded-full bg-blue-500 flex-shrink-0 shadow-sm" style={{ boxShadow: '0 0 6px rgba(59, 130, 246, 0.4)' }} />
+                                        <div className="flex items-center gap-3">
+                                            <div className="rounded-full flex-shrink-0"
+                                                 style={{
+                                                     width: '10px',
+                                                     height: '10px',
+                                                     backgroundColor: 'var(--color-info)',
+                                                     boxShadow: '0 0 10px rgba(59, 130, 246, 0.5)'
+                                                 }} />
                                             <div className="flex-1 min-w-0">
-                                                <div className="flex items-center gap-2">
-                                                    <span className="text-blue-400 font-mono text-xs">{issue.key}</span>
-                                                    <span className="text-xs text-gray-500">{issue.fields.project.name}</span>
+                                                <div className="flex items-center gap-2 mb-0.5">
+                                                    <span className="font-mono text-xs font-semibold" style={{ color: 'var(--color-info)' }}>{issue.key}</span>
+                                                    <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{issue.fields.project.name}</span>
                                                 </div>
-                                                <div className="text-white truncate">{issue.fields.summary}</div>
+                                                <div className="truncate" style={{ color: 'var(--color-text-primary)' }}>{issue.fields.summary}</div>
                                             </div>
                                         </div>
                                     </button>
@@ -246,11 +355,14 @@ export function AssignmentPicker({ value, onChange, placeholder = "Select assign
 
                         {/* Empty state */}
                         {filteredBuckets.length === 0 && (!hasJiraAccess || !settings.jira?.enabled || filteredJiraIssues.length === 0) && (
-                            <div className="px-3 py-8 text-center text-gray-500 text-sm animate-fade-in">
-                                <svg className="w-12 h-12 mx-auto mb-2 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <div className="px-4 py-12 text-center text-sm animate-fade-in"
+                                 style={{ color: 'var(--color-text-tertiary)' }}>
+                                <svg className="w-12 h-12 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ opacity: 0.5 }}>
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                                 </svg>
-                                <p>{searchQuery ? 'No assignments match your search' : 'No assignments available'}</p>
+                                <p style={{ fontFamily: 'var(--font-body)' }}>
+                                    {searchQuery ? 'No assignments match your search' : 'No assignments available'}
+                                </p>
                             </div>
                         )}
                     </div>

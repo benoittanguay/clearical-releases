@@ -297,14 +297,14 @@ export function Settings({ onOpenIntegrationModal }: SettingsProps = {}) {
             <TrialBanner />
 
             {/* Account & Subscription */}
-            <div className="bg-gray-800 p-3 rounded-lg mb-3">
-                <h3 className="text-xs font-semibold text-gray-400 uppercase mb-2">Account</h3>
-                <div className="space-y-2">
+            <div className="bg-[var(--color-bg-secondary)] p-4 rounded-2xl mb-3 border border-[var(--color-border-primary)] transition-all duration-200 hover:border-[var(--color-border-primary)]/60">
+                <h3 className="text-[10px] font-bold text-[var(--color-text-secondary)] uppercase tracking-wider mb-3 font-['Syne']">Account</h3>
+                <div className="space-y-2.5">
                     {/* User info */}
-                    <div className="flex items-center justify-between bg-gray-900 p-2.5 rounded border border-gray-700">
+                    <div className="flex items-center justify-between bg-[var(--color-bg-tertiary)] p-3 rounded-xl border border-[var(--color-border-primary)] transition-all duration-200 hover:border-[var(--color-accent)]/20">
                         <div>
-                            <div className="text-sm font-medium text-white">{user?.email || 'Unknown'}</div>
-                            <div className="text-xs text-gray-500">
+                            <div className="text-sm font-medium text-[var(--color-text-primary)]">{user?.email || 'Unknown'}</div>
+                            <div className="text-xs text-[var(--color-text-secondary)] font-mono">
                                 {subscription.isTrial
                                     ? `Trial (${subscription.trialDaysRemaining} days remaining)`
                                     : subscription.tier === 'workplace' && subscription.isActive
@@ -313,12 +313,12 @@ export function Settings({ onOpenIntegrationModal }: SettingsProps = {}) {
                                 }
                             </div>
                         </div>
-                        <span className={`text-xs px-2 py-1 rounded ${
+                        <span className={`text-[10px] px-2.5 py-1 rounded-full font-semibold font-mono tracking-wide ${
                             subscription.isTrial
-                                ? 'bg-blue-900 text-blue-400'
+                                ? 'bg-[var(--color-info-muted)] text-[var(--color-info)]'
                                 : subscription.tier === 'workplace' && subscription.isActive
-                                ? 'bg-green-900 text-green-400'
-                                : 'bg-gray-700 text-gray-400'
+                                ? 'bg-[var(--color-success-muted)] text-[var(--color-success)]'
+                                : 'bg-[var(--color-bg-quaternary)] text-[var(--color-text-tertiary)]'
                         }`}>
                             {subscription.isTrial ? 'TRIAL' : subscription.tier === 'workplace' && subscription.isActive ? 'ACTIVE' : 'FREE'}
                         </span>
@@ -326,20 +326,20 @@ export function Settings({ onOpenIntegrationModal }: SettingsProps = {}) {
 
                     {/* Upgrade prompt for free users (not on trial) */}
                     {subscription.tier === 'free' && !subscription.isTrial && (
-                        <div className="bg-blue-900/30 border border-blue-700 rounded-lg p-3">
+                        <div className="bg-[var(--color-info-muted)] border border-[var(--color-info)] rounded-xl p-3">
                             <div className="flex items-start gap-3">
-                                <svg className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <svg className="w-5 h-5 text-[var(--color-info)] flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                                 </svg>
                                 <div className="flex-1">
-                                    <h4 className="text-sm font-medium text-blue-300 mb-1">Upgrade to Workplace Plan</h4>
-                                    <p className="text-xs text-blue-200/80 mb-3">
+                                    <h4 className="text-sm font-medium text-[var(--color-text-primary)] mb-1">Upgrade to Workplace Plan</h4>
+                                    <p className="text-xs text-[var(--color-text-secondary)] mb-3">
                                         Unlock Jira and Tempo integrations to track time directly to your projects
                                     </p>
                                     <button
                                         onClick={handleOpenPortal}
                                         disabled={isOpeningPortal}
-                                        className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-blue-800 disabled:cursor-not-allowed text-white text-sm rounded transition-colors"
+                                        className="px-4 py-2 bg-[var(--color-accent)] hover:bg-[var(--color-accent)]/90 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm rounded-lg transition-all"
                                     >
                                         {isOpeningPortal ? 'Opening...' : 'Upgrade Now'}
                                     </button>
@@ -353,7 +353,7 @@ export function Settings({ onOpenIntegrationModal }: SettingsProps = {}) {
                         <button
                             onClick={handleOpenPortal}
                             disabled={isOpeningPortal}
-                            className="w-full px-3 py-1.5 bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 text-white text-sm rounded transition-colors"
+                            className="w-full px-3 py-1.5 bg-[var(--color-bg-tertiary)] hover:bg-[var(--color-bg-tertiary)]/70 disabled:opacity-50 text-[var(--color-text-primary)] text-sm rounded-lg transition-all"
                         >
                             {isOpeningPortal ? 'Opening...' : 'Manage Subscription'}
                         </button>
@@ -362,7 +362,7 @@ export function Settings({ onOpenIntegrationModal }: SettingsProps = {}) {
                         <button
                             onClick={handleOpenPortal}
                             disabled={isOpeningPortal}
-                            className="w-full px-3 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:bg-blue-800 text-white text-sm rounded transition-colors"
+                            className="w-full px-3 py-1.5 bg-[var(--color-accent)] hover:bg-[var(--color-accent)]/90 disabled:opacity-50 text-white text-sm rounded-lg transition-all"
                         >
                             {isOpeningPortal ? 'Opening...' : 'Upgrade to Workplace Plan'}
                         </button>
@@ -371,7 +371,7 @@ export function Settings({ onOpenIntegrationModal }: SettingsProps = {}) {
                     {/* Sign out button */}
                     <button
                         onClick={handleSignOut}
-                        className="w-full px-3 py-1.5 bg-gray-900 hover:bg-gray-700 text-gray-400 hover:text-white text-sm rounded transition-colors border border-gray-700"
+                        className="w-full px-3 py-1.5 bg-[var(--color-bg-tertiary)] hover:bg-[var(--color-bg-tertiary)]/70 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] text-sm rounded-lg transition-all border border-[var(--color-border-primary)]"
                     >
                         Sign Out
                     </button>
@@ -379,13 +379,13 @@ export function Settings({ onOpenIntegrationModal }: SettingsProps = {}) {
             </div>
 
             {/* Time Rounding Settings */}
-            <div className="bg-gray-800 p-3 rounded-lg mb-3">
-                <h3 className="text-xs font-semibold text-gray-400 uppercase mb-2">Time Rounding</h3>
+            <div className="bg-[var(--color-bg-secondary)] p-4 rounded-2xl mb-3 border border-[var(--color-border-primary)]">
+                <h3 className="text-[10px] font-bold text-[var(--color-text-secondary)] uppercase tracking-wider mb-3 font-['Syne']">Time Rounding</h3>
 
                 <div className="space-y-3">
                     <div>
                         <div className="flex items-center justify-between mb-1.5">
-                            <label className="block text-xs text-gray-400">
+                            <label className="block text-xs text-[var(--color-text-secondary)] font-medium">
                                 Round Time Entries
                             </label>
                         </div>
@@ -394,7 +394,7 @@ export function Settings({ onOpenIntegrationModal }: SettingsProps = {}) {
                             onChange={(e) => {
                                 setTempSettings(prev => ({ ...prev, timeRoundingIncrement: parseInt(e.target.value) }));
                             }}
-                            className="w-full bg-gray-900 border border-gray-700 text-white text-xs rounded px-3 py-2 focus:outline-none focus:ring-1 focus:ring-green-500"
+                            className="w-full bg-[var(--color-bg-tertiary)] border border-[var(--color-border-primary)] text-[var(--color-text-primary)] text-xs rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]"
                         >
                             {getTimeIncrementOptions().map(option => (
                                 <option key={option.value} value={option.value}>
@@ -402,15 +402,15 @@ export function Settings({ onOpenIntegrationModal }: SettingsProps = {}) {
                                 </option>
                             ))}
                         </select>
-                        <div className="text-xs text-gray-500 mt-1.5">
+                        <div className="text-xs text-[var(--color-text-secondary)] mt-1.5">
                             Time entries will be rounded UP to the nearest {tempSettings.timeRoundingIncrement} {tempSettings.timeRoundingIncrement === 1 ? 'minute' : 'minutes'}. This affects display and export to Tempo/Jira.
                         </div>
 
                         {/* Example showing rounding */}
                         {tempSettings.timeRoundingIncrement > 1 && (
-                            <div className="mt-2 p-2 bg-gray-900 rounded border border-gray-700">
-                                <div className="text-xs text-gray-400 font-semibold mb-1">Examples:</div>
-                                <div className="text-xs text-gray-500 space-y-0.5">
+                            <div className="mt-2 p-2 bg-[var(--color-bg-tertiary)] rounded-lg border border-[var(--color-border-primary)]">
+                                <div className="text-xs text-[var(--color-text-primary)] font-semibold mb-1">Examples:</div>
+                                <div className="text-xs text-[var(--color-text-secondary)] space-y-0.5">
                                     <div>• 0:01 to 0:{tempSettings.timeRoundingIncrement.toString().padStart(2, '0')} → 0:{tempSettings.timeRoundingIncrement.toString().padStart(2, '0')}</div>
                                     <div>• 0:{(tempSettings.timeRoundingIncrement + 1).toString().padStart(2, '0')} to 0:{(tempSettings.timeRoundingIncrement * 2).toString().padStart(2, '0')} → 0:{(tempSettings.timeRoundingIncrement * 2).toString().padStart(2, '0')}</div>
                                     <div>• 1:01 to 1:{tempSettings.timeRoundingIncrement.toString().padStart(2, '0')} → 1:{tempSettings.timeRoundingIncrement.toString().padStart(2, '0')}</div>
@@ -422,13 +422,13 @@ export function Settings({ onOpenIntegrationModal }: SettingsProps = {}) {
             </div>
 
             {/* Activity Filtering Settings */}
-            <div className="bg-gray-800 p-3 rounded-lg mb-3">
-                <h3 className="text-xs font-semibold text-gray-400 uppercase mb-2">Activity Filtering</h3>
+            <div className="bg-[var(--color-bg-secondary)] p-4 rounded-2xl mb-3 border border-[var(--color-border-primary)]">
+                <h3 className="text-[10px] font-bold text-[var(--color-text-secondary)] uppercase tracking-wider mb-3 font-['Syne']">Activity Filtering</h3>
 
                 <div className="space-y-3">
                     <div>
                         <div className="flex items-center justify-between mb-1.5">
-                            <label className="block text-xs text-gray-400">
+                            <label className="block text-xs text-[var(--color-text-secondary)] font-medium">
                                 Minimum Activity Duration
                             </label>
                         </div>
@@ -440,10 +440,10 @@ export function Settings({ onOpenIntegrationModal }: SettingsProps = {}) {
                                     const newDuration = parseDurationInput(e.target.value);
                                     setTempSettings(prev => ({ ...prev, minActivityDuration: newDuration }));
                                 }}
-                                className="w-full bg-gray-900 border border-gray-700 text-white text-xs rounded px-3 py-2 focus:outline-none focus:ring-1 focus:ring-green-500"
+                                className="w-full bg-[var(--color-bg-tertiary)] border border-[var(--color-border-primary)] text-[var(--color-text-primary)] text-xs rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]"
                                 placeholder="e.g. 1s, 1000ms"
                             />
-                            <div className="text-xs text-gray-500">
+                            <div className="text-xs text-[var(--color-text-secondary)]">
                                 Activities shorter than this will be filtered unless they're near other activities from the same app
                             </div>
                         </div>
@@ -451,7 +451,7 @@ export function Settings({ onOpenIntegrationModal }: SettingsProps = {}) {
 
                     <div>
                         <div className="flex items-center justify-between mb-1.5">
-                            <label className="block text-xs text-gray-400">
+                            <label className="block text-xs text-[var(--color-text-secondary)] font-medium">
                                 Activity Gap Threshold
                             </label>
                         </div>
@@ -463,10 +463,10 @@ export function Settings({ onOpenIntegrationModal }: SettingsProps = {}) {
                                     const newThreshold = parseDurationInput(e.target.value);
                                     setTempSettings(prev => ({ ...prev, activityGapThreshold: newThreshold }));
                                 }}
-                                className="w-full bg-gray-900 border border-gray-700 text-white text-xs rounded px-3 py-2 focus:outline-none focus:ring-1 focus:ring-green-500"
+                                className="w-full bg-[var(--color-bg-tertiary)] border border-[var(--color-border-primary)] text-[var(--color-text-primary)] text-xs rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]"
                                 placeholder="e.g. 2m, 120s"
                             />
-                            <div className="text-xs text-gray-500">
+                            <div className="text-xs text-[var(--color-text-secondary)]">
                                 Maximum time gap between same-app activities to keep short activities
                             </div>
                         </div>
@@ -475,7 +475,7 @@ export function Settings({ onOpenIntegrationModal }: SettingsProps = {}) {
                     <div className="flex gap-2 pt-1.5">
                         <button
                             onClick={handleResetSettings}
-                            className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-white text-xs rounded transition-colors"
+                            className="px-3 py-1.5 bg-[var(--color-bg-tertiary)] hover:bg-[var(--color-bg-tertiary)]/70 text-[var(--color-text-primary)] text-xs rounded-lg transition-all"
                         >
                             Reset to Defaults
                         </button>
@@ -484,21 +484,21 @@ export function Settings({ onOpenIntegrationModal }: SettingsProps = {}) {
             </div>
 
             {/* App Exclusions / Blacklist */}
-            <div className="bg-gray-800 p-3 rounded-lg mb-3">
-                <h3 className="text-xs font-semibold text-gray-400 uppercase mb-2">App Exclusions</h3>
+            <div className="bg-[var(--color-bg-secondary)] p-4 rounded-2xl mb-3 border border-[var(--color-border-primary)]">
+                <h3 className="text-[10px] font-bold text-[var(--color-text-secondary)] uppercase tracking-wider mb-3 font-['Syne']">App Exclusions</h3>
                 <AppBlacklistManager />
             </div>
 
             {/* AI Features Settings */}
-            <div className="bg-gray-800 p-3 rounded-lg mb-3">
-                <h3 className="text-xs font-semibold text-gray-400 uppercase mb-2">AI Features</h3>
+            <div className="bg-[var(--color-bg-secondary)] p-4 rounded-2xl mb-3 border border-[var(--color-border-primary)]">
+                <h3 className="text-[10px] font-bold text-[var(--color-text-secondary)] uppercase tracking-wider mb-3 font-['Syne']">AI Features</h3>
 
                 <div className="space-y-3">
                     {/* Auto-generate descriptions */}
-                    <div className="flex items-center justify-between bg-gray-900 p-2.5 rounded border border-gray-700">
+                    <div className="flex items-center justify-between bg-[var(--color-bg-tertiary)] p-2.5 rounded-lg border border-[var(--color-border-primary)]">
                         <div>
-                            <div className="text-sm font-medium text-white">Auto-generate Descriptions</div>
-                            <div className="text-xs text-gray-500">Automatically create descriptions from screenshots</div>
+                            <div className="text-sm font-medium text-[var(--color-text-primary)]">Auto-generate Descriptions</div>
+                            <div className="text-xs text-[var(--color-text-secondary)]">Automatically create descriptions from screenshots</div>
                         </div>
                         <label className="relative inline-flex items-center cursor-pointer">
                             <input
@@ -517,15 +517,15 @@ export function Settings({ onOpenIntegrationModal }: SettingsProps = {}) {
                                 }}
                                 className="sr-only peer"
                             />
-                            <div className="w-11 h-6 bg-gray-700 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-green-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
+                            <div className="w-11 h-6 bg-[var(--color-border-primary)] peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-[var(--color-success)] rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-[var(--color-border-primary)] after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[var(--color-success)]"></div>
                         </label>
                     </div>
 
                     {/* Auto-assign work */}
-                    <div className="flex items-center justify-between bg-gray-900 p-2.5 rounded border border-gray-700">
+                    <div className="flex items-center justify-between bg-[var(--color-bg-tertiary)] p-2.5 rounded-lg border border-[var(--color-border-primary)]">
                         <div>
-                            <div className="text-sm font-medium text-white">Auto-assign Work</div>
-                            <div className="text-xs text-gray-500">Automatically assign entries to buckets or Jira issues</div>
+                            <div className="text-sm font-medium text-[var(--color-text-primary)]">Auto-assign Work</div>
+                            <div className="text-xs text-[var(--color-text-secondary)]">Automatically assign entries to buckets or Jira issues</div>
                         </div>
                         <label className="relative inline-flex items-center cursor-pointer">
                             <input
@@ -544,15 +544,15 @@ export function Settings({ onOpenIntegrationModal }: SettingsProps = {}) {
                                 }}
                                 className="sr-only peer"
                             />
-                            <div className="w-11 h-6 bg-gray-700 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-green-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
+                            <div className="w-11 h-6 bg-[var(--color-border-primary)] peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-[var(--color-success)] rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-[var(--color-border-primary)] after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[var(--color-success)]"></div>
                         </label>
                     </div>
 
                     {/* Auto-select Tempo accounts */}
-                    <div className="flex items-center justify-between bg-gray-900 p-2.5 rounded border border-gray-700">
+                    <div className="flex items-center justify-between bg-[var(--color-bg-tertiary)] p-2.5 rounded-lg border border-[var(--color-border-primary)]">
                         <div>
-                            <div className="text-sm font-medium text-white">Auto-select Tempo Accounts</div>
-                            <div className="text-xs text-gray-500">Automatically select Tempo accounts for Jira issues</div>
+                            <div className="text-sm font-medium text-[var(--color-text-primary)]">Auto-select Tempo Accounts</div>
+                            <div className="text-xs text-[var(--color-text-secondary)]">Automatically select Tempo accounts for Jira issues</div>
                         </div>
                         <label className="relative inline-flex items-center cursor-pointer">
                             <input
@@ -571,18 +571,18 @@ export function Settings({ onOpenIntegrationModal }: SettingsProps = {}) {
                                 }}
                                 className="sr-only peer"
                             />
-                            <div className="w-11 h-6 bg-gray-700 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-green-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
+                            <div className="w-11 h-6 bg-[var(--color-border-primary)] peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-[var(--color-success)] rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-[var(--color-border-primary)] after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[var(--color-success)]"></div>
                         </label>
                     </div>
                 </div>
             </div>
 
             {/* Time Tracking Integration Settings */}
-            <div className="bg-gray-800 p-3 rounded-lg mb-3">
-                <div className="flex items-center justify-between mb-2">
-                    <h3 className="text-xs font-semibold text-gray-400 uppercase">Time Tracking Integration</h3>
+            <div className="bg-[var(--color-bg-secondary)] p-4 rounded-2xl mb-3 border border-[var(--color-border-primary)]">
+                <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-[10px] font-bold text-[var(--color-text-secondary)] uppercase tracking-wider font-['Syne']">Time Tracking Integration</h3>
                     {!hasJiraAccess && !hasTempoAccess && (
-                        <span className="text-xs px-2 py-1 bg-yellow-900/30 text-yellow-400 rounded border border-yellow-700">
+                        <span className="text-[10px] px-2 py-1 bg-[var(--color-warning-muted)] text-[var(--color-warning)] rounded-full font-semibold font-mono tracking-wide">
                             WORKPLACE ONLY
                         </span>
                     )}
@@ -590,19 +590,19 @@ export function Settings({ onOpenIntegrationModal }: SettingsProps = {}) {
 
                 <div className="space-y-2">
                     {/* Jira Status */}
-                    <div className={`flex items-center justify-between bg-gray-900 p-2.5 rounded border border-gray-700 ${!hasJiraAccess ? 'opacity-60' : ''}`}>
+                    <div className={`flex items-center justify-between bg-[var(--color-bg-tertiary)] p-2.5 rounded-lg border border-[var(--color-border-primary)] ${!hasJiraAccess ? 'opacity-60' : ''}`}>
                         <div className="flex-1">
                             <div className="flex items-center gap-2">
-                                <div className="text-sm font-medium text-white">
+                                <div className="text-sm font-medium text-[var(--color-text-primary)]">
                                     Jira Status
                                 </div>
                                 {!hasJiraAccess && (
-                                    <svg className="w-4 h-4 text-yellow-500" fill="currentColor" viewBox="0 0 20 20">
+                                    <svg className="w-4 h-4 text-[var(--color-warning)]" fill="currentColor" viewBox="0 0 20 20">
                                         <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
                                     </svg>
                                 )}
                             </div>
-                            <div className="text-xs text-gray-500">
+                            <div className="text-xs text-[var(--color-text-secondary)]">
                                 {!hasJiraAccess
                                     ? 'Requires Workplace Plan'
                                     : tempSettings.jira?.enabled
@@ -611,29 +611,29 @@ export function Settings({ onOpenIntegrationModal }: SettingsProps = {}) {
                                 }
                             </div>
                         </div>
-                        <span className={`text-xs px-2 py-1 rounded ${
+                        <span className={`text-[10px] px-2 py-1 rounded-full font-semibold font-mono tracking-wide ${
                             hasJiraAccess && tempSettings.jira?.enabled && tempSettings.jira?.apiToken && tempSettings.jira?.baseUrl && tempSettings.jira?.email
-                                ? 'bg-green-900 text-green-400'
-                                : 'bg-gray-900 text-gray-400'
+                                ? 'bg-[var(--color-success-muted)] text-[var(--color-success)]'
+                                : 'bg-[var(--color-bg-quaternary)] text-[var(--color-text-tertiary)]'
                         }`}>
                             {hasJiraAccess && tempSettings.jira?.enabled && tempSettings.jira?.apiToken && tempSettings.jira?.baseUrl && tempSettings.jira?.email ? 'CONNECTED' : 'DISABLED'}
                         </span>
                     </div>
 
                     {/* Tempo Status */}
-                    <div className={`flex items-center justify-between bg-gray-900 p-2.5 rounded border border-gray-700 ${!hasTempoAccess ? 'opacity-60' : ''}`}>
+                    <div className={`flex items-center justify-between bg-[var(--color-bg-tertiary)] p-2.5 rounded-lg border border-[var(--color-border-primary)] ${!hasTempoAccess ? 'opacity-60' : ''}`}>
                         <div className="flex-1">
                             <div className="flex items-center gap-2">
-                                <div className="text-sm font-medium text-white">
+                                <div className="text-sm font-medium text-[var(--color-text-primary)]">
                                     Tempo Status
                                 </div>
                                 {!hasTempoAccess && (
-                                    <svg className="w-4 h-4 text-yellow-500" fill="currentColor" viewBox="0 0 20 20">
+                                    <svg className="w-4 h-4 text-[var(--color-warning)]" fill="currentColor" viewBox="0 0 20 20">
                                         <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
                                     </svg>
                                 )}
                             </div>
-                            <div className="text-xs text-gray-500">
+                            <div className="text-xs text-[var(--color-text-secondary)]">
                                 {!hasTempoAccess
                                     ? 'Requires Workplace Plan'
                                     : tempSettings.tempo?.enabled
@@ -642,10 +642,10 @@ export function Settings({ onOpenIntegrationModal }: SettingsProps = {}) {
                                 }
                             </div>
                         </div>
-                        <span className={`text-xs px-2 py-1 rounded ${
+                        <span className={`text-[10px] px-2 py-1 rounded-full font-semibold font-mono tracking-wide ${
                             hasTempoAccess && tempSettings.tempo?.enabled && tempSettings.tempo?.apiToken
-                                ? 'bg-green-900 text-green-400'
-                                : 'bg-gray-900 text-gray-400'
+                                ? 'bg-[var(--color-success-muted)] text-[var(--color-success)]'
+                                : 'bg-[var(--color-bg-quaternary)] text-[var(--color-text-tertiary)]'
                         }`}>
                             {hasTempoAccess && tempSettings.tempo?.enabled && tempSettings.tempo?.apiToken ? 'CONNECTED' : 'DISABLED'}
                         </span>
@@ -655,7 +655,7 @@ export function Settings({ onOpenIntegrationModal }: SettingsProps = {}) {
                     {hasJiraAccess || hasTempoAccess ? (
                         <button
                             onClick={handleOpenIntegrationModal}
-                            className="w-full px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-sm rounded transition-colors"
+                            className="w-full px-3 py-1.5 bg-[var(--color-accent)] hover:bg-[var(--color-accent)]/90 text-white text-sm rounded-lg transition-all"
                         >
                             Configure Integration
                         </button>
@@ -663,7 +663,7 @@ export function Settings({ onOpenIntegrationModal }: SettingsProps = {}) {
                         <button
                             onClick={handleOpenPortal}
                             disabled={isOpeningPortal}
-                            className="w-full px-3 py-1.5 bg-yellow-600 hover:bg-yellow-500 disabled:bg-yellow-800 text-white text-sm rounded transition-colors flex items-center justify-center gap-2"
+                            className="w-full px-3 py-1.5 bg-[var(--color-warning)] hover:bg-[var(--color-warning)]/90 disabled:opacity-50 text-white text-sm rounded-lg transition-all flex items-center justify-center gap-2"
                         >
                             <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                                 <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
@@ -676,15 +676,15 @@ export function Settings({ onOpenIntegrationModal }: SettingsProps = {}) {
 
             {/* Jira Sync Settings */}
             {hasJiraAccess && tempSettings.jira?.enabled && tempSettings.jira?.apiToken && (
-                <div className="bg-gray-800 p-3 rounded-lg mb-3">
-                    <h3 className="text-xs font-semibold text-gray-400 uppercase mb-2">Jira Sync Settings</h3>
+                <div className="bg-[var(--color-bg-secondary)] p-4 rounded-2xl mb-3 border border-[var(--color-border-primary)]">
+                    <h3 className="text-[10px] font-bold text-[var(--color-text-secondary)] uppercase tracking-wider mb-3 font-['Syne']">Jira Sync Settings</h3>
 
                     <div className="space-y-3">
                         {/* Auto-sync toggle */}
-                        <div className="flex items-center justify-between bg-gray-900 p-2.5 rounded border border-gray-700">
+                        <div className="flex items-center justify-between bg-[var(--color-bg-tertiary)] p-2.5 rounded-lg border border-[var(--color-border-primary)]">
                             <div>
-                                <div className="text-sm font-medium text-white">Automatic Sync</div>
-                                <div className="text-xs text-gray-500">Periodically sync Jira data in background</div>
+                                <div className="text-sm font-medium text-[var(--color-text-primary)]">Automatic Sync</div>
+                                <div className="text-xs text-[var(--color-text-secondary)]">Periodically sync Jira data in background</div>
                             </div>
                             <label className="relative inline-flex items-center cursor-pointer">
                                 <input
@@ -701,14 +701,14 @@ export function Settings({ onOpenIntegrationModal }: SettingsProps = {}) {
                                     }}
                                     className="sr-only peer"
                                 />
-                                <div className="w-11 h-6 bg-gray-700 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-green-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
+                                <div className="w-11 h-6 bg-[var(--color-border-primary)] peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-[var(--color-success)] rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-[var(--color-border-primary)] after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[var(--color-success)]"></div>
                             </label>
                         </div>
 
                         {/* Sync interval selector */}
                         {tempSettings.jira?.autoSync && (
-                            <div className="bg-gray-900 p-2.5 rounded border border-gray-700">
-                                <label className="block text-sm font-medium text-white mb-2">
+                            <div className="bg-[var(--color-bg-tertiary)] p-2.5 rounded-lg border border-[var(--color-border-primary)]">
+                                <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
                                     Sync Interval
                                 </label>
                                 <select
@@ -722,7 +722,7 @@ export function Settings({ onOpenIntegrationModal }: SettingsProps = {}) {
                                             }
                                         }));
                                     }}
-                                    className="w-full bg-gray-800 border border-gray-700 text-white text-sm rounded px-3 py-2 focus:outline-none focus:ring-1 focus:ring-green-500"
+                                    className="w-full bg-[var(--color-bg-secondary)] border border-[var(--color-border-primary)] text-[var(--color-text-primary)] text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]"
                                 >
                                     <option value={15}>Every 15 minutes</option>
                                     <option value={30}>Every 30 minutes</option>
@@ -734,32 +734,32 @@ export function Settings({ onOpenIntegrationModal }: SettingsProps = {}) {
 
                         {/* Sync status */}
                         {syncStatus && (
-                            <div className="bg-gray-900 p-2.5 rounded border border-gray-700">
+                            <div className="bg-[var(--color-bg-tertiary)] p-2.5 rounded-lg border border-[var(--color-border-primary)]">
                                 <div className="flex items-center justify-between mb-2">
-                                    <div className="text-sm font-medium text-white">Sync Status</div>
-                                    <span className={`text-xs px-2 py-1 rounded ${
-                                        isSyncing ? 'bg-blue-900 text-blue-400' :
-                                        syncStatus.lastSyncError ? 'bg-red-900 text-red-400' :
-                                        'bg-green-900 text-green-400'
+                                    <div className="text-sm font-medium text-[var(--color-text-primary)]">Sync Status</div>
+                                    <span className={`text-[10px] px-2 py-1 rounded-full font-semibold font-mono tracking-wide ${
+                                        isSyncing ? 'bg-[var(--color-info-muted)] text-[var(--color-info)]' :
+                                        syncStatus.lastSyncError ? 'bg-[var(--color-error-muted)] text-[var(--color-error)]' :
+                                        'bg-[var(--color-success-muted)] text-[var(--color-success)]'
                                     }`}>
                                         {isSyncing ? 'SYNCING...' :
                                          syncStatus.lastSyncError ? 'ERROR' :
                                          'READY'}
                                     </span>
                                 </div>
-                                <div className="space-y-1 text-xs text-gray-500">
+                                <div className="space-y-1 text-xs text-[var(--color-text-secondary)]">
                                     <div className="flex justify-between">
                                         <span>Last sync:</span>
-                                        <span className="text-gray-400">{formatSyncTime(syncStatus.lastSyncTimestamp)}</span>
+                                        <span className="text-[var(--color-text-primary)]">{formatSyncTime(syncStatus.lastSyncTimestamp)}</span>
                                     </div>
                                     {syncStatus.isEnabled && syncStatus.nextSyncTimestamp && (
                                         <div className="flex justify-between">
                                             <span>Next sync:</span>
-                                            <span className="text-gray-400">{formatNextSyncTime(syncStatus.nextSyncTimestamp)}</span>
+                                            <span className="text-[var(--color-text-primary)]">{formatNextSyncTime(syncStatus.nextSyncTimestamp)}</span>
                                         </div>
                                     )}
                                     {syncStatus.lastSyncError && (
-                                        <div className="text-red-400 mt-1">
+                                        <div className="text-[var(--color-error)] mt-1">
                                             Error: {syncStatus.lastSyncError}
                                         </div>
                                     )}
@@ -771,10 +771,10 @@ export function Settings({ onOpenIntegrationModal }: SettingsProps = {}) {
                         <button
                             onClick={handleSyncNow}
                             disabled={isSyncing}
-                            className={`w-full px-3 py-2 text-sm rounded transition-colors ${
+                            className={`w-full px-3 py-2 text-sm rounded-lg transition-all ${
                                 isSyncing
-                                    ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
-                                    : 'bg-green-600 hover:bg-green-500 text-white'
+                                    ? 'bg-[var(--color-bg-tertiary)] text-[var(--color-text-secondary)] cursor-not-allowed'
+                                    : 'bg-[var(--color-success)] hover:bg-[var(--color-success)]/90 text-white'
                             }`}
                         >
                             {isSyncing ? 'Syncing...' : 'Sync Now'}
@@ -783,19 +783,19 @@ export function Settings({ onOpenIntegrationModal }: SettingsProps = {}) {
                 </div>
             )}
 
-            <div className="bg-gray-800 p-3 rounded-lg mb-3">
-                <h3 className="text-xs font-semibold text-gray-400 uppercase mb-2">Permissions</h3>
-                <div className="flex justify-between items-center bg-gray-900 p-2.5 rounded border border-gray-700">
+            <div className="bg-[var(--color-bg-secondary)] p-4 rounded-2xl mb-3 border border-[var(--color-border-primary)]">
+                <h3 className="text-[10px] font-bold text-[var(--color-text-secondary)] uppercase tracking-wider mb-3 font-['Syne']">Permissions</h3>
+                <div className="flex justify-between items-center bg-[var(--color-bg-tertiary)] p-2.5 rounded-lg border border-[var(--color-border-primary)]">
                     <div>
-                        <div className="text-sm font-medium text-white">Screen Recording</div>
-                        <div className="text-xs text-gray-500">Required for Screenshots</div>
+                        <div className="text-sm font-medium text-[var(--color-text-primary)]">Screen Recording</div>
+                        <div className="text-xs text-[var(--color-text-secondary)]">Required for Screenshots</div>
                     </div>
                     <div className="flex items-center gap-2">
-                        <span className={`text-xs px-2 py-1 rounded ${
-                            permissionStatus === 'granted' ? 'bg-green-900 text-green-400' :
-                            permissionStatus === 'denied' ? 'bg-red-900 text-red-400' :
-                            permissionStatus === 'stale' ? 'bg-orange-900 text-orange-400' :
-                            'bg-yellow-900 text-yellow-400'
+                        <span className={`text-[10px] px-2 py-1 rounded-full font-semibold font-mono tracking-wide ${
+                            permissionStatus === 'granted' ? 'bg-[var(--color-success-muted)] text-[var(--color-success)]' :
+                            permissionStatus === 'denied' ? 'bg-[var(--color-error-muted)] text-[var(--color-error)]' :
+                            permissionStatus === 'stale' ? 'bg-[var(--color-warning-muted)] text-[var(--color-warning)]' :
+                            'bg-[var(--color-warning-muted)] text-[var(--color-warning)]'
                             }`}>
                             {permissionStatus === 'stale' ? 'NEEDS RESET' : permissionStatus.toUpperCase()}
                         </span>
@@ -804,17 +804,17 @@ export function Settings({ onOpenIntegrationModal }: SettingsProps = {}) {
 
                 {/* Stale Permission Warning */}
                 {permissionStatus === 'stale' && (
-                    <div className="mt-2 bg-orange-900/30 border border-orange-700 rounded-lg p-3">
+                    <div className="mt-2 bg-[var(--color-warning-muted)] border border-[var(--color-warning)] rounded-xl p-3">
                         <div className="flex items-start gap-3 mb-3">
-                            <svg className="w-5 h-5 text-orange-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg className="w-5 h-5 text-[var(--color-warning)] flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                             </svg>
                             <div>
-                                <h4 className="text-sm font-semibold text-orange-300 mb-1">Permission Needs Reset</h4>
-                                <p className="text-xs text-orange-200/80 mb-2">
+                                <h4 className="text-sm font-semibold text-[var(--color-text-primary)] mb-1">Permission Needs Reset</h4>
+                                <p className="text-xs text-[var(--color-text-secondary)] mb-2">
                                     After updating the app, macOS may have stale permission entries. System Settings shows the permission is granted, but it doesn't actually work.
                                 </p>
-                                <p className="text-xs text-orange-200/80 font-medium">
+                                <p className="text-xs text-[var(--color-text-secondary)] font-medium">
                                     This is a known macOS issue with app updates. Your data is safe.
                                 </p>
                             </div>
@@ -829,7 +829,7 @@ export function Settings({ onOpenIntegrationModal }: SettingsProps = {}) {
                                     setTimeout(checkPermission, 1000);
                                 }
                             }}
-                            className="w-full px-4 py-2 bg-orange-600 hover:bg-orange-500 text-white text-sm font-semibold rounded-lg transition-all"
+                            className="w-full px-4 py-2 bg-[var(--color-warning)] hover:bg-[var(--color-warning)]/90 text-white text-sm font-semibold rounded-lg transition-all"
                         >
                             Fix Permission Issue
                         </button>
@@ -840,7 +840,7 @@ export function Settings({ onOpenIntegrationModal }: SettingsProps = {}) {
                 {permissionStatus !== 'granted' && permissionStatus !== 'stale' && (
                     <button
                         onClick={openSettings}
-                        className="mt-2 w-full text-xs bg-blue-600 hover:bg-blue-500 text-white py-1.5 rounded transition-colors"
+                        className="mt-2 w-full text-xs bg-[var(--color-accent)] hover:bg-[var(--color-accent)]/90 text-white py-1.5 rounded-lg transition-all"
                     >
                         Open System Settings
                     </button>
@@ -856,40 +856,40 @@ export function Settings({ onOpenIntegrationModal }: SettingsProps = {}) {
                             await window.electron.ipcRenderer.captureScreenshot();
                         }
                     }}
-                    className="mt-2 w-full text-xs bg-gray-700 hover:bg-gray-600 text-white py-1.5 rounded transition-colors border border-gray-600"
+                    className="mt-2 w-full text-xs bg-[var(--color-bg-tertiary)] hover:bg-[var(--color-bg-tertiary)]/70 text-[var(--color-text-primary)] py-1.5 rounded-lg transition-all border border-[var(--color-border-primary)]"
                 >
                     Test Screenshot Capture
                 </button>
             </div>
 
             {/* App Version & Updates */}
-            <div className="bg-gray-800 p-3 rounded-lg mb-3">
-                <h3 className="text-xs font-semibold text-gray-400 uppercase mb-2">App Version & Updates</h3>
+            <div className="bg-[var(--color-bg-secondary)] p-4 rounded-2xl mb-3 border border-[var(--color-border-primary)]">
+                <h3 className="text-[10px] font-bold text-[var(--color-text-secondary)] uppercase tracking-wider mb-3 font-['Syne']">App Version & Updates</h3>
 
                 <div className="space-y-2">
                     {/* Current Version */}
-                    <div className="flex items-center justify-between bg-gray-900 p-2.5 rounded border border-gray-700">
+                    <div className="flex items-center justify-between bg-[var(--color-bg-tertiary)] p-2.5 rounded-lg border border-[var(--color-border-primary)]">
                         <div>
-                            <div className="text-sm font-medium text-white">Current Version</div>
-                            <div className="text-xs text-gray-500">Clearical</div>
+                            <div className="text-sm font-medium text-[var(--color-text-primary)]">Current Version</div>
+                            <div className="text-xs text-[var(--color-text-secondary)]">Clearical</div>
                         </div>
-                        <span className="text-sm font-mono text-green-400">
+                        <span className="text-sm font-mono text-[var(--color-success)]">
                             v{appVersion || '...'}
                         </span>
                     </div>
 
                     {/* Update Status */}
                     {updateStatus && updateStatus.available && (
-                        <div className="bg-blue-900/30 border border-blue-700 rounded-lg p-2.5">
+                        <div className="bg-[var(--color-info-muted)] border border-[var(--color-info)] rounded-xl p-2.5">
                             <div className="flex items-start gap-2">
-                                <svg className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <svg className="w-4 h-4 text-[var(--color-info)] flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                                 </svg>
                                 <div className="flex-1">
-                                    <div className="text-sm font-medium text-blue-300 mb-0.5">
+                                    <div className="text-sm font-medium text-[var(--color-text-primary)] mb-0.5">
                                         Update Available
                                     </div>
-                                    <div className="text-xs text-blue-200/80">
+                                    <div className="text-xs text-[var(--color-text-secondary)]">
                                         Version {updateStatus.version} is available for download
                                     </div>
                                 </div>
@@ -902,10 +902,10 @@ export function Settings({ onOpenIntegrationModal }: SettingsProps = {}) {
                         <button
                             onClick={handleCheckForUpdates}
                             disabled={isCheckingUpdate}
-                            className={`px-3 py-2 text-sm rounded transition-colors flex items-center justify-center gap-2 ${
+                            className={`px-3 py-2 text-sm rounded-lg transition-all flex items-center justify-center gap-2 ${
                                 isCheckingUpdate
-                                    ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
-                                    : 'bg-blue-600 hover:bg-blue-500 text-white'
+                                    ? 'bg-[var(--color-bg-tertiary)] text-[var(--color-text-secondary)] cursor-not-allowed'
+                                    : 'bg-[var(--color-accent)] hover:bg-[var(--color-accent)]/90 text-white'
                             }`}
                         >
                             {isCheckingUpdate ? (
@@ -928,7 +928,7 @@ export function Settings({ onOpenIntegrationModal }: SettingsProps = {}) {
 
                         <button
                             onClick={handleDownloadLatest}
-                            className="px-3 py-2 text-sm rounded transition-colors flex items-center justify-center gap-2 bg-green-600 hover:bg-green-500 text-white"
+                            className="px-3 py-2 text-sm rounded-lg transition-all flex items-center justify-center gap-2 bg-[var(--color-success)] hover:bg-[var(--color-success)]/90 text-white"
                         >
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
@@ -939,8 +939,8 @@ export function Settings({ onOpenIntegrationModal }: SettingsProps = {}) {
 
                     {/* Update error message */}
                     {updateStatus?.error && (
-                        <div className="bg-red-900/30 border border-red-700 rounded-lg p-2.5">
-                            <div className="text-xs text-red-300">
+                        <div className="bg-[var(--color-error-muted)] border border-[var(--color-error)] rounded-xl p-2.5">
+                            <div className="text-xs text-[var(--color-error)]">
                                 {updateStatus.error}
                             </div>
                         </div>
@@ -948,9 +948,9 @@ export function Settings({ onOpenIntegrationModal }: SettingsProps = {}) {
                 </div>
             </div>
 
-            <div className="bg-gray-800 p-3 rounded-lg">
-                <h3 className="text-xs font-semibold text-gray-400 uppercase mb-2">About</h3>
-                <p className="text-xs text-gray-500">
+            <div className="bg-[var(--color-bg-secondary)] p-4 rounded-2xl border border-[var(--color-border-primary)]">
+                <h3 className="text-[10px] font-bold text-[var(--color-text-secondary)] uppercase tracking-wider mb-2 font-['Syne']">About</h3>
+                <p className="text-xs text-[var(--color-text-secondary)]">
                     Clearical is an intelligent time tracking application that helps you log and manage your work activities.
                 </p>
             </div>

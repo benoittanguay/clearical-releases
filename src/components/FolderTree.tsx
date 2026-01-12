@@ -126,9 +126,18 @@ export const FolderTree: React.FC<FolderTreeProps> = ({
     const tree = buildTree();
 
     return (
-        <ul className="space-y-2">
+        <ul className="space-y-3">
             {tree.length === 0 ? (
-                <li className="text-gray-500 text-sm text-center py-8">
+                <li
+                    className="text-center py-12 rounded-xl"
+                    style={{
+                        color: 'var(--color-text-secondary)',
+                        fontSize: 'var(--text-sm)',
+                        fontFamily: 'var(--font-body)',
+                        backgroundColor: 'var(--color-bg-secondary)',
+                        border: '1px dashed var(--color-border-primary)'
+                    }}
+                >
                     No buckets or folders yet. Create one to get started.
                 </li>
             ) : (

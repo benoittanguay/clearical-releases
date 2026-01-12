@@ -84,29 +84,57 @@ export const BucketItem: React.FC<BucketItemProps> = ({
 
     return (
         <li
-            className="bg-gray-800/50 rounded-lg border border-gray-800 hover:border-gray-700 transition-colors group"
-            style={{ marginLeft: `${paddingLeft}px` }}
+            className="rounded-xl border transition-all group"
+            style={{
+                marginLeft: `${paddingLeft}px`,
+                backgroundColor: 'var(--color-bg-secondary)',
+                borderColor: 'var(--color-border-primary)',
+                borderRadius: 'var(--radius-xl)',
+                transitionDuration: 'var(--duration-base)',
+                transitionTimingFunction: 'var(--ease-out)',
+                boxShadow: 'var(--shadow-sm)'
+            }}
+            onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = 'var(--color-accent-border)';
+                e.currentTarget.style.boxShadow = 'var(--shadow-md)';
+            }}
+            onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = 'var(--color-border-primary)';
+                e.currentTarget.style.boxShadow = 'var(--shadow-sm)';
+            }}
         >
-            <div className="p-3">
+            <div className="p-4">
                 <div className="flex justify-between items-start">
-                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
                         {/* Expand/Collapse chevron for folders */}
                         {bucket.isFolder && onToggleExpand && (
                             <button
                                 onClick={onToggleExpand}
-                                className="text-gray-400 hover:text-gray-200 transition-colors flex-shrink-0"
+                                className="flex-shrink-0 transition-all"
+                                style={{
+                                    color: 'var(--color-text-tertiary)',
+                                    transitionDuration: 'var(--duration-fast)',
+                                    transitionTimingFunction: 'var(--ease-out)'
+                                }}
+                                onMouseEnter={(e) => e.currentTarget.style.color = 'var(--color-text-secondary)'}
+                                onMouseLeave={(e) => e.currentTarget.style.color = 'var(--color-text-tertiary)'}
                             >
                                 <svg
                                     xmlns="http://www.w3.org/2000/svg"
-                                    width="14"
-                                    height="14"
+                                    width="16"
+                                    height="16"
                                     viewBox="0 0 24 24"
                                     fill="none"
                                     stroke="currentColor"
-                                    strokeWidth="2"
+                                    strokeWidth="2.5"
                                     strokeLinecap="round"
                                     strokeLinejoin="round"
-                                    className={`transform transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+                                    className="transform transition-transform"
+                                    style={{
+                                        transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
+                                        transitionDuration: 'var(--duration-base)',
+                                        transitionTimingFunction: 'var(--ease-out)'
+                                    }}
                                 >
                                     <polyline points="9 18 15 12 9 6" />
                                 </svg>
@@ -117,22 +145,28 @@ export const BucketItem: React.FC<BucketItemProps> = ({
                         {bucket.isFolder ? (
                             <svg
                                 xmlns="http://www.w3.org/2000/svg"
-                                width="18"
-                                height="18"
+                                width="20"
+                                height="20"
                                 viewBox="0 0 24 24"
                                 fill="none"
                                 stroke="currentColor"
                                 strokeWidth="2"
                                 strokeLinecap="round"
                                 strokeLinejoin="round"
-                                className="text-yellow-500 flex-shrink-0"
+                                className="flex-shrink-0"
+                                style={{ color: 'var(--color-text-primary)' }}
                             >
                                 <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z" />
                             </svg>
                         ) : (
                             <div
-                                className="w-4 h-4 rounded-full shadow-sm flex-shrink-0"
-                                style={{ backgroundColor: bucket.color }}
+                                className="rounded-full flex-shrink-0"
+                                style={{
+                                    width: '14px',
+                                    height: '14px',
+                                    backgroundColor: bucket.color,
+                                    boxShadow: `0 0 12px ${bucket.color}60, 0 2px 8px ${bucket.color}40`
+                                }}
                             />
                         )}
 
@@ -146,37 +180,95 @@ export const BucketItem: React.FC<BucketItemProps> = ({
                                     onChange={(e) => setEditedName(e.target.value)}
                                     onBlur={handleSaveRename}
                                     onKeyDown={handleKeyDown}
-                                    className="w-full bg-gray-700 border border-green-500 rounded px-2 py-1 text-sm font-medium text-white focus:outline-none focus:ring-2 focus:ring-green-500"
+                                    className="w-full rounded-lg px-3 py-1.5 text-sm font-medium focus:outline-none"
+                                    style={{
+                                        backgroundColor: 'var(--color-bg-tertiary)',
+                                        border: '2px solid var(--color-accent)',
+                                        color: 'var(--color-text-primary)',
+                                        fontFamily: 'var(--font-body)',
+                                        boxShadow: 'var(--focus-ring)'
+                                    }}
                                 />
                             ) : (
-                                <span className="font-medium text-white">{bucket.name}</span>
+                                <span
+                                    className="font-semibold"
+                                    style={{
+                                        color: 'var(--color-text-primary)',
+                                        fontFamily: 'var(--font-body)',
+                                        fontSize: 'var(--text-base)'
+                                    }}
+                                >
+                                    {bucket.name}
+                                </span>
                             )}
 
                             {/* Linked Jira Issue (only for buckets, not folders) */}
                             {!bucket.isFolder && bucket.linkedIssue && (
-                                <div className="mt-1.5 bg-gray-900/50 rounded p-2 border border-gray-700">
-                                    <div className="flex items-center gap-2 mb-1">
-                                        <span className="text-blue-400 font-mono text-xs">
+                                <div
+                                    className="mt-3 rounded-lg p-3 border"
+                                    style={{
+                                        backgroundColor: 'rgba(59, 130, 246, 0.05)',
+                                        borderColor: 'rgba(59, 130, 246, 0.2)',
+                                        borderRadius: 'var(--radius-lg)'
+                                    }}
+                                >
+                                    <div className="flex items-center gap-2 mb-1.5">
+                                        <span
+                                            className="font-mono text-xs font-semibold"
+                                            style={{ color: 'var(--color-info)' }}
+                                        >
                                             {bucket.linkedIssue.key}
                                         </span>
-                                        <span className="text-xs text-gray-500">
+                                        <span
+                                            className="text-xs"
+                                            style={{
+                                                color: 'var(--color-text-tertiary)',
+                                                fontFamily: 'var(--font-body)'
+                                            }}
+                                        >
                                             {bucket.linkedIssue.projectName}
                                         </span>
-                                        <span className="text-xs px-2 py-0.5 bg-gray-700 text-gray-300 rounded">
+                                        <span
+                                            className="text-xs px-2 py-0.5 rounded"
+                                            style={{
+                                                backgroundColor: 'var(--color-bg-tertiary)',
+                                                color: 'var(--color-text-secondary)',
+                                                fontFamily: 'var(--font-body)'
+                                            }}
+                                        >
                                             {bucket.linkedIssue.issueType}
                                         </span>
                                     </div>
-                                    <p className="text-sm text-gray-300 truncate">
+                                    <p
+                                        className="text-sm truncate mb-2"
+                                        style={{
+                                            color: 'var(--color-text-primary)',
+                                            fontFamily: 'var(--font-body)'
+                                        }}
+                                    >
                                         {bucket.linkedIssue.summary}
                                     </p>
-                                    <div className="flex items-center justify-between mt-2">
-                                        <span className="text-xs text-gray-400">
+                                    <div className="flex items-center justify-between">
+                                        <span
+                                            className="text-xs"
+                                            style={{
+                                                color: 'var(--color-text-secondary)',
+                                                fontFamily: 'var(--font-body)'
+                                            }}
+                                        >
                                             Status: {bucket.linkedIssue.status}
                                         </span>
                                         {onUnlinkJira && (
                                             <button
                                                 onClick={() => onUnlinkJira(bucket.id)}
-                                                className="text-xs text-red-400 hover:text-red-300 transition-colors"
+                                                className="text-xs font-medium transition-colors"
+                                                style={{
+                                                    color: 'var(--color-error)',
+                                                    fontFamily: 'var(--font-body)',
+                                                    transitionDuration: 'var(--duration-fast)'
+                                                }}
+                                                onMouseEnter={(e) => e.currentTarget.style.color = 'var(--color-accent)'}
+                                                onMouseLeave={(e) => e.currentTarget.style.color = 'var(--color-error)'}
                                             >
                                                 Unlink
                                             </button>
@@ -188,13 +280,26 @@ export const BucketItem: React.FC<BucketItemProps> = ({
                     </div>
 
                     {/* Action buttons */}
-                    <div className="flex items-center gap-1.5 ml-2">
+                    <div className="flex items-center gap-1 ml-3">
                         {/* Move to folder button */}
                         {onMove && availableFolders.length > 0 && (
                             <div className="relative" ref={moveMenuRef}>
                                 <button
                                     onClick={() => setShowMoveMenu(!showMoveMenu)}
-                                    className="text-gray-600 hover:text-blue-400 p-1.5 rounded-md hover:bg-gray-800 transition-all opacity-0 group-hover:opacity-100"
+                                    className="p-2 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+                                    style={{
+                                        color: 'var(--color-text-tertiary)',
+                                        transitionDuration: 'var(--duration-fast)',
+                                        transitionTimingFunction: 'var(--ease-out)'
+                                    }}
+                                    onMouseEnter={(e) => {
+                                        e.currentTarget.style.color = 'var(--color-info)';
+                                        e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)';
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        e.currentTarget.style.color = 'var(--color-text-tertiary)';
+                                        e.currentTarget.style.backgroundColor = 'transparent';
+                                    }}
                                     title="Move to folder"
                                 >
                                     <svg
@@ -216,21 +321,43 @@ export const BucketItem: React.FC<BucketItemProps> = ({
 
                                 {/* Move menu dropdown */}
                                 {showMoveMenu && (
-                                    <div className="absolute right-0 top-full mt-1 bg-gray-800 border border-gray-700 rounded-lg shadow-lg z-10 min-w-[160px]">
-                                        <div className="py-1">
+                                    <div
+                                        className="absolute right-0 top-full mt-2 rounded-lg z-10 min-w-[180px] glass animate-scale-in"
+                                        style={{
+                                            backgroundColor: 'var(--color-bg-secondary)',
+                                            border: '1px solid var(--color-border-primary)',
+                                            borderRadius: 'var(--radius-lg)',
+                                            boxShadow: 'var(--shadow-xl)'
+                                        }}
+                                    >
+                                        <div className="py-1.5">
                                             <button
                                                 onClick={() => handleMove(null)}
-                                                className="w-full text-left px-3 py-2 text-sm text-gray-300 hover:bg-gray-700 transition-colors"
+                                                className="w-full text-left px-3 py-2 text-sm transition-colors"
+                                                style={{
+                                                    color: 'var(--color-text-primary)',
+                                                    fontFamily: 'var(--font-body)',
+                                                    transitionDuration: 'var(--duration-fast)'
+                                                }}
+                                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)'}
+                                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                                             >
                                                 Move to Root
                                             </button>
                                             {availableFolders
-                                                .filter(f => f.id !== bucket.id) // Don't allow moving into self
+                                                .filter(f => f.id !== bucket.id)
                                                 .map(folder => (
                                                     <button
                                                         key={folder.id}
                                                         onClick={() => handleMove(folder.id)}
-                                                        className="w-full text-left px-3 py-2 text-sm text-gray-300 hover:bg-gray-700 transition-colors flex items-center gap-2"
+                                                        className="w-full text-left px-3 py-2 text-sm transition-colors flex items-center gap-2"
+                                                        style={{
+                                                            color: 'var(--color-text-primary)',
+                                                            fontFamily: 'var(--font-body)',
+                                                            transitionDuration: 'var(--duration-fast)'
+                                                        }}
+                                                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)'}
+                                                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                                                     >
                                                         <svg
                                                             xmlns="http://www.w3.org/2000/svg"
@@ -242,7 +369,7 @@ export const BucketItem: React.FC<BucketItemProps> = ({
                                                             strokeWidth="2"
                                                             strokeLinecap="round"
                                                             strokeLinejoin="round"
-                                                            className="text-yellow-500"
+                                                            style={{ color: 'var(--color-text-primary)' }}
                                                         >
                                                             <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z" />
                                                         </svg>
@@ -258,7 +385,20 @@ export const BucketItem: React.FC<BucketItemProps> = ({
                         {/* Rename button */}
                         <button
                             onClick={() => setIsEditing(true)}
-                            className="text-gray-600 hover:text-green-400 p-1.5 rounded-md hover:bg-gray-800 transition-all opacity-0 group-hover:opacity-100"
+                            className="p-2 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+                            style={{
+                                color: 'var(--color-text-tertiary)',
+                                transitionDuration: 'var(--duration-fast)',
+                                transitionTimingFunction: 'var(--ease-out)'
+                            }}
+                            onMouseEnter={(e) => {
+                                e.currentTarget.style.color = 'var(--color-accent)';
+                                e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)';
+                            }}
+                            onMouseLeave={(e) => {
+                                e.currentTarget.style.color = 'var(--color-text-tertiary)';
+                                e.currentTarget.style.backgroundColor = 'transparent';
+                            }}
                             title="Rename"
                         >
                             <svg
@@ -280,7 +420,20 @@ export const BucketItem: React.FC<BucketItemProps> = ({
                         {/* Delete button */}
                         <button
                             onClick={() => onDelete(bucket.id)}
-                            className="text-gray-600 hover:text-red-500 p-1.5 rounded-md hover:bg-gray-800 transition-all opacity-0 group-hover:opacity-100"
+                            className="p-2 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+                            style={{
+                                color: 'var(--color-text-tertiary)',
+                                transitionDuration: 'var(--duration-fast)',
+                                transitionTimingFunction: 'var(--ease-out)'
+                            }}
+                            onMouseEnter={(e) => {
+                                e.currentTarget.style.color = 'var(--color-error)';
+                                e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)';
+                            }}
+                            onMouseLeave={(e) => {
+                                e.currentTarget.style.color = 'var(--color-text-tertiary)';
+                                e.currentTarget.style.backgroundColor = 'transparent';
+                            }}
                             title={bucket.isFolder ? 'Delete Folder (and all contents)' : 'Delete Bucket'}
                         >
                             <svg

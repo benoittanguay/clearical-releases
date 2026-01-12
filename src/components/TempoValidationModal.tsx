@@ -239,29 +239,29 @@ export function TempoValidationModal({
         <>
             {/* Backdrop */}
             <div
-                className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in"
+                className="fixed inset-0 bg-black/70 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-fade-in"
                 onClick={onClose}
             >
                 {/* Modal */}
                 <div
-                    className="bg-gray-800 rounded-lg border border-gray-700 max-w-lg w-full shadow-2xl animate-scale-in"
+                    className="bg-[var(--color-bg-secondary)] rounded-[32px] border border-[var(--color-border-primary)] max-w-lg w-full shadow-2xl animate-scale-in"
                     onClick={(e) => e.stopPropagation()}
                     style={{ boxShadow: 'var(--shadow-xl)' }}
                 >
                     {/* Header */}
-                    <div className="flex items-center justify-between p-4 border-b border-gray-700">
+                    <div className="flex items-center justify-between p-4 border-b border-[var(--color-border-primary)]">
                         <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 bg-blue-600/20 rounded-lg flex items-center justify-center">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-400">
+                            <div className="w-10 h-10 bg-[var(--color-accent-muted)] rounded-lg flex items-center justify-center">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[var(--color-accent)]">
                                     <circle cx="12" cy="12" r="10"/>
                                     <path d="M12 6v6l4 2"/>
                                 </svg>
                             </div>
-                            <h3 className="text-lg font-semibold text-white">Confirm Log to Tempo</h3>
+                            <h3 className="text-lg font-semibold text-[var(--color-text-primary)] font-['Syne']">Confirm Log to Tempo</h3>
                         </div>
                         <button
                             onClick={onClose}
-                            className="p-1 hover:bg-gray-700 rounded transition-colors text-gray-400 hover:text-white"
+                            className="p-1 hover:bg-[var(--color-bg-tertiary)] rounded transition-colors text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
                             disabled={isLogging}
                         >
                             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -275,22 +275,22 @@ export function TempoValidationModal({
                     <div className="p-4 space-y-4">
                         {/* Error message */}
                         {error && (
-                            <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 flex items-start gap-2 animate-fade-in">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-red-400 flex-shrink-0 mt-0.5">
+                            <div className="bg-[var(--color-error-muted)] border border-[var(--color-error)]/30 rounded-lg p-3 flex items-start gap-2 animate-fade-in">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[var(--color-error)] flex-shrink-0 mt-0.5">
                                     <circle cx="12" cy="12" r="10"/>
                                     <line x1="12" y1="8" x2="12" y2="12"/>
                                     <line x1="12" y1="16" x2="12.01" y2="16"/>
                                 </svg>
                                 <div className="flex-1">
-                                    <div className="text-red-400 text-sm font-medium">Unable to log time</div>
-                                    <div className="text-red-300 text-xs mt-1">{error}</div>
+                                    <div className="text-[var(--color-error)] text-sm font-medium font-['Syne']">Unable to log time</div>
+                                    <div className="text-[var(--color-text-secondary)] text-xs mt-1">{error}</div>
                                 </div>
                             </div>
                         )}
 
                         {/* Assignment info */}
-                        <div className="bg-gray-750 rounded-lg p-3 border border-gray-700">
-                            <div className="text-xs text-gray-400 uppercase font-semibold mb-2">Assignment</div>
+                        <div className="bg-[var(--color-bg-tertiary)] rounded-lg p-3 border border-[var(--color-border-primary)]">
+                            <div className="text-xs text-[var(--color-text-secondary)] uppercase font-semibold mb-2 font-['Syne']">Assignment</div>
                             <div className="flex items-start gap-3">
                                 <div
                                     className="w-4 h-4 rounded-full flex-shrink-0 shadow-sm mt-0.5"
@@ -409,11 +409,11 @@ export function TempoValidationModal({
                     </div>
 
                     {/* Footer */}
-                    <div className="flex items-center justify-end gap-3 p-4 border-t border-gray-700">
+                    <div className="flex items-center justify-end gap-3 p-4 border-t border-[var(--color-border-primary)]">
                         <button
                             onClick={onClose}
                             disabled={isLogging}
-                            className="px-4 py-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="px-4 py-2 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-bg-tertiary)] rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                             style={{ transitionDuration: 'var(--duration-fast)', transitionTimingFunction: 'var(--ease-out)' }}
                         >
                             Cancel
@@ -421,7 +421,7 @@ export function TempoValidationModal({
                         <button
                             onClick={handleConfirm}
                             disabled={!canLog}
-                            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded-lg transition-all active:scale-[0.99] flex items-center gap-2 min-w-[120px] justify-center"
+                            className="px-4 py-2 bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] active:bg-[var(--color-accent)] disabled:bg-[var(--color-bg-tertiary)] disabled:text-[var(--color-text-tertiary)] disabled:cursor-not-allowed text-white rounded-full transition-all active:scale-[0.99] flex items-center gap-2 min-w-[120px] justify-center shadow-lg"
                             style={{ transitionDuration: 'var(--duration-fast)', transitionTimingFunction: 'var(--ease-out)' }}
                         >
                             {isLogging ? (
