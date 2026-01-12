@@ -8,14 +8,14 @@
  *
  * Provides:
  * - On-demand server startup (only when needed)
- * - Automatic shutdown after 60s of inactivity
+ * - Automatic shutdown after 5 minutes of inactivity
  * - Health monitoring and auto-restart on crashes
  * - Screenshot analysis via HTTP API
  *
  * Server lifecycle:
  * - Starts automatically when analyzeScreenshot() is called
  * - Stays running while actively processing requests
- * - Shuts down after 60 seconds of no activity to save resources
+ * - Shuts down after 5 minutes of no activity to save resources
  * - First analysis after idle shutdown will be slower (~30-60s for startup + model loading)
  */
 
@@ -27,9 +27,9 @@ import fs from 'fs';
 const FASTVLM_PORT = 5123;
 const FASTVLM_HOST = '127.0.0.1';
 const HEALTH_CHECK_INTERVAL = 5000; // 5 seconds
-const SERVER_STARTUP_TIMEOUT = 60000; // 60 seconds (model loading takes time)
-const MAX_HEALTH_CHECK_RETRIES = 12; // 60 seconds total (5s intervals)
-const IDLE_TIMEOUT = 60000; // 60 seconds of inactivity before shutdown
+const SERVER_STARTUP_TIMEOUT = 120000; // 120 seconds (both models load at startup now)
+const MAX_HEALTH_CHECK_RETRIES = 24; // 120 seconds total (5s intervals)
+const IDLE_TIMEOUT = 300000; // 5 minutes of inactivity before shutdown (was 60s)
 
 interface AnalysisRequest {
     image_path: string;

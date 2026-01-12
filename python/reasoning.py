@@ -59,14 +59,19 @@ def get_reasoning_model_path() -> str:
 
 def load_reasoning_model():
     """Load the Qwen2.5-0.5B-Instruct-4bit model for reasoning tasks."""
+    import time
     global _reasoning_model_cache
 
     if _reasoning_model_cache is not None:
-        logger.info("Using cached reasoning model")
+        logger.info("✓ Using cached reasoning model (cache hit)")
         return _reasoning_model_cache
+
+    logger.warning("⚠️  Cache MISS - Loading reasoning model from disk (this will take 30-60s)")
 
     import sys
     import os
+
+    load_start = time.time()
 
     # Redirect stdout/stderr during model loading to prevent potential broken pipe errors
     # from HuggingFace download progress bars or other output
@@ -94,7 +99,8 @@ def load_reasoning_model():
             devnull = None
 
         _reasoning_model_cache = (model, tokenizer)
-        logger.info("Reasoning model loaded successfully")
+        load_time = time.time() - load_start
+        logger.info(f"Reasoning model loaded successfully in {load_time:.2f}s")
         return model, tokenizer
     except Exception as e:
         # Restore stderr first so we can log the error
@@ -115,10 +121,14 @@ def generate_text(prompt: str, max_tokens: int = 200, temperature: float = 0.7) 
     Note: temperature parameter is currently not supported by mlx-lm Python API.
     The model will use default temperature (deterministic generation).
     """
+    import time
     import sys
     import os
 
+    gen_start = time.time()
     model, tokenizer = load_reasoning_model()
+    model_load_time = time.time() - gen_start
+    logger.info(f"Model load/cache retrieval took {model_load_time:.2f}s")
 
     from mlx_lm import generate
 
@@ -139,6 +149,7 @@ def generate_text(prompt: str, max_tokens: int = 200, temperature: float = 0.7) 
 
         # Note: mlx-lm's generate function doesn't currently support temperature parameter
         # in the Python API, so we omit it for compatibility
+        inference_start = time.time()
         response = generate(
             model,
             tokenizer,
@@ -146,6 +157,9 @@ def generate_text(prompt: str, max_tokens: int = 200, temperature: float = 0.7) 
             max_tokens=max_tokens,
             verbose=False  # Explicitly disable verbose output
         )
+        inference_time = time.time() - inference_start
+        total_time = time.time() - gen_start
+        logger.info(f"Text generation took {inference_time:.2f}s (total: {total_time:.2f}s)")
         return response
     except Exception as e:
         # Restore stderr first so we can log the error
@@ -189,9 +203,12 @@ Activities:
 Natural narrative summary:"""
 
     try:
+        import time
+        summarize_start = time.time()
         logger.info("Starting summarization...")
         summary = generate_text(prompt, max_tokens=150)
-        logger.info("Summarization completed successfully")
+        summarize_time = time.time() - summarize_start
+        logger.info(f"Summarization completed successfully in {summarize_time:.2f}s")
         return {"success": True, "summary": summary.strip()}
     except BrokenPipeError as e:
         logger.error(f"Broken pipe error during summarization: {e}", exc_info=True)

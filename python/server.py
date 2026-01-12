@@ -3,7 +3,7 @@ FastVLM Inference Server
 
 A FastAPI server that provides screenshot analysis endpoints using the FastVLM-0.5B model
 and text reasoning capabilities using the Qwen2.5-0.5B-Instruct-4bit model.
-The models are loaded on-demand and cached for reuse.
+Both models are preloaded at server startup and cached for reuse.
 
 Endpoints:
     GET / - Server information
@@ -215,17 +215,30 @@ async def lifespan(app: FastAPI):
     """
     Manage application lifecycle.
 
-    Loads the model at startup and cleans up on shutdown.
+    Loads both VLM and reasoning models at startup and cleans up on shutdown.
+    This ensures the first requests to /analyze, /summarize, and /classify
+    don't have to wait for model loading (which can take 10-20 seconds).
     """
     # Startup
     logger.info("Starting FastVLM Inference Server...")
+
+    # Load VLM model (nanoLLaVA)
     try:
-        logger.info("Loading model at startup...")
+        logger.info("Loading VLM model at startup...")
         load_model()
-        logger.info("Model loaded successfully")
+        logger.info("VLM model loaded successfully")
     except Exception as e:
-        logger.error(f"Failed to load model at startup: {str(e)}")
+        logger.error(f"Failed to load VLM model at startup: {str(e)}")
         logger.error("Server will start but /analyze endpoint will fail")
+
+    # Load reasoning model (Qwen2.5)
+    try:
+        logger.info("Loading reasoning model at startup...")
+        load_reasoning_model()
+        logger.info("Reasoning model loaded successfully")
+    except Exception as e:
+        logger.error(f"Failed to load reasoning model at startup: {str(e)}")
+        logger.error("Server will start but /summarize and /classify endpoints will fail")
 
     yield
 
@@ -277,10 +290,20 @@ async def health():
         HealthResponse: Server health status and model information
     """
     model_info = get_model_info()
+    reasoning_info = get_reasoning_model_info()
+
+    # Add reasoning model status to model_info
+    model_info["reasoning_model_loaded"] = reasoning_info["loaded"]
+
+    # Server is healthy only if both models are loaded
+    all_models_loaded = model_info["loaded"] and reasoning_info["loaded"]
+
+    if not all_models_loaded:
+        logger.warning(f"Health check: VLM loaded={model_info['loaded']}, Reasoning loaded={reasoning_info['loaded']}")
 
     return HealthResponse(
-        status="healthy" if model_info["loaded"] else "model_not_loaded",
-        model_loaded=model_info["loaded"],
+        status="healthy" if all_models_loaded else "model_not_loaded",
+        model_loaded=all_models_loaded,
         model_info=model_info
     )
 
@@ -349,10 +372,23 @@ async def summarize(request: SummarizeRequest):
     try:
         logger.info(f"Received summarization request with {len(request.descriptions)} descriptions")
 
-        result = summarize_activities(
-            descriptions=request.descriptions,
-            app_names=request.app_names
-        )
+        # Run summarization in thread pool to avoid blocking event loop
+        # This is critical because mlx-lm operations are CPU-intensive and synchronous
+        import concurrent.futures
+        import functools
+        loop = asyncio.get_event_loop()
+
+        with concurrent.futures.ThreadPoolExecutor() as pool:
+            # Use functools.partial to create a callable with arguments
+            func = functools.partial(
+                summarize_activities,
+                descriptions=request.descriptions,
+                app_names=request.app_names
+            )
+            result = await asyncio.wait_for(
+                loop.run_in_executor(pool, func),
+                timeout=55.0  # 55s timeout (less than client's 60s timeout)
+            )
 
         if not result["success"]:
             logger.error(f"Summarization failed: {result.get('error', 'Unknown error')}")
@@ -364,6 +400,12 @@ async def summarize(request: SummarizeRequest):
         logger.info("Summarization completed successfully")
         return SummarizeResponse(**result)
 
+    except asyncio.TimeoutError:
+        logger.error("Summarization timed out after 55 seconds")
+        raise HTTPException(
+            status_code=504,
+            detail="Summarization timed out. This may indicate the model is not properly cached or is taking too long to process."
+        )
     except HTTPException:
         raise
     except BrokenPipeError:
@@ -433,6 +475,9 @@ async def reasoning_health():
         ReasoningHealthResponse: Reasoning model health status
     """
     model_info = get_reasoning_model_info()
+
+    if not model_info["loaded"]:
+        logger.warning("Reasoning health check: Model NOT loaded! This will cause timeouts on summarization requests.")
 
     return ReasoningHealthResponse(
         status="healthy" if model_info["loaded"] else "model_not_loaded",
