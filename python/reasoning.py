@@ -1,7 +1,7 @@
 """
-Reasoning Module - Qwen3-0.6B for text summarization and classification
+Reasoning Module - Qwen2.5-0.5B for text summarization and classification
 
-This module provides text-only reasoning capabilities using Qwen3-0.6B-4bit
+This module provides text-only reasoning capabilities using Qwen2.5-0.5B-Instruct-4bit
 for tasks like:
 - Activity summarization
 - Bucket/Jira issue classification
@@ -14,7 +14,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 # Model configuration
-MODEL_ID = "mlx-community/Qwen3-0.6B-4bit"
+MODEL_ID = "mlx-community/Qwen2.5-0.5B-Instruct-4bit"
 
 # Global model cache
 _reasoning_model_cache = None
@@ -34,7 +34,7 @@ def get_reasoning_model_path() -> str:
     if getattr(sys, 'frozen', False):
         # Running as compiled executable
         bundle_dir = Path(sys._MEIPASS)
-        bundled_model = bundle_dir / "Qwen3-0.6B-4bit"
+        bundled_model = bundle_dir / "Qwen2.5-0.5B-Instruct-4bit"
 
         if bundled_model.exists():
             logger.info(f"Using bundled reasoning model from: {bundled_model}")
@@ -44,7 +44,7 @@ def get_reasoning_model_path() -> str:
     else:
         # Running in development mode
         script_dir = Path(__file__).parent
-        local_model = script_dir / "models" / "Qwen3-0.6B-4bit"
+        local_model = script_dir / "models" / "Qwen2.5-0.5B-Instruct-4bit"
 
         if local_model.exists():
             logger.info(f"Using local reasoning model from: {local_model}")
@@ -58,7 +58,7 @@ def get_reasoning_model_path() -> str:
 
 
 def load_reasoning_model():
-    """Load the Qwen3-0.6B-4bit model for reasoning tasks."""
+    """Load the Qwen2.5-0.5B-Instruct-4bit model for reasoning tasks."""
     global _reasoning_model_cache
 
     if _reasoning_model_cache is not None:
@@ -80,17 +80,23 @@ def load_reasoning_model():
         raise
 
 def generate_text(prompt: str, max_tokens: int = 200, temperature: float = 0.7) -> str:
-    """Generate text using the reasoning model."""
+    """
+    Generate text using the reasoning model.
+
+    Note: temperature parameter is currently not supported by mlx-lm Python API.
+    The model will use default temperature (deterministic generation).
+    """
     model, tokenizer = load_reasoning_model()
 
     from mlx_lm import generate
 
+    # Note: mlx-lm's generate function doesn't currently support temperature parameter
+    # in the Python API, so we omit it for compatibility
     response = generate(
         model,
         tokenizer,
         prompt=prompt,
-        max_tokens=max_tokens,
-        temp=temperature
+        max_tokens=max_tokens
     )
 
     return response
@@ -125,7 +131,7 @@ Activities:
 Natural narrative summary:"""
 
     try:
-        summary = generate_text(prompt, max_tokens=150, temperature=0.5)
+        summary = generate_text(prompt, max_tokens=150)
         return {"success": True, "summary": summary.strip()}
     except Exception as e:
         logger.error(f"Summarization failed: {e}")
@@ -163,7 +169,7 @@ Options:
 Reply with ONLY the number of the best matching option."""
 
     try:
-        response = generate_text(prompt, max_tokens=10, temperature=0.3)
+        response = generate_text(prompt, max_tokens=10)
 
         # Parse the number from response
         import re
@@ -192,7 +198,7 @@ Reply with ONLY the number of the best matching option."""
 def get_reasoning_model_info() -> Dict[str, Any]:
     """Get information about the reasoning model."""
     return {
-        "model_name": "Qwen3-0.6B-4bit",
+        "model_name": "Qwen2.5-0.5B-Instruct-4bit",
         "model_id": MODEL_ID,
         "framework": "mlx-lm",
         "loaded": _reasoning_model_cache is not None,

@@ -6,14 +6,14 @@ and saves them to a local directory for bundling with PyInstaller.
 
 Models downloaded:
   - mlx-community/nanoLLaVA-1.5-4bit (vision model)
-  - mlx-community/Qwen3-0.6B-4bit (reasoning model)
+  - mlx-community/Qwen2.5-0.5B-Instruct-4bit (reasoning model)
 
 Usage:
     python download_model.py
 
 The models will be saved to:
   - python/models/nanoLLaVA-1.5-4bit/
-  - python/models/Qwen3-0.6B-4bit/
+  - python/models/Qwen2.5-0.5B-Instruct-4bit/
 """
 
 import sys
@@ -36,10 +36,10 @@ MODELS = [
         "size_estimate": "~200-400MB"
     },
     {
-        "id": "mlx-community/Qwen3-0.6B-4bit",
-        "target_dir": "models/Qwen3-0.6B-4bit",
+        "id": "mlx-community/Qwen2.5-0.5B-Instruct-4bit",
+        "target_dir": "models/Qwen2.5-0.5B-Instruct-4bit",
         "description": "Reasoning model (4-bit quantized)",
-        "size_estimate": "~400-600MB"
+        "size_estimate": "~300-500MB"
     }
 ]
 

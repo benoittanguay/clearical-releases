@@ -5,7 +5,7 @@ PyInstaller Spec File for FastVLM Server
 This spec file configures PyInstaller to create a standalone macOS executable
 that bundles the FastVLM server with all dependencies and the models:
 - nanoLLaVA-1.5-4bit (quantized vision-language model)
-- Qwen3-0.6B-4bit (quantized reasoning model)
+- Qwen2.5-0.5B-Instruct-4bit (quantized reasoning model)
 
 Build command:
     pyinstaller python/fastvlm.spec
@@ -24,7 +24,7 @@ spec_dir = Path(SPECPATH)
 
 # Model directories (relative to spec file)
 vlm_model_dir = spec_dir / "models" / "nanoLLaVA-1.5-4bit"
-reasoning_model_dir = spec_dir / "models" / "Qwen3-0.6B-4bit"
+reasoning_model_dir = spec_dir / "models" / "Qwen2.5-0.5B-Instruct-4bit"
 
 # Verify VLM model exists
 if not vlm_model_dir.exists():
@@ -103,7 +103,7 @@ hiddenimports += [
     'pydantic.deprecated.decorator',
     'pydantic.json_schema',
     'pydantic_core',
-    'reasoning',  # Local reasoning module for Qwen3 model
+    'reasoning',  # Local reasoning module for Qwen2.5 model
 ]
 
 # Analysis step - scan all Python dependencies

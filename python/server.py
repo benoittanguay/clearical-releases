@@ -2,7 +2,7 @@
 FastVLM Inference Server
 
 A FastAPI server that provides screenshot analysis endpoints using the FastVLM-0.5B model
-and text reasoning capabilities using the Qwen3-0.6B-4bit model.
+and text reasoning capabilities using the Qwen2.5-0.5B-Instruct-4bit model.
 The models are loaded on-demand and cached for reuse.
 
 Endpoints:

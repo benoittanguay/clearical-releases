@@ -4,7 +4,7 @@ FastVLM Server Build Script
 
 This script builds a standalone macOS executable of the FastVLM server
 using PyInstaller. It bundles the server code, all dependencies, and
-the models (nanoLLaVA-1.5-4bit and Qwen3-0.6B-4bit) into a single-folder distribution.
+the models (nanoLLaVA-1.5-4bit and Qwen2.5-0.5B-Instruct-4bit) into a single-folder distribution.
 
 Prerequisites:
     1. Run download_model.py first to download the model
@@ -100,8 +100,8 @@ def check_prerequisites():
             if not (vlm_model_dir / file).exists():
                 warnings.append(f"VLM model file missing: {file}")
 
-    # 5. Check for reasoning model directory (Qwen3-0.6B-4bit)
-    reasoning_model_dir = script_dir / "models" / "Qwen3-0.6B-4bit"
+    # 5. Check for reasoning model directory (Qwen2.5-0.5B-Instruct-4bit)
+    reasoning_model_dir = script_dir / "models" / "Qwen2.5-0.5B-Instruct-4bit"
     if not reasoning_model_dir.exists():
         errors.append(
             f"Reasoning model directory not found: {reasoning_model_dir}\n"
@@ -281,7 +281,7 @@ def verify_build():
         logger.warning("  VLM model will need to be downloaded on first run")
 
     # Check for bundled reasoning model (PyInstaller puts data in _internal/)
-    bundled_reasoning_model = dist_dir / "_internal" / "Qwen3-0.6B-4bit"
+    bundled_reasoning_model = dist_dir / "_internal" / "Qwen2.5-0.5B-Instruct-4bit"
     if bundled_reasoning_model.exists():
         model_files = list(bundled_reasoning_model.rglob('*'))
         logger.info(f"  Bundled reasoning model: {bundled_reasoning_model} ({len(model_files)} files)")
