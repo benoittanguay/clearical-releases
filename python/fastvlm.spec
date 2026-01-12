@@ -113,12 +113,19 @@ hiddenimports += [
     'mlx_lm.tokenizer_utils',
 ]
 
+# Collect local Python modules that need to be bundled
+local_modules = [
+    (str(spec_dir / 'inference.py'), '.'),
+    (str(spec_dir / 'reasoning.py'), '.'),
+    (str(spec_dir / 'image_preprocessing.py'), '.'),
+]
+
 # Analysis step - scan all Python dependencies
 a = Analysis(
-    ['server.py'],  # Main script
+    ['server.py', 'inference.py', 'reasoning.py', 'image_preprocessing.py'],  # Main script and local modules
     pathex=[str(spec_dir)],  # Additional paths to search
     binaries=[],
-    datas=model_data + mlx_data + mlx_vlm_data + mlx_lm_data,  # Include model and library data
+    datas=model_data + mlx_data + mlx_vlm_data + mlx_lm_data + local_modules,  # Include model, library, and local module data
     hiddenimports=hiddenimports,
     hookspath=[str(spec_dir / 'hooks')],  # Use local hooks directory for custom hooks
     hooksconfig={},

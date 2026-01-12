@@ -330,16 +330,15 @@ function App() {
           }}
         >
         {/* Logo */}
-        <div
-          className="mb-10 font-bold tracking-tighter select-none"
-          style={{
-            fontFamily: 'var(--font-display)',
-            fontSize: 'var(--text-lg)',
-            color: 'var(--color-accent)',
-            letterSpacing: 'var(--tracking-tight)',
-          }}
-        >
-          clearical
+        <div className="mb-10 select-none">
+          <img
+            src="/icon.png"
+            alt="Clearical"
+            className="w-10 h-10 rounded-lg"
+            style={{
+              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)',
+            }}
+          />
         </div>
 
         {/* Navigation Items */}

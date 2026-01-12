@@ -49,6 +49,7 @@ What to avoid:
 Example good output: "Editing the ScreenshotAnalyzer.swift file in Xcode. Working on the processScreenshot() function that handles image compression. Several build warnings visible in the issues navigator."
 
 Example bad output: "The user is working on a project using code. There are various UI elements visible including panels and toolbars. The specific task is not clear from this image."
+"""
 
 
 def get_model_path() -> str:
