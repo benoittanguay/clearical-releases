@@ -197,22 +197,25 @@ def summarize_activities(descriptions: List[str], app_names: List[str] = None) -
     prompt = f"""You are creating a professional timesheet entry for billing or reporting to employers. Based on the screen activities below, write a 2-4 sentence description of work accomplished.
 
 RULES:
-- Use professional action verbs: Developed, Implemented, Debugged, Reviewed, Tested, Configured, Refactored, Analyzed, Designed, Integrated
+- Use professional action verbs: Reviewed, Prepared, Updated, Analyzed, Coordinated, Completed, Organized, Created, Edited, Researched
 - Focus on WHAT WORK was completed, not what screens showed
-- Mention specific technologies, files, or features when identifiable
+- Mention specific tools, files, projects, or deliverables when identifiable
 - Write in past tense, first person (no "the user")
-- NEVER mention: "screenshot", "image", "visual", "display", "shown", "observed"
-- Be concise and suitable for client billing
+- Keep it professional and suitable for client billing or management reporting
+- Describe the work activity itself, not the visual appearance of screens
 
 EXAMPLES:
-- Input: "Code editor with TypeScript errors, debugging panel visible"
-  Output: "Debugged TypeScript compilation errors in authentication module."
+- Input: "Figma with dashboard mockups, layers panel showing component structure"
+  Output: "Created mockups for the new dashboard layout in Figma, organizing components for developer handoff."
 
-- Input: "Web browser showing React application, developer tools open"
-  Output: "Tested and debugged React frontend functionality using browser developer tools."
+- Input: "Google Docs with quarterly report, editing and formatting visible"
+  Output: "Drafted and edited the quarterly report in Google Docs, incorporating feedback from stakeholders."
 
-- Input: "Terminal with git commands, code editor with merge conflicts"
-  Output: "Resolved merge conflicts in feature branch and synchronized with main repository."
+- Input: "Monday.com board with project tasks, updating status columns"
+  Output: "Organized project files and updated task status in Monday.com to reflect current sprint progress."
+
+- Input: "Excel spreadsheet with sales data, pivot tables and charts visible"
+  Output: "Reviewed sales data and prepared summary charts in Excel for the monthly executive presentation."
 
 Activities observed:
 {context}
