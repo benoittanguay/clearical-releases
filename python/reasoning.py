@@ -194,13 +194,31 @@ def summarize_activities(descriptions: List[str], app_names: List[str] = None) -
         unique_apps = list(set(app_names))[:5]
         apps_context = f"\n\nApplications used: {', '.join(unique_apps)}"
 
-    prompt = f"""Create a natural, story-like summary of these work activities. Write 2-3 sentences describing what the user did, focusing on the workflow and context. Start with "The user..." and make it read like a narrative, not a list.
+    prompt = f"""You are creating a professional timesheet entry for billing or reporting to employers. Based on the screen activities below, write a 2-4 sentence description of work accomplished.
 
-Activities:
+RULES:
+- Use professional action verbs: Developed, Implemented, Debugged, Reviewed, Tested, Configured, Refactored, Analyzed, Designed, Integrated
+- Focus on WHAT WORK was completed, not what screens showed
+- Mention specific technologies, files, or features when identifiable
+- Write in past tense, first person (no "the user")
+- NEVER mention: "screenshot", "image", "visual", "display", "shown", "observed"
+- Be concise and suitable for client billing
+
+EXAMPLES:
+- Input: "Code editor with TypeScript errors, debugging panel visible"
+  Output: "Debugged TypeScript compilation errors in authentication module."
+
+- Input: "Web browser showing React application, developer tools open"
+  Output: "Tested and debugged React frontend functionality using browser developer tools."
+
+- Input: "Terminal with git commands, code editor with merge conflicts"
+  Output: "Resolved merge conflicts in feature branch and synchronized with main repository."
+
+Activities observed:
 {context}
 {apps_context}
 
-Natural narrative summary:"""
+Professional timesheet entry:"""
 
     try:
         import time

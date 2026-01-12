@@ -82,7 +82,7 @@ class AnalyzeRequest(BaseModel):
         description="Custom prompt for analysis (optional)"
     )
     max_tokens: int = Field(
-        200,
+        500,
         ge=50,
         le=1000,
         description="Maximum tokens to generate (50-1000)"
