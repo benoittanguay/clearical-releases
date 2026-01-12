@@ -23,13 +23,18 @@ import { spawn, ChildProcessWithoutNullStreams } from 'child_process';
 import { app } from 'electron';
 import path from 'path';
 import fs from 'fs';
+import net from 'net';
 
 const FASTVLM_PORT = 5123;
 const FASTVLM_HOST = '127.0.0.1';
 const HEALTH_CHECK_INTERVAL = 5000; // 5 seconds
-const SERVER_STARTUP_TIMEOUT = 120000; // 120 seconds (both models load at startup now)
-const MAX_HEALTH_CHECK_RETRIES = 24; // 120 seconds total (5s intervals)
+const SERVER_STARTUP_TIMEOUT = 180000; // 180 seconds (extended for cold-start with memory pressure)
+const MAX_HEALTH_CHECK_RETRIES = 36; // 180 seconds total (5s intervals)
 const IDLE_TIMEOUT = 300000; // 5 minutes of inactivity before shutdown (was 60s)
+const MAX_REQUEST_RETRIES = 3; // Number of retries for analysis requests
+const INITIAL_BACKOFF_MS = 1000; // Initial backoff delay for restart retries
+const MAX_BACKOFF_MS = 30000; // Maximum backoff delay (30 seconds)
+const PORT_WAIT_TIMEOUT = 10000; // Maximum time to wait for port to be freed (10 seconds)
 
 interface AnalysisRequest {
     image_path: string;
@@ -66,12 +71,68 @@ class FastVLMServer {
     private idleTimer: NodeJS.Timeout | null = null;
     private serverUrl: string = `http://${FASTVLM_HOST}:${FASTVLM_PORT}`;
     private isStarting: boolean = false;
+    private restartBackoffMs: number = INITIAL_BACKOFF_MS;
+    private consecutiveFailures: number = 0;
 
     constructor() {
         // Ensure cleanup on app quit
         app.on('before-quit', () => {
             this.stop();
         });
+    }
+
+    /**
+     * Check if a port is available by attempting to bind to it
+     * Returns true if port is free, false otherwise
+     */
+    private async checkPortAvailable(port: number, host: string): Promise<boolean> {
+        return new Promise((resolve) => {
+            const server = net.createServer();
+
+            server.once('error', (err: NodeJS.ErrnoException) => {
+                if (err.code === 'EADDRINUSE') {
+                    console.log(`[FastVLM] Port ${port} is in use`);
+                    resolve(false);
+                } else {
+                    // Other errors also indicate port is not available
+                    console.log(`[FastVLM] Port check error:`, err.message);
+                    resolve(false);
+                }
+            });
+
+            server.once('listening', () => {
+                // Port is available, clean up
+                server.close(() => {
+                    console.log(`[FastVLM] Port ${port} is available`);
+                    resolve(true);
+                });
+            });
+
+            server.listen(port, host);
+        });
+    }
+
+    /**
+     * Wait for port to be freed after server shutdown
+     * Useful when port is in TIME_WAIT state
+     */
+    private async waitForPortFree(port: number, host: string, timeoutMs: number = PORT_WAIT_TIMEOUT): Promise<boolean> {
+        const startTime = Date.now();
+        console.log(`[FastVLM] Waiting for port ${port} to be freed (timeout: ${timeoutMs}ms)...`);
+
+        while (Date.now() - startTime < timeoutMs) {
+            const isAvailable = await this.checkPortAvailable(port, host);
+            if (isAvailable) {
+                console.log(`[FastVLM] Port ${port} is now free`);
+                return true;
+            }
+
+            // Wait a bit before checking again
+            await new Promise(resolve => setTimeout(resolve, 500));
+        }
+
+        console.warn(`[FastVLM] Timeout waiting for port ${port} to be freed`);
+        return false;
     }
 
     /**
@@ -163,6 +224,18 @@ class FastVLMServer {
 
             console.log('[FastVLM] Executable path:', executablePath);
 
+            // Check if port is available before spawning
+            const portAvailable = await this.checkPortAvailable(FASTVLM_PORT, FASTVLM_HOST);
+            if (!portAvailable) {
+                console.log('[FastVLM] Port is in use, waiting for it to be freed...');
+                const portFreed = await this.waitForPortFree(FASTVLM_PORT, FASTVLM_HOST);
+                if (!portFreed) {
+                    console.error('[FastVLM] Port still not available after waiting, aborting startup');
+                    this.isStarting = false;
+                    return false;
+                }
+            }
+
             // Spawn the bundled executable
             this.process = spawn(executablePath, ['--port', FASTVLM_PORT.toString()], {
                 env: {
@@ -240,7 +313,7 @@ class FastVLMServer {
     /**
      * Stop the FastVLM server
      */
-    stop(): void {
+    async stop(): Promise<void> {
         console.log('[FastVLM] Stopping server...');
 
         // Clear idle timer
@@ -257,33 +330,62 @@ class FastVLMServer {
 
         // Kill the process
         if (this.process) {
-            this.process.kill('SIGTERM');
-
-            // Force kill after 5 seconds if still running
-            setTimeout(() => {
-                if (this.process) {
-                    console.log('[FastVLM] Force killing server process');
-                    this.process.kill('SIGKILL');
-                }
-            }, 5000);
-
+            const processToKill = this.process;
             this.process = null;
+
+            processToKill.kill('SIGTERM');
+
+            // Wait for graceful shutdown, then force kill if needed
+            await new Promise<void>((resolve) => {
+                const forceKillTimer = setTimeout(() => {
+                    console.log('[FastVLM] Force killing server process');
+                    try {
+                        processToKill.kill('SIGKILL');
+                    } catch (error) {
+                        // Process may already be dead
+                        console.log('[FastVLM] Process already terminated');
+                    }
+                    resolve();
+                }, 5000);
+
+                // Listen for process exit
+                processToKill.once('exit', () => {
+                    clearTimeout(forceKillTimer);
+                    resolve();
+                });
+            });
         }
 
         this.isRunning = false;
         this.isStarting = false;
+
+        // Wait for port to be freed
+        console.log('[FastVLM] Waiting for port to be freed after shutdown...');
+        await this.waitForPortFree(FASTVLM_PORT, FASTVLM_HOST);
+
         console.log('[FastVLM] Server stopped');
     }
 
     /**
-     * Restart the FastVLM server
+     * Restart the FastVLM server with exponential backoff
      */
     async restart(): Promise<boolean> {
-        console.log('[FastVLM] Restarting server...');
-        this.stop();
+        console.log(`[FastVLM] Restarting server with backoff delay: ${this.restartBackoffMs}ms (consecutive failures: ${this.consecutiveFailures})...`);
 
-        // Wait a bit before restarting
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        await this.stop();
+
+        // Apply exponential backoff delay
+        console.log(`[FastVLM] Waiting ${this.restartBackoffMs}ms before restart...`);
+        await new Promise(resolve => setTimeout(resolve, this.restartBackoffMs));
+
+        // Increment consecutive failures for next potential restart
+        this.consecutiveFailures++;
+
+        // Calculate next backoff (exponential: 1s, 2s, 4s, 8s, 16s, 30s max)
+        this.restartBackoffMs = Math.min(
+            this.restartBackoffMs * 2,
+            MAX_BACKOFF_MS
+        );
 
         return await this.start();
     }
@@ -304,7 +406,18 @@ class FastVLMServer {
 
             if (response.ok) {
                 const data = await response.json() as { status: string };
-                return data.status === 'healthy';
+                const isHealthy = data.status === 'healthy';
+
+                if (isHealthy) {
+                    // Reset backoff on successful health check
+                    if (this.consecutiveFailures > 0) {
+                        console.log('[FastVLM] Health check successful, resetting backoff');
+                        this.consecutiveFailures = 0;
+                        this.restartBackoffMs = INITIAL_BACKOFF_MS;
+                    }
+                }
+
+                return isHealthy;
             }
 
             return false;
@@ -312,6 +425,87 @@ class FastVLMServer {
             console.error('[FastVLM] Health check failed:', error);
             return false;
         }
+    }
+
+    /**
+     * Retry a request with exponential backoff
+     * Only retries on transient errors (network, timeout, 5xx), not permanent failures (4xx)
+     */
+    private async retryRequest<T>(
+        requestFn: () => Promise<T>,
+        operationName: string,
+        maxRetries: number = MAX_REQUEST_RETRIES
+    ): Promise<T> {
+        let lastError: Error | null = null;
+
+        for (let attempt = 0; attempt < maxRetries; attempt++) {
+            try {
+                return await requestFn();
+            } catch (error) {
+                lastError = error as Error;
+
+                // Check if error is retryable
+                const isRetryable = this.isRetryableError(error);
+
+                if (!isRetryable) {
+                    console.log(`[FastVLM] ${operationName} failed with non-retryable error, not retrying`);
+                    throw error;
+                }
+
+                if (attempt < maxRetries - 1) {
+                    // Calculate delay with exponential backoff: 1s, 2s, 4s
+                    const delayMs = Math.pow(2, attempt) * 1000;
+                    console.log(`[FastVLM] ${operationName} failed (attempt ${attempt + 1}/${maxRetries}), retrying in ${delayMs}ms...`);
+                    await new Promise(resolve => setTimeout(resolve, delayMs));
+                } else {
+                    console.error(`[FastVLM] ${operationName} failed after ${maxRetries} attempts`);
+                }
+            }
+        }
+
+        throw lastError;
+    }
+
+    /**
+     * Check if an error is retryable (transient) or permanent
+     */
+    private isRetryableError(error: unknown): boolean {
+        if (!(error instanceof Error)) {
+            return false;
+        }
+
+        const errorMessage = error.message.toLowerCase();
+
+        // Retry on network errors
+        if (error.name === 'TimeoutError' ||
+            error.name === 'AbortError' ||
+            errorMessage.includes('fetch failed') ||
+            errorMessage.includes('econnrefused') ||
+            errorMessage.includes('enotfound') ||
+            errorMessage.includes('epipe') ||
+            errorMessage.includes('broken pipe') ||
+            errorMessage.includes('socket hang up') ||
+            errorMessage.includes('network')) {
+            return true;
+        }
+
+        // Retry on 5xx server errors
+        if (errorMessage.includes('server returned 5')) {
+            return true;
+        }
+
+        // Retry on 503 Service Unavailable
+        if (errorMessage.includes('503')) {
+            return true;
+        }
+
+        // Don't retry on 4xx client errors (bad request, not found, etc.)
+        if (errorMessage.includes('server returned 4')) {
+            return false;
+        }
+
+        // Default to not retrying unknown errors
+        return false;
     }
 
     /**
@@ -336,35 +530,38 @@ class FastVLMServer {
         }
 
         try {
-            const requestBody: AnalysisRequest = {
-                image_path: imagePath,
-                app_name: appName,
-                window_title: windowTitle
-            };
+            // Wrap the analysis request in retry logic
+            return await this.retryRequest(async () => {
+                const requestBody: AnalysisRequest = {
+                    image_path: imagePath,
+                    app_name: appName,
+                    window_title: windowTitle
+                };
 
-            console.log('[FastVLM] Sending analysis request:', imagePath, 'app:', appName, 'window:', windowTitle);
+                console.log('[FastVLM] Sending analysis request:', imagePath, 'app:', appName, 'window:', windowTitle);
 
-            const response = await fetch(`${this.serverUrl}/analyze`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(requestBody),
-                signal: AbortSignal.timeout(30000) // 30 second timeout for analysis
-            });
+                const response = await fetch(`${this.serverUrl}/analyze`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(requestBody),
+                    signal: AbortSignal.timeout(30000) // 30 second timeout for analysis
+                });
 
-            if (!response.ok) {
-                const errorText = await response.text();
-                throw new Error(`Server returned ${response.status}: ${errorText}`);
-            }
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`Server returned ${response.status}: ${errorText}`);
+                }
 
-            const result = await response.json() as AnalysisResponse;
-            console.log('[FastVLM] Analysis complete:', result.description?.substring(0, 100));
+                const result = await response.json() as AnalysisResponse;
+                console.log('[FastVLM] Analysis complete:', result.description?.substring(0, 100));
 
-            // Reset idle timer after successful analysis
-            this.resetIdleTimer();
+                // Reset idle timer after successful analysis
+                this.resetIdleTimer();
 
-            return result;
+                return result;
+            }, 'Analysis');
 
         } catch (error) {
             console.error('[FastVLM] Analysis request failed:', error);
@@ -406,35 +603,38 @@ class FastVLMServer {
         }
 
         try {
-            const requestBody: ClassifyRequest = {
-                description,
-                options,
-                context
-            };
+            // Wrap the classification request in retry logic
+            return await this.retryRequest(async () => {
+                const requestBody: ClassifyRequest = {
+                    description,
+                    options,
+                    context
+                };
 
-            console.log('[FastVLM] Sending classify request with', options.length, 'options');
+                console.log('[FastVLM] Sending classify request with', options.length, 'options');
 
-            const response = await fetch(`${this.serverUrl}/classify`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(requestBody),
-                signal: AbortSignal.timeout(15000) // 15 second timeout for classification
-            });
+                const response = await fetch(`${this.serverUrl}/classify`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(requestBody),
+                    signal: AbortSignal.timeout(15000) // 15 second timeout for classification
+                });
 
-            if (!response.ok) {
-                const errorText = await response.text();
-                throw new Error(`Server returned ${response.status}: ${errorText}`);
-            }
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`Server returned ${response.status}: ${errorText}`);
+                }
 
-            const result = await response.json() as ClassifyResponse;
-            console.log('[FastVLM] Classification complete:', result.selected_name, 'confidence:', result.confidence);
+                const result = await response.json() as ClassifyResponse;
+                console.log('[FastVLM] Classification complete:', result.selected_name, 'confidence:', result.confidence);
 
-            // Reset idle timer after successful classification
-            this.resetIdleTimer();
+                // Reset idle timer after successful classification
+                this.resetIdleTimer();
 
-            return result;
+                return result;
+            }, 'Classification');
 
         } catch (error) {
             console.error('[FastVLM] Classification request failed:', error);
@@ -474,34 +674,37 @@ class FastVLMServer {
         }
 
         try {
-            const requestBody = {
-                descriptions,
-                app_names: appNames
-            };
+            // Wrap the summarization request in retry logic
+            return await this.retryRequest(async () => {
+                const requestBody = {
+                    descriptions,
+                    app_names: appNames
+                };
 
-            console.log('[FastVLM] Sending summarization request with', descriptions.length, 'descriptions');
+                console.log('[FastVLM] Sending summarization request with', descriptions.length, 'descriptions');
 
-            const response = await fetch(`${this.serverUrl}/summarize`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(requestBody),
-                signal: AbortSignal.timeout(60000) // 60 second timeout for summarization (generates longer text than classification)
-            });
+                const response = await fetch(`${this.serverUrl}/summarize`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(requestBody),
+                    signal: AbortSignal.timeout(60000) // 60 second timeout for summarization (generates longer text than classification)
+                });
 
-            if (!response.ok) {
-                const errorText = await response.text();
-                throw new Error(`Server returned ${response.status}: ${errorText}`);
-            }
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`Server returned ${response.status}: ${errorText}`);
+                }
 
-            const result = await response.json() as { success: boolean; summary: string; error?: string };
-            console.log('[FastVLM] Summarization complete:', result.summary?.substring(0, 100));
+                const result = await response.json() as { success: boolean; summary: string; error?: string };
+                console.log('[FastVLM] Summarization complete:', result.summary?.substring(0, 100));
 
-            // Reset idle timer after successful summarization
-            this.resetIdleTimer();
+                // Reset idle timer after successful summarization
+                this.resetIdleTimer();
 
-            return result;
+                return result;
+            }, 'Summarization');
 
         } catch (error) {
             console.error('[FastVLM] Summarization request failed:', error);
@@ -586,10 +789,10 @@ class FastVLMServer {
         }
 
         // Set new timer to shut down after idle period
-        this.idleTimer = setTimeout(() => {
+        this.idleTimer = setTimeout(async () => {
             if (this.isRunning) {
                 console.log(`[FastVLM] Server idle for ${IDLE_TIMEOUT/1000}s, shutting down to save resources...`);
-                this.stop();
+                await this.stop();
             }
         }, IDLE_TIMEOUT);
 

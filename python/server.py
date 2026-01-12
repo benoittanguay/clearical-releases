@@ -25,6 +25,8 @@ Example:
 import asyncio
 import signal
 import sys
+import threading
+import concurrent.futures
 from contextlib import asynccontextmanager
 from typing import Optional, Dict, Any, List
 import logging
@@ -55,6 +57,22 @@ DEFAULT_HOST = "localhost"
 
 # Shutdown flag
 shutdown_event = asyncio.Event()
+
+# Thread safety for model inference
+# MLX models are not thread-safe, so we need to serialize access
+_model_lock = threading.Lock()
+
+# Shared thread pool for CPU-intensive inference operations
+# Limited to 2 workers to prevent resource exhaustion
+_inference_pool = concurrent.futures.ThreadPoolExecutor(
+    max_workers=2,
+    thread_name_prefix="mlx_inference"
+)
+
+# Semaphore to limit concurrent requests (prevents queueing indefinitely)
+# This allows graceful degradation when system is under heavy load
+_max_concurrent_requests = 2
+_request_semaphore = threading.Semaphore(_max_concurrent_requests)
 
 
 # Request/Response Models
@@ -253,6 +271,11 @@ async def lifespan(app: FastAPI):
     # Shutdown
     logger.info("Shutting down FastVLM Inference Server...")
 
+    # Shutdown thread pool gracefully
+    logger.info("Shutting down inference thread pool...")
+    _inference_pool.shutdown(wait=True, cancel_futures=False)
+    logger.info("Thread pool shutdown complete")
+
 
 # Create FastAPI app
 app = FastAPI(
@@ -330,19 +353,40 @@ async def analyze(request: AnalyzeRequest):
     Raises:
         HTTPException: If analysis fails
     """
+    # Check if we can accept this request (graceful degradation)
+    if not _request_semaphore.acquire(blocking=False):
+        logger.warning(f"Too many concurrent requests ({_max_concurrent_requests} in progress). Returning 503.")
+        raise HTTPException(
+            status_code=503,
+            detail=f"Server is currently processing {_max_concurrent_requests} requests. Please try again in a moment."
+        )
+
     try:
         logger.info("Received analysis request")
 
-        # Perform analysis
-        result = analyze_screenshot(
-            image_path=request.image_path,
-            image_base64=request.image_base64,
-            app_name=request.app_name,
-            window_title=request.window_title,
-            prompt=request.prompt,
-            max_tokens=request.max_tokens,
-            temperature=request.temperature,
-            preprocess=request.preprocess
+        # Thread-safe wrapper that acquires the model lock before inference
+        def locked_analyze():
+            logger.info("Acquiring model lock for analysis...")
+            with _model_lock:
+                logger.info("Model lock acquired, starting analysis...")
+                result = analyze_screenshot(
+                    image_path=request.image_path,
+                    image_base64=request.image_base64,
+                    app_name=request.app_name,
+                    window_title=request.window_title,
+                    prompt=request.prompt,
+                    max_tokens=request.max_tokens,
+                    temperature=request.temperature,
+                    preprocess=request.preprocess
+                )
+                logger.info("Model lock released")
+                return result
+
+        # Run analysis in shared thread pool
+        loop = asyncio.get_event_loop()
+        result = await asyncio.wait_for(
+            loop.run_in_executor(_inference_pool, locked_analyze),
+            timeout=60.0  # 60s timeout for analysis
         )
 
         # Check if analysis was successful
@@ -356,6 +400,12 @@ async def analyze(request: AnalyzeRequest):
         logger.info("Analysis completed successfully")
         return AnalyzeResponse(**result)
 
+    except asyncio.TimeoutError:
+        logger.error("Analysis timed out after 60 seconds")
+        raise HTTPException(
+            status_code=504,
+            detail="Analysis timed out."
+        )
     except HTTPException:
         raise
     except Exception as e:
@@ -364,6 +414,10 @@ async def analyze(request: AnalyzeRequest):
             status_code=500,
             detail=f"Unexpected error: {str(e)}"
         )
+    finally:
+        # Always release the semaphore when done
+        _request_semaphore.release()
+        logger.info("Request semaphore released")
 
 
 # Reasoning Endpoints
@@ -378,26 +432,39 @@ async def summarize(request: SummarizeRequest):
     Returns:
         SummarizeResponse: Generated summary
     """
+    # Check if we can accept this request (graceful degradation)
+    if not _request_semaphore.acquire(blocking=False):
+        logger.warning(f"Too many concurrent requests ({_max_concurrent_requests} in progress). Returning 503.")
+        raise HTTPException(
+            status_code=503,
+            detail=f"Server is currently processing {_max_concurrent_requests} requests. Please try again in a moment."
+        )
+
     try:
         logger.info(f"Received summarization request with {len(request.descriptions)} descriptions")
 
-        # Run summarization in thread pool to avoid blocking event loop
+        # Thread-safe wrapper that acquires the model lock before inference
+        def locked_summarize():
+            logger.info("Acquiring model lock for summarization...")
+            with _model_lock:
+                logger.info("Model lock acquired, starting summarization...")
+                result = summarize_activities(
+                    descriptions=request.descriptions,
+                    app_names=request.app_names
+                )
+                logger.info("Model lock released")
+                return result
+
+        # Run summarization in shared thread pool to avoid blocking event loop
         # This is critical because mlx-lm operations are CPU-intensive and synchronous
-        import concurrent.futures
         import functools
         loop = asyncio.get_event_loop()
 
-        with concurrent.futures.ThreadPoolExecutor() as pool:
-            # Use functools.partial to create a callable with arguments
-            func = functools.partial(
-                summarize_activities,
-                descriptions=request.descriptions,
-                app_names=request.app_names
-            )
-            result = await asyncio.wait_for(
-                loop.run_in_executor(pool, func),
-                timeout=55.0  # 55s timeout (less than client's 60s timeout)
-            )
+        # Use the shared thread pool (max 2 workers) instead of creating a new one
+        result = await asyncio.wait_for(
+            loop.run_in_executor(_inference_pool, locked_summarize),
+            timeout=120.0  # 120s timeout to handle long summarizations
+        )
 
         if not result["success"]:
             logger.error(f"Summarization failed: {result.get('error', 'Unknown error')}")
@@ -410,7 +477,7 @@ async def summarize(request: SummarizeRequest):
         return SummarizeResponse(**result)
 
     except asyncio.TimeoutError:
-        logger.error("Summarization timed out after 55 seconds")
+        logger.error("Summarization timed out after 120 seconds")
         raise HTTPException(
             status_code=504,
             detail="Summarization timed out. This may indicate the model is not properly cached or is taking too long to process."
@@ -430,6 +497,10 @@ async def summarize(request: SummarizeRequest):
             status_code=500,
             detail=f"Unexpected error: {str(e)}"
         )
+    finally:
+        # Always release the semaphore when done
+        _request_semaphore.release()
+        logger.info("Request semaphore released")
 
 
 @app.post("/classify", response_model=ClassifyResponse)
@@ -443,16 +514,37 @@ async def classify(request: ClassifyRequest):
     Returns:
         ClassifyResponse: Selected classification with confidence
     """
+    # Check if we can accept this request (graceful degradation)
+    if not _request_semaphore.acquire(blocking=False):
+        logger.warning(f"Too many concurrent requests ({_max_concurrent_requests} in progress). Returning 503.")
+        raise HTTPException(
+            status_code=503,
+            detail=f"Server is currently processing {_max_concurrent_requests} requests. Please try again in a moment."
+        )
+
     try:
         logger.info(f"Received classification request with {len(request.options)} options")
 
-        # Convert Pydantic models to dicts for the reasoning module
-        options_dicts = [{"id": opt.id, "name": opt.name} for opt in request.options]
+        # Thread-safe wrapper that acquires the model lock before inference
+        def locked_classify():
+            logger.info("Acquiring model lock for classification...")
+            with _model_lock:
+                logger.info("Model lock acquired, starting classification...")
+                # Convert Pydantic models to dicts for the reasoning module
+                options_dicts = [{"id": opt.id, "name": opt.name} for opt in request.options]
+                result = classify_activity(
+                    description=request.description,
+                    options=options_dicts,
+                    context=request.context or ""
+                )
+                logger.info("Model lock released")
+                return result
 
-        result = classify_activity(
-            description=request.description,
-            options=options_dicts,
-            context=request.context or ""
+        # Run classification in shared thread pool
+        loop = asyncio.get_event_loop()
+        result = await asyncio.wait_for(
+            loop.run_in_executor(_inference_pool, locked_classify),
+            timeout=30.0  # 30s timeout for classification
         )
 
         if not result["success"]:
@@ -465,6 +557,12 @@ async def classify(request: ClassifyRequest):
         logger.info("Classification completed successfully")
         return ClassifyResponse(**result)
 
+    except asyncio.TimeoutError:
+        logger.error("Classification timed out after 30 seconds")
+        raise HTTPException(
+            status_code=504,
+            detail="Classification timed out."
+        )
     except HTTPException:
         raise
     except Exception as e:
@@ -473,6 +571,10 @@ async def classify(request: ClassifyRequest):
             status_code=500,
             detail=f"Unexpected error: {str(e)}"
         )
+    finally:
+        # Always release the semaphore when done
+        _request_semaphore.release()
+        logger.info("Request semaphore released")
 
 
 @app.get("/reasoning/health", response_model=ReasoningHealthResponse)

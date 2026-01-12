@@ -52,6 +52,11 @@ export function useTimer() {
     const pollingActiveRef = useRef<boolean>(false);
     const pendingAnalyses = useRef<Map<string, Promise<void>>>(new Map());
 
+    // Analysis queue for concurrency limiting
+    const analysisQueue = useRef<Array<{path: string, timestamp: number}>>([]);
+    const activeAnalysisCount = useRef<number>(0);
+    const MAX_CONCURRENT_ANALYSES = 3;
+
     // Load state from local storage on mount
     useEffect(() => {
         const stored = localStorage.getItem('timeportal-timer-state');
@@ -143,8 +148,25 @@ export function useTimer() {
             }
         };
 
-        const analyzeScreenshotAsync = async (path: string, timestamp: number) => {
-            console.log('[Renderer] 🔍 Starting AI analysis for:', path.split('/').pop());
+        const processNextAnalysis = () => {
+            // Check if we can start another analysis
+            if (activeAnalysisCount.current >= MAX_CONCURRENT_ANALYSES) {
+                console.log(`[Renderer] 🚦 Max concurrent analyses (${MAX_CONCURRENT_ANALYSES}) reached, waiting...`);
+                return;
+            }
+
+            // Get next item from queue
+            const nextItem = analysisQueue.current.shift();
+            if (!nextItem) {
+                console.log('[Renderer] 📭 Analysis queue empty');
+                return;
+            }
+
+            const { path, timestamp } = nextItem;
+            console.log(`[Renderer] 🔍 Starting AI analysis for: ${path.split('/').pop()} (active: ${activeAnalysisCount.current + 1}/${MAX_CONCURRENT_ANALYSES}, queue: ${analysisQueue.current.length})`);
+
+            // Increment active count
+            activeAnalysisCount.current++;
 
             // Notify context that analysis is starting
             startAnalysis(path);
@@ -265,13 +287,31 @@ export function useTimer() {
                         });
                     });
                 } finally {
+                    // Decrement active count
+                    activeAnalysisCount.current--;
+
                     // Remove from pending analyses when complete
                     pendingAnalyses.current.delete(path);
+
+                    console.log(`[Renderer] 🏁 Analysis completed (active: ${activeAnalysisCount.current}/${MAX_CONCURRENT_ANALYSES}, queue: ${analysisQueue.current.length})`);
+
+                    // Process next item in queue
+                    processNextAnalysis();
                 }
             })();
 
             // Store the promise
             pendingAnalyses.current.set(path, analysisPromise);
+        };
+
+        const analyzeScreenshotAsync = (path: string, timestamp: number) => {
+            console.log(`[Renderer] 📥 Queuing AI analysis for: ${path.split('/').pop()}`);
+
+            // Add to queue
+            analysisQueue.current.push({ path, timestamp });
+
+            // Try to process immediately
+            processNextAnalysis();
         };
 
         const pollWindow = async () => {
@@ -484,6 +524,8 @@ export function useTimer() {
         currentActivityScreenshotVisionData.current = {}; // Reset vision data
         lastScreenshotTime.current = 0; // Reset screenshot timing
         pendingAnalyses.current.clear(); // Clear any pending analyses from previous session
+        analysisQueue.current = []; // Clear analysis queue
+        activeAnalysisCount.current = 0; // Reset active count
     };
 
     const pause = () => {
@@ -729,6 +771,8 @@ export function useTimer() {
         currentActivityScreenshotVisionData.current = {}; // Reset vision data
         lastScreenshotTime.current = 0; // Reset screenshot timing
         pendingAnalyses.current.clear(); // Clear pending analyses
+        analysisQueue.current = []; // Clear analysis queue
+        activeAnalysisCount.current = 0; // Reset active count
     };
 
     const formatTime = (ms: number) => {
