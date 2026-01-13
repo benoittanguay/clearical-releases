@@ -28,6 +28,7 @@
     inset 0 -1px 2px rgba(0, 0, 0, 0.5);
   overflow: hidden;
   perspective: 400px;
+  transform-style: preserve-3d;
 }
 
 /* Size variants */
@@ -63,6 +64,7 @@
   overflow: hidden;
   background: #1a1a1a;
   backface-visibility: hidden;
+  transform-style: preserve-3d;
 }
 
 .flap-top {
@@ -133,15 +135,18 @@
 .flap-flip-top {
   z-index: 20;
   animation: flipDown 400ms ease-out forwards;
-  transform-origin: bottom;
+  transform-origin: center bottom;
+  will-change: transform, opacity;
 }
 
 /* Animated flipping bottom half */
 .flap-flip-bottom {
   z-index: 5;
   animation: flipUp 400ms ease-out forwards;
-  transform-origin: top;
+  transform-origin: center top;
   opacity: 0;
+  transform: rotateX(90deg);
+  will-change: transform, opacity;
 }
 
 @keyframes flipDown {

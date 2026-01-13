@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import './SplitFlapDisplay.css';
 
 interface SplitFlapDigitProps {
@@ -9,6 +9,20 @@ interface SplitFlapDigitProps {
 interface SplitFlapDisplayProps {
   value: string; // Format: "HH:MM:SS"
   size?: 'small' | 'medium' | 'large';
+}
+
+/**
+ * Custom hook to track previous value
+ * Returns the value from the previous render
+ */
+function usePrevious<T>(value: T): T {
+  const ref = useRef<T>(value);
+
+  useEffect(() => {
+    ref.current = value;
+  }, [value]);
+
+  return ref.current;
 }
 
 /**
@@ -40,8 +54,13 @@ export const SplitFlapDigit: React.FC<SplitFlapDigitProps> = ({ digit, prevDigit
         clearTimeout(halfwayTimer);
         clearTimeout(endTimer);
       };
+    } else {
+      // No animation needed, just update the display if it's different
+      if (displayDigit !== digit) {
+        setDisplayDigit(digit);
+      }
     }
-  }, [digit, prevDigit]);
+  }, [digit, prevDigit, displayDigit]);
 
   return (
     <div className="split-flap-digit">
@@ -91,13 +110,8 @@ export const SplitFlapDisplay: React.FC<SplitFlapDisplayProps> = ({
   value,
   size = 'medium'
 }) => {
-  const [prevValue, setPrevValue] = useState(value);
-
-  useEffect(() => {
-    if (value !== prevValue) {
-      setPrevValue(value);
-    }
-  }, [value, prevValue]);
+  // Track previous value to detect changes for animation
+  const prevValue = usePrevious(value);
 
   // Parse time string into individual characters
   const parseTimeString = (timeStr: string): string[] => {

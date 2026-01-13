@@ -655,7 +655,14 @@ function App() {
                     }
                   }}
                 >
-                  {isRunning ? 'STOP' : 'START'}
+                  {isRunning ? (
+                    <span className="flex items-center gap-2">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="white" stroke="none">
+                        <rect x="6" y="6" width="12" height="12" rx="2" />
+                      </svg>
+                      STOP
+                    </span>
+                  ) : 'START'}
                 </button>
 
                 {/* Pause/Resume button - always takes up space to prevent layout shift */}
@@ -701,7 +708,15 @@ function App() {
                     }
                   }}
                 >
-                  {isPaused ? 'RESUME' : 'PAUSE'}
+                  {isPaused ? 'RESUME' : (
+                    <span className="flex items-center gap-2">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="white" stroke="none">
+                        <rect x="6" y="4" width="4" height="16" rx="1" />
+                        <rect x="14" y="4" width="4" height="16" rx="1" />
+                      </svg>
+                      PAUSE
+                    </span>
+                  )}
                 </button>
               </div>
             </div>
@@ -971,16 +986,16 @@ function App() {
                                 backdropFilter: 'blur(8px)'
                               }}
                             >
-                              <div className="flex items-center gap-4">
-                                <h2
-                                  className="text-sm font-bold uppercase tracking-wider"
-                                  style={{
-                                    color: 'var(--color-text-primary)',
-                                    fontFamily: 'var(--font-display)'
-                                  }}
-                                >
-                                  {formatWeekLabel(parseInt(weekKey))}
-                                </h2>
+                              <h2
+                                className="text-xs font-bold uppercase tracking-wider"
+                                style={{
+                                  color: 'var(--color-text-secondary)',
+                                  fontFamily: 'var(--font-display)'
+                                }}
+                              >
+                                {formatWeekLabel(parseInt(weekKey))}
+                              </h2>
+                              <div className="flex items-center gap-3">
                                 {settings.tempo?.enabled && weekHasLoggableJiraActivities && (
                                   <button
                                     onClick={(e) => {
@@ -1013,16 +1028,16 @@ function App() {
                                     Log to Tempo
                                   </button>
                                 )}
+                                <span
+                                  className="text-sm font-mono font-bold"
+                                  style={{
+                                    color: 'var(--color-accent)',
+                                    fontFamily: 'var(--font-mono)'
+                                  }}
+                                >
+                                  {formatTime(weekTotalDuration)}
+                                </span>
                               </div>
-                              <span
-                                className="text-sm font-mono font-bold"
-                                style={{
-                                  color: 'var(--color-accent)',
-                                  fontFamily: 'var(--font-mono)'
-                                }}
-                              >
-                                {formatTime(weekTotalDuration)}
-                              </span>
                             </div>
 
                             {/* Days within the week */}
@@ -1056,9 +1071,6 @@ function App() {
                                         {formatDateLabel(parseInt(dateKey))}
                                       </h3>
                                       <div className="flex items-center gap-3">
-                                        <span className="text-xs font-mono" style={{ color: 'var(--color-accent)', fontFamily: 'var(--font-mono)' }}>
-                                          {formatTime(totalDuration)}
-                                        </span>
                                         {settings.tempo?.enabled && hasLoggableJiraActivities && (
                                           <button
                                             onClick={(e) => {
@@ -1089,6 +1101,9 @@ function App() {
                                             Log to Tempo
                                           </button>
                                         )}
+                                        <span className="text-xs font-mono" style={{ color: 'var(--color-accent)', fontFamily: 'var(--font-mono)' }}>
+                                          {formatTime(totalDuration)}
+                                        </span>
                                       </div>
                                     </div>
 
@@ -1104,6 +1119,11 @@ function App() {
                                             type: 'bucket' as const,
                                             bucket: buckets.find(b => b.id === entry.bucketId)
                                           } : null);
+
+                                        // Calculate rounded time
+                                        const actualDuration = entry.duration;
+                                        const roundedDuration = Math.ceil(actualDuration / (15 * 60 * 1000)) * (15 * 60 * 1000); // Round up to nearest 15 minutes
+                                        const roundedDiff = roundedDuration - actualDuration;
 
                                         return (
                                           <div
@@ -1166,14 +1186,21 @@ function App() {
                                               {entry.description && (
                                                 <p className="text-xs mb-1 truncate" style={{ color: 'var(--color-text-secondary)' }}>{entry.description}</p>
                                               )}
-                                              <span className="text-xs" style={{ color: 'var(--color-accent)', fontFamily: 'var(--font-mono)' }}>{new Date(entry.startTime).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true })} - {new Date(entry.startTime + entry.duration).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true })}</span>
+                                              <span className="text-xs" style={{ color: 'var(--color-text-primary)', fontFamily: 'var(--font-mono)' }}>{new Date(entry.startTime).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true })} - {new Date(entry.startTime + entry.duration).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true })}</span>
                                             </div>
                                             <div className="flex items-center gap-3">
                                               {entry.windowActivity && entry.windowActivity.length > 0 && (
                                                 <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{entry.windowActivity.length} activities</span>
                                               )}
-                                              <div className="font-mono font-bold" style={{ color: 'var(--color-accent)', fontFamily: 'var(--font-mono)' }}>
-                                                {formatTime(entry.duration)}
+                                              <div className="flex flex-col items-end gap-0.5">
+                                                <div className="font-mono font-bold" style={{ color: 'var(--color-accent)', fontFamily: 'var(--font-mono)' }}>
+                                                  {formatTime(entry.duration)}
+                                                </div>
+                                                {roundedDiff > 0 && (
+                                                  <span className="text-xs" style={{ color: 'var(--color-text-tertiary)', fontFamily: 'var(--font-mono)' }}>
+                                                    Rounded +{formatTime(roundedDiff)}
+                                                  </span>
+                                                )}
                                               </div>
                                               <DeleteButton
                                                 onDelete={() => removeEntry(entry.id)}

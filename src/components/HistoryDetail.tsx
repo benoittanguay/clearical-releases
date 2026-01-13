@@ -1103,7 +1103,7 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                                 <span className="font-semibold">Elapsed:</span> {formatTime(entry.duration)}
                             </div>
                         </div>
-                        <div className="flex flex-col items-end gap-1">
+                        <div className="flex flex-col items-end gap-1" style={{ fontFamily: 'var(--font-mono)' }}>
                             {/* Recorded time - showing rounded time, edit icon on LEFT, using accent color */}
                             <InlineTimeEditor
                                 value={isRoundingEnabled && roundTime(entry.duration).isRounded ? roundTime(entry.duration).rounded : entry.duration}
@@ -1122,8 +1122,8 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                     {/* Assignment Section */}
                     <div className="p-4 border-b" style={{ borderColor: 'var(--color-border-secondary)' }}>
                         <div className="flex items-center justify-between mb-2">
-                            <label className="text-xs uppercase font-semibold" style={{ color: 'var(--color-text-secondary)', letterSpacing: 'var(--tracking-wider)' }}>Bucket</label>
                             <div className="flex items-center gap-2">
+                                <label className="text-xs uppercase font-semibold" style={{ color: 'var(--color-text-secondary)', letterSpacing: 'var(--tracking-wider)' }}>Bucket</label>
                                 {entry.assignmentAutoSelected && currentAssignment && (
                                     <span className="text-xs flex items-center gap-1" style={{ color: 'var(--color-info)' }}>
                                         <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1137,6 +1137,8 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                                         AI Selected
                                     </span>
                                 )}
+                            </div>
+                            <div className="flex items-center gap-2">
                                 <button
                                     onClick={async () => {
                                         if (entry.description) {
@@ -1149,19 +1151,19 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                                     disabled={isAssigningBucket || !entry.description}
                                     className="px-2.5 py-1 text-white text-xs rounded-md transition-all active:scale-95 flex items-center gap-1 disabled:cursor-not-allowed"
                                     style={{
-                                        backgroundColor: isAssigningBucket || !entry.description ? 'var(--color-bg-tertiary)' : 'var(--color-accent)',
+                                        backgroundColor: isAssigningBucket || !entry.description ? 'var(--color-bg-tertiary)' : 'var(--color-surface-dark)',
                                         opacity: isAssigningBucket || !entry.description ? 0.6 : 1,
                                         transitionDuration: 'var(--duration-fast)',
                                         transitionTimingFunction: 'var(--ease-out)'
                                     }}
                                     onMouseEnter={(e) => {
                                         if (!isAssigningBucket && entry.description) {
-                                            e.currentTarget.style.backgroundColor = '#E64000';
+                                            e.currentTarget.style.backgroundColor = '#1a1919';
                                         }
                                     }}
                                     onMouseLeave={(e) => {
                                         if (!isAssigningBucket && entry.description) {
-                                            e.currentTarget.style.backgroundColor = 'var(--color-accent)';
+                                            e.currentTarget.style.backgroundColor = 'var(--color-surface-dark)';
                                         }
                                     }}
                                     title="AI assign bucket"
@@ -1196,10 +1198,10 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                     {currentAssignment?.type === 'jira' && settings.tempo?.enabled && (
                         <div className="p-4 border-b" style={{ borderColor: 'var(--color-border-secondary)' }}>
                             <div className="flex items-center justify-between mb-2">
-                                <label className="text-xs uppercase font-semibold" style={{ color: 'var(--color-text-secondary)', letterSpacing: 'var(--tracking-wider)' }}>
-                                    Tempo Account
-                                </label>
                                 <div className="flex items-center gap-2">
+                                    <label className="text-xs uppercase font-semibold" style={{ color: 'var(--color-text-secondary)', letterSpacing: 'var(--tracking-wider)' }}>
+                                        Tempo Account
+                                    </label>
                                     {entry.tempoAccountAutoSelected && entry.tempoAccount && (
                                         <span className="text-xs flex items-center gap-1" style={{ color: 'var(--color-info)' }}>
                                             <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1213,6 +1215,8 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                                             AI Selected
                                         </span>
                                     )}
+                                </div>
+                                <div className="flex items-center gap-2">
                                     <button
                                         onClick={async () => {
                                             if (currentAssignment?.type === 'jira' && currentAssignment.jiraIssue && availableAccounts.length > 0) {
@@ -1221,19 +1225,19 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                                         }}
                                         className="px-2.5 py-1 text-white text-xs rounded-md transition-all active:scale-95 flex items-center gap-1 disabled:cursor-not-allowed"
                                         style={{
-                                            backgroundColor: isAssigningTempoAccount || !currentAssignment?.jiraIssue || availableAccounts.length === 0 ? 'var(--color-bg-tertiary)' : 'var(--color-accent)',
+                                            backgroundColor: isAssigningTempoAccount || !currentAssignment?.jiraIssue || availableAccounts.length === 0 ? 'var(--color-bg-tertiary)' : 'var(--color-surface-dark)',
                                             opacity: isAssigningTempoAccount || !currentAssignment?.jiraIssue || availableAccounts.length === 0 ? 0.6 : 1,
                                             transitionDuration: 'var(--duration-fast)',
                                             transitionTimingFunction: 'var(--ease-out)'
                                         }}
                                         onMouseEnter={(e) => {
                                             if (!isAssigningTempoAccount && currentAssignment?.jiraIssue && availableAccounts.length > 0) {
-                                                e.currentTarget.style.backgroundColor = '#E64000';
+                                                e.currentTarget.style.backgroundColor = '#1a1919';
                                             }
                                         }}
                                         onMouseLeave={(e) => {
                                             if (!isAssigningTempoAccount && currentAssignment?.jiraIssue && availableAccounts.length > 0) {
-                                                e.currentTarget.style.backgroundColor = 'var(--color-accent)';
+                                                e.currentTarget.style.backgroundColor = 'var(--color-surface-dark)';
                                             }
                                         }}
                                         title="AI assign tempo account"
@@ -1359,10 +1363,20 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                                     disabled={isGeneratingSummary}
                                     className="px-2.5 py-1 text-white text-xs rounded-md transition-all active:scale-95 flex items-center gap-1 disabled:cursor-not-allowed"
                                     style={{
-                                        backgroundColor: isGeneratingSummary ? 'var(--color-bg-tertiary)' : 'var(--color-info)',
+                                        backgroundColor: isGeneratingSummary ? 'var(--color-bg-tertiary)' : 'var(--color-surface-dark)',
                                         transitionDuration: 'var(--duration-fast)',
                                         transitionTimingFunction: 'var(--ease-out)',
                                         opacity: isGeneratingSummary ? 0.6 : 1
+                                    }}
+                                    onMouseEnter={(e) => {
+                                        if (!isGeneratingSummary) {
+                                            e.currentTarget.style.backgroundColor = '#1a1919';
+                                        }
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        if (!isGeneratingSummary) {
+                                            e.currentTarget.style.backgroundColor = 'var(--color-surface-dark)';
+                                        }
                                     }}
                                 >
                                     {isGeneratingSummary ? (
@@ -1634,9 +1648,8 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                                                     e.stopPropagation();
                                                     handleCreateEntryFromApp(group.appName);
                                                 }}
-                                                className="p-1.5 rounded transition-all active:scale-95"
+                                                className="p-1.5 rounded transition-all active:scale-95 text-gray-400 hover:text-gray-600"
                                                 style={{
-                                                    color: 'var(--color-info)',
                                                     transitionDuration: 'var(--duration-fast)',
                                                     transitionTimingFunction: 'var(--ease-out)'
                                                 }}
@@ -1742,9 +1755,8 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                                                                     act.appName === activity.appName &&
                                                                     act.windowTitle === activity.windowTitle
                                                                 ) ?? -1)}
-                                                                className="p-1 rounded transition-all active:scale-95"
+                                                                className="p-1 rounded transition-all active:scale-95 text-gray-400 hover:text-gray-600"
                                                                 style={{
-                                                                    color: 'var(--color-info)',
                                                                     transitionDuration: 'var(--duration-fast)',
                                                                     transitionTimingFunction: 'var(--ease-out)'
                                                                 }}
