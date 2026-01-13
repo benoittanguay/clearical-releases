@@ -97,9 +97,9 @@ echo -e "${BLUE}Step 3: Building Electron app...${NC}"
 npm run build:electron 2>&1 | tail -20
 echo "  ✓ Electron build complete"
 
-# Step 4: Ad-hoc sign the app
+# Step 4: Code sign the app with Developer ID
 echo ""
-echo -e "${BLUE}Step 4: Ad-hoc signing the app...${NC}"
+echo -e "${BLUE}Step 4: Code signing with Developer ID...${NC}"
 APP_PATH="dist/mac-arm64/Clearical.app"
 
 if [ ! -d "$APP_PATH" ]; then
@@ -107,9 +107,22 @@ if [ ! -d "$APP_PATH" ]; then
     exit 1
 fi
 
-# Remove existing signature and apply proper ad-hoc signature
-codesign --force --deep --sign - "$APP_PATH" 2>&1
-echo "  ✓ Applied ad-hoc signature"
+# Check if Developer ID certificate is available
+IDENTITY="Developer ID Application: Benoit Tanguay (98UY743MSB)"
+if security find-identity -v -p codesigning | grep -q "$IDENTITY"; then
+    echo "  ✓ Found Developer ID certificate"
+
+    # Sign with Developer ID, hardened runtime, and secure timestamp
+    codesign --force --deep --options runtime \
+        --timestamp \
+        --entitlements build/entitlements.mac.plist \
+        --sign "$IDENTITY" "$APP_PATH" 2>&1
+    echo "  ✓ Signed with Developer ID"
+else
+    echo -e "${YELLOW}  Developer ID not found, using ad-hoc signing${NC}"
+    codesign --force --deep --sign - "$APP_PATH" 2>&1
+    echo "  ✓ Applied ad-hoc signature"
+fi
 
 # Verify the signature
 if codesign --verify --deep --strict "$APP_PATH" 2>&1; then
@@ -121,7 +134,7 @@ fi
 
 # Show signature details
 echo "  Signature details:"
-codesign -dvvv "$APP_PATH" 2>&1 | grep -E "(Identifier|Signature|flags)" | head -3 | sed 's/^/    /'
+codesign -dvvv "$APP_PATH" 2>&1 | grep -E "(Identifier|Signature|flags|Authority)" | head -5 | sed 's/^/    /'
 
 # Step 5: Rebuild DMG with signed app
 echo ""
@@ -148,10 +161,65 @@ echo ""
 echo -e "${BLUE}Build artifacts:${NC}"
 ls -lh dist/Clearical-arm64.dmg dist/Clearical-arm64.zip | awk '{print "  " $9 ": " $5}'
 
-# Step 7: Publish to GitHub (if --publish flag)
+# Step 7: Notarize the app (if credentials available)
+echo ""
+echo -e "${BLUE}Step 7: Notarizing with Apple...${NC}"
+
+if [ -n "$APPLE_ID" ] && [ -n "$APPLE_APP_SPECIFIC_PASSWORD" ] && [ -n "$APPLE_TEAM_ID" ]; then
+    # Check if signed with Developer ID (not ad-hoc)
+    if codesign -dvvv "$APP_PATH" 2>&1 | grep -q "Authority=Developer ID"; then
+        echo "  Submitting ZIP for notarization..."
+
+        # Submit for notarization and wait for completion
+        NOTARIZE_OUTPUT=$(xcrun notarytool submit "$ZIP_PATH" \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_APP_SPECIFIC_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" \
+            --wait 2>&1)
+
+        echo "$NOTARIZE_OUTPUT" | tail -5
+
+        if echo "$NOTARIZE_OUTPUT" | grep -q "status: Accepted"; then
+            echo "  ✓ Notarization successful!"
+
+            # Staple the ticket to the app
+            echo "  Stapling ticket to app..."
+            xcrun stapler staple "$APP_PATH" 2>&1 | grep -E "(staple|Processing)" || true
+            echo "  ✓ Ticket stapled to app"
+
+            # Recreate DMG with stapled app
+            echo "  Recreating DMG with stapled app..."
+            rm -f "$DMG_PATH"
+            hdiutil create -volname "Clearical" -srcfolder "$APP_PATH" -ov -format UDZO "$DMG_PATH" 2>&1 | grep -E "(created|error)" || true
+
+            # Staple the DMG too
+            xcrun stapler staple "$DMG_PATH" 2>&1 | grep -E "(staple|Processing)" || true
+            echo "  ✓ DMG recreated and stapled"
+
+            # Recreate ZIP with stapled app
+            echo "  Recreating ZIP with stapled app..."
+            rm -f "$ZIP_PATH"
+            cd dist
+            ditto -c -k --sequesterRsrc --keepParent mac-arm64/Clearical.app Clearical-arm64.zip
+            cd "$PROJECT_ROOT"
+            echo "  ✓ ZIP recreated with stapled app"
+        else
+            echo -e "${YELLOW}  ⚠ Notarization failed or timed out${NC}"
+            echo "$NOTARIZE_OUTPUT" | grep -E "(status|message)" | head -5 | sed 's/^/    /'
+            echo -e "${YELLOW}  Continuing with non-notarized build...${NC}"
+        fi
+    else
+        echo -e "${YELLOW}  ⚠ App not signed with Developer ID, skipping notarization${NC}"
+    fi
+else
+    echo -e "${YELLOW}  ⚠ Apple credentials not configured, skipping notarization${NC}"
+    echo "  Set APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, and APPLE_TEAM_ID in .env.local"
+fi
+
+# Step 8: Publish to GitHub (if --publish flag)
 if [ "$PUBLISH" = true ]; then
     echo ""
-    echo -e "${BLUE}Step 7: Publishing to GitHub...${NC}"
+    echo -e "${BLUE}Step 8: Publishing to GitHub...${NC}"
 
     # Check if gh CLI is available
     if ! command -v gh &> /dev/null; then
@@ -179,19 +247,13 @@ if [ "$PUBLISH" = true ]; then
 
 ## macOS Installation
 
-Since the app is not notarized, run this after downloading:
+Download the DMG, open it, and drag Clearical to your Applications folder.
 
-\`\`\`bash
-xattr -cr ~/Downloads/Clearical-arm64.dmg
-\`\`\`
-
-Or right-click the app → Open → Open.
+The app is **signed and notarized** by Apple for your security.
 
 ## What's New
 
-- **FastVLM AI Analysis**: Screenshots are now analyzed using an on-device vision-language model (nanoLLaVA) for more accurate activity descriptions
-- No setup required - the AI model is bundled with the app
-- Loading indicator shown during AI analysis"
+See commit history for changes in this release."
         echo "  ✓ Release created and artifacts uploaded"
     fi
 

@@ -13,9 +13,8 @@
       "smartUnpack": true
     },
     "asarUnpack": [
-      "package.json",
-      "dist/**/*",
-      "dist-electron/**/*"
+      "**/*.node",
+      "**/better-sqlite3/**/*"
     ],
     "files": [
       "package.json",
@@ -72,9 +71,11 @@
     "mac": {
       "icon": "build/icon.icns",
       "category": "public.app-category.productivity",
-      "identity": null,
-      "hardenedRuntime": false,
+      "identity": "Benoit Tanguay (98UY743MSB)",
+      "hardenedRuntime": true,
       "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist",
       "artifactName": "${productName}-${arch}.${ext}",
       "target": [
         {
@@ -85,10 +86,11 @@
           "target": "zip",
           "arch": "arm64"
         }
-      ]
+      ],
+      "notarize": false
     },
     "dmg": {
-      "sign": false,
+      "sign": true,
       "artifactName": "${productName}-${arch}.${ext}",
       "contents": [
         {
