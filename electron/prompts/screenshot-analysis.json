@@ -1,0 +1,11 @@
+{
+  "name": "screenshot-analysis",
+  "model": "nanoLLaVA-1.5-4bit",
+  "description": "Analyzes screenshots to describe visible work activity",
+  "version": "1.0.0",
+  "template": "<image>\nApp: {app_name}\nWindow: {window_title}\n\nDescribe the work visible in this screenshot in 2-3 sentences.\n\nInclude:\n- Specific file, document, or page names visible\n- Concrete details: function names, error messages, data being edited\n- The task: editing, reviewing, debugging, designing, analyzing, etc.\n\nAvoid:\n- Generic phrases like \"working on a project\" or \"development work\"\n- Listing UI elements unless relevant to the task\n- Assumptions about what the user intends to do\n\nBe specific and factual. Describe only what is visible.",
+  "parameters": {
+    "max_tokens": 100,
+    "temperature": 0.3
+  }
+}

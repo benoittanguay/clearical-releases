@@ -456,9 +456,9 @@ test.describe('Screenshot Gallery - Metadata Display', () => {
       const aiSection = metadataPanel.locator('text=AI Narrative:');
       await expect(aiSection).toBeVisible();
 
-      // Check for Apple Intelligence badge
-      const appleBadge = metadataPanel.locator('text=Apple Intelligence');
-      await expect(appleBadge).toBeVisible();
+      // Check for FastVLM badge
+      const vlmBadge = metadataPanel.locator('text=FastVLM');
+      await expect(vlmBadge).toBeVisible();
     }
   });
 

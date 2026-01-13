@@ -1,7 +1,7 @@
 {
   "name": "clearical",
   "private": true,
-  "version": "1.2.2",
+  "version": "1.2.3",
   "type": "module",
   "build": {
     "appId": "io.clearical.app",
@@ -53,13 +53,6 @@
       "!.playwright-setup-summary.md"
     ],
     "extraResources": [
-      {
-        "from": "native/screenshot-analyzer/build/screenshot-analyzer",
-        "to": "screenshot-analyzer",
-        "filter": [
-          "**/*"
-        ]
-      },
       {
         "from": "public/tray-icon.png",
         "to": "tray-icon.png"

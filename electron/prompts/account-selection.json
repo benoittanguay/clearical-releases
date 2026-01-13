@@ -1,0 +1,11 @@
+{
+  "name": "account-selection",
+  "model": "Qwen2.5-0.5B-Instruct-4bit",
+  "description": "Selects the best Tempo account for time logging",
+  "version": "1.0.0",
+  "template": "Select the best account for logging time on this work.\n\nWork: {description}\nProject: {project}\nIssue Type: {issue_type}\n\nAccounts:\n{options}\n\nReply with ONLY the number of the best account.",
+  "parameters": {
+    "max_tokens": 10,
+    "temperature": 0.2
+  }
+}

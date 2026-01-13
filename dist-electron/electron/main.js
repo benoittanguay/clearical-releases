@@ -97,25 +97,68 @@ let timerState = {
 };
 let timerInterval = null;
 /**
- * Convert regular digits to monospace digits to prevent menu bar jiggling.
- * Uses Unicode Numeric Forms block (U+1D7F6 - U+1D7FF) which renders as fixed-width.
- * Falls back to padding with hair spaces if monospace digits aren't supported.
+ * ANSI color codes for tray title styling.
+ * Note: Background colors in macOS menu bar have limited support and may not render
+ * as expected due to system-level constraints. macOS typically only allows the system
+ * to control background colors for proper light/dark mode adaptation.
  */
-function toMonospaceDigits(text) {
-    // Map of regular digits to their monospace equivalents
-    const monoDigits = {
-        '0': '𝟶',
-        '1': '𝟷',
-        '2': '𝟸',
-        '3': '𝟹',
-        '4': '𝟺',
-        '5': '𝟻',
-        '6': '𝟼',
-        '7': '𝟽',
-        '8': '𝟾',
-        '9': '𝟿'
-    };
-    return text.split('').map(char => monoDigits[char] || char).join('');
+const ANSI_COLORS = {
+    // Foreground colors
+    BLACK: '\x1b[30m',
+    RED: '\x1b[31m',
+    GREEN: '\x1b[32m',
+    YELLOW: '\x1b[33m',
+    BLUE: '\x1b[34m',
+    MAGENTA: '\x1b[35m',
+    CYAN: '\x1b[36m',
+    WHITE: '\x1b[37m',
+    // Bright foreground colors
+    BRIGHT_BLACK: '\x1b[90m',
+    BRIGHT_RED: '\x1b[91m',
+    BRIGHT_GREEN: '\x1b[92m',
+    BRIGHT_YELLOW: '\x1b[93m',
+    BRIGHT_BLUE: '\x1b[94m',
+    BRIGHT_MAGENTA: '\x1b[95m',
+    BRIGHT_CYAN: '\x1b[96m',
+    BRIGHT_WHITE: '\x1b[97m',
+    // Background colors (LIMITED SUPPORT on macOS menu bar)
+    // macOS menu bar typically ignores background color codes and uses system colors
+    BG_BLACK: '\x1b[40m',
+    BG_RED: '\x1b[41m',
+    BG_GREEN: '\x1b[42m',
+    BG_YELLOW: '\x1b[43m',
+    BG_BLUE: '\x1b[44m',
+    BG_MAGENTA: '\x1b[45m',
+    BG_CYAN: '\x1b[46m',
+    BG_WHITE: '\x1b[47m',
+    // Reset
+    RESET: '\x1b[0m'
+};
+/**
+ * Apply color styling to timer text using ANSI codes.
+ *
+ * IMPORTANT LIMITATION: macOS menu bar has strict styling constraints:
+ * - Background colors are typically NOT supported (macOS controls the background)
+ * - Foreground colors have limited support and may be overridden by the system theme
+ * - The system automatically adjusts text color for light/dark mode
+ *
+ * Alternative approaches for visual distinction:
+ * 1. Use Unicode box-drawing characters to create a "frame" around the text
+ * 2. Use different Unicode characters (e.g., enclosed alphanumerics)
+ * 3. Use emoji or symbols to add visual interest
+ * 4. Generate dynamic tray icons with embedded text (using nativeImage)
+ *    Example: Create a canvas, draw colored background + text, convert to PNG
+ *    Pros: Full control over colors, fonts, and styling
+ *    Cons: More complex, requires image generation on every update, higher CPU usage
+ *
+ * @param text - The text to style
+ * @returns Styled text with ANSI codes (may not render as expected on macOS)
+ */
+function styleTimerText(text) {
+    // Attempt to use foreground color (may be overridden by system)
+    // Using cyan for a professional look that works in both light and dark modes
+    // Note: You can experiment with other colors like GREEN, YELLOW, MAGENTA, etc.
+    return `${ANSI_COLORS.CYAN}${text}${ANSI_COLORS.RESET}`;
 }
 /**
  * Format elapsed time in milliseconds to HH:MM:SS
@@ -130,6 +173,19 @@ function formatTime(ms) {
 /**
  * Update the tray title based on current timer state.
  * This runs in the main process and is not affected by renderer throttling.
+ *
+ * FONT STYLING: Uses Electron's native `monospacedDigit` fontType option (macOS 10.11+)
+ * which provides true system-level monospace digits. This is superior to Unicode
+ * monospace characters as it uses the system's San Francisco Mono font on macOS,
+ * ensuring perfect alignment and readability.
+ *
+ * COLOR LIMITATIONS: While Electron's setTitle() supports ANSI colors, macOS menu bar
+ * has strict visual guidelines and typically overrides custom colors to maintain
+ * consistency with the system theme (black text in light mode, white in dark mode).
+ * Background colors are not supported at all in the menu bar.
+ *
+ * For more visual customization, consider using dynamic tray icons (nativeImage)
+ * with rendered text, though this is more complex and less performant.
  */
 function updateTrayTitle() {
     if (!tray)
@@ -138,19 +194,26 @@ function updateTrayTitle() {
         // Calculate current elapsed time
         const elapsed = Date.now() - timerState.startTime;
         const formattedTime = formatTime(elapsed);
-        const monoTime = toMonospaceDigits(formattedTime);
-        currentTimerText = monoTime;
+        // Apply color styling (may be overridden by system theme)
+        const styledTime = styleTimerText(formattedTime);
+        currentTimerText = formattedTime;
         if (process.platform === 'darwin') {
-            tray.setTitle(monoTime);
+            // Use native monospacedDigit font for perfect digit alignment
+            // This leverages SF Mono on macOS 10.11+ for professional appearance
+            tray.setTitle(styledTime, {
+                fontType: 'monospacedDigit'
+            });
         }
     }
     else if (timerState.isPaused) {
         // Show paused state with last elapsed time
         const formattedTime = formatTime(timerState.elapsed);
-        const monoTime = toMonospaceDigits(formattedTime);
-        currentTimerText = `⏸ ${monoTime}`;
+        const styledTime = styleTimerText(formattedTime);
+        currentTimerText = `⏸ ${formattedTime}`;
         if (process.platform === 'darwin') {
-            tray.setTitle(`⏸ ${monoTime}`);
+            tray.setTitle(`⏸ ${styledTime}`, {
+                fontType: 'monospacedDigit'
+            });
         }
     }
     else {

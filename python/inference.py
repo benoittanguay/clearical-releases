@@ -34,21 +34,19 @@ DEFAULT_PROMPT = """<image>
 App: {app_name}
 Window: {window_title}
 
-Describe what work is being done in this screenshot. Be specific and concise (2-3 sentences maximum).
+Describe the work visible in this screenshot in 2-3 sentences.
 
-What to include:
-- The specific file, document, or webpage name visible in tabs or title bars
-- Specific content you can read: function names, class names, error messages, document sections, data being edited
-- The specific task: editing code, reviewing documents, debugging errors, designing UI, analyzing data, etc.
+Include:
+- Specific file, document, or page names visible
+- Concrete details: function names, error messages, data being edited
+- The task: editing, reviewing, debugging, designing, analyzing, etc.
 
-What to avoid:
-- Generic phrases like "working on a project", "code snippets", "development process"
-- Vague descriptions that apply to any screenshot
-- Listing UI elements unless directly relevant to the task
+Avoid:
+- Generic phrases like "working on a project"
+- Listing UI elements unless relevant to the task
+- Assumptions about intent
 
-Example good output: "Editing the ScreenshotAnalyzer.swift file in Xcode. Working on the processScreenshot() function that handles image compression. Several build warnings visible in the issues navigator."
-
-Example bad output: "The user is working on a project using code. There are various UI elements visible including panels and toolbars. The specific task is not clear from this image."
+Be specific and factual. Describe only what is visible.
 """
 
 

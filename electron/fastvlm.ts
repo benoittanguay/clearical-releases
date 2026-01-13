@@ -217,7 +217,7 @@ class FastVLMServer {
             const executablePath = this.getServerExecutablePath();
             if (!executablePath) {
                 console.error('[FastVLM] Bundled executable not found');
-                console.error('[FastVLM] FastVLM will not be available - falling back to Swift');
+                console.error('[FastVLM] FastVLM will not be available - screenshot analysis disabled');
                 this.isStarting = false;
                 return false;
             }

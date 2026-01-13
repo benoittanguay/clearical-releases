@@ -194,43 +194,22 @@ def summarize_activities(descriptions: List[str], app_names: List[str] = None) -
         unique_apps = list(set(app_names))[:5]
         apps_context = f"\n\nApplications used: {', '.join(unique_apps)}"
 
-    prompt = f"""You are synthesizing multiple screen activities into ONE cohesive professional timesheet entry for client billing or employer reporting.
+    prompt = f"""Synthesize these activities into a professional timesheet entry (2-4 sentences).
 
-YOUR TASK: Identify the main project/task being worked on and write a 2-4 sentence summary of what was accomplished.
+Rules:
+1. SYNTHESIZE into one cohesive narrative - do not list or paraphrase
+2. Focus on OUTCOMES and accomplishments
+3. Write for a client/manager - what billable work was completed?
+4. Mention specific deliverables: files edited, features built, issues resolved
+5. Do NOT mention UI elements, tabs, cursors, or screens
+6. Do NOT invent tools or applications not mentioned in the activities
+7. Only mention applications that appear in the activities below
 
-CRITICAL INSTRUCTIONS:
-1. SYNTHESIZE - do not just list or paraphrase the activities. Find the common thread and main objective.
-2. IDENTIFY THE PROJECT - what is the central work being done? Group related activities together.
-3. REMOVE REDUNDANCY - if multiple activities describe the same work, mention it once.
-4. FOCUS ON OUTCOMES - what was accomplished, not descriptions of screens or UI elements.
-5. DO NOT repeat phrases from the input. Transform observations into work narrative.
-6. DO NOT describe screens ("tabs", "cursor", "visible", "showing", "displayed").
-7. Write as if explaining to a client or manager what billable work was completed.
-
-EXAMPLES OF SYNTHESIS:
-
-Input activities:
-- "VS Code with Python file open, editing functions"
-- "Terminal showing pytest running tests"
-- "Browser with GitHub pull request page"
-- "VS Code again with different Python file"
-
-BAD (just paraphrasing): "The user edited Python files in VS Code, ran tests in terminal, and viewed GitHub. Multiple tabs were open."
-GOOD (synthesized): "Developed and tested new features for the Python API, fixing bugs identified in code review and validating changes before submitting pull request."
-
-Input activities:
-- "Figma with dashboard mockup, layers panel visible"
-- "Figma with color picker selecting brand colors"
-- "Figma with component variants being created"
-
-BAD (repetitive): "Worked on Figma mockup with dashboard, selected colors, and created components. Used Figma for design work."
-GOOD (synthesized): "Designed new dashboard mockup in Figma, establishing component system with brand color palette for engineering handoff."
-
-NOW SYNTHESIZE THESE ACTIVITIES:
+Activities:
 {context}
 {apps_context}
 
-Professional timesheet entry (2-4 sentences):"""
+Professional summary:"""
 
     try:
         import time
