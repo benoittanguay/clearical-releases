@@ -157,13 +157,13 @@ COMMENT ON COLUMN profiles.updated_at IS 'Timestamp when the profile was last up
 -- Add check constraint to ensure subscription_status has valid values
 ALTER TABLE profiles
 ADD CONSTRAINT check_subscription_status
-CHECK (subscription_status IN ('active', 'canceled', 'past_due', 'trialing', 'incomplete', 'incomplete_expired', 'unpaid', 'inactive'));
+CHECK (subscription_status IN ('active', 'canceled', 'canceling', 'past_due', 'trialing', 'incomplete', 'incomplete_expired', 'unpaid', 'inactive', 'payment_failed'));
 
 -- Add check constraint to ensure subscription_tier has valid values
 -- Adjust these values based on your specific tier structure
 ALTER TABLE profiles
 ADD CONSTRAINT check_subscription_tier
-CHECK (subscription_tier IN ('free', 'pro', 'enterprise'));
+CHECK (subscription_tier IN ('free', 'premium', 'pro', 'enterprise'));
 
 -- ============================================================================
 -- Helper Function for Checking Active Subscription
@@ -188,3 +188,35 @@ GRANT EXECUTE ON FUNCTION has_active_subscription(UUID) TO authenticated;
 
 -- Comment on the helper function
 COMMENT ON FUNCTION has_active_subscription(UUID) IS 'Checks if a user has an active subscription with valid period end date';
+
+-- ============================================================================
+-- Auto-Create Profile on User Signup
+-- ============================================================================
+
+-- Function to create a profile when a new user signs up
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS TRIGGER AS $$
+BEGIN
+    INSERT INTO public.profiles (id, email, subscription_status, subscription_tier)
+    VALUES (
+        NEW.id,
+        NEW.email,
+        'inactive',
+        'free'
+    )
+    ON CONFLICT (id) DO NOTHING;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Drop the trigger if it exists
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+
+-- Create trigger to auto-create profile when user signs up
+CREATE TRIGGER on_auth_user_created
+    AFTER INSERT ON auth.users
+    FOR EACH ROW
+    EXECUTE FUNCTION public.handle_new_user();
+
+-- Comment on the function
+COMMENT ON FUNCTION public.handle_new_user() IS 'Creates a profile row when a new user signs up via Supabase Auth';

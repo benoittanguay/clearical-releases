@@ -65,28 +65,76 @@ export function LoginScreen() {
     };
 
     return (
-        <div className="min-h-screen bg-gray-900 flex items-center justify-center p-4">
+        <div
+            className="min-h-screen flex items-center justify-center p-4 animate-fade-in"
+            style={{
+                backgroundColor: 'var(--color-bg-primary)',
+                fontFamily: 'var(--font-body)'
+            }}
+        >
             <div className="w-full max-w-sm">
                 {/* Logo/Brand */}
-                <div className="text-center mb-8">
-                    <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl mx-auto mb-4 flex items-center justify-center">
-                        <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div className="text-center mb-8 animate-slide-down">
+                    <div
+                        className="w-20 h-20 mx-auto mb-5 flex items-center justify-center rounded-3xl shadow-lg"
+                        style={{
+                            background: 'linear-gradient(135deg, var(--color-accent) 0%, var(--color-accent-light) 100%)',
+                            boxShadow: 'var(--shadow-accent)'
+                        }}
+                    >
+                        <svg className="w-11 h-11 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
                     </div>
-                    <h1 className="text-2xl font-bold text-white">Clearical</h1>
-                    <p className="text-gray-400 text-sm mt-1">Track your time, boost productivity</p>
+                    <h1
+                        className="text-3xl font-bold mb-2 text-gradient-accent"
+                        style={{
+                            fontFamily: 'var(--font-display)',
+                            letterSpacing: 'var(--tracking-tight)'
+                        }}
+                    >
+                        Clearical
+                    </h1>
+                    <p
+                        className="text-sm"
+                        style={{ color: 'var(--color-text-secondary)' }}
+                    >
+                        Track your time, boost productivity
+                    </p>
                 </div>
 
                 {/* Login Form */}
-                <div className="bg-gray-800 rounded-xl p-6 shadow-xl border border-gray-700">
+                <div
+                    className="rounded-3xl p-8 shadow-lg border animate-slide-up"
+                    style={{
+                        backgroundColor: 'var(--color-bg-secondary)',
+                        borderColor: 'var(--color-border-primary)',
+                        borderRadius: 'var(--radius-3xl)'
+                    }}
+                >
                     {step === 'email' ? (
                         <form onSubmit={handleSendOtp}>
-                            <h2 className="text-lg font-semibold text-white mb-4">Sign in to your account</h2>
+                            <h2
+                                className="text-xl font-semibold mb-6"
+                                style={{
+                                    fontFamily: 'var(--font-display)',
+                                    color: 'var(--color-text-primary)'
+                                }}
+                            >
+                                Sign in to your account
+                            </h2>
 
-                            <div className="mb-4">
-                                <label htmlFor="email" className="block text-sm font-medium text-gray-300 mb-2">
-                                    Email address
+                            <div className="mb-5">
+                                <label
+                                    htmlFor="email"
+                                    className="block text-xs font-semibold mb-2 uppercase"
+                                    style={{
+                                        fontFamily: 'var(--font-display)',
+                                        color: 'var(--color-text-secondary)',
+                                        letterSpacing: 'var(--tracking-wider)'
+                                    }}
+                                >
+                                    Email Address
                                 </label>
                                 <input
                                     id="email"
@@ -94,26 +142,72 @@ export function LoginScreen() {
                                     value={email}
                                     onChange={(e) => setEmail(e.target.value)}
                                     placeholder="you@example.com"
-                                    className="w-full px-4 py-3 bg-gray-900 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                    className="w-full px-4 py-3 rounded-xl border transition-all duration-200 focus:outline-none"
+                                    style={{
+                                        backgroundColor: 'var(--color-bg-tertiary)',
+                                        borderColor: 'var(--color-border-primary)',
+                                        color: 'var(--color-text-primary)',
+                                        fontFamily: 'var(--font-body)',
+                                        borderRadius: 'var(--radius-xl)'
+                                    }}
+                                    onFocus={(e) => {
+                                        e.target.style.borderColor = 'var(--color-accent)';
+                                        e.target.style.boxShadow = 'var(--shadow-accent)';
+                                    }}
+                                    onBlur={(e) => {
+                                        e.target.style.borderColor = 'var(--color-border-primary)';
+                                        e.target.style.boxShadow = 'none';
+                                    }}
                                     disabled={isLoading}
                                     autoFocus
                                 />
                             </div>
 
                             {error && (
-                                <div className="mb-4 p-3 bg-red-900/30 border border-red-700 rounded-lg">
-                                    <p className="text-sm text-red-400">{error}</p>
+                                <div
+                                    className="mb-5 p-4 rounded-xl border animate-slide-down"
+                                    style={{
+                                        backgroundColor: 'var(--color-error-muted)',
+                                        borderColor: 'var(--color-error)',
+                                        borderRadius: 'var(--radius-xl)'
+                                    }}
+                                >
+                                    <p
+                                        className="text-sm font-medium"
+                                        style={{ color: 'var(--color-error)' }}
+                                    >
+                                        {error}
+                                    </p>
                                 </div>
                             )}
 
                             <button
                                 type="submit"
                                 disabled={isLoading}
-                                className="w-full py-3 bg-blue-600 hover:bg-blue-500 disabled:bg-blue-800 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors"
+                                className="w-full py-3.5 font-semibold rounded-full transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-60"
+                                style={{
+                                    backgroundColor: 'var(--color-accent)',
+                                    color: 'white',
+                                    fontFamily: 'var(--font-display)',
+                                    borderRadius: 'var(--radius-full)',
+                                    boxShadow: 'var(--shadow-accent)'
+                                }}
+                                onMouseEnter={(e) => {
+                                    if (!isLoading) {
+                                        e.currentTarget.style.backgroundColor = 'var(--color-accent-hover)';
+                                        e.currentTarget.style.transform = 'translateY(-1px)';
+                                        e.currentTarget.style.boxShadow = 'var(--shadow-accent-lg)';
+                                    }
+                                }}
+                                onMouseLeave={(e) => {
+                                    e.currentTarget.style.backgroundColor = 'var(--color-accent)';
+                                    e.currentTarget.style.transform = 'translateY(0)';
+                                    e.currentTarget.style.boxShadow = 'var(--shadow-accent)';
+                                }}
                             >
                                 {isLoading ? (
                                     <span className="flex items-center justify-center gap-2">
-                                        <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                                        <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
                                             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
                                             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                                         </svg>
@@ -129,7 +223,17 @@ export function LoginScreen() {
                             <button
                                 type="button"
                                 onClick={handleBackToEmail}
-                                className="flex items-center gap-1 text-sm text-gray-400 hover:text-white mb-4 transition-colors"
+                                className="flex items-center gap-1.5 text-sm font-medium mb-6 transition-colors duration-200"
+                                style={{
+                                    color: 'var(--color-text-secondary)',
+                                    fontFamily: 'var(--font-display)'
+                                }}
+                                onMouseEnter={(e) => {
+                                    e.currentTarget.style.color = 'var(--color-accent)';
+                                }}
+                                onMouseLeave={(e) => {
+                                    e.currentTarget.style.color = 'var(--color-text-secondary)';
+                                }}
                             >
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -137,18 +241,50 @@ export function LoginScreen() {
                                 Back
                             </button>
 
-                            <h2 className="text-lg font-semibold text-white mb-2">Enter verification code</h2>
-                            <p className="text-sm text-gray-400 mb-4">
-                                We sent a 6-digit code to <span className="text-white">{email}</span>
+                            <h2
+                                className="text-xl font-semibold mb-2"
+                                style={{
+                                    fontFamily: 'var(--font-display)',
+                                    color: 'var(--color-text-primary)'
+                                }}
+                            >
+                                Enter verification code
+                            </h2>
+                            <p
+                                className="text-sm mb-6"
+                                style={{ color: 'var(--color-text-secondary)' }}
+                            >
+                                We sent a 6-digit code to{' '}
+                                <span
+                                    className="font-semibold"
+                                    style={{ color: 'var(--color-text-primary)' }}
+                                >
+                                    {email}
+                                </span>
                             </p>
 
-                            <div className="mb-4">
+                            <div className="mb-5">
                                 <input
                                     type="text"
                                     value={otpCode}
                                     onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
                                     placeholder="000000"
-                                    className="w-full px-4 py-3 bg-gray-900 border border-gray-600 rounded-lg text-white text-center text-2xl tracking-widest placeholder-gray-600 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 font-mono"
+                                    className="w-full px-4 py-4 rounded-xl border text-center text-3xl font-bold tracking-widest transition-all duration-200 focus:outline-none"
+                                    style={{
+                                        backgroundColor: 'var(--color-bg-tertiary)',
+                                        borderColor: 'var(--color-border-primary)',
+                                        color: 'var(--color-text-primary)',
+                                        fontFamily: 'var(--font-mono)',
+                                        borderRadius: 'var(--radius-xl)'
+                                    }}
+                                    onFocus={(e) => {
+                                        e.target.style.borderColor = 'var(--color-accent)';
+                                        e.target.style.boxShadow = 'var(--shadow-accent)';
+                                    }}
+                                    onBlur={(e) => {
+                                        e.target.style.borderColor = 'var(--color-border-primary)';
+                                        e.target.style.boxShadow = 'none';
+                                    }}
                                     disabled={isLoading}
                                     autoFocus
                                     maxLength={6}
@@ -156,19 +292,50 @@ export function LoginScreen() {
                             </div>
 
                             {error && (
-                                <div className="mb-4 p-3 bg-red-900/30 border border-red-700 rounded-lg">
-                                    <p className="text-sm text-red-400">{error}</p>
+                                <div
+                                    className="mb-5 p-4 rounded-xl border animate-slide-down"
+                                    style={{
+                                        backgroundColor: 'var(--color-error-muted)',
+                                        borderColor: 'var(--color-error)',
+                                        borderRadius: 'var(--radius-xl)'
+                                    }}
+                                >
+                                    <p
+                                        className="text-sm font-medium"
+                                        style={{ color: 'var(--color-error)' }}
+                                    >
+                                        {error}
+                                    </p>
                                 </div>
                             )}
 
                             <button
                                 type="submit"
                                 disabled={isLoading || otpCode.length < 6}
-                                className="w-full py-3 bg-blue-600 hover:bg-blue-500 disabled:bg-blue-800 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors"
+                                className="w-full py-3.5 font-semibold rounded-full transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-60"
+                                style={{
+                                    backgroundColor: 'var(--color-accent)',
+                                    color: 'white',
+                                    fontFamily: 'var(--font-display)',
+                                    borderRadius: 'var(--radius-full)',
+                                    boxShadow: 'var(--shadow-accent)'
+                                }}
+                                onMouseEnter={(e) => {
+                                    if (!isLoading && otpCode.length === 6) {
+                                        e.currentTarget.style.backgroundColor = 'var(--color-accent-hover)';
+                                        e.currentTarget.style.transform = 'translateY(-1px)';
+                                        e.currentTarget.style.boxShadow = 'var(--shadow-accent-lg)';
+                                    }
+                                }}
+                                onMouseLeave={(e) => {
+                                    e.currentTarget.style.backgroundColor = 'var(--color-accent)';
+                                    e.currentTarget.style.transform = 'translateY(0)';
+                                    e.currentTarget.style.boxShadow = 'var(--shadow-accent)';
+                                }}
                             >
                                 {isLoading ? (
                                     <span className="flex items-center justify-center gap-2">
-                                        <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                                        <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
                                             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
                                             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                                         </svg>
@@ -183,7 +350,19 @@ export function LoginScreen() {
                                 type="button"
                                 onClick={handleSendOtp}
                                 disabled={isLoading}
-                                className="w-full mt-3 py-2 text-sm text-gray-400 hover:text-white disabled:text-gray-600 transition-colors"
+                                className="w-full mt-4 py-2 text-sm font-medium transition-colors duration-200 disabled:opacity-50"
+                                style={{
+                                    color: 'var(--color-text-secondary)',
+                                    fontFamily: 'var(--font-display)'
+                                }}
+                                onMouseEnter={(e) => {
+                                    if (!isLoading) {
+                                        e.currentTarget.style.color = 'var(--color-accent)';
+                                    }
+                                }}
+                                onMouseLeave={(e) => {
+                                    e.currentTarget.style.color = 'var(--color-text-secondary)';
+                                }}
                             >
                                 Didn't receive the code? Resend
                             </button>
@@ -193,11 +372,26 @@ export function LoginScreen() {
 
                 {/* Sign up link */}
                 <div className="mt-6 text-center">
-                    <p className="text-gray-400 text-sm">
+                    <p
+                        className="text-sm"
+                        style={{ color: 'var(--color-text-secondary)' }}
+                    >
                         Don't have an account?{' '}
                         <button
                             onClick={handleOpenSignup}
-                            className="text-blue-400 hover:text-blue-300 transition-colors"
+                            className="font-semibold transition-colors duration-200"
+                            style={{
+                                color: 'var(--color-accent)',
+                                fontFamily: 'var(--font-display)'
+                            }}
+                            onMouseEnter={(e) => {
+                                e.currentTarget.style.color = 'var(--color-accent-hover)';
+                                e.currentTarget.style.textDecoration = 'underline';
+                            }}
+                            onMouseLeave={(e) => {
+                                e.currentTarget.style.color = 'var(--color-accent)';
+                                e.currentTarget.style.textDecoration = 'none';
+                            }}
                         >
                             Sign up for free
                         </button>
@@ -206,18 +400,39 @@ export function LoginScreen() {
 
                 {/* Footer */}
                 <div className="mt-8 text-center">
-                    <p className="text-xs text-gray-500">
+                    <p
+                        className="text-xs leading-relaxed"
+                        style={{ color: 'var(--color-text-tertiary)' }}
+                    >
                         By signing in, you agree to our{' '}
                         <button
                             onClick={() => window.electron.ipcRenderer.invoke('open-external-url', 'https://clearical.io/terms')}
-                            className="text-gray-400 hover:text-white transition-colors"
+                            className="transition-colors duration-200"
+                            style={{ color: 'var(--color-text-secondary)' }}
+                            onMouseEnter={(e) => {
+                                e.currentTarget.style.color = 'var(--color-accent)';
+                                e.currentTarget.style.textDecoration = 'underline';
+                            }}
+                            onMouseLeave={(e) => {
+                                e.currentTarget.style.color = 'var(--color-text-secondary)';
+                                e.currentTarget.style.textDecoration = 'none';
+                            }}
                         >
                             Terms of Service
                         </button>{' '}
                         and{' '}
                         <button
                             onClick={() => window.electron.ipcRenderer.invoke('open-external-url', 'https://clearical.io/privacy')}
-                            className="text-gray-400 hover:text-white transition-colors"
+                            className="transition-colors duration-200"
+                            style={{ color: 'var(--color-text-secondary)' }}
+                            onMouseEnter={(e) => {
+                                e.currentTarget.style.color = 'var(--color-accent)';
+                                e.currentTarget.style.textDecoration = 'underline';
+                            }}
+                            onMouseLeave={(e) => {
+                                e.currentTarget.style.color = 'var(--color-text-secondary)';
+                                e.currentTarget.style.textDecoration = 'none';
+                            }}
                         >
                             Privacy Policy
                         </button>

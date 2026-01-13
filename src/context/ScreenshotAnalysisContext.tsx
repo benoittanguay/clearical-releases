@@ -116,19 +116,16 @@ export function ScreenshotAnalysisProvider({ children }: { children: ReactNode }
             };
 
             // @ts-ignore
-            window.electron.ipcRenderer.on('screenshot-analysis-start', handleAnalysisStart);
+            const unsubscribeStart = window.electron.ipcRenderer.on('screenshot-analysis-start', handleAnalysisStart);
             // @ts-ignore
-            window.electron.ipcRenderer.on('screenshot-analysis-complete', handleAnalysisComplete);
+            const unsubscribeComplete = window.electron.ipcRenderer.on('screenshot-analysis-complete', handleAnalysisComplete);
             // @ts-ignore
-            window.electron.ipcRenderer.on('screenshot-analysis-error', handleAnalysisError);
+            const unsubscribeError = window.electron.ipcRenderer.on('screenshot-analysis-error', handleAnalysisError);
 
             return () => {
-                // @ts-ignore
-                window.electron.ipcRenderer.removeListener('screenshot-analysis-start', handleAnalysisStart);
-                // @ts-ignore
-                window.electron.ipcRenderer.removeListener('screenshot-analysis-complete', handleAnalysisComplete);
-                // @ts-ignore
-                window.electron.ipcRenderer.removeListener('screenshot-analysis-error', handleAnalysisError);
+                if (unsubscribeStart) unsubscribeStart();
+                if (unsubscribeComplete) unsubscribeComplete();
+                if (unsubscribeError) unsubscribeError();
             };
         }
     }, [startAnalysis, completeAnalysis, failAnalysis]);

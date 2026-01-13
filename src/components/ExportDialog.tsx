@@ -154,11 +154,11 @@ export function ExportDialog({ entries, buckets, onClose, onExport }: ExportDial
             onClick={onClose}
         >
             <div
-                className="bg-[var(--color-bg-secondary)] rounded-[32px] p-6 w-full max-w-md mx-4 border border-[var(--color-border-primary)] shadow-2xl animate-scale-in"
+                className="bg-[var(--color-bg-secondary)] rounded-[32px] w-full max-w-md mx-4 border border-[var(--color-border-primary)] shadow-2xl animate-scale-in max-h-[90vh] flex flex-col"
                 onClick={(e) => e.stopPropagation()}
             >
-                <div className="flex items-center justify-between mb-6">
-                    <h2 className="text-xl font-bold text-[var(--color-text-primary)] font-['Syne']">Export Timesheet</h2>
+                <div className="flex items-center justify-between p-6 pb-4 flex-shrink-0">
+                    <h2 className="text-xl font-bold text-[var(--color-text-primary)]" style={{ fontFamily: 'var(--font-display)' }}>Export Timesheet</h2>
                     <button
                         onClick={onClose}
                         className="text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-all duration-200 hover:scale-110 active:scale-95"
@@ -170,35 +170,37 @@ export function ExportDialog({ entries, buckets, onClose, onExport }: ExportDial
                     </button>
                 </div>
 
-                {error && (
-                    <div className="mb-4 p-3 bg-[var(--color-error-muted)] border border-[var(--color-error)]/50 rounded-xl text-[var(--color-error)] text-sm font-mono">
-                        {error}
-                    </div>
-                )}
+                {/* Scrollable Content */}
+                <div className="px-6 overflow-y-auto flex-1">
+                    {error && (
+                        <div className="mb-4 p-3 bg-[var(--color-error-muted)] border border-[var(--color-error)]/50 rounded-xl text-[var(--color-error)] text-sm" style={{ fontFamily: 'var(--font-mono)' }}>
+                            {error}
+                        </div>
+                    )}
 
-                <div className="space-y-5 mb-6">
+                    <div className="space-y-5 mb-6">
                     {/* Date Range */}
                     <div>
                         <label className="block text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider mb-3" style={{ fontFamily: 'var(--font-display)' }}>Date Range</label>
                         <div className="grid grid-cols-2 gap-3">
                             <div>
-                                <label className="block text-[10px] text-[var(--color-text-tertiary)] uppercase tracking-wider mb-1.5 font-mono">From</label>
+                                <label className="block text-[10px] text-[var(--color-text-tertiary)] uppercase tracking-wider mb-1.5" style={{ fontFamily: 'var(--font-mono)' }}>From</label>
                                 <input
                                     type="date"
                                     value={dateFrom}
                                     onChange={(e) => setDateFrom(e.target.value)}
-                                    className="w-full bg-white border-2 border-[var(--color-border-primary)] text-[var(--color-text-primary)] text-sm rounded-lg px-3 py-2.5 font-mono focus:outline-none focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-accent)]/20 hover:border-[var(--color-border-secondary)] transition-all duration-200"
-                                    style={{ colorScheme: 'light' }}
+                                    className="w-full bg-white border-2 border-[var(--color-border-primary)] text-[var(--color-text-primary)] text-sm rounded-lg px-3 py-2.5 focus:outline-none focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-accent)]/20 hover:border-[var(--color-border-secondary)] transition-all duration-200"
+                                    style={{ fontFamily: 'var(--font-mono)', colorScheme: 'light' }}
                                 />
                             </div>
                             <div>
-                                <label className="block text-[10px] text-[var(--color-text-tertiary)] uppercase tracking-wider mb-1.5 font-mono">To</label>
+                                <label className="block text-[10px] text-[var(--color-text-tertiary)] uppercase tracking-wider mb-1.5" style={{ fontFamily: 'var(--font-mono)' }}>To</label>
                                 <input
                                     type="date"
                                     value={dateTo}
                                     onChange={(e) => setDateTo(e.target.value)}
-                                    className="w-full bg-white border-2 border-[var(--color-border-primary)] text-[var(--color-text-primary)] text-sm rounded-lg px-3 py-2.5 font-mono focus:outline-none focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-accent)]/20 hover:border-[var(--color-border-secondary)] transition-all duration-200"
-                                    style={{ colorScheme: 'light' }}
+                                    className="w-full bg-white border-2 border-[var(--color-border-primary)] text-[var(--color-text-primary)] text-sm rounded-lg px-3 py-2.5 focus:outline-none focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-accent)]/20 hover:border-[var(--color-border-secondary)] transition-all duration-200"
+                                    style={{ fontFamily: 'var(--font-mono)', colorScheme: 'light' }}
                                 />
                             </div>
                         </div>
@@ -228,7 +230,7 @@ export function ExportDialog({ entries, buckets, onClose, onExport }: ExportDial
                                         className="w-4 h-4 text-[var(--color-accent)] bg-white border-2 border-[var(--color-border-primary)] rounded focus:ring-2 focus:ring-[var(--color-accent)]/20 transition-all duration-200 cursor-pointer"
                                     />
                                     <div className="w-3 h-3 rounded-full transition-transform duration-200 group-hover:scale-110" style={{ backgroundColor: bucket.color }}></div>
-                                    <span className="text-sm text-[var(--color-text-primary)] font-mono">{bucket.name}</span>
+                                    <span className="text-sm text-[var(--color-text-primary)]" style={{ fontFamily: 'var(--font-mono)' }}>{bucket.name}</span>
                                 </label>
                             ))}
                         </div>
@@ -245,7 +247,7 @@ export function ExportDialog({ entries, buckets, onClose, onExport }: ExportDial
                                 onChange={(e) => setIncludeDescription(e.target.checked)}
                                 className="w-4 h-4 text-[var(--color-accent)] bg-white border-2 border-[var(--color-border-primary)] rounded focus:ring-2 focus:ring-[var(--color-accent)]/20 transition-all duration-200 cursor-pointer"
                             />
-                            <span className="text-sm text-[var(--color-text-primary)] font-mono group-hover:text-[var(--color-accent)] transition-colors duration-200">Include descriptions</span>
+                            <span className="text-sm text-[var(--color-text-primary)] group-hover:text-[var(--color-accent)] transition-colors duration-200" style={{ fontFamily: 'var(--font-body)' }}>Include descriptions</span>
                         </label>
 
                         <label className="flex items-center gap-2.5 cursor-pointer group p-2 rounded-lg hover:bg-[var(--color-bg-primary)] transition-all duration-200">
@@ -255,7 +257,7 @@ export function ExportDialog({ entries, buckets, onClose, onExport }: ExportDial
                                 onChange={(e) => setIncludeIssueKey(e.target.checked)}
                                 className="w-4 h-4 text-[var(--color-accent)] bg-white border-2 border-[var(--color-border-primary)] rounded focus:ring-2 focus:ring-[var(--color-accent)]/20 transition-all duration-200 cursor-pointer"
                             />
-                            <span className="text-sm text-[var(--color-text-primary)] font-mono group-hover:text-[var(--color-accent)] transition-colors duration-200">Include issue key</span>
+                            <span className="text-sm text-[var(--color-text-primary)] group-hover:text-[var(--color-accent)] transition-colors duration-200" style={{ fontFamily: 'var(--font-body)' }}>Include issue key</span>
                         </label>
 
                         {includeIssueKey && (
@@ -264,7 +266,8 @@ export function ExportDialog({ entries, buckets, onClose, onExport }: ExportDial
                                 value={issueKey}
                                 onChange={(e) => setIssueKey(e.target.value)}
                                 placeholder="Default issue key (e.g., PROJ-123)"
-                                className="w-full bg-white border-2 border-[var(--color-border-primary)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] text-sm rounded-lg px-4 py-2.5 font-mono focus:outline-none focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-accent)]/20 hover:border-[var(--color-border-secondary)] mt-2 transition-all duration-200"
+                                className="w-full bg-white border-2 border-[var(--color-border-primary)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] text-sm rounded-lg px-4 py-2.5 focus:outline-none focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-accent)]/20 hover:border-[var(--color-border-secondary)] mt-2 transition-all duration-200"
+                                style={{ fontFamily: 'var(--font-mono)' }}
                             />
                         )}
                     </div>
@@ -272,14 +275,15 @@ export function ExportDialog({ entries, buckets, onClose, onExport }: ExportDial
                     {/* Preview */}
                     <div className="bg-[var(--color-accent-muted)] rounded-xl p-4 border-2 border-[var(--color-accent-border)]">
                         <div className="text-[10px] text-[var(--color-text-secondary)] uppercase tracking-wider mb-1.5 font-bold" style={{ fontFamily: 'var(--font-display)' }}>Export Preview</div>
-                        <div className="text-sm text-[var(--color-text-primary)] font-mono">
+                        <div className="text-sm text-[var(--color-text-primary)]" style={{ fontFamily: 'var(--font-mono)' }}>
                             <span className="text-[var(--color-accent)] font-bold text-lg">{filteredCount}</span> {filteredCount === 1 ? 'activity' : 'activities'} will be exported
                         </div>
                     </div>
                 </div>
+                </div>
 
-                {/* Actions */}
-                <div className="flex gap-3">
+                {/* Actions - Sticky Footer */}
+                <div className="flex gap-3 p-6 pt-4 border-t border-[var(--color-border-primary)] flex-shrink-0 bg-[var(--color-bg-secondary)]">
                     <button
                         onClick={onClose}
                         disabled={isExporting}

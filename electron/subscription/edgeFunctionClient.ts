@@ -23,6 +23,11 @@ interface PortalResponse {
     error?: string;
 }
 
+interface CreateCustomerResponse {
+    customerId: string;
+    error?: string;
+}
+
 interface ProfileRow {
     subscription_status?: string;
     subscription_tier?: string;
@@ -137,8 +142,58 @@ export class EdgeFunctionClient {
     }
 
     /**
+     * Ensure user has a Stripe customer created
+     * Called after successful authentication to create Stripe customer if needed.
+     * This is idempotent - safe to call multiple times.
+     *
+     * @returns true if customer exists or was created, false if failed
+     */
+    async ensureStripeCustomer(): Promise<boolean> {
+        console.log('[EdgeFunctionClient] Ensuring Stripe customer exists...');
+
+        try {
+            const authService = getAuthService();
+            const session = await authService.getSession();
+
+            if (!session) {
+                console.log('[EdgeFunctionClient] No active session, skipping customer creation');
+                return false;
+            }
+
+            const response = await fetch(this.config.api.stripeCreateCustomer, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${session.accessToken}`,
+                },
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({ error: 'Unknown error' })) as { error?: string };
+                console.error('[EdgeFunctionClient] Customer creation failed:', errorData);
+                // Don't throw - this shouldn't block login
+                return false;
+            }
+
+            const data = await response.json() as CreateCustomerResponse;
+            console.log('[EdgeFunctionClient] Stripe customer ensured:', data.customerId);
+
+            return true;
+        } catch (error) {
+            console.error('[EdgeFunctionClient] Error ensuring Stripe customer:', error);
+            // Don't throw - this shouldn't block login
+            return false;
+        }
+    }
+
+    /**
      * Get subscription status from Supabase profile (populated by webhooks)
      * This replaces direct Stripe API calls for subscription status checks.
+     *
+     * Returns null if:
+     * - User is not authenticated
+     * - Profile doesn't exist
+     * - API call fails
      */
     async getSubscriptionStatus(): Promise<{
         status: string;
@@ -147,36 +202,48 @@ export class EdgeFunctionClient {
     } | null> {
         console.log('[EdgeFunctionClient] Getting subscription status from Supabase');
 
-        const authService = getAuthService();
-        const session = await authService.getSession();
+        try {
+            const authService = getAuthService();
+            const session = await authService.getSession();
 
-        if (!session) {
+            if (!session) {
+                console.log('[EdgeFunctionClient] No active session, user not authenticated');
+                return null;
+            }
+
+            const response = await fetch(`${this.config.supabase.url}/rest/v1/profiles?id=eq.${session.user.id}&select=subscription_status,subscription_tier,subscription_period_end`, {
+                headers: {
+                    'apikey': this.config.supabase.anonKey,
+                    'Authorization': `Bearer ${session.accessToken}`,
+                },
+            });
+
+            if (!response.ok) {
+                console.error('[EdgeFunctionClient] Failed to get profile:', response.status);
+                return null;
+            }
+
+            const profiles = await response.json() as ProfileRow[];
+            if (!profiles || profiles.length === 0) {
+                console.log('[EdgeFunctionClient] No profile found for user');
+                return null;
+            }
+
+            const profile = profiles[0];
+            console.log('[EdgeFunctionClient] Profile found:', {
+                status: profile.subscription_status,
+                tier: profile.subscription_tier,
+            });
+
+            return {
+                status: profile.subscription_status || 'inactive',
+                tier: profile.subscription_tier || 'free',
+                periodEnd: profile.subscription_period_end,
+            };
+        } catch (error) {
+            console.error('[EdgeFunctionClient] Error getting subscription status:', error);
             return null;
         }
-
-        const response = await fetch(`${this.config.supabase.url}/rest/v1/profiles?id=eq.${session.user.id}&select=subscription_status,subscription_tier,subscription_period_end`, {
-            headers: {
-                'apikey': this.config.supabase.anonKey,
-                'Authorization': `Bearer ${session.accessToken}`,
-            },
-        });
-
-        if (!response.ok) {
-            console.error('[EdgeFunctionClient] Failed to get profile');
-            return null;
-        }
-
-        const profiles = await response.json() as ProfileRow[];
-        if (!profiles || profiles.length === 0) {
-            return null;
-        }
-
-        const profile = profiles[0];
-        return {
-            status: profile.subscription_status || 'inactive',
-            tier: profile.subscription_tier || 'free',
-            periodEnd: profile.subscription_period_end,
-        };
     }
 }
 

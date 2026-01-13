@@ -157,23 +157,23 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
     return (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 animate-fade-in">
             <div
-                className="bg-[var(--color-bg-secondary)] rounded-[32px] shadow-2xl w-full max-w-2xl mx-4 overflow-hidden border border-[var(--color-border-primary)]"
+                className="bg-[var(--color-bg-secondary)] rounded-[32px] shadow-2xl w-full max-w-2xl mx-4 border border-[var(--color-border-primary)] max-h-[90vh] flex flex-col"
                 style={{
                     animation: 'fadeInScale 0.3s ease-out',
                 }}
             >
                 {/* Progress Bar */}
-                <div className="h-1.5 bg-[var(--color-bg-tertiary)]">
+                <div className="h-1.5 bg-[var(--color-bg-tertiary)] flex-shrink-0">
                     <div
                         className="h-full bg-[var(--color-accent)] transition-all duration-500 ease-out"
                         style={{ width: `${progressPercentage}%` }}
                     />
                 </div>
 
-                {/* Content Container with Slide Animation */}
-                <div className="relative overflow-hidden">
+                {/* Content Container with Slide Animation - Scrollable */}
+                <div className="relative overflow-y-auto flex-1">
                     <div
-                        className={`transition-all duration-200 ${
+                        className={`transition-all duration-200 h-full ${
                             isTransitioning ? 'opacity-0 scale-95' : 'opacity-100 scale-100'
                         }`}
                     >
@@ -188,7 +188,7 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                                             <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
                                         </svg>
                                     </div>
-                                    <h2 className="text-3xl font-bold text-[var(--color-text-primary)] mb-2 font-['Syne']">System Permissions</h2>
+                                    <h2 className="text-3xl font-bold text-[var(--color-text-primary)] mb-2" style={{ fontFamily: 'var(--font-display)' }}>System Permissions</h2>
                                     <p className="text-[var(--color-text-secondary)] text-lg">Clearical needs access to track your activity</p>
                                 </div>
 
@@ -201,7 +201,7 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                                             </svg>
                                         </div>
                                         <div>
-                                            <h4 className="text-sm font-semibold text-[var(--color-text-primary)] mb-1 font-['Syne']">Why these permissions?</h4>
+                                            <h4 className="text-sm font-semibold text-[var(--color-text-primary)] mb-1" style={{ fontFamily: 'var(--font-display)' }}>Why these permissions?</h4>
                                             <p className="text-sm text-[var(--color-text-secondary)]">
                                                 These permissions allow Clearical to automatically track your work and capture screenshots. All data stays on your device.
                                             </p>
@@ -233,7 +233,7 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                                             </div>
                                             <div className="flex-1">
                                                 <div className="flex items-center justify-between mb-2">
-                                                    <h3 className="text-lg font-semibold text-[var(--color-text-primary)] font-['Syne']">Accessibility</h3>
+                                                    <h3 className="text-lg font-semibold text-[var(--color-text-primary)]" style={{ fontFamily: 'var(--font-display)' }}>Accessibility</h3>
                                                     {accessibilityGranted && (
                                                         <span className="text-xs px-2.5 py-1 rounded-full font-medium bg-[var(--color-success-muted)] text-[var(--color-success)] border border-[var(--color-success)]/30">
                                                             Granted
@@ -278,7 +278,7 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                                             </div>
                                             <div className="flex-1">
                                                 <div className="flex items-center justify-between mb-2">
-                                                    <h3 className="text-lg font-semibold text-[var(--color-text-primary)] font-['Syne']">Screen Recording</h3>
+                                                    <h3 className="text-lg font-semibold text-[var(--color-text-primary)]" style={{ fontFamily: 'var(--font-display)' }}>Screen Recording</h3>
                                                     {screenRecordingGranted && (
                                                         <span className="text-xs px-2.5 py-1 rounded-full font-medium bg-[var(--color-success-muted)] text-[var(--color-success)] border border-[var(--color-success)]/30">
                                                             Granted
@@ -347,7 +347,7 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                                             <path d="M10 16h4"/>
                                         </svg>
                                     </div>
-                                    <h2 className="text-3xl font-bold text-[var(--color-text-primary)] mb-2 font-['Syne']">Welcome to Clearical</h2>
+                                    <h2 className="text-3xl font-bold text-[var(--color-text-primary)] mb-2" style={{ fontFamily: 'var(--font-display)' }}>Welcome to Clearical</h2>
                                     <p className="text-[var(--color-text-secondary)] text-lg">Let's get you started with your first bucket</p>
                                 </div>
 
@@ -360,7 +360,7 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                                             </svg>
                                         </div>
                                         <div>
-                                            <h4 className="text-sm font-semibold text-[var(--color-text-primary)] mb-1 font-['Syne']">What are buckets?</h4>
+                                            <h4 className="text-sm font-semibold text-[var(--color-text-primary)] mb-1" style={{ fontFamily: 'var(--font-display)' }}>What are buckets?</h4>
                                             <p className="text-sm text-[var(--color-text-secondary)]">
                                                 Buckets are categories that help you organize your time entries.
                                                 Think of them as projects, clients, or types of work you want to track separately.
@@ -372,7 +372,7 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                                 {/* Form */}
                                 <div className="space-y-5">
                                     <div>
-                                        <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-2 font-['Syne']">
+                                        <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-2" style={{ fontFamily: 'var(--font-display)' }}>
                                             Bucket Name
                                         </label>
                                         <input
@@ -391,7 +391,7 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                                     </div>
 
                                     <div>
-                                        <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-2 font-['Syne']">
+                                        <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-2" style={{ fontFamily: 'var(--font-display)' }}>
                                             Choose a Color
                                         </label>
                                         <div className="grid grid-cols-8 gap-2.5">
@@ -676,8 +676,8 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                     </div>
                 </div>
 
-                {/* Step Indicators */}
-                <div className="flex justify-center gap-2 pb-6">
+                {/* Step Indicators - Sticky Footer */}
+                <div className="flex justify-center gap-2 py-6 border-t border-[var(--color-border-primary)] flex-shrink-0 bg-[var(--color-bg-secondary)]">
                     {Array.from({ length: totalSteps }).map((_, index) => (
                         <button
                             key={index}

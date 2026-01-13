@@ -64,12 +64,12 @@ export function CreateBucketModal({ isOpen, onClose, onCreateBucket, availableFo
             onClick={onClose}
         >
             <div
-                className="bg-[var(--color-bg-secondary)] rounded-[32px] p-6 w-full max-w-md mx-4 border border-[var(--color-border-primary)] shadow-2xl animate-scale-in"
+                className="bg-[var(--color-bg-secondary)] rounded-[32px] w-full max-w-md mx-4 border border-[var(--color-border-primary)] shadow-2xl animate-scale-in max-h-[90vh] flex flex-col"
                 onClick={(e) => e.stopPropagation()}
             >
                 {/* Header */}
-                <div className="flex justify-between items-center mb-6">
-                    <h3 className="text-xl font-bold text-[var(--color-text-primary)] font-['Syne']">Create New Bucket</h3>
+                <div className="flex justify-between items-center p-6 pb-4 flex-shrink-0">
+                    <h3 className="text-xl font-bold text-[var(--color-text-primary)]" style={{ fontFamily: 'var(--font-display)' }}>Create New Bucket</h3>
                     <button
                         onClick={onClose}
                         className="text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-all duration-200 hover:scale-110 active:scale-95"
@@ -81,11 +81,11 @@ export function CreateBucketModal({ isOpen, onClose, onCreateBucket, availableFo
                     </button>
                 </div>
 
-                {/* Form */}
-                <div className="space-y-5">
+                {/* Form - Scrollable Content */}
+                <div className="space-y-5 px-6 overflow-y-auto flex-1">
                     {/* Name Input */}
                     <div>
-                        <label className="block text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider mb-2 font-['Syne']">
+                        <label className="block text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider mb-2" style={{ fontFamily: 'var(--font-display)' }}>
                             Bucket Name *
                         </label>
                         <input
@@ -94,14 +94,15 @@ export function CreateBucketModal({ isOpen, onClose, onCreateBucket, availableFo
                             onChange={(e) => setBucketName(e.target.value)}
                             onKeyDown={handleKeyDown}
                             autoFocus
-                            className="w-full bg-[var(--color-bg-tertiary)] border border-[var(--color-border-primary)] text-[var(--color-text-primary)] text-sm rounded-lg px-4 py-3 font-mono focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:border-transparent transition-all duration-200"
+                            className="w-full bg-[var(--color-bg-tertiary)] border border-[var(--color-border-primary)] text-[var(--color-text-primary)] text-sm rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:border-transparent transition-all duration-200"
+                            style={{ fontFamily: 'var(--font-mono)' }}
                             placeholder="e.g. Client Work, Documentation, Research"
                         />
                     </div>
 
                     {/* Color Picker */}
                     <div>
-                        <label className="block text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider mb-3 font-['Syne']">
+                        <label className="block text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider mb-3" style={{ fontFamily: 'var(--font-display)' }}>
                             Color
                         </label>
                         <div className="grid grid-cols-6 gap-2.5">
@@ -125,13 +126,14 @@ export function CreateBucketModal({ isOpen, onClose, onCreateBucket, availableFo
                     {/* Parent Folder Selection */}
                     {availableFolders.length > 0 && (
                         <div>
-                            <label className="block text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider mb-2 font-['Syne']">
+                            <label className="block text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider mb-2" style={{ fontFamily: 'var(--font-display)' }}>
                                 Parent Folder (Optional)
                             </label>
                             <select
                                 value={selectedParentId || ''}
                                 onChange={(e) => setSelectedParentId(e.target.value || null)}
-                                className="w-full bg-[var(--color-bg-tertiary)] border border-[var(--color-border-primary)] text-[var(--color-text-primary)] text-sm rounded-lg px-4 py-3 font-mono focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:border-transparent transition-all duration-200"
+                                className="w-full bg-[var(--color-bg-tertiary)] border border-[var(--color-border-primary)] text-[var(--color-text-primary)] text-sm rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:border-transparent transition-all duration-200"
+                                style={{ fontFamily: 'var(--font-mono)' }}
                             >
                                 <option value="">Root Level</option>
                                 {availableFolders.map((folder) => (
@@ -140,18 +142,19 @@ export function CreateBucketModal({ isOpen, onClose, onCreateBucket, availableFo
                                     </option>
                                 ))}
                             </select>
-                            <div className="text-xs text-[var(--color-text-tertiary)] mt-2 font-mono">
+                            <div className="text-xs text-[var(--color-text-tertiary)] mt-2" style={{ fontFamily: 'var(--font-body)' }}>
                                 Choose a folder to organize this bucket
                             </div>
                         </div>
                     )}
                 </div>
 
-                {/* Actions */}
-                <div className="flex justify-end gap-3 mt-8">
+                {/* Actions - Sticky Footer */}
+                <div className="flex justify-end gap-3 p-6 pt-4 border-t border-[var(--color-border-primary)] flex-shrink-0 bg-[var(--color-bg-secondary)]">
                     <button
                         onClick={onClose}
                         className="px-5 py-2.5 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] text-sm font-medium transition-all duration-200 hover:scale-105 active:scale-95"
+                        style={{ fontFamily: 'var(--font-body)' }}
                     >
                         Cancel
                     </button>
@@ -159,6 +162,7 @@ export function CreateBucketModal({ isOpen, onClose, onCreateBucket, availableFo
                         onClick={handleCreate}
                         disabled={!bucketName.trim()}
                         className="px-6 py-2.5 bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] disabled:bg-[var(--color-bg-tertiary)] disabled:text-[var(--color-text-tertiary)] disabled:cursor-not-allowed text-white text-sm font-semibold rounded-full transition-all duration-200 hover:scale-105 active:scale-95 shadow-lg hover:shadow-[var(--shadow-accent)]"
+                        style={{ fontFamily: 'var(--font-body)' }}
                     >
                         Create Bucket
                     </button>

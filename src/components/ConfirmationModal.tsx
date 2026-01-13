@@ -43,76 +43,79 @@ export function ConfirmationModal({
             onClick={isLoading ? undefined : onClose}
         >
             <div
-                className="bg-[var(--color-bg-secondary)] rounded-[32px] p-6 w-full max-w-md mx-4 border border-[var(--color-border-primary)] shadow-2xl animate-scale-in"
+                className="bg-[var(--color-bg-secondary)] rounded-[32px] w-full max-w-md mx-4 border border-[var(--color-border-primary)] shadow-2xl animate-scale-in max-h-[90vh] flex flex-col"
                 onClick={(e) => e.stopPropagation()}
             >
-                {/* Header with Icon */}
-                <div className="flex items-start gap-4 mb-5">
-                    {confirmVariant === 'danger' ? (
-                        <div
-                            className="flex-shrink-0 w-12 h-12 rounded-full flex items-center justify-center"
-                            style={{
-                                backgroundColor: 'rgba(239, 68, 68, 0.15)',
-                                border: '2px solid rgba(239, 68, 68, 0.3)'
-                            }}
-                        >
-                            <svg
-                                xmlns="http://www.w3.org/2000/svg"
-                                width="24"
-                                height="24"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="#ef4444"
-                                strokeWidth="2"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
+                {/* Header with Icon - Scrollable Content */}
+                <div className="flex items-start gap-4 p-6 pb-4 overflow-y-auto flex-1">
+                    <div className="flex items-start gap-4">
+                        {confirmVariant === 'danger' ? (
+                            <div
+                                className="flex-shrink-0 w-12 h-12 rounded-full flex items-center justify-center"
+                                style={{
+                                    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+                                    border: '2px solid rgba(239, 68, 68, 0.3)'
+                                }}
                             >
-                                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-                                <line x1="12" y1="9" x2="12" y2="13" />
-                                <line x1="12" y1="17" x2="12.01" y2="17" />
-                            </svg>
-                        </div>
-                    ) : (
-                        <div
-                            className="flex-shrink-0 w-12 h-12 rounded-full flex items-center justify-center"
-                            style={{
-                                backgroundColor: 'rgba(59, 130, 246, 0.15)',
-                                border: '2px solid rgba(59, 130, 246, 0.3)'
-                            }}
-                        >
-                            <svg
-                                xmlns="http://www.w3.org/2000/svg"
-                                width="24"
-                                height="24"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="#3b82f6"
-                                strokeWidth="2"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
+                                <svg
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    width="24"
+                                    height="24"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="#ef4444"
+                                    strokeWidth="2"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                >
+                                    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                                    <line x1="12" y1="9" x2="12" y2="13" />
+                                    <line x1="12" y1="17" x2="12.01" y2="17" />
+                                </svg>
+                            </div>
+                        ) : (
+                            <div
+                                className="flex-shrink-0 w-12 h-12 rounded-full flex items-center justify-center"
+                                style={{
+                                    backgroundColor: 'rgba(59, 130, 246, 0.15)',
+                                    border: '2px solid rgba(59, 130, 246, 0.3)'
+                                }}
                             >
-                                <circle cx="12" cy="12" r="10" />
-                                <line x1="12" y1="16" x2="12" y2="12" />
-                                <line x1="12" y1="8" x2="12.01" y2="8" />
-                            </svg>
+                                <svg
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    width="24"
+                                    height="24"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="#3b82f6"
+                                    strokeWidth="2"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                >
+                                    <circle cx="12" cy="12" r="10" />
+                                    <line x1="12" y1="16" x2="12" y2="12" />
+                                    <line x1="12" y1="8" x2="12.01" y2="8" />
+                                </svg>
+                            </div>
+                        )}
+                        <div className="flex-1 pt-1">
+                            <h3 className="text-xl font-bold text-[var(--color-text-primary)] mb-2" style={{ fontFamily: 'var(--font-display)' }}>
+                                {title}
+                            </h3>
+                            <p className="text-sm text-[var(--color-text-secondary)] leading-relaxed" style={{ fontFamily: 'var(--font-body)' }}>
+                                {message}
+                            </p>
                         </div>
-                    )}
-                    <div className="flex-1 pt-1">
-                        <h3 className="text-xl font-bold text-[var(--color-text-primary)] font-['Syne'] mb-2">
-                            {title}
-                        </h3>
-                        <p className="text-sm text-[var(--color-text-secondary)] leading-relaxed">
-                            {message}
-                        </p>
                     </div>
                 </div>
 
-                {/* Actions */}
-                <div className="flex justify-end gap-3 mt-6">
+                {/* Actions - Sticky Footer */}
+                <div className="flex justify-end gap-3 p-6 pt-4 border-t border-[var(--color-border-primary)] flex-shrink-0 bg-[var(--color-bg-secondary)]">
                     <button
                         onClick={onClose}
                         disabled={isLoading}
                         className="px-5 py-2.5 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] text-sm font-medium transition-all duration-200 hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                        style={{ fontFamily: 'var(--font-body)' }}
                     >
                         Cancel
                     </button>
@@ -126,8 +129,8 @@ export function ConfirmationModal({
                         }`}
                         style={
                             confirmVariant === 'danger'
-                                ? { boxShadow: '0 4px 14px rgba(239, 68, 68, 0.4)' }
-                                : undefined
+                                ? { fontFamily: 'var(--font-body)', boxShadow: '0 4px 14px rgba(239, 68, 68, 0.4)' }
+                                : { fontFamily: 'var(--font-body)' }
                         }
                     >
                         {isLoading ? (

@@ -9,6 +9,7 @@ import { InlineTimeEditor } from './InlineTimeEditor';
 import { useStorage } from '../context/StorageContext';
 import { useSettings } from '../context/SettingsContext';
 import { useSubscription } from '../context/SubscriptionContext';
+import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { useJiraCache } from '../context/JiraCacheContext';
 import { useTimeRounding } from '../hooks/useTimeRounding';
@@ -77,7 +78,8 @@ interface AppGroup {
 export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSettings, formatTime }: HistoryDetailProps) {
     const { removeActivityFromEntry, removeAllActivitiesForApp, removeScreenshotFromEntry, addManualActivityToEntry, setEntryAssignment, createEntryFromActivity, entries } = useStorage();
     const { settings } = useSettings();
-    const { hasFeature } = useSubscription();
+    const { hasFeature, upgrade } = useSubscription();
+    const { user } = useAuth();
     const { showToast } = useToast();
     const jiraCache = useJiraCache();
     const { roundTime, isRoundingEnabled } = useTimeRounding();
@@ -107,6 +109,8 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
     const [availableAccounts, setAvailableAccounts] = useState<TempoAccount[]>([]);
     const [isLoadingAccounts, setIsLoadingAccounts] = useState(false);
     const [showAccountPicker, setShowAccountPicker] = useState(false);
+    const [isAssigningBucket, setIsAssigningBucket] = useState(false);
+    const [isAssigningTempoAccount, setIsAssigningTempoAccount] = useState(false);
     const [showUpgradeModal, setShowUpgradeModal] = useState(false);
     const previousAssignmentRef = useRef<WorkAssignment | null>(null);
     const accountsCacheRef = useRef<Map<string, TempoAccount[]>>(new Map());
@@ -287,16 +291,23 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
     };
 
     // Auto-assign work based on AI suggestion
-    const autoAssignWork = async (description: string, metadata: any) => {
-        // Check if auto-assignment is enabled in settings
-        const autoAssignEnabled = settings.ai?.autoAssignWork !== false;
-        if (!autoAssignEnabled) {
-            console.log('[HistoryDetail] Auto-assignment disabled in settings');
-            return;
+    const autoAssignWork = async (description: string, metadata: any, manualTrigger: boolean = false) => {
+        // Check if auto-assignment is enabled in settings (skip check for manual trigger)
+        if (!manualTrigger) {
+            const autoAssignEnabled = settings.ai?.autoAssignWork !== false;
+            if (!autoAssignEnabled) {
+                console.log('[HistoryDetail] Auto-assignment disabled in settings');
+                return;
+            }
+
+            // Don't override existing assignment for auto-trigger
+            if (selectedAssignment) return;
         }
 
-        // Don't override existing assignment
-        if (selectedAssignment) return;
+        // Set loading state for manual trigger
+        if (manualTrigger) {
+            setIsAssigningBucket(true);
+        }
 
         try {
             console.log('[HistoryDetail] Requesting AI assignment suggestion');
@@ -367,25 +378,62 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                 console.log('[HistoryDetail] Assignment reason:', result.suggestion.reason);
             } else {
                 console.log('[HistoryDetail] No assignment suggestion available');
+                if (manualTrigger) {
+                    showToast({
+                        type: 'info',
+                        title: 'No suggestion',
+                        message: 'Could not determine appropriate assignment',
+                        duration: 4000
+                    });
+                }
             }
         } catch (error) {
             console.error('[HistoryDetail] Auto-assignment failed:', error);
+            if (manualTrigger) {
+                showToast({
+                    type: 'error',
+                    title: 'Assignment failed',
+                    message: error instanceof Error ? error.message : 'Failed to assign bucket',
+                    duration: 5000
+                });
+            }
+        } finally {
+            if (manualTrigger) {
+                setIsAssigningBucket(false);
+            }
         }
     };
 
     // Auto-select Tempo account based on AI suggestion
-    const autoSelectTempoAccount = async (issue: LinkedJiraIssue, accounts: TempoAccount[]) => {
-        // Check if auto-selection is enabled in settings
-        const autoSelectEnabled = settings.ai?.autoSelectAccount !== false;
-        if (!autoSelectEnabled) {
-            console.log('[HistoryDetail] Auto-account selection disabled in settings');
+    const autoSelectTempoAccount = async (issue: LinkedJiraIssue, accounts: TempoAccount[], manualTrigger: boolean = false) => {
+        // Check if auto-selection is enabled in settings (skip check for manual trigger)
+        if (!manualTrigger) {
+            const autoSelectEnabled = settings.ai?.autoSelectAccount !== false;
+            if (!autoSelectEnabled) {
+                console.log('[HistoryDetail] Auto-account selection disabled in settings');
+                return;
+            }
+
+            // Don't override existing tempo account selection for auto-trigger
+            if (entry.tempoAccount) return;
+        }
+
+        if (!settings.tempo?.enabled || accounts.length === 0) {
+            if (manualTrigger) {
+                showToast({
+                    type: 'error',
+                    title: 'Cannot assign',
+                    message: accounts.length === 0 ? 'No accounts available' : 'Tempo is not enabled',
+                    duration: 4000
+                });
+            }
             return;
         }
 
-        if (!settings.tempo?.enabled || accounts.length === 0) return;
-
-        // Don't override existing tempo account selection
-        if (entry.tempoAccount) return;
+        // Set loading state for manual trigger
+        if (manualTrigger) {
+            setIsAssigningTempoAccount(true);
+        }
 
         try {
             console.log('[HistoryDetail] Requesting AI tempo account selection');
@@ -434,9 +482,29 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                 console.log('[HistoryDetail] Account selection reason:', result.selection.reason);
             } else {
                 console.log('[HistoryDetail] No account selection available');
+                if (manualTrigger) {
+                    showToast({
+                        type: 'info',
+                        title: 'No suggestion',
+                        message: 'Could not determine appropriate Tempo account',
+                        duration: 4000
+                    });
+                }
             }
         } catch (error) {
             console.error('[HistoryDetail] Auto-account selection failed:', error);
+            if (manualTrigger) {
+                showToast({
+                    type: 'error',
+                    title: 'Selection failed',
+                    message: error instanceof Error ? error.message : 'Failed to select Tempo account',
+                    duration: 5000
+                });
+            }
+        } finally {
+            if (manualTrigger) {
+                setIsAssigningTempoAccount(false);
+            }
         }
     };
 
@@ -684,9 +752,19 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
         setShowTempoValidationModal(true);
     };
 
-    const handleOpenUpgradeUrl = () => {
-        window.electron.ipcRenderer.invoke('open-external-url', 'https://clearical.io/pricing');
+    const handleOpenUpgradeUrl = async () => {
+        if (!user?.email) {
+            console.error('[HistoryDetail] No user email available');
+            return;
+        }
+
+        const result = await upgrade(user.email);
         setShowUpgradeModal(false);
+
+        if (!result.success) {
+            console.error('[HistoryDetail] Failed to start upgrade:', result.error);
+            alert(`Failed to start upgrade: ${result.error}`);
+        }
     };
 
     const handleTempoSuccess = () => {
@@ -1065,36 +1143,44 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                                             await autoAssignWork(entry.description, {
                                                 technologies: entry.detectedTechnologies,
                                                 activities: entry.detectedActivities
-                                            });
+                                            }, true);
                                         }
                                     }}
-                                    className="px-2 py-1 text-xs rounded transition-all active:scale-95 flex items-center gap-1 border"
+                                    disabled={isAssigningBucket || !entry.description}
+                                    className="px-2.5 py-1 text-white text-xs rounded-md transition-all active:scale-95 flex items-center gap-1 disabled:cursor-not-allowed"
                                     style={{
-                                        backgroundColor: 'var(--color-bg-primary)',
-                                        color: 'var(--color-text-secondary)',
-                                        borderColor: 'var(--color-border-primary)',
+                                        backgroundColor: isAssigningBucket || !entry.description ? 'var(--color-bg-tertiary)' : 'var(--color-accent)',
+                                        opacity: isAssigningBucket || !entry.description ? 0.6 : 1,
                                         transitionDuration: 'var(--duration-fast)',
                                         transitionTimingFunction: 'var(--ease-out)'
                                     }}
                                     onMouseEnter={(e) => {
-                                        e.currentTarget.style.borderColor = 'var(--color-info)';
-                                        e.currentTarget.style.color = 'var(--color-info)';
+                                        if (!isAssigningBucket && entry.description) {
+                                            e.currentTarget.style.backgroundColor = '#E64000';
+                                        }
                                     }}
                                     onMouseLeave={(e) => {
-                                        e.currentTarget.style.borderColor = 'var(--color-border-primary)';
-                                        e.currentTarget.style.color = 'var(--color-text-secondary)';
+                                        if (!isAssigningBucket && entry.description) {
+                                            e.currentTarget.style.backgroundColor = 'var(--color-accent)';
+                                        }
                                     }}
                                     title="AI assign bucket"
                                 >
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                        <path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/>
-                                        <path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/>
-                                        <path d="M15 13a4.5 4.5 0 0 1-3 4 4.5 4.5 0 0 1-3-4"/>
-                                        <path d="M12 18v4"/>
-                                        <path d="M8.5 4.5a2.5 2.5 0 0 0-2.5 2.5"/>
-                                        <path d="M15.5 4.5a2.5 2.5 0 0 1 2.5 2.5"/>
-                                    </svg>
-                                    Assign
+                                    {isAssigningBucket ? (
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="animate-spin">
+                                            <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+                                        </svg>
+                                    ) : (
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                            <path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/>
+                                            <path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/>
+                                            <path d="M15 13a4.5 4.5 0 0 1-3 4 4.5 4.5 0 0 1-3-4"/>
+                                            <path d="M12 18v4"/>
+                                            <path d="M8.5 4.5a2.5 2.5 0 0 0-2.5 2.5"/>
+                                            <path d="M15.5 4.5a2.5 2.5 0 0 1 2.5 2.5"/>
+                                        </svg>
+                                    )}
+                                    {isAssigningBucket ? 'Assigning...' : 'Assign'}
                                 </button>
                             </div>
                         </div>
@@ -1130,37 +1216,44 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                                     <button
                                         onClick={async () => {
                                             if (currentAssignment?.type === 'jira' && currentAssignment.jiraIssue && availableAccounts.length > 0) {
-                                                await autoSelectTempoAccount(currentAssignment.jiraIssue, availableAccounts);
+                                                await autoSelectTempoAccount(currentAssignment.jiraIssue, availableAccounts, true);
                                             }
                                         }}
-                                        className="px-2 py-1 text-xs rounded transition-all active:scale-95 flex items-center gap-1 border"
+                                        className="px-2.5 py-1 text-white text-xs rounded-md transition-all active:scale-95 flex items-center gap-1 disabled:cursor-not-allowed"
                                         style={{
-                                            backgroundColor: 'var(--color-bg-primary)',
-                                            color: 'var(--color-text-secondary)',
-                                            borderColor: 'var(--color-border-primary)',
+                                            backgroundColor: isAssigningTempoAccount || !currentAssignment?.jiraIssue || availableAccounts.length === 0 ? 'var(--color-bg-tertiary)' : 'var(--color-accent)',
+                                            opacity: isAssigningTempoAccount || !currentAssignment?.jiraIssue || availableAccounts.length === 0 ? 0.6 : 1,
                                             transitionDuration: 'var(--duration-fast)',
                                             transitionTimingFunction: 'var(--ease-out)'
                                         }}
                                         onMouseEnter={(e) => {
-                                            e.currentTarget.style.borderColor = 'var(--color-info)';
-                                            e.currentTarget.style.color = 'var(--color-info)';
+                                            if (!isAssigningTempoAccount && currentAssignment?.jiraIssue && availableAccounts.length > 0) {
+                                                e.currentTarget.style.backgroundColor = '#E64000';
+                                            }
                                         }}
                                         onMouseLeave={(e) => {
-                                            e.currentTarget.style.borderColor = 'var(--color-border-primary)';
-                                            e.currentTarget.style.color = 'var(--color-text-secondary)';
+                                            if (!isAssigningTempoAccount && currentAssignment?.jiraIssue && availableAccounts.length > 0) {
+                                                e.currentTarget.style.backgroundColor = 'var(--color-accent)';
+                                            }
                                         }}
                                         title="AI assign tempo account"
-                                        disabled={!currentAssignment?.jiraIssue || availableAccounts.length === 0}
+                                        disabled={isAssigningTempoAccount || !currentAssignment?.jiraIssue || availableAccounts.length === 0}
                                     >
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                            <path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/>
-                                            <path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/>
-                                            <path d="M15 13a4.5 4.5 0 0 1-3 4 4.5 4.5 0 0 1-3-4"/>
-                                            <path d="M12 18v4"/>
-                                            <path d="M8.5 4.5a2.5 2.5 0 0 0-2.5 2.5"/>
-                                            <path d="M15.5 4.5a2.5 2.5 0 0 1 2.5 2.5"/>
-                                        </svg>
-                                        Assign
+                                        {isAssigningTempoAccount ? (
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="animate-spin">
+                                                <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+                                            </svg>
+                                        ) : (
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                <path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/>
+                                                <path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/>
+                                                <path d="M15 13a4.5 4.5 0 0 1-3 4 4.5 4.5 0 0 1-3-4"/>
+                                                <path d="M12 18v4"/>
+                                                <path d="M8.5 4.5a2.5 2.5 0 0 0-2.5 2.5"/>
+                                                <path d="M15.5 4.5a2.5 2.5 0 0 1 2.5 2.5"/>
+                                            </svg>
+                                        )}
+                                        {isAssigningTempoAccount ? 'Assigning...' : 'Assign'}
                                     </button>
                                     {entry.tempoAccount && (
                                         <button

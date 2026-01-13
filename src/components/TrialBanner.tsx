@@ -3,8 +3,8 @@ import { useAuth } from '../context/AuthContext';
 import { useState } from 'react';
 
 export function TrialBanner() {
-    const { subscription } = useSubscription();
-    const { openCustomerPortal } = useAuth();
+    const { subscription, upgrade } = useSubscription();
+    const { user } = useAuth();
     const [isUpgrading, setIsUpgrading] = useState(false);
 
     // Don't show banner if not on trial
@@ -13,12 +13,18 @@ export function TrialBanner() {
     }
 
     const handleUpgrade = async () => {
+        if (!user?.email) {
+            console.error('[TrialBanner] No user email available');
+            return;
+        }
+
         setIsUpgrading(true);
-        const result = await openCustomerPortal();
+        const result = await upgrade(user.email);
         setIsUpgrading(false);
 
         if (!result.success) {
-            console.error('[TrialBanner] Failed to open portal:', result.error);
+            console.error('[TrialBanner] Failed to start upgrade:', result.error);
+            alert(`Failed to start upgrade: ${result.error}`);
         }
     };
 

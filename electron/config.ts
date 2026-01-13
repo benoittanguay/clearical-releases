@@ -36,6 +36,7 @@ export interface AppConfig {
         stripeCheckout: string;
         stripePortal: string;
         stripeWebhook: string;
+        stripeCreateCustomer: string;
     };
 
     // App Info
@@ -67,6 +68,7 @@ const developmentConfig: AppConfig = {
         stripeCheckout: 'https://wyikhlelmuvcxozwktzr.supabase.co/functions/v1/stripe-checkout',
         stripePortal: 'https://wyikhlelmuvcxozwktzr.supabase.co/functions/v1/stripe-portal',
         stripeWebhook: 'https://wyikhlelmuvcxozwktzr.supabase.co/functions/v1/stripe-webhook',
+        stripeCreateCustomer: 'https://wyikhlelmuvcxozwktzr.supabase.co/functions/v1/stripe-create-customer',
     },
 
     app: {
@@ -97,6 +99,7 @@ const productionConfig: AppConfig = {
         stripeCheckout: 'https://jiuxhwrgmexhhpoaazbj.supabase.co/functions/v1/stripe-checkout',
         stripePortal: 'https://jiuxhwrgmexhhpoaazbj.supabase.co/functions/v1/stripe-portal',
         stripeWebhook: 'https://jiuxhwrgmexhhpoaazbj.supabase.co/functions/v1/stripe-webhook',
+        stripeCreateCustomer: 'https://jiuxhwrgmexhhpoaazbj.supabase.co/functions/v1/stripe-create-customer',
     },
 
     app: {

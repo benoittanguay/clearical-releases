@@ -119,9 +119,9 @@ export function PermissionRequestModal({ isOpen, onClose, onPermissionsGranted }
 
     return (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 animate-fade-in">
-            <div className="bg-[var(--color-bg-secondary)] rounded-[32px] shadow-2xl w-full max-w-2xl mx-4 overflow-hidden border border-[var(--color-border-primary)]">
+            <div className="bg-[var(--color-bg-secondary)] rounded-[32px] shadow-2xl w-full max-w-2xl mx-4 border border-[var(--color-border-primary)] max-h-[90vh] flex flex-col">
                 {/* Header */}
-                <div className="bg-[var(--color-warning-muted)] border-b border-[var(--color-border-primary)] px-6 py-4">
+                <div className="bg-[var(--color-warning-muted)] border-b border-[var(--color-border-primary)] px-6 py-4 flex-shrink-0">
                     <div className="flex items-center gap-3">
                         <div className="flex-shrink-0">
                             <div className="w-12 h-12 bg-[var(--color-warning)] rounded-xl flex items-center justify-center shadow-lg">
@@ -133,14 +133,14 @@ export function PermissionRequestModal({ isOpen, onClose, onPermissionsGranted }
                             </div>
                         </div>
                         <div>
-                            <h2 className="text-2xl font-bold text-[var(--color-text-primary)] font-['Syne']">Permissions Required</h2>
-                            <p className="text-[var(--color-text-secondary)] text-sm">Clearical needs system permissions to track your activity</p>
+                            <h2 className="text-2xl font-bold text-[var(--color-text-primary)]" style={{ fontFamily: 'var(--font-display)' }}>Permissions Required</h2>
+                            <p className="text-[var(--color-text-secondary)] text-sm" style={{ fontFamily: 'var(--font-body)' }}>Clearical needs system permissions to track your activity</p>
                         </div>
                     </div>
                 </div>
 
-                {/* Content */}
-                <div className="p-6">
+                {/* Content - Scrollable */}
+                <div className="p-6 overflow-y-auto flex-1">
                     {/* Why Box */}
                     <div className="bg-[var(--color-bg-tertiary)] border border-[var(--color-accent)]/30 rounded-2xl p-4 mb-6">
                         <div className="flex gap-3">
@@ -150,8 +150,8 @@ export function PermissionRequestModal({ isOpen, onClose, onPermissionsGranted }
                                 </svg>
                             </div>
                             <div>
-                                <h4 className="text-sm font-semibold text-[var(--color-text-primary)] mb-1 font-['Syne']">Why these permissions?</h4>
-                                <p className="text-sm text-[var(--color-text-secondary)]">
+                                <h4 className="text-sm font-semibold text-[var(--color-text-primary)] mb-1" style={{ fontFamily: 'var(--font-display)' }}>Why these permissions?</h4>
+                                <p className="text-sm text-[var(--color-text-secondary)]" style={{ fontFamily: 'var(--font-body)' }}>
                                     Clearical needs these permissions to automatically track which apps you're using and capture screenshots for AI-powered summaries. Without them, the timer cannot function properly.
                                 </p>
                             </div>
@@ -194,7 +194,7 @@ export function PermissionRequestModal({ isOpen, onClose, onPermissionsGranted }
                                 </div>
                                 <div className="flex-1">
                                     <div className="flex items-center justify-between mb-2">
-                                        <h3 className="text-lg font-semibold text-[var(--color-text-primary)] font-['Syne']">Accessibility</h3>
+                                        <h3 className="text-lg font-semibold text-[var(--color-text-primary)]" style={{ fontFamily: 'var(--font-display)' }}>Accessibility</h3>
                                         {permissions.accessibility === true && (
                                             <span className="text-xs px-2.5 py-1 rounded-full font-medium bg-[var(--color-success-muted)] text-[var(--color-success)] border border-[var(--color-success)]/30">
                                                 Granted
@@ -256,7 +256,7 @@ export function PermissionRequestModal({ isOpen, onClose, onPermissionsGranted }
                                 </div>
                                 <div className="flex-1">
                                     <div className="flex items-center justify-between mb-2">
-                                        <h3 className="text-lg font-semibold text-[var(--color-text-primary)] font-['Syne']">Screen Recording</h3>
+                                        <h3 className="text-lg font-semibold text-[var(--color-text-primary)]" style={{ fontFamily: 'var(--font-display)' }}>Screen Recording</h3>
                                         {permissions.screenRecording === true && (
                                             <span className="text-xs px-2.5 py-1 rounded-full font-medium bg-[var(--color-success-muted)] text-[var(--color-success)] border border-[var(--color-success)]/30">
                                                 Granted
@@ -299,7 +299,7 @@ export function PermissionRequestModal({ isOpen, onClose, onPermissionsGranted }
 
                     {showStaleInstructions && (
                         <div className="bg-[var(--color-warning-muted)] border border-[var(--color-warning)]/30 rounded-2xl p-4 mb-6">
-                            <h4 className="text-sm font-semibold text-[var(--color-text-primary)] mb-2 font-['Syne']">Stale Permission Fix</h4>
+                            <h4 className="text-sm font-semibold text-[var(--color-text-primary)] mb-2" style={{ fontFamily: 'var(--font-display)' }}>Stale Permission Fix</h4>
                             <p className="text-sm text-[var(--color-text-secondary)] mb-3">
                                 Sometimes macOS caches permissions incorrectly. To fix this:
                             </p>
@@ -321,41 +321,45 @@ export function PermissionRequestModal({ isOpen, onClose, onPermissionsGranted }
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                                 </svg>
                                 <div>
-                                    <h4 className="text-sm font-semibold text-[var(--color-text-primary)] font-['Syne']">All permissions granted!</h4>
+                                    <h4 className="text-sm font-semibold text-[var(--color-text-primary)]" style={{ fontFamily: 'var(--font-display)' }}>All permissions granted!</h4>
                                     <p className="text-sm text-[var(--color-text-secondary)]">Starting timer...</p>
                                 </div>
                             </div>
                         </div>
                     )}
 
-                    {/* Actions */}
-                    <div className="flex justify-between gap-3 pt-4 border-t border-[var(--color-border-primary)]">
+                </div>
+
+                {/* Actions - Sticky Footer */}
+                <div className="flex justify-between gap-3 p-6 pt-4 border-t border-[var(--color-border-primary)] flex-shrink-0 bg-[var(--color-bg-secondary)]">
+                    <button
+                        onClick={onClose}
+                        className="px-5 py-2.5 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] text-sm font-medium transition-colors"
+                        style={{ fontFamily: 'var(--font-body)' }}
+                    >
+                        Cancel
+                    </button>
+                    <div className="flex gap-3">
                         <button
-                            onClick={onClose}
-                            className="px-5 py-2.5 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] text-sm font-medium transition-colors"
+                            onClick={handleCheckAgain}
+                            disabled={checking || allGranted}
+                            className="px-5 py-2.5 bg-[var(--color-bg-tertiary)] hover:bg-[var(--color-border-primary)] disabled:bg-[var(--color-bg-tertiary)] disabled:text-[var(--color-text-tertiary)] disabled:cursor-not-allowed text-[var(--color-text-primary)] text-sm font-semibold rounded-lg transition-all border border-[var(--color-border-primary)]"
+                            style={{ fontFamily: 'var(--font-body)' }}
                         >
-                            Cancel
+                            Check Again
                         </button>
-                        <div className="flex gap-3">
+                        {allGranted && (
                             <button
-                                onClick={handleCheckAgain}
-                                disabled={checking || allGranted}
-                                className="px-5 py-2.5 bg-[var(--color-bg-tertiary)] hover:bg-[var(--color-border-primary)] disabled:bg-[var(--color-bg-tertiary)] disabled:text-[var(--color-text-tertiary)] disabled:cursor-not-allowed text-[var(--color-text-primary)] text-sm font-semibold rounded-lg transition-all border border-[var(--color-border-primary)]"
+                                onClick={() => {
+                                    onPermissionsGranted();
+                                    onClose();
+                                }}
+                                className="px-6 py-2.5 bg-[var(--color-success)] hover:bg-[var(--color-success)]/90 text-white text-sm font-semibold rounded-lg transition-all transform hover:scale-105 active:scale-95 shadow-md hover:shadow-lg"
+                                style={{ fontFamily: 'var(--font-body)' }}
                             >
-                                Check Again
+                                Continue
                             </button>
-                            {allGranted && (
-                                <button
-                                    onClick={() => {
-                                        onPermissionsGranted();
-                                        onClose();
-                                    }}
-                                    className="px-6 py-2.5 bg-[var(--color-success)] hover:bg-[var(--color-success)]/90 text-white text-sm font-semibold rounded-lg transition-all transform hover:scale-105 active:scale-95 shadow-md hover:shadow-lg"
-                                >
-                                    Continue
-                                </button>
-                            )}
-                        </div>
+                        )}
                     </div>
                 </div>
             </div>

@@ -11,10 +11,30 @@ export function AuthGate({ children }: AuthGateProps) {
     // Show loading state while checking auth
     if (isLoading) {
         return (
-            <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+            <div
+                className="min-h-screen flex items-center justify-center animate-fade-in"
+                style={{
+                    backgroundColor: 'var(--color-bg-primary)',
+                    fontFamily: 'var(--font-body)'
+                }}
+            >
                 <div className="text-center">
-                    <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-                    <p className="text-gray-400">Loading...</p>
+                    <div
+                        className="w-14 h-14 border-4 rounded-full animate-spin mx-auto mb-4"
+                        style={{
+                            borderColor: 'var(--color-accent-muted)',
+                            borderTopColor: 'var(--color-accent)'
+                        }}
+                    ></div>
+                    <p
+                        className="text-sm font-medium"
+                        style={{
+                            color: 'var(--color-text-secondary)',
+                            fontFamily: 'var(--font-display)'
+                        }}
+                    >
+                        Loading...
+                    </p>
                 </div>
             </div>
         );

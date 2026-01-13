@@ -27,6 +27,7 @@ import {
 import { SubscriptionStorage } from './subscriptionStorage.js';
 import { StripeClient } from './stripeClient.js';
 import { DeviceFingerprintService } from '../licensing/deviceFingerprint.js';
+import { getEdgeFunctionClient } from './edgeFunctionClient.js';
 
 /**
  * Subscription validator service
@@ -46,13 +47,147 @@ export class SubscriptionValidator {
     }
 
     /**
+     * Validate subscription from Supabase profiles table
+     * This is the source of truth for subscription status after webhooks update it
+     */
+    private async validateFromSupabase(): Promise<ValidationResult | null> {
+        try {
+            console.log('[SubscriptionValidator] Checking Supabase for subscription status...');
+
+            const edgeClient = getEdgeFunctionClient();
+            const supabaseStatus = await edgeClient.getSubscriptionStatus();
+
+            if (!supabaseStatus) {
+                console.log('[SubscriptionValidator] No subscription status found in Supabase');
+                return null;
+            }
+
+            console.log('[SubscriptionValidator] Found Supabase subscription:', supabaseStatus);
+
+            // Map Supabase status to our subscription status
+            const statusMap: Record<string, SubscriptionStatus> = {
+                'active': SubscriptionStatus.ACTIVE,
+                'past_due': SubscriptionStatus.PAST_DUE,
+                'canceled': SubscriptionStatus.CANCELED,
+                'canceling': SubscriptionStatus.CANCELED,
+                'unpaid': SubscriptionStatus.UNPAID,
+                'incomplete': SubscriptionStatus.INCOMPLETE,
+                'incomplete_expired': SubscriptionStatus.INCOMPLETE_EXPIRED,
+                'trialing': SubscriptionStatus.TRIAL,
+                'inactive': SubscriptionStatus.NONE,
+                'payment_failed': SubscriptionStatus.UNPAID,
+            };
+
+            const status = statusMap[supabaseStatus.status] || SubscriptionStatus.NONE;
+
+            // Map tier to plan
+            const planMap: Record<string, SubscriptionPlan> = {
+                'premium': SubscriptionPlan.WORKPLACE_MONTHLY,
+                'workplace': SubscriptionPlan.WORKPLACE_MONTHLY,
+                'free': SubscriptionPlan.FREE,
+            };
+
+            const plan = planMap[supabaseStatus.tier] || SubscriptionPlan.FREE;
+
+            // Get or create local subscription
+            let subscription = await SubscriptionStorage.getSubscription();
+
+            if (!subscription) {
+                // Create new subscription from Supabase data
+                const deviceFingerprint = await DeviceFingerprintService.generate();
+                const now = Date.now();
+
+                const deviceInfo: DeviceInfo = {
+                    deviceId: deviceFingerprint.deviceId,
+                    deviceName: deviceFingerprint.deviceName,
+                    platform: deviceFingerprint.platform,
+                    osVersion: deviceFingerprint.osVersion,
+                    lastSeenAt: now,
+                    registeredAt: now,
+                };
+
+                subscription = {
+                    stripeCustomerId: '', // Will be populated when needed
+                    email: '', // Will be populated from auth
+                    status,
+                    plan,
+                    deviceId: deviceInfo.deviceId,
+                    devices: [deviceInfo],
+                    lastValidated: now,
+                    validatedOffline: false,
+                    features: getFeaturesForPlan(plan),
+                    version: '1.0',
+                    createdAt: now,
+                    updatedAt: now,
+                };
+
+                if (supabaseStatus.periodEnd) {
+                    subscription.currentPeriodEnd = new Date(supabaseStatus.periodEnd).getTime();
+                }
+            } else {
+                // Update existing subscription with Supabase data
+                subscription.status = status;
+                subscription.plan = plan;
+                subscription.features = getFeaturesForPlan(plan);
+                subscription.lastValidated = Date.now();
+                subscription.updatedAt = Date.now();
+
+                if (supabaseStatus.periodEnd) {
+                    subscription.currentPeriodEnd = new Date(supabaseStatus.periodEnd).getTime();
+                }
+            }
+
+            // Save updated subscription
+            await SubscriptionStorage.saveSubscription(subscription);
+
+            const isValid = isPremiumStatus(status);
+
+            this.emitEvent({
+                type: SubscriptionEventType.VALIDATION_SUCCESS,
+                timestamp: Date.now(),
+                deviceId: subscription.deviceId,
+                subscriptionStatus: status,
+                metadata: { mode: ValidationMode.WEBHOOK, source: 'supabase' },
+            });
+
+            console.log('[SubscriptionValidator] Subscription validated from Supabase:', {
+                status,
+                plan,
+                valid: isValid,
+            });
+
+            return {
+                valid: isValid,
+                subscription,
+                mode: ValidationMode.WEBHOOK,
+            };
+        } catch (error) {
+            console.error('[SubscriptionValidator] Supabase validation error:', error);
+            return null;
+        }
+    }
+
+    /**
      * Main validation method - validates subscription from cache or online
+     * Priority: Supabase profiles > local cache > trial creation
      */
     async validate(): Promise<ValidationResult> {
         try {
             console.log('[SubscriptionValidator] Starting validation...');
 
-            // 1. Check if subscription exists in storage
+            // 1. FIRST: Check Supabase for subscription status
+            try {
+                const supabaseStatus = await this.validateFromSupabase();
+                if (supabaseStatus) {
+                    console.log('[SubscriptionValidator] Using subscription from Supabase:', supabaseStatus.subscription.status);
+                    return supabaseStatus;
+                }
+            } catch (error) {
+                console.warn('[SubscriptionValidator] Supabase check failed, falling back to local:', error);
+                // Continue to local validation on error
+            }
+
+            // 2. Check if subscription exists in storage
             const cachedSubscription = await SubscriptionStorage.getSubscription();
 
             if (!cachedSubscription) {
@@ -64,14 +199,14 @@ export class SubscriptionValidator {
                 }
             }
 
-            // 2. Update device info
+            // 3. Update device info
             await this.updateDeviceInfo(cachedSubscription);
 
-            // 3. Check if cached subscription is fresh enough
+            // 4. Check if cached subscription is fresh enough
             const cacheAge = Date.now() - cachedSubscription.lastValidated;
             const isFresh = cacheAge < this.config.onlineCheckInterval;
 
-            // 4. Validate subscription status
+            // 5. Validate subscription status
             const isValid = this.isSubscriptionValid(cachedSubscription);
 
             if (isFresh && isValid) {
@@ -91,7 +226,7 @@ export class SubscriptionValidator {
                 };
             }
 
-            // 5. Cache is stale or invalid, attempt online validation
+            // 6. Cache is stale or invalid, attempt online validation
             try {
                 const onlineResult = await this.validateOnline(cachedSubscription);
                 return onlineResult;

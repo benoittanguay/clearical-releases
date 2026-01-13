@@ -133,7 +133,7 @@ async function handleSendOtp(
 
 /**
  * Verify OTP code
- * Note: Stripe customer is created on-demand via Edge Functions when user initiates checkout
+ * After successful verification, ensures a Stripe customer is created for the user.
  */
 async function handleVerifyOtp(
     _event: Electron.IpcMainInvokeEvent,
@@ -143,6 +143,18 @@ async function handleVerifyOtp(
     try {
         const authService = getAuthService();
         const result = await authService.verifyOtp(email, token);
+
+        // If OTP verification succeeded, ensure Stripe customer exists
+        if (result.success && result.user) {
+            console.log('[Auth] OTP verified, ensuring Stripe customer...');
+            const edgeClient = getEdgeFunctionClient();
+
+            // Call customer creation asynchronously - don't block login if it fails
+            edgeClient.ensureStripeCustomer().catch((error) => {
+                console.error('[Auth] Failed to ensure Stripe customer (non-blocking):', error);
+            });
+        }
+
         return result;
     } catch (error) {
         console.error('[Auth] Verify OTP error:', error);

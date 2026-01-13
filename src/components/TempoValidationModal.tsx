@@ -244,12 +244,12 @@ export function TempoValidationModal({
             >
                 {/* Modal */}
                 <div
-                    className="bg-[var(--color-bg-secondary)] rounded-[32px] border border-[var(--color-border-primary)] max-w-lg w-full shadow-2xl animate-scale-in"
+                    className="bg-[var(--color-bg-secondary)] rounded-[32px] border border-[var(--color-border-primary)] max-w-lg w-full shadow-2xl animate-scale-in max-h-[90vh] flex flex-col"
                     onClick={(e) => e.stopPropagation()}
                     style={{ boxShadow: 'var(--shadow-xl)' }}
                 >
                     {/* Header */}
-                    <div className="flex items-center justify-between p-4 border-b border-[var(--color-border-primary)]">
+                    <div className="flex items-center justify-between p-4 border-b border-[var(--color-border-primary)] flex-shrink-0">
                         <div className="flex items-center gap-3">
                             <div className="w-10 h-10 bg-[var(--color-accent-muted)] rounded-lg flex items-center justify-center">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[var(--color-accent)]">
@@ -257,7 +257,7 @@ export function TempoValidationModal({
                                     <path d="M12 6v6l4 2"/>
                                 </svg>
                             </div>
-                            <h3 className="text-lg font-semibold text-[var(--color-text-primary)] font-['Syne']">Confirm Log to Tempo</h3>
+                            <h3 className="text-lg font-semibold text-[var(--color-text-primary)]" style={{ fontFamily: 'var(--font-display)' }}>Confirm Log to Tempo</h3>
                         </div>
                         <button
                             onClick={onClose}
@@ -271,8 +271,8 @@ export function TempoValidationModal({
                         </button>
                     </div>
 
-                    {/* Content */}
-                    <div className="p-4 space-y-3">
+                    {/* Content - Scrollable */}
+                    <div className="p-4 space-y-3 overflow-y-auto flex-1">
                         {/* Error message */}
                         {error && (
                             <div className="bg-[var(--color-error-muted)] border border-[var(--color-error)]/30 rounded-lg p-3 flex items-start gap-2 animate-fade-in">
@@ -282,7 +282,7 @@ export function TempoValidationModal({
                                     <line x1="12" y1="16" x2="12.01" y2="16"/>
                                 </svg>
                                 <div className="flex-1">
-                                    <div className="text-[var(--color-error)] text-sm font-medium font-['Syne']">Unable to log time</div>
+                                    <div className="text-[var(--color-error)] text-sm font-medium" style={{ fontFamily: 'var(--font-display)' }}>Unable to log time</div>
                                     <div className="text-[var(--color-text-secondary)] text-xs mt-1">{error}</div>
                                 </div>
                             </div>
@@ -301,7 +301,7 @@ export function TempoValidationModal({
                                     />
                                     <div className="flex-1 min-w-0">
                                         <div className="flex items-center gap-2 mb-1">
-                                            <span className="text-[var(--color-info)] font-['JetBrains_Mono'] text-base font-semibold">{jiraKey}</span>
+                                            <span className="text-[var(--color-info)] text-base font-semibold" style={{ fontFamily: 'var(--font-mono)' }}>{jiraKey}</span>
                                         </div>
                                         {assignmentDisplay.details && (
                                             <div className="text-[var(--color-text-secondary)] text-sm">{assignmentDisplay.details}</div>
@@ -318,8 +318,8 @@ export function TempoValidationModal({
                         <div className="grid grid-cols-2 gap-3">
                             {/* Duration */}
                             <div className="bg-[var(--color-bg-tertiary)] rounded-lg p-3 border border-[var(--color-border-primary)]">
-                                <div className="text-xs text-[var(--color-text-secondary)] uppercase font-semibold mb-1.5 font-['Syne']">Duration</div>
-                                <div className="text-[var(--color-success)] font-['JetBrains_Mono'] text-xl font-bold leading-tight">{formatTime(durationToLog)}</div>
+                                <div className="text-xs text-[var(--color-text-secondary)] uppercase font-semibold mb-1.5" style={{ fontFamily: 'var(--font-display)' }}>Duration</div>
+                                <div className="text-[var(--color-success)] text-xl font-bold leading-tight" style={{ fontFamily: 'var(--font-mono)' }}>{formatTime(durationToLog)}</div>
                                 {isRoundingEnabled && roundTime(entry.duration).isRounded && (
                                     <div className="text-[var(--color-text-tertiary)] text-xs mt-0.5">
                                         Rounded {roundTime(entry.duration).formattedDifference}
@@ -329,11 +329,11 @@ export function TempoValidationModal({
 
                             {/* Date & Time */}
                             <div className="bg-[var(--color-bg-tertiary)] rounded-lg p-3 border border-[var(--color-border-primary)]">
-                                <div className="text-xs text-[var(--color-text-secondary)] uppercase font-semibold mb-1.5 font-['Syne']">When</div>
-                                <div className="text-[var(--color-text-primary)] font-['JetBrains_Mono'] text-sm font-medium leading-tight">
+                                <div className="text-xs text-[var(--color-text-secondary)] uppercase font-semibold mb-1.5" style={{ fontFamily: 'var(--font-display)' }}>When</div>
+                                <div className="text-[var(--color-text-primary)] text-sm font-medium leading-tight" style={{ fontFamily: 'var(--font-mono)' }}>
                                     {new Date(entry.startTime).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
                                 </div>
-                                <div className="text-[var(--color-text-secondary)] font-['JetBrains_Mono'] text-xs mt-0.5">
+                                <div className="text-[var(--color-text-secondary)] text-xs mt-0.5" style={{ fontFamily: 'var(--font-mono)' }}>
                                     {new Date(entry.startTime).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true })}
                                 </div>
                             </div>
@@ -342,7 +342,7 @@ export function TempoValidationModal({
                         {/* Account Selection */}
                         {jiraKey && (
                             <div>
-                                <label className="block text-xs text-[var(--color-text-secondary)] uppercase font-semibold mb-2 font-['Syne']">
+                                <label className="block text-xs text-[var(--color-text-secondary)] uppercase font-semibold mb-2" style={{ fontFamily: 'var(--font-display)' }}>
                                     Account <span className="text-[var(--color-error)]">*</span>
                                 </label>
                                 {isLoadingAccounts ? (
@@ -359,8 +359,8 @@ export function TempoValidationModal({
                                         value={selectedAccount}
                                         onChange={(e) => setSelectedAccount(e.target.value)}
                                         disabled={isLogging}
-                                        className="w-full bg-[var(--color-bg-secondary)] border border-[var(--color-border-primary)] text-[var(--color-text-primary)] text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:border-[var(--color-accent)] disabled:opacity-50 disabled:cursor-not-allowed transition-all font-['JetBrains_Mono']"
-                                        style={{ transitionDuration: 'var(--duration-fast)', transitionTimingFunction: 'var(--ease-out)' }}
+                                        className="w-full bg-[var(--color-bg-secondary)] border border-[var(--color-border-primary)] text-[var(--color-text-primary)] text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:border-[var(--color-accent)] disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                                        style={{ fontFamily: 'var(--font-mono)', transitionDuration: 'var(--duration-fast)', transitionTimingFunction: 'var(--ease-out)' }}
                                     >
                                         <option value="">Select an account...</option>
                                         {availableAccounts.map((account) => (
@@ -375,21 +375,21 @@ export function TempoValidationModal({
 
                         {/* Description */}
                         <div>
-                            <label className="block text-xs text-[var(--color-text-secondary)] uppercase font-semibold mb-2 font-['Syne']">Description</label>
+                            <label className="block text-xs text-[var(--color-text-secondary)] uppercase font-semibold mb-2" style={{ fontFamily: 'var(--font-display)' }}>Description</label>
                             <textarea
                                 value={description}
                                 onChange={(e) => setDescription(e.target.value)}
                                 placeholder="Add a description for this worklog..."
-                                className="w-full bg-[var(--color-bg-secondary)] border border-[var(--color-border-primary)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:border-[var(--color-accent)] resize-none transition-all font-['JetBrains_Mono']"
-                                style={{ transitionDuration: 'var(--duration-base)', transitionTimingFunction: 'var(--ease-out)' }}
+                                className="w-full bg-[var(--color-bg-secondary)] border border-[var(--color-border-primary)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:border-[var(--color-accent)] resize-none transition-all"
+                                style={{ fontFamily: 'var(--font-mono)', transitionDuration: 'var(--duration-base)', transitionTimingFunction: 'var(--ease-out)' }}
                                 rows={3}
                                 disabled={isLogging}
                             />
                         </div>
                     </div>
 
-                    {/* Footer */}
-                    <div className="flex items-center justify-end gap-3 p-4 border-t border-[var(--color-border-primary)]">
+                    {/* Footer - Sticky */}
+                    <div className="flex items-center justify-end gap-3 p-4 border-t border-[var(--color-border-primary)] flex-shrink-0 bg-[var(--color-bg-secondary)]">
                         <button
                             onClick={onClose}
                             disabled={isLogging}
