@@ -87,10 +87,10 @@ function AppIcon({ app, size = 32 }: { app: InstalledApp; size?: number }) {
     if (loading) {
         return (
             <div
-                className="bg-gray-700 rounded flex items-center justify-center flex-shrink-0 animate-pulse"
+                className="bg-[var(--color-bg-tertiary)] rounded flex items-center justify-center flex-shrink-0 animate-pulse"
                 style={{ width: size, height: size }}
             >
-                <svg className="text-gray-600" style={{ width: size * 0.5, height: size * 0.5 }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="text-[var(--color-text-tertiary)]" style={{ width: size * 0.5, height: size * 0.5 }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                 </svg>
             </div>
@@ -116,11 +116,11 @@ function AppIcon({ app, size = 32 }: { app: InstalledApp; size?: number }) {
     // Fallback icon for errors or missing icons
     return (
         <div
-            className="bg-gray-700 rounded flex items-center justify-center flex-shrink-0"
+            className="bg-[var(--color-bg-tertiary)] rounded flex items-center justify-center flex-shrink-0"
             style={{ width: size, height: size }}
             title={loadError ? `Icon not available for ${app.name}` : undefined}
         >
-            <svg className="text-gray-500" style={{ width: size * 0.625, height: size * 0.625 }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="text-[var(--color-text-tertiary)]" style={{ width: size * 0.625, height: size * 0.625 }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
             </svg>
         </div>
@@ -257,14 +257,14 @@ export function AppBlacklistManager({ className = '' }: AppBlacklistManagerProps
         <div className={className}>
             {/* Header with description */}
             <div className="mb-4">
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-[var(--color-text-secondary)]">
                     Exclude specific apps from being tracked. Screenshots from blacklisted apps will not be captured.
                 </p>
             </div>
 
             {/* Error message */}
             {error && (
-                <div className="mb-4 p-3 bg-red-900/30 border border-red-700 rounded text-xs text-red-400">
+                <div className="mb-4 p-3 bg-[var(--color-error-muted)] border border-[var(--color-error)] rounded-lg text-xs text-[var(--color-error)]">
                     {error}
                 </div>
             )}
@@ -273,12 +273,12 @@ export function AppBlacklistManager({ className = '' }: AppBlacklistManagerProps
             {!loading && (
                 <div className="mb-4 flex items-center gap-4 text-xs">
                     <div className="flex items-center gap-2">
-                        <span className="text-gray-500">Total apps:</span>
-                        <span className="font-medium text-white">{stats.total}</span>
+                        <span className="text-[var(--color-text-secondary)]">Total apps:</span>
+                        <span className="font-medium text-[var(--color-text-primary)]">{stats.total}</span>
                     </div>
                     <div className="flex items-center gap-2">
-                        <span className="text-gray-500">Blacklisted:</span>
-                        <span className="font-medium text-red-400">{stats.blacklisted}</span>
+                        <span className="text-[var(--color-text-secondary)]">Blacklisted:</span>
+                        <span className="font-medium text-[var(--color-error)]">{stats.blacklisted}</span>
                     </div>
                 </div>
             )}
@@ -291,9 +291,9 @@ export function AppBlacklistManager({ className = '' }: AppBlacklistManagerProps
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         placeholder="Search apps by name or bundle ID..."
-                        className="w-full bg-gray-900 border border-gray-700 text-white text-sm rounded pl-9 pr-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow"
+                        className="w-full bg-[var(--color-bg-secondary)] border border-[var(--color-border-primary)] text-[var(--color-text-primary)] text-sm rounded-lg pl-9 pr-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:border-transparent transition-all placeholder:text-[var(--color-text-tertiary)]"
                     />
-                    <svg className="w-4 h-4 text-gray-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-4 h-4 text-[var(--color-text-tertiary)] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                     </svg>
                 </div>
@@ -303,14 +303,14 @@ export function AppBlacklistManager({ className = '' }: AppBlacklistManagerProps
                     <div className="flex gap-2 mt-2">
                         <button
                             onClick={() => toggleAllCategories(true)}
-                            className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
+                            className="text-xs text-[var(--color-accent)] hover:text-[var(--color-accent-hover)] transition-colors font-medium"
                         >
                             Expand All
                         </button>
-                        <span className="text-gray-600">•</span>
+                        <span className="text-[var(--color-text-tertiary)]">•</span>
                         <button
                             onClick={() => toggleAllCategories(false)}
-                            className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
+                            className="text-xs text-[var(--color-accent)] hover:text-[var(--color-accent-hover)] transition-colors font-medium"
                         >
                             Collapse All
                         </button>
@@ -320,14 +320,14 @@ export function AppBlacklistManager({ className = '' }: AppBlacklistManagerProps
 
             {/* Apps List */}
             {loading ? (
-                <div className="bg-gray-900 p-8 rounded-lg border border-gray-700 text-center">
-                    <div className="text-sm text-gray-500">Loading apps...</div>
+                <div className="bg-[var(--color-bg-secondary)] p-8 rounded-lg border border-[var(--color-border-primary)] text-center">
+                    <div className="text-sm text-[var(--color-text-secondary)]">Loading apps...</div>
                 </div>
             ) : groupedApps.length === 0 ? (
-                <div className="bg-gray-900 p-8 rounded-lg border border-gray-700 text-center">
-                    <div className="text-sm text-gray-500">No apps found</div>
+                <div className="bg-[var(--color-bg-secondary)] p-8 rounded-lg border border-[var(--color-border-primary)] text-center">
+                    <div className="text-sm text-[var(--color-text-secondary)]">No apps found</div>
                     {searchQuery && (
-                        <div className="text-xs text-gray-600 mt-1">
+                        <div className="text-xs text-[var(--color-text-tertiary)] mt-1">
                             Try a different search term
                         </div>
                     )}
@@ -339,15 +339,15 @@ export function AppBlacklistManager({ className = '' }: AppBlacklistManagerProps
                         const blacklistedCount = apps.filter(app => blacklistedBundleIds.has(app.bundleId)).length;
 
                         return (
-                            <div key={category} className="bg-gray-900 rounded-lg border border-gray-700 overflow-hidden">
+                            <div key={category} className="bg-[var(--color-bg-secondary)] rounded-lg border border-[var(--color-border-primary)] overflow-hidden">
                                 {/* Category Header */}
                                 <button
                                     onClick={() => toggleCategory(category)}
-                                    className="w-full p-3 flex items-center justify-between hover:bg-gray-800 transition-colors group"
+                                    className="w-full p-3 flex items-center justify-between hover:bg-[var(--color-bg-tertiary)] transition-colors group"
                                 >
                                     <div className="flex items-center gap-2.5">
                                         <svg
-                                            className={`w-4 h-4 text-gray-400 transition-transform flex-shrink-0 ${
+                                            className={`w-4 h-4 text-[var(--color-text-secondary)] transition-transform flex-shrink-0 ${
                                                 isExpanded ? 'rotate-90' : ''
                                             }`}
                                             fill="none"
@@ -356,14 +356,14 @@ export function AppBlacklistManager({ className = '' }: AppBlacklistManagerProps
                                         >
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                                         </svg>
-                                        <div className="text-sm font-semibold text-white">
+                                        <div className="text-sm font-semibold text-[var(--color-text-primary)]">
                                             {category}
                                         </div>
-                                        <div className="text-xs text-gray-500">
+                                        <div className="text-xs text-[var(--color-text-secondary)]">
                                             ({apps.length} {apps.length === 1 ? 'app' : 'apps'})
                                         </div>
                                         {blacklistedCount > 0 && (
-                                            <div className="text-xs px-2 py-0.5 bg-red-900/30 text-red-400 rounded">
+                                            <div className="text-xs px-2 py-0.5 bg-[var(--color-error-muted)] text-[var(--color-error)] rounded font-medium">
                                                 {blacklistedCount} blocked
                                             </div>
                                         )}
@@ -372,21 +372,21 @@ export function AppBlacklistManager({ className = '' }: AppBlacklistManagerProps
 
                                 {/* Apps in Category */}
                                 {isExpanded && (
-                                    <div className="border-t border-gray-700">
+                                    <div className="border-t border-[var(--color-border-primary)]">
                                         {apps.map(app => {
                                             const isBlacklisted = blacklistedBundleIds.has(app.bundleId);
 
                                             return (
                                                 <label
                                                     key={app.bundleId}
-                                                    className="flex items-center gap-3 p-3 hover:bg-gray-800 transition-colors cursor-pointer border-b border-gray-700 last:border-b-0 group"
+                                                    className="flex items-center gap-3 p-3 hover:bg-[var(--color-bg-tertiary)] transition-colors cursor-pointer border-b border-[var(--color-border-primary)] last:border-b-0 group"
                                                 >
                                                     {/* Checkbox */}
                                                     <input
                                                         type="checkbox"
                                                         checked={isBlacklisted}
                                                         onChange={() => handleToggleApp(app, isBlacklisted)}
-                                                        className="w-4 h-4 bg-gray-700 border-gray-600 rounded text-red-600 focus:ring-2 focus:ring-red-500 focus:ring-offset-0 cursor-pointer transition-colors"
+                                                        className="w-4 h-4 bg-[var(--color-bg-secondary)] border-[var(--color-border-primary)] rounded text-[var(--color-error)] focus:ring-2 focus:ring-[var(--color-error)] focus:ring-offset-0 cursor-pointer transition-colors"
                                                     />
 
                                                     {/* App Icon */}
@@ -394,14 +394,14 @@ export function AppBlacklistManager({ className = '' }: AppBlacklistManagerProps
 
                                                     {/* App Info */}
                                                     <div className="flex-1 min-w-0">
-                                                        <div className="text-sm font-medium text-white truncate">
+                                                        <div className="text-sm font-medium text-[var(--color-text-primary)] truncate">
                                                             {app.name}
                                                         </div>
                                                     </div>
 
                                                     {/* Status Badge */}
                                                     {isBlacklisted && (
-                                                        <div className="text-xs px-2 py-1 bg-red-900/30 text-red-400 rounded flex-shrink-0">
+                                                        <div className="text-xs px-2 py-1 bg-[var(--color-error-muted)] text-[var(--color-error)] rounded flex-shrink-0 font-semibold font-mono tracking-wide">
                                                             BLOCKED
                                                         </div>
                                                     )}

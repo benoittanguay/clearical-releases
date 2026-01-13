@@ -298,7 +298,7 @@ export function Settings({ onOpenIntegrationModal }: SettingsProps = {}) {
 
             {/* Account & Subscription */}
             <div className="bg-[var(--color-bg-secondary)] p-4 rounded-2xl mb-3 border border-[var(--color-border-primary)] transition-all duration-200 hover:border-[var(--color-border-primary)]/60">
-                <h3 className="text-[10px] font-bold text-[var(--color-text-secondary)] uppercase tracking-wider mb-3 font-['Syne']">Account</h3>
+                <h3 className="text-[10px] font-bold text-[var(--color-text-secondary)] uppercase tracking-wider mb-3 font-[var(--font-display)]">Account</h3>
                 <div className="space-y-2.5">
                     {/* User info */}
                     <div className="flex items-center justify-between bg-[var(--color-bg-tertiary)] p-3 rounded-xl border border-[var(--color-border-primary)] transition-all duration-200 hover:border-[var(--color-accent)]/20">
@@ -380,7 +380,7 @@ export function Settings({ onOpenIntegrationModal }: SettingsProps = {}) {
 
             {/* Time Rounding Settings */}
             <div className="bg-[var(--color-bg-secondary)] p-4 rounded-2xl mb-3 border border-[var(--color-border-primary)]">
-                <h3 className="text-[10px] font-bold text-[var(--color-text-secondary)] uppercase tracking-wider mb-3 font-['Syne']">Time Rounding</h3>
+                <h3 className="text-[10px] font-bold text-[var(--color-text-secondary)] uppercase tracking-wider mb-3 font-[var(--font-display)]">Time Rounding</h3>
 
                 <div className="space-y-3">
                     <div>
@@ -423,7 +423,7 @@ export function Settings({ onOpenIntegrationModal }: SettingsProps = {}) {
 
             {/* Activity Filtering Settings */}
             <div className="bg-[var(--color-bg-secondary)] p-4 rounded-2xl mb-3 border border-[var(--color-border-primary)]">
-                <h3 className="text-[10px] font-bold text-[var(--color-text-secondary)] uppercase tracking-wider mb-3 font-['Syne']">Activity Filtering</h3>
+                <h3 className="text-[10px] font-bold text-[var(--color-text-secondary)] uppercase tracking-wider mb-3 font-[var(--font-display)]">Activity Filtering</h3>
 
                 <div className="space-y-3">
                     <div>
@@ -485,13 +485,13 @@ export function Settings({ onOpenIntegrationModal }: SettingsProps = {}) {
 
             {/* App Exclusions / Blacklist */}
             <div className="bg-[var(--color-bg-secondary)] p-4 rounded-2xl mb-3 border border-[var(--color-border-primary)]">
-                <h3 className="text-[10px] font-bold text-[var(--color-text-secondary)] uppercase tracking-wider mb-3 font-['Syne']">App Exclusions</h3>
+                <h3 className="text-[10px] font-bold text-[var(--color-text-secondary)] uppercase tracking-wider mb-3 font-[var(--font-display)]">App Exclusions</h3>
                 <AppBlacklistManager />
             </div>
 
             {/* AI Features Settings */}
             <div className="bg-[var(--color-bg-secondary)] p-4 rounded-2xl mb-3 border border-[var(--color-border-primary)]">
-                <h3 className="text-[10px] font-bold text-[var(--color-text-secondary)] uppercase tracking-wider mb-3 font-['Syne']">AI Features</h3>
+                <h3 className="text-[10px] font-bold text-[var(--color-text-secondary)] uppercase tracking-wider mb-3 font-[var(--font-display)]">AI Features</h3>
 
                 <div className="space-y-3">
                     {/* Auto-generate descriptions */}
@@ -580,7 +580,7 @@ export function Settings({ onOpenIntegrationModal }: SettingsProps = {}) {
             {/* Time Tracking Integration Settings */}
             <div className="bg-[var(--color-bg-secondary)] p-4 rounded-2xl mb-3 border border-[var(--color-border-primary)]">
                 <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-[10px] font-bold text-[var(--color-text-secondary)] uppercase tracking-wider font-['Syne']">Time Tracking Integration</h3>
+                    <h3 className="text-[10px] font-bold text-[var(--color-text-secondary)] uppercase tracking-wider font-[var(--font-display)]">Time Tracking Integration</h3>
                     {!hasJiraAccess && !hasTempoAccess && (
                         <span className="text-[10px] px-2 py-1 bg-[var(--color-warning-muted)] text-[var(--color-warning)] rounded-full font-semibold font-mono tracking-wide">
                             WORKPLACE ONLY
@@ -677,7 +677,7 @@ export function Settings({ onOpenIntegrationModal }: SettingsProps = {}) {
             {/* Jira Sync Settings */}
             {hasJiraAccess && tempSettings.jira?.enabled && tempSettings.jira?.apiToken && (
                 <div className="bg-[var(--color-bg-secondary)] p-4 rounded-2xl mb-3 border border-[var(--color-border-primary)]">
-                    <h3 className="text-[10px] font-bold text-[var(--color-text-secondary)] uppercase tracking-wider mb-3 font-['Syne']">Jira Sync Settings</h3>
+                    <h3 className="text-[10px] font-bold text-[var(--color-text-secondary)] uppercase tracking-wider mb-3 font-[var(--font-display)]">Jira Sync Settings</h3>
 
                     <div className="space-y-3">
                         {/* Auto-sync toggle */}
@@ -784,7 +784,7 @@ export function Settings({ onOpenIntegrationModal }: SettingsProps = {}) {
             )}
 
             <div className="bg-[var(--color-bg-secondary)] p-4 rounded-2xl mb-3 border border-[var(--color-border-primary)]">
-                <h3 className="text-[10px] font-bold text-[var(--color-text-secondary)] uppercase tracking-wider mb-3 font-['Syne']">Permissions</h3>
+                <h3 className="text-[10px] font-bold text-[var(--color-text-secondary)] uppercase tracking-wider mb-3 font-[var(--font-display)]">Permissions</h3>
                 <div className="flex justify-between items-center bg-[var(--color-bg-tertiary)] p-2.5 rounded-lg border border-[var(--color-border-primary)]">
                     <div>
                         <div className="text-sm font-medium text-[var(--color-text-primary)]">Screen Recording</div>
@@ -864,7 +864,7 @@ export function Settings({ onOpenIntegrationModal }: SettingsProps = {}) {
 
             {/* App Version & Updates */}
             <div className="bg-[var(--color-bg-secondary)] p-4 rounded-2xl mb-3 border border-[var(--color-border-primary)]">
-                <h3 className="text-[10px] font-bold text-[var(--color-text-secondary)] uppercase tracking-wider mb-3 font-['Syne']">App Version & Updates</h3>
+                <h3 className="text-[10px] font-bold text-[var(--color-text-secondary)] uppercase tracking-wider mb-3 font-[var(--font-display)]">App Version & Updates</h3>
 
                 <div className="space-y-2">
                     {/* Current Version */}
@@ -949,7 +949,7 @@ export function Settings({ onOpenIntegrationModal }: SettingsProps = {}) {
             </div>
 
             <div className="bg-[var(--color-bg-secondary)] p-4 rounded-2xl border border-[var(--color-border-primary)]">
-                <h3 className="text-[10px] font-bold text-[var(--color-text-secondary)] uppercase tracking-wider mb-2 font-['Syne']">About</h3>
+                <h3 className="text-[10px] font-bold text-[var(--color-text-secondary)] uppercase tracking-wider mb-2 font-[var(--font-display)]">About</h3>
                 <p className="text-xs text-[var(--color-text-secondary)]">
                     Clearical is an intelligent time tracking application that helps you log and manage your work activities.
                 </p>

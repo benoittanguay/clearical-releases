@@ -132,19 +132,23 @@ export function InlineTimeEditor({ value, onChange, formatTime, className = '' }
                         onKeyDown={handleKeyDown}
                         onBlur={handleBlur}
                         placeholder="e.g. 1:30 or 90m"
-                        className={`bg-gray-700 border ${error ? 'border-red-500' : 'border-green-500'} text-white text-2xl font-mono font-bold rounded-lg px-3 py-1 w-40 focus:outline-none focus:ring-2 focus:ring-green-500 transition-all ${className}`}
+                        className={`border text-2xl font-mono font-bold rounded-lg px-3 py-1 w-40 focus:outline-none transition-all ${className}`}
                         style={{
+                            backgroundColor: 'var(--color-bg-primary)',
+                            borderColor: error ? 'var(--color-error)' : 'var(--color-accent)',
+                            color: 'var(--color-text-primary)',
                             transitionDuration: 'var(--duration-fast)',
-                            transitionTimingFunction: 'var(--ease-out)'
+                            transitionTimingFunction: 'var(--ease-out)',
+                            boxShadow: error ? 'var(--focus-ring-error)' : 'var(--focus-ring)'
                         }}
                     />
                 </div>
                 {error && (
-                    <div className="text-xs text-red-400 whitespace-nowrap">
+                    <div className="text-xs whitespace-nowrap" style={{ color: 'var(--color-error)' }}>
                         {error}
                     </div>
                 )}
-                <div className="text-xs text-gray-400 whitespace-nowrap">
+                <div className="text-xs whitespace-nowrap" style={{ color: 'var(--color-text-tertiary)' }}>
                     Formats: 1:30, 1:30:00, 90m, 1h 30m
                 </div>
             </div>
@@ -154,14 +158,20 @@ export function InlineTimeEditor({ value, onChange, formatTime, className = '' }
     return (
         <button
             onClick={handleStartEdit}
-            className={`text-2xl font-mono font-bold text-green-400 hover:text-green-300 active:text-green-200 rounded-lg px-2 py-1 -m-2 hover:bg-green-500/10 active:bg-green-500/20 transition-all group relative ${className}`}
+            className={`text-2xl font-mono font-bold rounded-lg px-2 py-1 -m-2 transition-all group relative flex items-center ${className}`}
             style={{
+                color: 'var(--color-accent)',
                 transitionDuration: 'var(--duration-fast)',
                 transitionTimingFunction: 'var(--ease-out)'
             }}
+            onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = 'var(--color-accent-muted)';
+            }}
+            onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = 'transparent';
+            }}
             title="Click to edit duration"
         >
-            {formatTime(value)}
             <svg
                 xmlns="http://www.w3.org/2000/svg"
                 width="14"
@@ -172,7 +182,7 @@ export function InlineTimeEditor({ value, onChange, formatTime, className = '' }
                 strokeWidth="2"
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                className="inline-block ml-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                className="inline-block mr-2 opacity-0 group-hover:opacity-100 transition-opacity"
                 style={{
                     transitionDuration: 'var(--duration-normal)',
                     transitionTimingFunction: 'var(--ease-out)'
@@ -181,6 +191,7 @@ export function InlineTimeEditor({ value, onChange, formatTime, className = '' }
                 <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
                 <path d="m15 5 4 4" />
             </svg>
+            {formatTime(value)}
         </button>
     );
 }

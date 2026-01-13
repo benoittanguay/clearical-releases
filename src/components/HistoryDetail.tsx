@@ -109,6 +109,8 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
     const [showAccountPicker, setShowAccountPicker] = useState(false);
     const [showUpgradeModal, setShowUpgradeModal] = useState(false);
     const previousAssignmentRef = useRef<WorkAssignment | null>(null);
+    const accountsCacheRef = useRef<Map<string, TempoAccount[]>>(new Map());
+    const isLoadingAccountsRef = useRef<Map<string, boolean>>(new Map());
 
     // Note: JiraCache initialization is handled by JiraCacheContext
     useEffect(() => {
@@ -134,6 +136,31 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                 return;
             }
 
+            const cacheKey = jiraIssue.key;
+
+            // Check if we're already loading this issue's accounts
+            if (isLoadingAccountsRef.current.get(cacheKey)) {
+                console.log('[HistoryDetail] Already loading accounts for', cacheKey);
+                return;
+            }
+
+            // Check cache first - instant load!
+            const cachedAccounts = accountsCacheRef.current.get(cacheKey);
+            if (cachedAccounts) {
+                console.log('[HistoryDetail] Using cached accounts for', cacheKey, '- instant load!');
+                setAvailableAccounts(cachedAccounts);
+                setIsLoadingAccounts(false);
+
+                // Only auto-select if entry has no tempo account selected
+                if (cachedAccounts.length > 0 && !entry.tempoAccount) {
+                    autoSelectTempoAccount(jiraIssue, cachedAccounts);
+                }
+                return;
+            }
+
+            // Not in cache - fetch from API
+            console.log('[HistoryDetail] Cache miss for', cacheKey, '- fetching from API');
+            isLoadingAccountsRef.current.set(cacheKey, true);
             setIsLoadingAccounts(true);
 
             try {
@@ -153,6 +180,10 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                 const accounts = await tempoService.getAccountsForIssueOrProject(projectId, issueId);
                 console.log('[HistoryDetail] Fetched accounts:', accounts);
 
+                // Cache the results for instant future access
+                accountsCacheRef.current.set(cacheKey, accounts);
+                console.log('[HistoryDetail] Cached accounts for', cacheKey);
+
                 setAvailableAccounts(accounts);
 
                 // Auto-select account if we have accounts and no account is currently selected
@@ -164,6 +195,7 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                 console.error('[HistoryDetail] Failed to fetch accounts:', error);
                 setAvailableAccounts([]);
             } finally {
+                isLoadingAccountsRef.current.set(cacheKey, false);
                 setIsLoadingAccounts(false);
             }
         };
@@ -174,7 +206,7 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
         } else {
             setAvailableAccounts([]);
         }
-    }, [selectedAssignment, settings.tempo, settings.jira, entry.tempoAccount]);
+    }, [selectedAssignment, settings.tempo, settings.jira, hasTempoAccess, hasJiraAccess]);
 
     // Update local state when entry changes
     useEffect(() => {
@@ -502,6 +534,55 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                 type: 'error',
                 title: 'Creation Failed',
                 message: `Failed to create entry from "${activityTitle}"`,
+                duration: 5000
+            });
+        }
+    };
+
+    const handleCreateEntryFromApp = async (appName: string) => {
+        const appActivities = entry.windowActivity?.filter(activity => activity.appName === appName) || [];
+        if (appActivities.length === 0) return;
+
+        try {
+            // Get all activity indices for this app
+            const activityIndices = appActivities.map(activity =>
+                entry.windowActivity?.findIndex(act =>
+                    act.timestamp === activity.timestamp &&
+                    act.appName === activity.appName &&
+                    act.windowTitle === activity.windowTitle
+                ) ?? -1
+            ).filter(idx => idx !== -1);
+
+            if (activityIndices.length === 0) return;
+
+            // Create new entry from all activities of this app
+            // We'll split them one by one, starting from the last index to avoid index shifting issues
+            const sortedIndices = [...activityIndices].sort((a, b) => b - a);
+            let newEntryId: string | null = null;
+
+            for (const activityIndex of sortedIndices) {
+                newEntryId = await createEntryFromActivity(entry.id, activityIndex);
+            }
+
+            if (newEntryId) {
+                showToast({
+                    type: 'success',
+                    title: 'Entry Created',
+                    message: `Created new entry from ${appActivities.length} ${appName} ${appActivities.length === 1 ? 'activity' : 'activities'}`,
+                    duration: 3000
+                });
+
+                // Navigate back to reload the entries list with the new entry
+                onBack();
+            } else {
+                throw new Error('Failed to create entry');
+            }
+        } catch (error) {
+            console.error('Failed to create entry from app:', error);
+            showToast({
+                type: 'error',
+                title: 'Creation Failed',
+                message: `Failed to create entry from "${appName}"`,
                 duration: 5000
             });
         }
@@ -933,28 +1014,28 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                 <div className="border rounded-lg mt-4" style={{ backgroundColor: 'var(--color-bg-secondary)', borderColor: 'var(--color-border-primary)', borderRadius: 'var(--radius-2xl)', boxShadow: 'var(--shadow-md)' }}>
                     {/* Time Summary Section - Start/End times and Duration counter */}
                     <div className="flex items-center justify-between p-4 border-b" style={{ borderColor: 'var(--color-border-secondary)' }}>
-                        <div className="flex flex-col gap-1">
-                            <div className="text-xs" style={{ color: 'var(--color-text-secondary)', fontFamily: 'var(--font-mono)' }}>
-                                <span className="font-semibold">Start:</span> {new Date(entry.startTime).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true })}
+                        <div className="flex flex-col gap-1.5">
+                            {/* Start and End times - Side by side */}
+                            <div className="flex items-center gap-3 text-xs" style={{ color: 'var(--color-text-secondary)', fontFamily: 'var(--font-mono)' }}>
+                                <span><span className="font-semibold">Start:</span> {new Date(entry.startTime).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true })}</span>
+                                <span><span className="font-semibold">End:</span> {new Date(entry.startTime + entry.duration).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true })}</span>
                             </div>
-                            <div className="text-xs" style={{ color: 'var(--color-text-secondary)', fontFamily: 'var(--font-mono)' }}>
-                                <span className="font-semibold">End:</span> {new Date(entry.startTime + entry.duration).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true })}
+                            {/* Elapsed time */}
+                            <div className="text-xs" style={{ color: 'var(--color-text-tertiary)', fontFamily: 'var(--font-mono)' }}>
+                                <span className="font-semibold">Elapsed:</span> {formatTime(entry.duration)}
                             </div>
                         </div>
                         <div className="flex flex-col items-end gap-1">
+                            {/* Recorded time - showing rounded time, edit icon on LEFT, using accent color */}
                             <InlineTimeEditor
-                                value={entry.duration}
+                                value={isRoundingEnabled && roundTime(entry.duration).isRounded ? roundTime(entry.duration).rounded : entry.duration}
                                 onChange={handleDurationChange}
                                 formatTime={formatTime}
                             />
+                            {/* Label showing rounded difference */}
                             {isRoundingEnabled && roundTime(entry.duration).isRounded && (
-                                <div className="flex items-center gap-1.5 text-xs" style={{ color: 'var(--color-text-secondary)' }}>
-                                    <span style={{ color: 'var(--color-text-tertiary)' }}>{formatTime(entry.duration)}</span>
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--color-text-tertiary)' }}>
-                                        <polyline points="9 18 15 12 9 6" />
-                                    </svg>
-                                    <span style={{ color: 'var(--color-accent)', fontWeight: 'var(--font-semibold)' }}>{formatTime(roundTime(entry.duration).rounded)}</span>
-                                    <span style={{ color: 'var(--color-info)' }}>({roundTime(entry.duration).formattedDifference})</span>
+                                <div className="text-xs" style={{ color: 'var(--color-text-secondary)', fontFamily: 'var(--font-mono)' }}>
+                                    Rounded {roundTime(entry.duration).formattedDifference}
                                 </div>
                             )}
                         </div>
@@ -963,17 +1044,59 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                     {/* Assignment Section */}
                     <div className="p-4 border-b" style={{ borderColor: 'var(--color-border-secondary)' }}>
                         <div className="flex items-center justify-between mb-2">
-                            <label className="text-xs uppercase font-semibold" style={{ color: 'var(--color-text-secondary)', letterSpacing: 'var(--tracking-wider)' }}>Assignment</label>
-                            {entry.assignmentAutoSelected && currentAssignment && (
-                                <span className="text-xs flex items-center gap-1" style={{ color: 'var(--color-info)' }}>
+                            <label className="text-xs uppercase font-semibold" style={{ color: 'var(--color-text-secondary)', letterSpacing: 'var(--tracking-wider)' }}>Bucket</label>
+                            <div className="flex items-center gap-2">
+                                {entry.assignmentAutoSelected && currentAssignment && (
+                                    <span className="text-xs flex items-center gap-1" style={{ color: 'var(--color-info)' }}>
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                            <path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/>
+                                            <path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/>
+                                            <path d="M15 13a4.5 4.5 0 0 1-3 4 4.5 4.5 0 0 1-3-4"/>
+                                            <path d="M12 18v4"/>
+                                            <path d="M8.5 4.5a2.5 2.5 0 0 0-2.5 2.5"/>
+                                            <path d="M15.5 4.5a2.5 2.5 0 0 1 2.5 2.5"/>
+                                        </svg>
+                                        AI Selected
+                                    </span>
+                                )}
+                                <button
+                                    onClick={async () => {
+                                        if (entry.description) {
+                                            await autoAssignWork(entry.description, {
+                                                technologies: entry.detectedTechnologies,
+                                                activities: entry.detectedActivities
+                                            });
+                                        }
+                                    }}
+                                    className="px-2 py-1 text-xs rounded transition-all active:scale-95 flex items-center gap-1 border"
+                                    style={{
+                                        backgroundColor: 'var(--color-bg-primary)',
+                                        color: 'var(--color-text-secondary)',
+                                        borderColor: 'var(--color-border-primary)',
+                                        transitionDuration: 'var(--duration-fast)',
+                                        transitionTimingFunction: 'var(--ease-out)'
+                                    }}
+                                    onMouseEnter={(e) => {
+                                        e.currentTarget.style.borderColor = 'var(--color-info)';
+                                        e.currentTarget.style.color = 'var(--color-info)';
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        e.currentTarget.style.borderColor = 'var(--color-border-primary)';
+                                        e.currentTarget.style.color = 'var(--color-text-secondary)';
+                                    }}
+                                    title="AI assign bucket"
+                                >
                                     <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                        <path d="M12 2L2 7l10 5 10-5-10-5z"/>
-                                        <path d="M2 17l10 5 10-5"/>
-                                        <path d="M2 12l10 5 10-5"/>
+                                        <path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/>
+                                        <path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/>
+                                        <path d="M15 13a4.5 4.5 0 0 1-3 4 4.5 4.5 0 0 1-3-4"/>
+                                        <path d="M12 18v4"/>
+                                        <path d="M8.5 4.5a2.5 2.5 0 0 0-2.5 2.5"/>
+                                        <path d="M15.5 4.5a2.5 2.5 0 0 1 2.5 2.5"/>
                                     </svg>
-                                    AI Selected
-                                </span>
-                            )}
+                                    Assign
+                                </button>
+                            </div>
                         </div>
                         <AssignmentPicker
                             value={currentAssignment}
@@ -990,16 +1113,79 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                                 <label className="text-xs uppercase font-semibold" style={{ color: 'var(--color-text-secondary)', letterSpacing: 'var(--tracking-wider)' }}>
                                     Tempo Account
                                 </label>
-                                {entry.tempoAccountAutoSelected && entry.tempoAccount && (
-                                    <span className="text-xs flex items-center gap-1" style={{ color: 'var(--color-info)' }}>
+                                <div className="flex items-center gap-2">
+                                    {entry.tempoAccountAutoSelected && entry.tempoAccount && (
+                                        <span className="text-xs flex items-center gap-1" style={{ color: 'var(--color-info)' }}>
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                <path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/>
+                                                <path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/>
+                                                <path d="M15 13a4.5 4.5 0 0 1-3 4 4.5 4.5 0 0 1-3-4"/>
+                                                <path d="M12 18v4"/>
+                                                <path d="M8.5 4.5a2.5 2.5 0 0 0-2.5 2.5"/>
+                                                <path d="M15.5 4.5a2.5 2.5 0 0 1 2.5 2.5"/>
+                                            </svg>
+                                            AI Selected
+                                        </span>
+                                    )}
+                                    <button
+                                        onClick={async () => {
+                                            if (currentAssignment?.type === 'jira' && currentAssignment.jiraIssue && availableAccounts.length > 0) {
+                                                await autoSelectTempoAccount(currentAssignment.jiraIssue, availableAccounts);
+                                            }
+                                        }}
+                                        className="px-2 py-1 text-xs rounded transition-all active:scale-95 flex items-center gap-1 border"
+                                        style={{
+                                            backgroundColor: 'var(--color-bg-primary)',
+                                            color: 'var(--color-text-secondary)',
+                                            borderColor: 'var(--color-border-primary)',
+                                            transitionDuration: 'var(--duration-fast)',
+                                            transitionTimingFunction: 'var(--ease-out)'
+                                        }}
+                                        onMouseEnter={(e) => {
+                                            e.currentTarget.style.borderColor = 'var(--color-info)';
+                                            e.currentTarget.style.color = 'var(--color-info)';
+                                        }}
+                                        onMouseLeave={(e) => {
+                                            e.currentTarget.style.borderColor = 'var(--color-border-primary)';
+                                            e.currentTarget.style.color = 'var(--color-text-secondary)';
+                                        }}
+                                        title="AI assign tempo account"
+                                        disabled={!currentAssignment?.jiraIssue || availableAccounts.length === 0}
+                                    >
                                         <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                            <path d="M12 2L2 7l10 5 10-5-10-5z"/>
-                                            <path d="M2 17l10 5 10-5"/>
-                                            <path d="M2 12l10 5 10-5"/>
+                                            <path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/>
+                                            <path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/>
+                                            <path d="M15 13a4.5 4.5 0 0 1-3 4 4.5 4.5 0 0 1-3-4"/>
+                                            <path d="M12 18v4"/>
+                                            <path d="M8.5 4.5a2.5 2.5 0 0 0-2.5 2.5"/>
+                                            <path d="M15.5 4.5a2.5 2.5 0 0 1 2.5 2.5"/>
                                         </svg>
-                                        AI Selected
-                                    </span>
-                                )}
+                                        Assign
+                                    </button>
+                                    {entry.tempoAccount && (
+                                        <button
+                                            onClick={() => setShowAccountPicker(true)}
+                                            className="px-2 py-1 text-xs rounded transition-all active:scale-95 border"
+                                            style={{
+                                                backgroundColor: 'var(--color-bg-primary)',
+                                                color: 'var(--color-text-secondary)',
+                                                borderColor: 'var(--color-border-primary)',
+                                                transitionDuration: 'var(--duration-fast)',
+                                                transitionTimingFunction: 'var(--ease-out)'
+                                            }}
+                                            onMouseEnter={(e) => {
+                                                e.currentTarget.style.borderColor = 'var(--color-accent)';
+                                                e.currentTarget.style.color = 'var(--color-text-primary)';
+                                            }}
+                                            onMouseLeave={(e) => {
+                                                e.currentTarget.style.borderColor = 'var(--color-border-primary)';
+                                                e.currentTarget.style.color = 'var(--color-text-secondary)';
+                                            }}
+                                        >
+                                            Change
+                                        </button>
+                                    )}
+                                </div>
                             </div>
 
                             {isLoadingAccounts ? (
@@ -1012,38 +1198,13 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                                     No accounts available for this issue
                                 </div>
                             ) : entry.tempoAccount ? (
-                                <div className="flex items-center justify-between">
-                                    <div className="flex-1 min-w-0">
-                                        <div className="border rounded-lg px-3 py-2" style={{ backgroundColor: 'var(--color-bg-primary)', borderColor: 'var(--color-border-primary)' }}>
-                                            <div className="text-sm font-medium" style={{ color: 'var(--color-text-primary)' }}>
-                                                {entry.tempoAccount.name}
-                                            </div>
-                                            <div className="text-xs font-mono" style={{ color: 'var(--color-text-secondary)', fontFamily: 'var(--font-mono)' }}>
-                                                {entry.tempoAccount.key}
-                                            </div>
-                                        </div>
+                                <div className="border rounded-lg px-3 py-2" style={{ backgroundColor: 'var(--color-bg-primary)', borderColor: 'var(--color-border-primary)' }}>
+                                    <div className="text-sm font-medium" style={{ color: 'var(--color-text-primary)' }}>
+                                        {entry.tempoAccount.name}
                                     </div>
-                                    <button
-                                        onClick={() => setShowAccountPicker(true)}
-                                        className="ml-2 px-2.5 py-1.5 text-xs rounded-md transition-all active:scale-95 border"
-                                        style={{
-                                            backgroundColor: 'var(--color-bg-primary)',
-                                            color: 'var(--color-text-secondary)',
-                                            borderColor: 'var(--color-border-primary)',
-                                            transitionDuration: 'var(--duration-fast)',
-                                            transitionTimingFunction: 'var(--ease-out)'
-                                        }}
-                                        onMouseEnter={(e) => {
-                                            e.currentTarget.style.borderColor = 'var(--color-accent)';
-                                            e.currentTarget.style.color = 'var(--color-text-primary)';
-                                        }}
-                                        onMouseLeave={(e) => {
-                                            e.currentTarget.style.borderColor = 'var(--color-border-primary)';
-                                            e.currentTarget.style.color = 'var(--color-text-secondary)';
-                                        }}
-                                    >
-                                        Change
-                                    </button>
+                                    <div className="text-xs font-mono" style={{ color: 'var(--color-text-secondary)', fontFamily: 'var(--font-mono)' }}>
+                                        {entry.tempoAccount.key}
+                                    </div>
                                 </div>
                             ) : (
                                 <button
@@ -1079,27 +1240,23 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                                 {entry.description && entry.descriptionAutoGenerated && (
                                     <span className="text-xs flex items-center gap-1" style={{ color: 'var(--color-info)' }}>
                                         <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                            <path d="M12 2L2 7l10 5 10-5-10-5z"/>
-                                            <path d="M2 17l10 5 10-5"/>
-                                            <path d="M2 12l10 5 10-5"/>
+                                            <path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/>
+                                            <path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/>
+                                            <path d="M15 13a4.5 4.5 0 0 1-3 4 4.5 4.5 0 0 1-3-4"/>
+                                            <path d="M12 18v4"/>
+                                            <path d="M8.5 4.5a2.5 2.5 0 0 0-2.5 2.5"/>
+                                            <path d="M15.5 4.5a2.5 2.5 0 0 1 2.5 2.5"/>
                                         </svg>
                                         AI Generated
                                     </span>
                                 )}
-                                {screenshotStats.total > 0 && (
-                                    <div className="flex items-center gap-2">
-                                        <div className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
-                                            {screenshotStats.analyzed}/{screenshotStats.total} screenshots analyzed
-                                        </div>
-                                        {totalAnalyzing > 0 && (
-                                            <div className="flex items-center gap-1.5 text-xs px-2 py-1 rounded-full border animate-pulse" style={{ backgroundColor: 'rgba(59, 130, 246, 0.1)', color: 'var(--color-info)', borderColor: 'rgba(59, 130, 246, 0.3)' }}>
-                                                <svg className="animate-spin h-3 w-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                                </svg>
-                                                <span>{totalAnalyzing} analyzing</span>
-                                            </div>
-                                        )}
+                                {totalAnalyzing > 0 && (
+                                    <div className="flex items-center gap-1.5 text-xs px-2 py-1 rounded-full border animate-pulse" style={{ backgroundColor: 'rgba(59, 130, 246, 0.1)', color: 'var(--color-info)', borderColor: 'rgba(59, 130, 246, 0.3)' }}>
+                                        <svg className="animate-spin h-3 w-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                        </svg>
+                                        <span>{totalAnalyzing} analyzing</span>
                                     </div>
                                 )}
                             </div>
@@ -1123,11 +1280,14 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                                     ) : (
                                         <>
                                             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                                <path d="M12 2L2 7l10 5 10-5-10-5z"/>
-                                                <path d="M2 17l10 5 10-5"/>
-                                                <path d="M2 12l10 5 10-5"/>
+                                                <path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/>
+                                                <path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/>
+                                                <path d="M15 13a4.5 4.5 0 0 1-3 4 4.5 4.5 0 0 1-3-4"/>
+                                                <path d="M12 18v4"/>
+                                                <path d="M8.5 4.5a2.5 2.5 0 0 0-2.5 2.5"/>
+                                                <path d="M15.5 4.5a2.5 2.5 0 0 1 2.5 2.5"/>
                                             </svg>
-                                            Generate Summary
+                                            Generate
                                         </>
                                     )}
                                 </button>
@@ -1376,6 +1536,31 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                                             <div className="font-mono font-bold" style={{ fontFamily: 'var(--font-mono)', color: 'var(--color-accent)' }}>
                                                 {formatTime(group.totalDuration)}
                                             </div>
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleCreateEntryFromApp(group.appName);
+                                                }}
+                                                className="p-1.5 rounded transition-all active:scale-95"
+                                                style={{
+                                                    color: 'var(--color-info)',
+                                                    transitionDuration: 'var(--duration-fast)',
+                                                    transitionTimingFunction: 'var(--ease-out)'
+                                                }}
+                                                onMouseEnter={(e) => {
+                                                    e.currentTarget.style.backgroundColor = 'var(--color-info-muted)';
+                                                }}
+                                                onMouseLeave={(e) => {
+                                                    e.currentTarget.style.backgroundColor = 'transparent';
+                                                }}
+                                                title="Create new entry from all activities in this app"
+                                            >
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                                    <polyline points="7 10 12 15 17 10" />
+                                                    <line x1="12" y1="15" x2="12" y2="3" />
+                                                </svg>
+                                            </button>
                                             <DeleteButton
                                                 onDelete={() => handleDeleteApp(group.appName)}
                                                 confirmMessage={`Delete all ${group.appName} activities?`}
@@ -1464,7 +1649,7 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                                                                     act.appName === activity.appName &&
                                                                     act.windowTitle === activity.windowTitle
                                                                 ) ?? -1)}
-                                                                className="p-1.5 rounded transition-all active:scale-95"
+                                                                className="p-1 rounded transition-all active:scale-95"
                                                                 style={{
                                                                     color: 'var(--color-info)',
                                                                     transitionDuration: 'var(--duration-fast)',
@@ -1479,9 +1664,8 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                                                                 title="Create new entry from this activity"
                                                             >
                                                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                                                                    <polyline points="7 10 12 15 17 10" />
-                                                                    <line x1="12" y1="15" x2="12" y2="3" />
+                                                                    <rect x="2" y="7" width="20" height="14" rx="2" ry="2"/>
+                                                                    <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>
                                                                 </svg>
                                                             </button>
                                                             <DeleteButton

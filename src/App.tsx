@@ -185,7 +185,7 @@ function App() {
     setShowUpdateSuccessModal(false);
   };
 
-  const handleBulkLogToTempo = async () => {
+  const handleBulkLogToTempo = async (_dateKey?: string) => {
     if (!settings.tempo?.enabled) {
       setCurrentView('settings');
       return;
@@ -332,7 +332,7 @@ function App() {
         {/* Logo */}
         <div className="mb-10 select-none">
           <img
-            src="/icon.png"
+            src="./icon.png"
             alt="Clearical"
             className="w-10 h-10 rounded-lg"
             style={{
@@ -586,7 +586,7 @@ function App() {
                 />
               </div>
 
-              {/* Timer Display - Prominent with glow effect */}
+              {/* Timer Display - Prominent and clean */}
               <div className="relative mb-16">
                 <div
                   className="tabular-nums transition-all duration-300"
@@ -595,13 +595,7 @@ function App() {
                     fontFamily: 'var(--font-mono)',
                     fontWeight: 'var(--font-bold)',
                     letterSpacing: 'var(--tracking-tight)',
-                    color: isPaused ? 'var(--color-warning)' : 'var(--color-accent)',
-                    textShadow: isPaused
-                      ? '0 0 30px rgba(254, 188, 46, 0.6), 0 0 60px rgba(254, 188, 46, 0.3)'
-                      : '0 0 30px rgba(255, 72, 0, 0.6), 0 0 60px rgba(255, 72, 0, 0.3)',
-                    filter: isPaused
-                      ? 'drop-shadow(0 4px 12px rgba(254, 188, 46, 0.4))'
-                      : 'drop-shadow(0 4px 12px rgba(255, 72, 0, 0.4))'
+                    color: isPaused ? 'var(--color-warning)' : 'var(--color-accent)'
                   }}
                 >
                   {formatTime(elapsed)}
@@ -859,20 +853,6 @@ function App() {
                   {entries.length > 0 && (
                     <div className="flex items-center gap-3 no-drag">
                       <button
-                        onClick={handleBulkLogToTempo}
-                        className={`px-4 py-2 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2 ${
-                          settings.tempo?.enabled
-                            ? 'bg-blue-600 hover:bg-blue-500'
-                            : 'bg-gray-600 hover:bg-gray-500'
-                        }`}
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <circle cx="12" cy="12" r="10" />
-                          <polyline points="12 6 12 12 16 14" />
-                        </svg>
-                        {settings.tempo?.enabled ? 'Bulk Log to Tempo' : 'Connect Tempo'}
-                      </button>
-                      <button
                         onClick={() => setShowExportDialog(true)}
                         className="px-4 py-2 bg-green-600 hover:bg-green-500 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2"
                       >
@@ -930,14 +910,58 @@ function App() {
                       return Array.from(groupedByDate.entries()).map(([dateKey, dateEntries]) => {
                         const totalDuration = dateEntries.reduce((sum, entry) => sum + entry.duration, 0);
 
+                        // Check if this day has any Jira activities with all required info
+                        const hasLoggableJiraActivities = dateEntries.some(entry => {
+                          const assignment = entry.assignment ||
+                            (entry.linkedJiraIssue ? {
+                              type: 'jira' as const,
+                              jiraIssue: entry.linkedJiraIssue
+                            } : null);
+
+                          return assignment?.type === 'jira' && assignment.jiraIssue && entry.description;
+                        });
+
                         return (
                           <div key={dateKey} className="mb-4 last:mb-0">
                             {/* Date Separator Header - Sticky with solid background */}
                             <div className="sticky top-0 z-10 px-3 py-2 mb-2 -mx-4 flex items-center justify-between shadow-sm" style={{ backgroundColor: 'var(--color-bg-secondary)', borderBottom: '1px solid var(--color-border-primary)' }}>
-                              <h3 className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>
-                                {formatDateLabel(parseInt(dateKey))}
-                              </h3>
-                              <span className="text-xs font-mono" style={{ color: 'var(--color-text-tertiary)' }}>
+                              <div className="flex items-center gap-3">
+                                <h3 className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>
+                                  {formatDateLabel(parseInt(dateKey))}
+                                </h3>
+                                {settings.tempo?.enabled && hasLoggableJiraActivities && (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleBulkLogToTempo(dateKey);
+                                    }}
+                                    className="no-drag flex items-center gap-1.5 px-2 py-1 rounded-md transition-all text-xs font-medium"
+                                    style={{
+                                      backgroundColor: 'var(--color-bg-tertiary)',
+                                      color: 'var(--color-accent)',
+                                      border: '1px solid var(--color-accent)',
+                                      opacity: 0.8,
+                                      transitionDuration: 'var(--duration-base)',
+                                      transitionTimingFunction: 'var(--ease-out)'
+                                    }}
+                                    onMouseEnter={(e) => {
+                                      e.currentTarget.style.opacity = '1';
+                                      e.currentTarget.style.backgroundColor = 'var(--color-accent-muted)';
+                                    }}
+                                    onMouseLeave={(e) => {
+                                      e.currentTarget.style.opacity = '0.8';
+                                      e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)';
+                                    }}
+                                  >
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                      <circle cx="12" cy="12" r="10" />
+                                      <polyline points="12 6 12 12 16 14" />
+                                    </svg>
+                                    Log Day to Tempo
+                                  </button>
+                                )}
+                              </div>
+                              <span className="text-xs font-mono" style={{ color: 'var(--color-text-tertiary)', fontFamily: 'var(--font-mono)' }}>
                                 {formatTime(totalDuration)}
                               </span>
                             </div>
@@ -1016,13 +1040,13 @@ function App() {
                                       {entry.description && (
                                         <p className="text-xs mb-1 truncate" style={{ color: 'var(--color-text-secondary)' }}>{entry.description}</p>
                                       )}
-                                      <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{new Date(entry.startTime).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true })} - {new Date(entry.startTime + entry.duration).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true })}</span>
+                                      <span className="text-xs" style={{ color: 'var(--color-text-tertiary)', fontFamily: 'var(--font-mono)' }}>{new Date(entry.startTime).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true })} - {new Date(entry.startTime + entry.duration).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true })}</span>
                                     </div>
                                     <div className="flex items-center gap-3">
                                       {entry.windowActivity && entry.windowActivity.length > 0 && (
                                         <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{entry.windowActivity.length} activities</span>
                                       )}
-                                      <div className="font-mono font-bold" style={{ color: 'var(--color-success)' }}>
+                                      <div className="font-mono font-bold" style={{ color: 'var(--color-success)', fontFamily: 'var(--font-mono)' }}>
                                         {formatTime(entry.duration)}
                                       </div>
                                       <DeleteButton

@@ -272,7 +272,7 @@ export function TempoValidationModal({
                     </div>
 
                     {/* Content */}
-                    <div className="p-4 space-y-4">
+                    <div className="p-4 space-y-3">
                         {/* Error message */}
                         {error && (
                             <div className="bg-[var(--color-error-muted)] border border-[var(--color-error)]/30 rounded-lg p-3 flex items-start gap-2 animate-fade-in">
@@ -288,61 +288,79 @@ export function TempoValidationModal({
                             </div>
                         )}
 
-                        {/* Assignment info */}
-                        <div className="bg-[var(--color-bg-tertiary)] rounded-lg p-3 border border-[var(--color-border-primary)]">
-                            <div className="text-xs text-[var(--color-text-secondary)] uppercase font-semibold mb-2 font-['Syne']">Assignment</div>
-                            <div className="flex items-start gap-3">
-                                <div
-                                    className="w-4 h-4 rounded-full flex-shrink-0 shadow-sm mt-0.5"
-                                    style={{
-                                        backgroundColor: assignmentDisplay.color,
-                                        boxShadow: `0 0 8px ${assignmentDisplay.color}40`
-                                    }}
-                                />
-                                <div className="flex-1 min-w-0">
-                                    <div className="text-white font-medium">{assignmentDisplay.label}</div>
-                                    {assignmentDisplay.details && (
-                                        <div className="text-gray-400 text-sm mt-0.5">{assignmentDisplay.details}</div>
-                                    )}
+                        {/* Jira Issue & Assignment - Consolidated */}
+                        {jiraKey && (
+                            <div className="bg-[var(--color-bg-tertiary)] rounded-lg p-3 border border-[var(--color-border-primary)]">
+                                <div className="flex items-start gap-3">
+                                    <div
+                                        className="w-4 h-4 rounded-full flex-shrink-0 mt-0.5"
+                                        style={{
+                                            backgroundColor: assignmentDisplay.color,
+                                            boxShadow: `0 0 8px ${assignmentDisplay.color}40`
+                                        }}
+                                    />
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <span className="text-[var(--color-info)] font-['JetBrains_Mono'] text-base font-semibold">{jiraKey}</span>
+                                        </div>
+                                        {assignmentDisplay.details && (
+                                            <div className="text-[var(--color-text-secondary)] text-sm">{assignmentDisplay.details}</div>
+                                        )}
+                                        {assignmentDisplay.issueDetails && (
+                                            <div className="text-[var(--color-text-tertiary)] text-xs mt-0.5">{assignmentDisplay.issueDetails}</div>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Time & Account - Compact 2-column layout */}
+                        <div className="grid grid-cols-2 gap-3">
+                            {/* Duration */}
+                            <div className="bg-[var(--color-bg-tertiary)] rounded-lg p-3 border border-[var(--color-border-primary)]">
+                                <div className="text-xs text-[var(--color-text-secondary)] uppercase font-semibold mb-1.5 font-['Syne']">Duration</div>
+                                <div className="text-[var(--color-success)] font-['JetBrains_Mono'] text-xl font-bold leading-tight">{formatTime(durationToLog)}</div>
+                                {isRoundingEnabled && roundTime(entry.duration).isRounded && (
+                                    <div className="text-[var(--color-text-tertiary)] text-xs mt-0.5">
+                                        Rounded {roundTime(entry.duration).formattedDifference}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Date & Time */}
+                            <div className="bg-[var(--color-bg-tertiary)] rounded-lg p-3 border border-[var(--color-border-primary)]">
+                                <div className="text-xs text-[var(--color-text-secondary)] uppercase font-semibold mb-1.5 font-['Syne']">When</div>
+                                <div className="text-[var(--color-text-primary)] font-['JetBrains_Mono'] text-sm font-medium leading-tight">
+                                    {new Date(entry.startTime).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                                </div>
+                                <div className="text-[var(--color-text-secondary)] font-['JetBrains_Mono'] text-xs mt-0.5">
+                                    {new Date(entry.startTime).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true })}
                                 </div>
                             </div>
                         </div>
 
-                        {/* Jira issue key */}
-                        {jiraKey && (
-                            <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
-                                <div className="text-xs text-gray-400 uppercase font-semibold mb-2">Jira Issue</div>
-                                <div className="flex items-center gap-2 mb-1">
-                                    <div className="w-3 h-3 rounded-full bg-blue-500 flex-shrink-0 shadow-sm" style={{ boxShadow: '0 0 6px rgba(59, 130, 246, 0.4)' }} />
-                                    <span className="text-blue-400 font-mono text-lg font-semibold">{jiraKey}</span>
-                                </div>
-                                {assignmentDisplay.issueDetails && (
-                                    <div className="text-gray-400 text-xs ml-5">{assignmentDisplay.issueDetails}</div>
-                                )}
-                            </div>
-                        )}
-
                         {/* Account Selection */}
                         {jiraKey && (
-                            <div className="bg-gray-750 rounded-lg p-3 border border-gray-700">
-                                <label className="block text-xs text-gray-400 uppercase font-semibold mb-2">
-                                    Account <span className="text-red-400">*</span>
+                            <div>
+                                <label className="block text-xs text-[var(--color-text-secondary)] uppercase font-semibold mb-2 font-['Syne']">
+                                    Account <span className="text-[var(--color-error)]">*</span>
                                 </label>
                                 {isLoadingAccounts ? (
-                                    <div className="flex items-center gap-2 text-sm text-gray-400">
-                                        <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
+                                    <div className="flex items-center gap-2 text-sm text-[var(--color-text-secondary)] bg-[var(--color-bg-tertiary)] rounded-lg px-3 py-2 border border-[var(--color-border-primary)]">
+                                        <div className="w-4 h-4 border-2 border-[var(--color-accent)] border-t-transparent rounded-full animate-spin"></div>
                                         <span>Loading accounts...</span>
                                     </div>
                                 ) : availableAccounts.length === 0 ? (
-                                    <div className="text-sm text-yellow-400 bg-yellow-500/10 border border-yellow-500/30 rounded px-3 py-2">
-                                        No accounts linked to this issue. Please configure accounts in Tempo or contact your Tempo administrator.
+                                    <div className="text-sm text-[var(--color-warning)] bg-[var(--color-warning-muted)] border border-[var(--color-warning)]/30 rounded-lg px-3 py-2">
+                                        No accounts linked to this issue. Please configure accounts in Tempo.
                                     </div>
                                 ) : (
                                     <select
                                         value={selectedAccount}
                                         onChange={(e) => setSelectedAccount(e.target.value)}
                                         disabled={isLogging}
-                                        className="w-full bg-gray-700 border border-gray-600 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        className="w-full bg-[var(--color-bg-secondary)] border border-[var(--color-border-primary)] text-[var(--color-text-primary)] text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:border-[var(--color-accent)] disabled:opacity-50 disabled:cursor-not-allowed transition-all font-['JetBrains_Mono']"
+                                        style={{ transitionDuration: 'var(--duration-fast)', transitionTimingFunction: 'var(--ease-out)' }}
                                     >
                                         <option value="">Select an account...</option>
                                         {availableAccounts.map((account) => (
@@ -352,55 +370,17 @@ export function TempoValidationModal({
                                         ))}
                                     </select>
                                 )}
-                                <div className="text-xs text-gray-500 mt-1">
-                                    Required for logging time to Tempo
-                                </div>
                             </div>
                         )}
 
-                        {/* Duration info */}
-                        <div className="bg-gray-750 rounded-lg p-3 border border-gray-700">
-                            <div className="text-xs text-gray-400 uppercase font-semibold mb-2">Time to Log</div>
-                            <div className="flex flex-col gap-1">
-                                <div className="flex items-baseline gap-2">
-                                    <span className="text-green-400 font-mono text-2xl font-bold">{formatTime(durationToLog)}</span>
-                                    <span className="text-gray-500 text-sm">({TempoService.durationMsToSeconds(durationToLog)} seconds)</span>
-                                </div>
-                                {isRoundingEnabled && roundTime(entry.duration).isRounded && (
-                                    <div className="flex items-center gap-1.5 text-xs">
-                                        <span className="text-gray-500">Original: {formatTime(entry.duration)}</span>
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-500">
-                                            <polyline points="9 18 15 12 9 6" />
-                                        </svg>
-                                        <span className="text-purple-400">Rounded {roundTime(entry.duration).formattedDifference}</span>
-                                    </div>
-                                )}
-                            </div>
-                            <div className="text-gray-400 text-sm mt-2">
-                                <span className="font-semibold">Date:</span> {new Date(entry.startTime).toLocaleDateString(undefined, {
-                                    weekday: 'short',
-                                    year: 'numeric',
-                                    month: 'short',
-                                    day: 'numeric'
-                                })}
-                            </div>
-                            <div className="text-gray-400 text-sm">
-                                <span className="font-semibold">Time:</span> {new Date(entry.startTime).toLocaleTimeString([], {
-                                    hour: 'numeric',
-                                    minute: '2-digit',
-                                    hour12: true
-                                })}
-                            </div>
-                        </div>
-
                         {/* Description */}
                         <div>
-                            <label className="block text-xs text-gray-400 uppercase font-semibold mb-2">Description</label>
+                            <label className="block text-xs text-[var(--color-text-secondary)] uppercase font-semibold mb-2 font-['Syne']">Description</label>
                             <textarea
                                 value={description}
                                 onChange={(e) => setDescription(e.target.value)}
                                 placeholder="Add a description for this worklog..."
-                                className="w-full bg-gray-700 border border-gray-600 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none transition-all"
+                                className="w-full bg-[var(--color-bg-secondary)] border border-[var(--color-border-primary)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:border-[var(--color-accent)] resize-none transition-all font-['JetBrains_Mono']"
                                 style={{ transitionDuration: 'var(--duration-base)', transitionTimingFunction: 'var(--ease-out)' }}
                                 rows={3}
                                 disabled={isLogging}

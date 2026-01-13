@@ -1,50 +1,52 @@
 import { useState } from 'react';
+import { ConfirmationModal } from './ConfirmationModal';
 
 interface DeleteButtonProps {
     onDelete: () => void | Promise<void>;
     confirmMessage?: string;
+    confirmTitle?: string;
     className?: string;
     size?: 'sm' | 'md' | 'lg';
     variant?: 'danger' | 'subtle';
 }
 
-export function DeleteButton({ 
-    onDelete, 
+export function DeleteButton({
+    onDelete,
     confirmMessage = "Are you sure you want to delete this item?",
+    confirmTitle = "Confirm Delete",
     className = "",
     size = 'md',
     variant = 'danger'
 }: DeleteButtonProps) {
-    const [showConfirm, setShowConfirm] = useState(false);
+    const [showModal, setShowModal] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
 
-    const handleClick = async (e: React.MouseEvent) => {
+    const handleClick = (e: React.MouseEvent) => {
         e.stopPropagation();
-        
-        if (!showConfirm) {
-            setShowConfirm(true);
-            return;
-        }
+        setShowModal(true);
+    };
 
+    const handleConfirm = async () => {
         setIsDeleting(true);
         try {
             await onDelete();
+            setShowModal(false);
         } catch (error) {
             console.error('Delete failed:', error);
         } finally {
             setIsDeleting(false);
-            setShowConfirm(false);
         }
     };
 
-    const handleCancel = (e: React.MouseEvent) => {
-        e.stopPropagation();
-        setShowConfirm(false);
+    const handleCancel = () => {
+        if (!isDeleting) {
+            setShowModal(false);
+        }
     };
 
     const sizes = {
         sm: 'w-4 h-4',
-        md: 'w-5 h-5', 
+        md: 'w-5 h-5',
         lg: 'w-6 h-6'
     };
 
@@ -59,50 +61,32 @@ export function DeleteButton({
         lg: 'p-2'
     };
 
-    if (showConfirm) {
-        return (
-            <div className="flex items-center gap-2 bg-red-900/20 border border-red-500/30 rounded-lg px-3 py-1 animate-scale-in shadow-md" style={{ boxShadow: 'var(--glow-red)' }}>
-                <span className="text-red-300 text-sm">{confirmMessage}</span>
-                <button
-                    onClick={handleClick}
-                    disabled={isDeleting}
-                    className="text-red-400 hover:text-red-300 disabled:opacity-50 px-2 py-1 text-xs bg-red-500/20 rounded hover:bg-red-500/30 active:scale-95 transition-all"
-                    style={{ transitionDuration: 'var(--duration-fast)', transitionTimingFunction: 'var(--ease-out)' }}
-                >
-                    {isDeleting ? (
-                        <span className="flex items-center gap-1">
-                            <svg className="w-3 h-3 spinner" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                <circle cx="12" cy="12" r="10" strokeOpacity="0.25" />
-                                <path d="M12 2a10 10 0 0 1 10 10" strokeLinecap="round" />
-                            </svg>
-                            Deleting...
-                        </span>
-                    ) : 'Delete'}
-                </button>
-                <button
-                    onClick={handleCancel}
-                    className="text-gray-400 hover:text-gray-300 px-2 py-1 text-xs bg-gray-500/20 rounded hover:bg-gray-500/30 active:scale-95 transition-all"
-                    style={{ transitionDuration: 'var(--duration-fast)', transitionTimingFunction: 'var(--ease-out)' }}
-                >
-                    Cancel
-                </button>
-            </div>
-        );
-    }
-
     return (
-        <button
-            onClick={handleClick}
-            className={`${variants[variant]} ${buttonSizes[size]} rounded hover:bg-red-500/10 active:bg-red-500/20 active:scale-95 transition-all ${className}`}
-            style={{ transitionDuration: 'var(--duration-base)', transitionTimingFunction: 'var(--ease-out)' }}
-            title="Delete"
-        >
-            <svg className={sizes[size]} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M3 6h18" />
-                <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6m3 0V4c0-1 1-2 2-2h4c0-1 1-2 2-2v2" />
-                <line x1="10" y1="11" x2="10" y2="17" />
-                <line x1="14" y1="11" x2="14" y2="17" />
-            </svg>
-        </button>
+        <>
+            <button
+                onClick={handleClick}
+                className={`${variants[variant]} ${buttonSizes[size]} rounded hover:bg-red-500/10 active:bg-red-500/20 active:scale-95 transition-all ${className}`}
+                style={{ transitionDuration: 'var(--duration-base)', transitionTimingFunction: 'var(--ease-out)' }}
+                title="Delete"
+            >
+                <svg className={sizes[size]} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M3 6h18" />
+                    <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6m3 0V4c0-1 1-2 2-2h4c0-1 1-2 2-2v2" />
+                    <line x1="10" y1="11" x2="10" y2="17" />
+                    <line x1="14" y1="11" x2="14" y2="17" />
+                </svg>
+            </button>
+
+            <ConfirmationModal
+                isOpen={showModal}
+                onClose={handleCancel}
+                onConfirm={handleConfirm}
+                title={confirmTitle}
+                message={confirmMessage}
+                confirmText="Delete"
+                confirmVariant="danger"
+                isLoading={isDeleting}
+            />
+        </>
     );
 }

@@ -179,7 +179,7 @@ export function ExportDialog({ entries, buckets, onClose, onExport }: ExportDial
                 <div className="space-y-5 mb-6">
                     {/* Date Range */}
                     <div>
-                        <label className="block text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider mb-3 font-['Syne']">Date Range</label>
+                        <label className="block text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider mb-3" style={{ fontFamily: 'var(--font-display)' }}>Date Range</label>
                         <div className="grid grid-cols-2 gap-3">
                             <div>
                                 <label className="block text-[10px] text-[var(--color-text-tertiary)] uppercase tracking-wider mb-1.5 font-mono">From</label>
@@ -187,7 +187,8 @@ export function ExportDialog({ entries, buckets, onClose, onExport }: ExportDial
                                     type="date"
                                     value={dateFrom}
                                     onChange={(e) => setDateFrom(e.target.value)}
-                                    className="w-full bg-[var(--color-bg-tertiary)] border border-[var(--color-border-primary)] text-[var(--color-text-primary)] text-sm rounded-lg px-3 py-2.5 font-mono focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] transition-all duration-200"
+                                    className="w-full bg-white border-2 border-[var(--color-border-primary)] text-[var(--color-text-primary)] text-sm rounded-lg px-3 py-2.5 font-mono focus:outline-none focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-accent)]/20 hover:border-[var(--color-border-secondary)] transition-all duration-200"
+                                    style={{ colorScheme: 'light' }}
                                 />
                             </div>
                             <div>
@@ -196,7 +197,8 @@ export function ExportDialog({ entries, buckets, onClose, onExport }: ExportDial
                                     type="date"
                                     value={dateTo}
                                     onChange={(e) => setDateTo(e.target.value)}
-                                    className="w-full bg-[var(--color-bg-tertiary)] border border-[var(--color-border-primary)] text-[var(--color-text-primary)] text-sm rounded-lg px-3 py-2.5 font-mono focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] transition-all duration-200"
+                                    className="w-full bg-white border-2 border-[var(--color-border-primary)] text-[var(--color-text-primary)] text-sm rounded-lg px-3 py-2.5 font-mono focus:outline-none focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-accent)]/20 hover:border-[var(--color-border-secondary)] transition-all duration-200"
+                                    style={{ colorScheme: 'light' }}
                                 />
                             </div>
                         </div>
@@ -205,25 +207,25 @@ export function ExportDialog({ entries, buckets, onClose, onExport }: ExportDial
                     {/* Bucket Filter */}
                     <div>
                         <div className="flex items-center justify-between mb-3">
-                            <label className="text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider font-['Syne']">Buckets</label>
+                            <label className="text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider" style={{ fontFamily: 'var(--font-display)' }}>Buckets</label>
                             <button
                                 onClick={handleSelectAllBuckets}
-                                className="text-xs text-[var(--color-accent)] hover:text-[var(--color-accent-hover)] font-semibold transition-colors duration-200"
+                                className="text-xs text-[var(--color-accent)] hover:text-[var(--color-accent-hover)] font-semibold transition-colors duration-200 hover:scale-105 active:scale-95"
                             >
                                 {selectedBucketIds.length === buckets.length ? 'Deselect All' : 'Select All'}
                             </button>
                         </div>
-                        <div className="max-h-32 overflow-y-auto space-y-2 bg-[var(--color-bg-tertiary)] rounded-lg p-3 border border-[var(--color-border-secondary)]">
+                        <div className="max-h-32 overflow-y-auto space-y-1.5 bg-white rounded-lg p-3 border-2 border-[var(--color-border-primary)]">
                             {buckets.map(bucket => (
                                 <label
                                     key={bucket.id}
-                                    className="flex items-center gap-2.5 p-2 rounded-lg hover:bg-[var(--color-bg-quaternary)] cursor-pointer transition-all duration-200 group"
+                                    className="flex items-center gap-2.5 p-2 rounded-lg hover:bg-[var(--color-bg-primary)] cursor-pointer transition-all duration-200 group"
                                 >
                                     <input
                                         type="checkbox"
                                         checked={selectedBucketIds.includes(bucket.id)}
                                         onChange={() => handleBucketToggle(bucket.id)}
-                                        className="w-4 h-4 text-[var(--color-accent)] bg-[var(--color-bg-primary)] border-[var(--color-border-primary)] rounded focus:ring-[var(--color-accent)] transition-all duration-200"
+                                        className="w-4 h-4 text-[var(--color-accent)] bg-white border-2 border-[var(--color-border-primary)] rounded focus:ring-2 focus:ring-[var(--color-accent)]/20 transition-all duration-200 cursor-pointer"
                                     />
                                     <div className="w-3 h-3 rounded-full transition-transform duration-200 group-hover:scale-110" style={{ backgroundColor: bucket.color }}></div>
                                     <span className="text-sm text-[var(--color-text-primary)] font-mono">{bucket.name}</span>
@@ -234,24 +236,24 @@ export function ExportDialog({ entries, buckets, onClose, onExport }: ExportDial
 
                     {/* Options */}
                     <div className="space-y-2.5">
-                        <label className="block text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider mb-3 font-['Syne']">Options</label>
+                        <label className="block text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider mb-3" style={{ fontFamily: 'var(--font-display)' }}>Options</label>
 
-                        <label className="flex items-center gap-2.5 cursor-pointer group">
+                        <label className="flex items-center gap-2.5 cursor-pointer group p-2 rounded-lg hover:bg-[var(--color-bg-primary)] transition-all duration-200">
                             <input
                                 type="checkbox"
                                 checked={includeDescription}
                                 onChange={(e) => setIncludeDescription(e.target.checked)}
-                                className="w-4 h-4 text-[var(--color-accent)] bg-[var(--color-bg-tertiary)] border-[var(--color-border-primary)] rounded focus:ring-[var(--color-accent)]"
+                                className="w-4 h-4 text-[var(--color-accent)] bg-white border-2 border-[var(--color-border-primary)] rounded focus:ring-2 focus:ring-[var(--color-accent)]/20 transition-all duration-200 cursor-pointer"
                             />
                             <span className="text-sm text-[var(--color-text-primary)] font-mono group-hover:text-[var(--color-accent)] transition-colors duration-200">Include descriptions</span>
                         </label>
 
-                        <label className="flex items-center gap-2.5 cursor-pointer group">
+                        <label className="flex items-center gap-2.5 cursor-pointer group p-2 rounded-lg hover:bg-[var(--color-bg-primary)] transition-all duration-200">
                             <input
                                 type="checkbox"
                                 checked={includeIssueKey}
                                 onChange={(e) => setIncludeIssueKey(e.target.checked)}
-                                className="w-4 h-4 text-[var(--color-accent)] bg-[var(--color-bg-tertiary)] border-[var(--color-border-primary)] rounded focus:ring-[var(--color-accent)]"
+                                className="w-4 h-4 text-[var(--color-accent)] bg-white border-2 border-[var(--color-border-primary)] rounded focus:ring-2 focus:ring-[var(--color-accent)]/20 transition-all duration-200 cursor-pointer"
                             />
                             <span className="text-sm text-[var(--color-text-primary)] font-mono group-hover:text-[var(--color-accent)] transition-colors duration-200">Include issue key</span>
                         </label>
@@ -262,16 +264,16 @@ export function ExportDialog({ entries, buckets, onClose, onExport }: ExportDial
                                 value={issueKey}
                                 onChange={(e) => setIssueKey(e.target.value)}
                                 placeholder="Default issue key (e.g., PROJ-123)"
-                                className="w-full bg-[var(--color-bg-tertiary)] border border-[var(--color-border-primary)] text-[var(--color-text-primary)] text-sm rounded-lg px-4 py-2.5 font-mono focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] mt-2 transition-all duration-200"
+                                className="w-full bg-white border-2 border-[var(--color-border-primary)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] text-sm rounded-lg px-4 py-2.5 font-mono focus:outline-none focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-accent)]/20 hover:border-[var(--color-border-secondary)] mt-2 transition-all duration-200"
                             />
                         )}
                     </div>
 
                     {/* Preview */}
-                    <div className="bg-[var(--color-bg-tertiary)] rounded-xl p-4 border border-[var(--color-border-secondary)]">
-                        <div className="text-[10px] text-[var(--color-text-tertiary)] uppercase tracking-wider mb-1.5 font-['Syne'] font-bold">Export Preview</div>
+                    <div className="bg-[var(--color-accent-muted)] rounded-xl p-4 border-2 border-[var(--color-accent-border)]">
+                        <div className="text-[10px] text-[var(--color-text-secondary)] uppercase tracking-wider mb-1.5 font-bold" style={{ fontFamily: 'var(--font-display)' }}>Export Preview</div>
                         <div className="text-sm text-[var(--color-text-primary)] font-mono">
-                            <span className="text-[var(--color-accent)] font-bold">{filteredCount}</span> {filteredCount === 1 ? 'activity' : 'activities'} will be exported
+                            <span className="text-[var(--color-accent)] font-bold text-lg">{filteredCount}</span> {filteredCount === 1 ? 'activity' : 'activities'} will be exported
                         </div>
                     </div>
                 </div>
@@ -281,14 +283,14 @@ export function ExportDialog({ entries, buckets, onClose, onExport }: ExportDial
                     <button
                         onClick={onClose}
                         disabled={isExporting}
-                        className="flex-1 px-4 py-2.5 bg-[var(--color-bg-tertiary)] hover:bg-[var(--color-bg-quaternary)] text-[var(--color-text-primary)] text-sm font-medium rounded-full transition-all duration-200 disabled:opacity-50 hover:scale-105 active:scale-95 border border-[var(--color-border-primary)]"
+                        className="flex-1 px-4 py-2.5 bg-white hover:bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] text-sm font-medium rounded-full transition-all duration-200 disabled:opacity-50 hover:scale-105 active:scale-95 border-2 border-[var(--color-border-primary)] hover:border-[var(--color-text-secondary)]"
                     >
                         Cancel
                     </button>
                     <button
                         onClick={handleExport}
                         disabled={isExporting || filteredCount === 0}
-                        className="flex-1 px-4 py-2.5 bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white text-sm font-semibold rounded-full transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 hover:scale-105 active:scale-95 shadow-lg hover:shadow-[var(--shadow-accent)]"
+                        className="flex-1 px-4 py-2.5 bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white text-sm font-semibold rounded-full transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 hover:scale-105 active:scale-95 shadow-lg hover:shadow-[var(--shadow-accent-lg)]"
                     >
                         {isExporting ? (
                             <>
