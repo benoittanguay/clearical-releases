@@ -1,0 +1,245 @@
+/* Split-Flap Display Component Styles */
+/* Mimics classic mechanical train station departure boards */
+
+.split-flap-display {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'JetBrains Mono', 'Courier New', monospace;
+  font-weight: 600;
+  user-select: none;
+}
+
+.split-flap-container {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Individual digit container */
+.split-flap-digit {
+  position: relative;
+  display: inline-block;
+  background: #1a1a1a;
+  border-radius: 4px;
+  box-shadow:
+    0 2px 4px rgba(0, 0, 0, 0.3),
+    inset 0 1px 2px rgba(255, 255, 255, 0.1),
+    inset 0 -1px 2px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+  perspective: 400px;
+}
+
+/* Size variants */
+.split-flap-display--small .split-flap-digit {
+  width: 24px;
+  height: 36px;
+  font-size: 20px;
+  line-height: 18px;
+  border-radius: 3px;
+}
+
+.split-flap-display--medium .split-flap-digit {
+  width: 36px;
+  height: 54px;
+  font-size: 32px;
+  line-height: 27px;
+  border-radius: 4px;
+}
+
+.split-flap-display--large .split-flap-digit {
+  width: 48px;
+  height: 72px;
+  font-size: 42px;
+  line-height: 36px;
+  border-radius: 6px;
+}
+
+/* Half sections of the flap */
+.flap-half {
+  position: absolute;
+  width: 100%;
+  height: 50%;
+  overflow: hidden;
+  background: #1a1a1a;
+  backface-visibility: hidden;
+}
+
+.flap-top {
+  top: 0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.5);
+  border-radius: 4px 4px 0 0;
+}
+
+.flap-bottom {
+  bottom: 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 0 0 4px 4px;
+}
+
+/* Size-specific border radius */
+.split-flap-display--small .flap-top {
+  border-radius: 3px 3px 0 0;
+}
+
+.split-flap-display--small .flap-bottom {
+  border-radius: 0 0 3px 3px;
+}
+
+.split-flap-display--large .flap-top {
+  border-radius: 6px 6px 0 0;
+}
+
+.split-flap-display--large .flap-bottom {
+  border-radius: 0 0 6px 6px;
+}
+
+/* Digit content positioning */
+.flap-content {
+  position: absolute;
+  width: 100%;
+  text-align: center;
+  color: #f5f5f5;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+}
+
+.flap-content-top {
+  bottom: 0;
+}
+
+.flap-content-bottom {
+  top: 0;
+}
+
+/* The visible split line in the middle */
+.flap-split-line {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0.6) 0%,
+    rgba(0, 0, 0, 0.8) 50%,
+    rgba(0, 0, 0, 0.6) 100%
+  );
+  transform: translateY(-1px);
+  z-index: 10;
+  pointer-events: none;
+}
+
+/* Animated flipping top half */
+.flap-flip-top {
+  z-index: 20;
+  animation: flipDown 400ms ease-out forwards;
+  transform-origin: bottom;
+}
+
+/* Animated flipping bottom half */
+.flap-flip-bottom {
+  z-index: 5;
+  animation: flipUp 400ms ease-out forwards;
+  transform-origin: top;
+  opacity: 0;
+}
+
+@keyframes flipDown {
+  0% {
+    transform: rotateX(0deg);
+  }
+  100% {
+    transform: rotateX(-90deg);
+    opacity: 0;
+  }
+}
+
+@keyframes flipUp {
+  0% {
+    transform: rotateX(90deg);
+    opacity: 0;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    transform: rotateX(0deg);
+    opacity: 1;
+  }
+}
+
+/* Colon separator */
+.split-flap-separator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #f5f5f5;
+  font-weight: 700;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+  margin: 0 2px;
+}
+
+.split-flap-display--small .split-flap-separator {
+  font-size: 20px;
+  margin: 0 1px;
+}
+
+.split-flap-display--medium .split-flap-separator {
+  font-size: 32px;
+  margin: 0 2px;
+}
+
+.split-flap-display--large .split-flap-separator {
+  font-size: 42px;
+  margin: 0 3px;
+}
+
+/* Add subtle shine effect on top half for realism */
+.flap-top::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 50%;
+  background: linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0.08) 0%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  pointer-events: none;
+}
+
+/* Add subtle shadow on bottom half for depth */
+.flap-bottom::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 50%;
+  background: linear-gradient(
+    to top,
+    rgba(0, 0, 0, 0.3) 0%,
+    rgba(0, 0, 0, 0) 100%
+  );
+  pointer-events: none;
+}
+
+/* Respect user's motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  .flap-flip-top,
+  .flap-flip-bottom {
+    animation: none;
+    transition: opacity 150ms ease-out;
+  }
+
+  .flap-flip-top {
+    opacity: 0;
+  }
+
+  .flap-flip-bottom {
+    opacity: 1;
+    transform: none;
+  }
+}

@@ -17,6 +17,7 @@ import { IntegrationConfigModal } from './components/IntegrationConfigModal';
 import { UpdateNotification } from './components/UpdateNotification';
 import { UpdateSuccessModal } from './components/UpdateSuccessModal';
 import { PermissionRequestModal } from './components/PermissionRequestModal';
+import { SplitFlapDisplay } from './components/SplitFlapDisplay';
 import type { WorkAssignment } from './context/StorageContext';
 import './App.css'
 
@@ -586,20 +587,9 @@ function App() {
                 />
               </div>
 
-              {/* Timer Display - Prominent and clean */}
+              {/* Timer Display - Split-flap display */}
               <div className="relative mb-16">
-                <div
-                  className="tabular-nums transition-all duration-300"
-                  style={{
-                    fontSize: 'var(--text-timer)',
-                    fontFamily: 'var(--font-mono)',
-                    fontWeight: 'var(--font-bold)',
-                    letterSpacing: 'var(--tracking-tight)',
-                    color: isPaused ? 'var(--color-warning)' : 'var(--color-accent)'
-                  }}
-                >
-                  {formatTime(elapsed)}
-                </div>
+                <SplitFlapDisplay value={formatTime(elapsed)} size="large" />
                 {isPaused && (
                   <div className="absolute -top-10 left-1/2 transform -translate-x-1/2 animate-fade-in">
                     <div style={{

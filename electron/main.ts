@@ -149,9 +149,14 @@ function formatTime(ms: number): string {
     return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
 }
 
+// Animation frames for the running timer indicator (braille spinner for smooth animation)
+const spinnerFrames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+let spinnerFrameIndex = 0;
+
 /**
  * Update the tray title based on current timer state.
  * This runs in the main process and is not affected by renderer throttling.
+ * Includes a rotating spinner animation when timer is running for visual interest.
  */
 function updateTrayTitle(): void {
     if (!tray) return;
@@ -161,9 +166,14 @@ function updateTrayTitle(): void {
         const elapsed = Date.now() - timerState.startTime;
         const formattedTime = formatTime(elapsed);
         const monoTime = toMonospaceDigits(formattedTime);
-        currentTimerText = monoTime;
+
+        // Animate spinner for visual feedback that timer is running
+        const spinner = spinnerFrames[spinnerFrameIndex % spinnerFrames.length];
+        spinnerFrameIndex++;
+
+        currentTimerText = `${spinner} ${monoTime}`;
         if (process.platform === 'darwin') {
-            tray.setTitle(monoTime);
+            tray.setTitle(`${spinner} ${monoTime}`);
         }
     } else if (timerState.isPaused) {
         // Show paused state with last elapsed time
@@ -174,8 +184,9 @@ function updateTrayTitle(): void {
             tray.setTitle(`⏸ ${monoTime}`);
         }
     } else {
-        // Timer stopped - clear title
+        // Timer stopped - clear title and reset spinner
         currentTimerText = '';
+        spinnerFrameIndex = 0;
         if (process.platform === 'darwin') {
             tray.setTitle('');
         }
