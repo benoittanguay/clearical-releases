@@ -656,13 +656,20 @@ function App() {
                   }}
                 >
                   {isRunning ? (
-                    <span className="flex items-center gap-2">
+                    <span className="flex items-center justify-center gap-2">
                       <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="white" stroke="none">
                         <rect x="6" y="6" width="12" height="12" rx="2" />
                       </svg>
                       STOP
                     </span>
-                  ) : 'START'}
+                  ) : (
+                    <span className="flex items-center justify-center gap-2">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="white" stroke="none">
+                        <polygon points="5 3 19 12 5 21 5 3" />
+                      </svg>
+                      START
+                    </span>
+                  )}
                 </button>
 
                 {/* Pause/Resume button - always takes up space to prevent layout shift */}
@@ -708,8 +715,15 @@ function App() {
                     }
                   }}
                 >
-                  {isPaused ? 'RESUME' : (
-                    <span className="flex items-center gap-2">
+                  {isPaused ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="white" stroke="none">
+                        <polygon points="5 3 19 12 5 21 5 3" />
+                      </svg>
+                      RESUME
+                    </span>
+                  ) : (
+                    <span className="flex items-center justify-center gap-2">
                       <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="white" stroke="none">
                         <rect x="6" y="4" width="4" height="16" rx="1" />
                         <rect x="14" y="4" width="4" height="16" rx="1" />

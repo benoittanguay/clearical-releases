@@ -195,14 +195,10 @@ function formatTime(ms: number): string {
     return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
 }
 
-// Animation frames for the running timer indicator (braille spinner for smooth animation)
-const spinnerFrames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
-let spinnerFrameIndex = 0;
 
 /**
  * Update the tray title based on current timer state.
  * This runs in the main process and is not affected by renderer throttling.
- * Includes a rotating spinner animation when timer is running for visual interest.
  *
  * FONT STYLING: Uses Electron's native `monospacedDigit` fontType option (macOS 10.11+)
  * which provides true system-level monospace digits. This is superior to Unicode
@@ -225,18 +221,14 @@ function updateTrayTitle(): void {
         const elapsed = Date.now() - timerState.startTime;
         const formattedTime = formatTime(elapsed);
 
-        // Animate spinner for visual feedback that timer is running
-        const spinner = spinnerFrames[spinnerFrameIndex % spinnerFrames.length];
-        spinnerFrameIndex++;
-
         // Apply color styling (may be overridden by system theme)
         const styledTime = styleTimerText(formattedTime);
-        currentTimerText = `${spinner} ${formattedTime}`;
+        currentTimerText = formattedTime;
 
         if (process.platform === 'darwin') {
             // Use native monospacedDigit font for perfect digit alignment
             // This leverages SF Mono on macOS 10.11+ for professional appearance
-            tray.setTitle(`${spinner} ${styledTime}`, {
+            tray.setTitle(styledTime, {
                 fontType: 'monospacedDigit'
             });
         }
@@ -252,9 +244,8 @@ function updateTrayTitle(): void {
             });
         }
     } else {
-        // Timer stopped - clear title and reset spinner
+        // Timer stopped - clear title
         currentTimerText = '';
-        spinnerFrameIndex = 0;
         if (process.platform === 'darwin') {
             tray.setTitle('');
         }
