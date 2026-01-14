@@ -98,9 +98,11 @@ npm run build:electron 2>&1 | tail -20
 echo "  ✓ Electron build complete"
 
 
-# Step 4: Check code signing
+# Step 4: Sign all embedded binaries (inside-out signing)
+# electron-builder doesn't sign extraResources, so we must sign fastvlm-server binaries manually.
+# Important: Must sign in correct order (innermost binaries first, then frameworks, then helpers, then main app)
 echo ""
-echo -e "${BLUE}Step 4: Checking code signature...${NC}"
+echo -e "${BLUE}Step 4: Signing embedded binaries...${NC}"
 APP_PATH="dist/mac-arm64/Clearical.app"
 
 if [ ! -d "$APP_PATH" ]; then
@@ -108,10 +110,72 @@ if [ ! -d "$APP_PATH" ]; then
     exit 1
 fi
 
-# Show signature details (don't fail on verification errors, notarization will catch real issues)
+IDENTITY="Developer ID Application: Benoit Tanguay (98UY743MSB)"
+ENTITLEMENTS="build/entitlements.mac.plist"
+FASTVLM_PATH="$APP_PATH/Contents/Resources/fastvlm-server"
+FRAMEWORKS="$APP_PATH/Contents/Frameworks"
+
+# Step 4a: Sign all individual binaries (.so, .dylib, .node files) in the entire app bundle
+echo "  Signing individual binaries..."
+find "$APP_PATH" -type f -name "*.so" -exec codesign --force --options runtime --timestamp --sign "$IDENTITY" {} \; 2>/dev/null
+find "$APP_PATH" -type f -name "*.dylib" -exec codesign --force --options runtime --timestamp --sign "$IDENTITY" {} \; 2>/dev/null
+find "$APP_PATH" -type f -name "*.node" -exec codesign --force --options runtime --timestamp --sign "$IDENTITY" {} \; 2>/dev/null
+echo "  ✓ Signed .so, .dylib, and .node files"
+
+# Step 4b: Sign Python framework inside fastvlm-server (if exists)
+PYTHON_FW="$FASTVLM_PATH/_internal/Python3.framework"
+if [ -d "$PYTHON_FW" ]; then
+    echo "  Signing Python framework..."
+    codesign --force --options runtime --timestamp --sign "$IDENTITY" "$PYTHON_FW/Versions/3.9/Python3" 2>/dev/null || true
+    codesign --force --options runtime --timestamp --sign "$IDENTITY" "$PYTHON_FW" 2>/dev/null || true
+    echo "  ✓ Python framework signed"
+fi
+
+# Step 4c: Sign fastvlm-server executable
+if [ -d "$FASTVLM_PATH" ]; then
+    echo "  Signing fastvlm-server executable..."
+    codesign --force --options runtime --timestamp --entitlements "$ENTITLEMENTS" \
+        --sign "$IDENTITY" "$FASTVLM_PATH/fastvlm-server"
+    echo "  ✓ fastvlm-server signed"
+fi
+
+# Step 4d: Re-sign all Electron frameworks (their internal dylibs were modified)
+echo "  Re-signing Electron frameworks..."
+for fw in "$FRAMEWORKS"/*.framework; do
+    if [ -d "$fw" ]; then
+        codesign --force --options runtime --timestamp --sign "$IDENTITY" "$fw" 2>/dev/null || true
+    fi
+done
+echo "  ✓ Frameworks signed"
+
+# Step 4e: Re-sign all Electron helper apps
+echo "  Re-signing helper apps..."
+for helper in "$FRAMEWORKS"/*.app; do
+    if [ -d "$helper" ]; then
+        codesign --force --options runtime --timestamp --entitlements "$ENTITLEMENTS" --sign "$IDENTITY" "$helper" 2>/dev/null || true
+    fi
+done
+echo "  ✓ Helper apps signed"
+
+# Step 4f: Sign the main app bundle (must be last)
+echo "  Signing main app bundle..."
+codesign --force --options runtime --timestamp --entitlements "$ENTITLEMENTS" \
+    --sign "$IDENTITY" "$APP_PATH"
+echo "  ✓ Main app signed"
+
+# Step 4g: Verify the signature
+echo "  Verifying deep signature..."
+if codesign --verify --deep --strict "$APP_PATH" 2>&1; then
+    echo "  ✓ Deep signature verification passed"
+else
+    echo -e "${RED}  ✗ Deep signature verification failed${NC}"
+    codesign -vvv "$APP_PATH" 2>&1 | grep -E "(missing|invalid|modified)" | head -5 | sed 's/^/    /'
+    exit 1
+fi
+
+# Show signature details
 echo "  Signature details:"
-codesign -dvvv "$APP_PATH" 2>&1 | grep -E "(Identifier|Signature|flags|Authority)" | head -5 | sed 's/^/    /'
-echo "  ✓ App is signed"
+codesign -dvvv "$APP_PATH" 2>&1 | grep -E "(Identifier|Authority|TeamIdentifier|flags)" | head -5 | sed 's/^/    /'
 
 # Step 5: Rebuild DMG with signed app
 echo ""
