@@ -27,11 +27,5 @@
     <!-- File access -->
     <key>com.apple.security.files.user-selected.read-write</key>
     <true/>
-
-    <!-- Keychain access for credential storage -->
-    <key>keychain-access-groups</key>
-    <array>
-        <string>$(AppIdentifierPrefix)io.clearical.timeportal</string>
-    </array>
 </dict>
 </plist>
