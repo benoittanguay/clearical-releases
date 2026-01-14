@@ -2515,8 +2515,8 @@ function createWindow() {
     const preloadPath = path.join(__dirname, 'preload.cjs');
     console.log('[Main] Preload Path:', preloadPath);
     win = new BrowserWindow({
-        width: 640,
-        height: 450,
+        width: 520,
+        height: 660,
         show: false, // Don't show immediately - we'll position and show after tray is ready
         frame: false,
         resizable: true,

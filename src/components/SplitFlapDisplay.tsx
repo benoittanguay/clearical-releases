@@ -71,10 +71,12 @@ export const SplitFlapDigit: React.FC<SplitFlapDigitProps> = ({ digit, prevDigit
         </div>
       </div>
 
-      {/* Static bottom half - shows CURRENT digit bottom (always in sync with top) */}
+      {/* Static bottom half - shows OLD digit during flip, NEW digit when static */}
+      {/* IMPORTANT: Stays VISIBLE during animation showing prevDigit */}
+      {/* The animated bottom flap will rotate down and cover this */}
       <div className="flap-half flap-bottom-static">
         <div className="flap-content flap-content-bottom">
-          {digit}
+          {isFlipping ? prevDigit : digit}
         </div>
       </div>
 

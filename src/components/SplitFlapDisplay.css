@@ -158,8 +158,11 @@
   border-radius: 0 0 4px 4px;
   z-index: 40; /* INCREASED: Must be above static flaps and visible during animation */
 
-  /* Same background as static flaps - no orange tint */
+  /* SOLID opaque background - must cover the static bottom beneath it */
   background: #1a1a1a;
+
+  /* Ensure this flap is fully opaque and covers what's beneath */
+  opacity: 1;
 
   /* Transform origin at top center - this is where the hinge is */
   transform-origin: center top;
@@ -233,11 +236,12 @@
  * Enhanced with dramatic shadows and brightness for visibility
  * NOW WITH translateZ for actual 3D depth during rotation!
  * NEUTRAL SHADOWS - no orange coloring
+ * IMPORTANT: opacity stays at 1.0 throughout - this flap must cover the static bottom
  */
 @keyframes flipBottomUp {
   0% {
     transform: rotateX(90deg) translateZ(0px);
-    opacity: 0.5; /* MORE VISIBLE from start */
+    opacity: 1; /* FULLY OPAQUE - must cover what's beneath */
     filter: brightness(0.9);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6), 0 2px 8px rgba(0, 0, 0, 0.5);
   }
@@ -245,7 +249,7 @@
   /* DRAMATIC fade in as it emerges from behind top flap */
   15% {
     transform: rotateX(67.5deg) translateZ(10px);
-    opacity: 0.85;
+    opacity: 1; /* FULLY OPAQUE - must cover what's beneath */
     filter: brightness(1.2);
     box-shadow: 0 8px 20px rgba(0, 0, 0, 0.75), 0 6px 16px rgba(0, 0, 0, 0.7);
   }
@@ -253,7 +257,7 @@
   /* Mid-point with enhanced shadow - MAX Z-depth! */
   40% {
     transform: rotateX(45deg) translateZ(12px);
-    opacity: 1;
+    opacity: 1; /* FULLY OPAQUE - must cover what's beneath */
     filter: brightness(1.4); /* VERY BRIGHT */
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.85), 0 8px 20px rgba(0, 0, 0, 0.8);
   }
@@ -261,7 +265,7 @@
   /* PEAK brightness as it approaches final position */
   70% {
     transform: rotateX(22.5deg) translateZ(8px);
-    opacity: 1;
+    opacity: 1; /* FULLY OPAQUE - must cover what's beneath */
     filter: brightness(1.5); /* MAXIMUM BRIGHTNESS */
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.8), 0 6px 16px rgba(0, 0, 0, 0.7);
   }
@@ -269,7 +273,7 @@
   /* Final position - still bright, slight overshoot handled by cubic-bezier */
   100% {
     transform: rotateX(0deg) translateZ(1px);
-    opacity: 1;
+    opacity: 1; /* FULLY OPAQUE - must cover what's beneath */
     filter: brightness(1.2); /* BRIGHTER END STATE */
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6), 0 2px 8px rgba(0, 0, 0, 0.5);
   }
