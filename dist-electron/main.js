@@ -1,5 +1,4 @@
 import { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, systemPreferences, shell, desktopCapturer, dialog } from 'electron';
-import { spawn } from 'child_process';
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
@@ -577,11 +576,10 @@ ipcMain.handle('capture-screenshot', async () => {
     }
     return null;
 });
-// Primary: FastVLM Python server for VLM analysis
-// Fallback: Swift Vision Framework + on-device AI
+// FastVLM Python server for VLM analysis
 ipcMain.handle('analyze-screenshot', async (event, imagePath, requestId) => {
     console.log('[Main] analyze-screenshot requested for:', imagePath);
-    console.log('[Main] Using FastVLM backend with Swift fallback');
+    console.log('[Main] Using FastVLM backend for screenshot analysis');
     // Check if the image file exists
     if (!fs.existsSync(imagePath)) {
         console.log('[Main] analyze-screenshot: Image file not found:', imagePath);
@@ -693,17 +691,21 @@ ipcMain.handle('analyze-screenshot', async (event, imagePath, requestId) => {
             };
         }
         else {
+            // FastVLM analysis failed - return error with fallback description
             console.warn('[Main] FastVLM analysis failed:', fastVLMResult.error);
-            console.log('[Main] Falling back to Swift analyzer...');
+            const fallbackDescription = generateFallbackFromFilename(imagePath);
+            return {
+                success: false,
+                error: fastVLMResult.error || 'FastVLM analysis failed',
+                description: fallbackDescription,
+                rawVisionData: null,
+                aiDescription: null,
+                analyzer: 'fallback'
+            };
         }
     }
     catch (fastVLMError) {
         console.error('[Main] FastVLM error:', fastVLMError);
-        console.log('[Main] Falling back to Swift analyzer...');
-    }
-    // FALLBACK TO SWIFT ANALYZER
-    if (process.platform !== 'darwin') {
-        console.log('[Main] analyze-screenshot: Not macOS, Swift fallback not available');
         // Clean up temp decrypted file if we created one
         if (tempDecryptedPath) {
             try {
@@ -713,153 +715,11 @@ ipcMain.handle('analyze-screenshot', async (event, imagePath, requestId) => {
                 console.warn('[Main] Failed to cleanup temp file:', cleanupError);
             }
         }
-        return {
-            success: false,
-            error: 'Analysis not available: FastVLM not running and not on macOS',
-            description: generateFallbackFromFilename(imagePath),
-            rawVisionData: null,
-            aiDescription: null
-        };
-    }
-    // Path to our Swift helper - relative to app root
-    const helperPath = app.isPackaged
-        ? path.join(process.resourcesPath, 'screenshot-analyzer')
-        : path.join(app.getAppPath(), 'native', 'screenshot-analyzer', 'build', 'screenshot-analyzer');
-    console.log('[Main] Looking for Swift helper at:', helperPath);
-    // Check if the helper exists
-    if (!fs.existsSync(helperPath)) {
-        console.log('[Main] analyze-screenshot: Swift helper not found at:', helperPath);
-        // Clean up temp decrypted file if we created one
-        if (tempDecryptedPath) {
-            try {
-                await fs.promises.unlink(tempDecryptedPath);
-            }
-            catch (cleanupError) {
-                console.warn('[Main] Failed to cleanup temp file:', cleanupError);
-            }
-        }
-        return {
-            success: false,
-            error: 'Swift helper not found. Run: cd native/screenshot-analyzer && ./build.sh',
-            description: generateFallbackFromFilename(imagePath),
-            rawVisionData: null,
-            aiDescription: null
-        };
-    }
-    try {
-        // STAGE 1: Vision Framework Extraction (Swift)
-        console.log('[Main] Stage 1: Running Vision Framework extraction...');
-        const visionResult = await new Promise((resolve, reject) => {
-            const child = spawn(helperPath, [], {
-                stdio: ['pipe', 'pipe', 'pipe']
-            });
-            let stdout = '';
-            let stderr = '';
-            child.stdout.on('data', (data) => {
-                stdout += data.toString();
-            });
-            child.stderr.on('data', (data) => {
-                stderr += data.toString();
-            });
-            child.on('close', (code) => {
-                if (code === 0) {
-                    try {
-                        const response = JSON.parse(stdout.trim());
-                        resolve(response);
-                    }
-                    catch (parseError) {
-                        console.error('[Main] Failed to parse Swift helper response:', stdout);
-                        reject(new Error(`Failed to parse response: ${parseError}`));
-                    }
-                }
-                else {
-                    console.error('[Main] Swift helper failed with code:', code);
-                    console.error('[Main] stderr:', stderr);
-                    reject(new Error(`Helper exited with code ${code}: ${stderr}`));
-                }
-            });
-            child.on('error', (error) => {
-                console.error('[Main] Failed to spawn Swift helper:', error);
-                reject(error);
-            });
-            // Send the request as JSON to stdin
-            // Use analyzeImagePath which is either the original or decrypted temp file
-            const request = {
-                imagePath: analyzeImagePath,
-                requestId: requestId || null
-            };
-            child.stdin.write(JSON.stringify(request) + '\n');
-            child.stdin.end();
-        });
-        // Clean up temp decrypted file if we created one
-        if (tempDecryptedPath) {
-            try {
-                await fs.promises.unlink(tempDecryptedPath);
-                console.log('[Main] Cleaned up temp decrypted file');
-            }
-            catch (cleanupError) {
-                console.warn('[Main] Failed to cleanup temp file:', cleanupError);
-            }
-        }
-        console.log('[Main] Stage 1 complete - Vision Framework extraction successful');
-        console.log('[Main] Extracted:', {
-            textItems: visionResult.detectedText?.length || 0,
-            objects: visionResult.objects?.length || 0,
-            hasExtraction: !!visionResult.extraction,
-            confidence: visionResult.confidence
-        });
-        // Prepare raw Vision data for response
-        const rawVisionData = {
-            confidence: visionResult.confidence,
-            detectedText: visionResult.detectedText,
-            objects: visionResult.objects,
-            extraction: visionResult.extraction
-        };
-        // STAGE 2: On-device AI narrative (already generated by Swift)
-        // The Swift analyzer now includes intelligent narrative generation using
-        // Apple's NaturalLanguage framework combined with advanced heuristics
-        // Use Swift description if meaningful, otherwise generate from filename
-        let aiDescription = visionResult.description;
-        if (!aiDescription || aiDescription.length < 10 || aiDescription === 'Screenshot captured') {
-            console.log('[Main] Swift description empty/generic, using filename fallback');
-            aiDescription = generateFallbackFromFilename(imagePath);
-        }
-        console.log('[Main] Stage 2 complete - On-device AI narrative generated');
-        console.log('[Main] Description length:', aiDescription.length, 'characters');
-        console.log('[Main] Final description:', aiDescription);
-        // Return both raw Vision data AND AI-generated description
-        return {
-            success: true,
-            // The description field now contains the on-device AI-generated narrative
-            description: aiDescription,
-            confidence: visionResult.confidence,
-            detectedText: visionResult.detectedText,
-            objects: visionResult.objects,
-            extraction: visionResult.extraction,
-            requestId: visionResult.requestId,
-            // Separate fields for two-stage architecture
-            rawVisionData: rawVisionData,
-            aiDescription: aiDescription,
-            llmError: null, // No external LLM, so no errors
-            analyzer: 'swift' // Indicate which analyzer was used
-        };
-    }
-    catch (error) {
-        console.error('[Main] Swift analyzer failed:', error);
-        // Clean up temp decrypted file if we created one
-        if (tempDecryptedPath) {
-            try {
-                await fs.promises.unlink(tempDecryptedPath);
-            }
-            catch (cleanupError) {
-                console.warn('[Main] Failed to cleanup temp file:', cleanupError);
-            }
-        }
-        // Generate fallback from filename even on error
+        // Generate fallback from filename
         const fallbackDescription = generateFallbackFromFilename(imagePath);
         return {
             success: false,
-            error: error instanceof Error ? error.message : 'Unknown error',
+            error: fastVLMError instanceof Error ? fastVLMError.message : 'Unknown error',
             description: fallbackDescription,
             rawVisionData: null,
             aiDescription: null,
@@ -2679,12 +2539,15 @@ function createWindow() {
     // Position window off-screen initially to prevent flash at (0,0)
     // This prevents the window from appearing in lower-left corner before repositioning
     win.setPosition(-9999, -9999);
-    if (!app.isPackaged) {
+    // In test mode or production, load from built files
+    // In development (not test), load from Vite dev server
+    const isTestMode = process.env.NODE_ENV === 'test';
+    if (!app.isPackaged && !isTestMode) {
         win.loadURL('http://127.0.0.1:5173');
         // win.webContents.openDevTools({ mode: 'detach' });
     }
     else {
-        // Use loadFile for production - it has built-in asar support
+        // Use loadFile for production/test - it has built-in asar support
         // Electron's loadFile() correctly handles files inside asar archives
         const indexPath = path.join(process.env.DIST || '', 'index.html');
         console.log('[Main] Loading index.html from:', indexPath);
