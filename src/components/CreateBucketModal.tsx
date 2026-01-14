@@ -64,7 +64,7 @@ export function CreateBucketModal({ isOpen, onClose, onCreateBucket, availableFo
             onClick={onClose}
         >
             <div
-                className="bg-[var(--color-bg-secondary)] rounded-[32px] w-full max-w-md mx-4 border border-[var(--color-border-primary)] shadow-2xl animate-scale-in max-h-[90vh] flex flex-col"
+                className="bg-[var(--color-bg-secondary)] rounded-[12px] w-full max-w-md mx-4 border border-[var(--color-border-primary)] shadow-2xl animate-scale-in max-h-[90vh] flex flex-col"
                 onClick={(e) => e.stopPropagation()}
             >
                 {/* Header */}

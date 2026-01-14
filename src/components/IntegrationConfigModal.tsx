@@ -202,7 +202,7 @@ export function IntegrationConfigModal({
 
     return (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 animate-fade-in">
-            <div className="bg-[var(--color-bg-secondary)] rounded-[32px] p-6 w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto border border-[var(--color-border-primary)] shadow-2xl animate-scale-in">
+            <div className="bg-[var(--color-bg-secondary)] rounded-[12px] p-6 w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto border border-[var(--color-border-primary)] shadow-2xl animate-scale-in">
                 <div className="flex justify-between items-center mb-4">
                     <h3 className="text-lg font-semibold text-[var(--color-text-primary)] font-['Syne']">Configure Time Tracking Integration</h3>
                     <button

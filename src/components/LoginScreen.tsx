@@ -75,17 +75,14 @@ export function LoginScreen() {
             <div className="w-full max-w-sm">
                 {/* Logo/Brand */}
                 <div className="text-center mb-8 animate-slide-down">
-                    <div
-                        className="w-20 h-20 mx-auto mb-5 flex items-center justify-center rounded-3xl shadow-lg"
+                    <img
+                        src="./icon.png"
+                        alt="Clearical"
+                        className="w-16 h-16 mx-auto mb-5 rounded-3xl"
                         style={{
-                            background: 'linear-gradient(135deg, var(--color-accent) 0%, var(--color-accent-light) 100%)',
                             boxShadow: 'var(--shadow-accent)'
                         }}
-                    >
-                        <svg className="w-11 h-11 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                    </div>
+                    />
                     <h1
                         className="text-3xl font-bold mb-2 text-gradient-accent"
                         style={{
@@ -187,7 +184,7 @@ export function LoginScreen() {
                                 className="w-full py-3.5 font-semibold rounded-full transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-60"
                                 style={{
                                     backgroundColor: 'var(--color-accent)',
-                                    color: 'white',
+                                    color: 'var(--color-text-inverse)',
                                     fontFamily: 'var(--font-display)',
                                     borderRadius: 'var(--radius-full)',
                                     boxShadow: 'var(--shadow-accent)'
@@ -315,7 +312,7 @@ export function LoginScreen() {
                                 className="w-full py-3.5 font-semibold rounded-full transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-60"
                                 style={{
                                     backgroundColor: 'var(--color-accent)',
-                                    color: 'white',
+                                    color: 'var(--color-text-inverse)',
                                     fontFamily: 'var(--font-display)',
                                     borderRadius: 'var(--radius-full)',
                                     boxShadow: 'var(--shadow-accent)'
@@ -402,7 +399,7 @@ export function LoginScreen() {
                 <div className="mt-8 text-center">
                     <p
                         className="text-xs leading-relaxed"
-                        style={{ color: 'var(--color-text-tertiary)' }}
+                        style={{ color: 'var(--color-text-secondary)' }}
                     >
                         By signing in, you agree to our{' '}
                         <button

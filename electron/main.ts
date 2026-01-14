@@ -2773,11 +2773,15 @@ function createWindow() {
     // This prevents the window from appearing in lower-left corner before repositioning
     win.setPosition(-9999, -9999);
 
-    if (!app.isPackaged) {
+    // In test mode or production, load from built files
+    // In development (not test), load from Vite dev server
+    const isTestMode = process.env.NODE_ENV === 'test';
+
+    if (!app.isPackaged && !isTestMode) {
         win.loadURL('http://127.0.0.1:5173');
         // win.webContents.openDevTools({ mode: 'detach' });
     } else {
-        // Use loadFile for production - it has built-in asar support
+        // Use loadFile for production/test - it has built-in asar support
         // Electron's loadFile() correctly handles files inside asar archives
         const indexPath = path.join(process.env.DIST || '', 'index.html');
         console.log('[Main] Loading index.html from:', indexPath);

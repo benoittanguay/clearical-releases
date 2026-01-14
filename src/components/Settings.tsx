@@ -11,10 +11,11 @@ import type { UpdateStatus } from '../types/electron';
 type PermissionStatus = 'not-determined' | 'granted' | 'denied' | 'restricted' | 'unknown' | 'stale';
 
 interface SettingsProps {
-    onOpenIntegrationModal?: () => void;
+    onOpenJiraModal?: () => void;
+    onOpenTempoModal?: () => void;
 }
 
-export function Settings({ onOpenIntegrationModal }: SettingsProps = {}) {
+export function Settings({ onOpenJiraModal, onOpenTempoModal }: SettingsProps = {}) {
     const { settings, updateSettings, resetSettings } = useSettings();
     const { subscription, hasFeature, upgrade, openCustomerPortal } = useSubscription();
     const { user, signOut } = useAuth();
@@ -29,9 +30,15 @@ export function Settings({ onOpenIntegrationModal }: SettingsProps = {}) {
     const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null);
     const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
 
-    const handleOpenIntegrationModal = () => {
-        if (onOpenIntegrationModal) {
-            onOpenIntegrationModal();
+    const handleOpenJiraModal = () => {
+        if (onOpenJiraModal) {
+            onOpenJiraModal();
+        }
+    };
+
+    const handleOpenTempoModal = () => {
+        if (onOpenTempoModal) {
+            onOpenTempoModal();
         }
     };
 
@@ -667,14 +674,24 @@ export function Settings({ onOpenIntegrationModal }: SettingsProps = {}) {
                         </span>
                     </div>
 
-                    {/* Configure or Upgrade Button */}
+                    {/* Configure or Upgrade Buttons */}
                     {hasJiraAccess || hasTempoAccess ? (
-                        <button
-                            onClick={handleOpenIntegrationModal}
-                            className="w-full px-3 py-1.5 bg-[var(--color-accent)] hover:bg-[var(--color-accent)]/90 text-white text-sm rounded-lg transition-all"
-                        >
-                            Configure Integration
-                        </button>
+                        <div className="grid grid-cols-2 gap-2">
+                            <button
+                                onClick={handleOpenJiraModal}
+                                disabled={!hasJiraAccess}
+                                className="px-3 py-1.5 bg-[var(--color-accent)] hover:bg-[var(--color-accent)]/90 disabled:bg-[var(--color-bg-tertiary)] disabled:text-[var(--color-text-tertiary)] disabled:cursor-not-allowed text-white text-sm rounded-lg transition-all"
+                            >
+                                Configure Jira
+                            </button>
+                            <button
+                                onClick={handleOpenTempoModal}
+                                disabled={!hasTempoAccess}
+                                className="px-3 py-1.5 bg-[var(--color-accent)] hover:bg-[var(--color-accent)]/90 disabled:bg-[var(--color-bg-tertiary)] disabled:text-[var(--color-text-tertiary)] disabled:cursor-not-allowed text-white text-sm rounded-lg transition-all"
+                            >
+                                Configure Tempo
+                            </button>
+                        </div>
                     ) : (
                         <button
                             onClick={handleUpgrade}

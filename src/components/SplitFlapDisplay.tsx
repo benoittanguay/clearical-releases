@@ -11,6 +11,10 @@ interface SplitFlapDisplayProps {
   size?: 'small' | 'medium' | 'large';
 }
 
+interface FlipClockContainerProps {
+  children: React.ReactNode;
+}
+
 /**
  * Custom hook to track previous value
  * Returns the value from the previous render
@@ -26,54 +30,75 @@ function usePrevious<T>(value: T): T | undefined {
 }
 
 /**
- * Single split-flap digit with mechanical flip animation
- * Uses CSS 3D transforms to create the classic train station display effect
+ * Single split-flap digit with realistic mechanical flip animation
+ *
+ * Animation mechanics:
+ * 1. Top flap (showing old digit top) flips DOWN from 0° to -90° (hinged at bottom)
+ * 2. Bottom flap (showing new digit bottom) flips UP from 90° to 0° (hinged at top)
+ * 3. Bottom flap starts after top flap passes ~45° for realism
+ * 4. Both use gravity-style easing with subtle bounce on bottom flap
  */
 export const SplitFlapDigit: React.FC<SplitFlapDigitProps> = ({ digit, prevDigit }) => {
   const [isFlipping, setIsFlipping] = useState(false);
-  const [currentDigit, setCurrentDigit] = useState(digit);
+  const [animationKey, setAnimationKey] = useState(0);
 
   useEffect(() => {
-    // Only animate if the digit actually changed and we have a previous digit
-    if (digit !== prevDigit && digit !== currentDigit) {
+    // Only animate if the digit actually changed
+    if (digit !== prevDigit) {
+      console.log(`🔄 FLIP TRIGGERED: "${prevDigit}" → "${digit}"`);
       setIsFlipping(true);
+      // Increment key to force new DOM elements and restart animation
+      setAnimationKey(prev => prev + 1);
 
-      // End animation and update display
-      const timer = setTimeout(() => {
-        setCurrentDigit(digit);
+      // End animation after total duration (600ms top + 300ms delay + 500ms bottom = 1400ms max)
+      const endTimer = setTimeout(() => {
+        console.log(`✅ FLIP COMPLETE: "${digit}"`);
         setIsFlipping(false);
-      }, 400);
+      }, 1400);
 
-      return () => clearTimeout(timer);
+      return () => {
+        clearTimeout(endTimer);
+      };
     }
-  }, [digit, prevDigit, currentDigit]);
+  }, [digit, prevDigit]);
 
   return (
     <div className="split-flap-digit">
-      {/* Static top half - shows previous digit top */}
-      <div className="flap-half flap-top">
+      {/* Static top half - shows CURRENT digit top (always in sync with bottom) */}
+      <div className="flap-half flap-top-static">
         <div className="flap-content flap-content-top">
-          {isFlipping ? prevDigit : currentDigit}
+          {digit}
         </div>
       </div>
 
-      {/* Static bottom half - shows current digit bottom */}
-      <div className="flap-half flap-bottom">
+      {/* Static bottom half - shows CURRENT digit bottom (always in sync with top) */}
+      <div className="flap-half flap-bottom-static">
         <div className="flap-content flap-content-bottom">
-          {currentDigit}
+          {digit}
         </div>
       </div>
 
-      {/* Animated flipping top half (flips down to reveal new digit) */}
+      {/* Animated top flap - flips DOWN from 0° to -90° (hinged at bottom) */}
+      {/* Shows the OLD digit flipping away */}
       {isFlipping && (
-        <div className="flap-half flap-top flap-flip-top">
+        <div key={`top-${animationKey}`} className="flap-half flap-top-animated">
           <div className="flap-content flap-content-top">
             {prevDigit}
           </div>
         </div>
       )}
 
-      {/* Center split line */}
+      {/* Animated bottom flap - flips UP from 90° to 0° (hinged at top) */}
+      {/* Shows the NEW digit flipping into place */}
+      {isFlipping && (
+        <div key={`bottom-${animationKey}`} className="flap-half flap-bottom-animated">
+          <div className="flap-content flap-content-bottom">
+            {digit}
+          </div>
+        </div>
+      )}
+
+      {/* Center split line for mechanical realism */}
       <div className="flap-split-line" />
     </div>
   );
@@ -124,6 +149,23 @@ export const SplitFlapDisplay: React.FC<SplitFlapDisplayProps> = ({
             />
           );
         })}
+      </div>
+    </div>
+  );
+};
+
+/**
+ * Container wrapper for the flip clock display
+ * Provides dark background, orange accent border, and glass-like bezel effect
+ * Similar to classic retro flip clocks with beveled housing
+ */
+export const FlipClockContainer: React.FC<FlipClockContainerProps> = ({ children }) => {
+  return (
+    <div className="flip-clock-container">
+      <div className="flip-clock-bezel">
+        <div className="flip-clock-inner">
+          {children}
+        </div>
       </div>
     </div>
   );

@@ -111,6 +111,11 @@ hiddenimports += [
     'mlx_lm.models.base',
     'mlx_lm.utils',
     'mlx_lm.tokenizer_utils',
+    # Ensure mlx_vlm and its dependencies are included
+    'mlx_vlm',
+    'mlx_vlm.models',
+    'mlx_vlm.utils',
+    'tqdm',  # Required by transformers
 ]
 
 # Collect local Python modules that need to be bundled
@@ -138,6 +143,10 @@ a = Analysis(
         'torch',
         'tensorflow',
         'jax',
+        # Exclude OpenCV - not used, only Pillow is used for image processing
+        'cv2',
+        'opencv-python',
+        'opencv-python-headless',
     ],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,

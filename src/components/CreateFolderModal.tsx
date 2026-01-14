@@ -46,7 +46,7 @@ export function CreateFolderModal({ isOpen, onClose, onCreateFolder, availableFo
             onClick={onClose}
         >
             <div
-                className="bg-[var(--color-bg-secondary)] rounded-[32px] p-6 w-full max-w-md mx-4 border border-[var(--color-border-primary)] shadow-2xl animate-scale-in"
+                className="bg-[var(--color-bg-secondary)] rounded-[12px] p-6 w-full max-w-md mx-4 border border-[var(--color-border-primary)] shadow-2xl animate-scale-in"
                 onClick={(e) => e.stopPropagation()}
             >
                 {/* Header */}

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useStorage } from '../context/StorageContext';
 import { useSettings } from '../context/SettingsContext';
+import type { JiraProject } from '../services/jiraService';
 
 interface OnboardingModalProps {
     isOpen: boolean;
@@ -25,12 +26,25 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
     const [selectedColor, setSelectedColor] = useState(BUCKET_COLORS[0].value);
     const [isTransitioning, setIsTransitioning] = useState(false);
     const { addBucket } = useStorage();
-    const { settings } = useSettings();
+    const { settings, updateSettings } = useSettings();
 
     // Permission states
     const [accessibilityGranted, setAccessibilityGranted] = useState<boolean | null>(null);
     const [screenRecordingGranted, setScreenRecordingGranted] = useState<boolean | null>(null);
     const [checkingPermissions, setCheckingPermissions] = useState(false);
+
+    // Jira configuration states
+    const [jiraBaseUrl, setJiraBaseUrl] = useState('');
+    const [jiraEmail, setJiraEmail] = useState('');
+    const [jiraApiToken, setJiraApiToken] = useState('');
+    const [showApiToken, setShowApiToken] = useState(false);
+    const [isTestingJira, setIsTestingJira] = useState(false);
+    const [jiraConnected, setJiraConnected] = useState(false);
+    const [showCredentials, setShowCredentials] = useState(true);
+    const [availableProjects, setAvailableProjects] = useState<JiraProject[]>([]);
+    const [selectedProjects, setSelectedProjects] = useState<string[]>([]);
+    const [loadingProjects, setLoadingProjects] = useState(false);
+    const [jiraError, setJiraError] = useState<string | null>(null);
 
     // Reset when modal opens
     useEffect(() => {
@@ -39,8 +53,16 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
             setBucketName('');
             setSelectedColor(BUCKET_COLORS[0].value);
             checkPermissions();
+            // Reset Jira states
+            setJiraBaseUrl(settings.jira?.baseUrl || '');
+            setJiraEmail(settings.jira?.email || '');
+            setJiraApiToken(settings.jira?.apiToken || '');
+            setJiraConnected(settings.jira?.enabled || false);
+            setSelectedProjects(settings.jira?.selectedProjects || []);
+            setAvailableProjects([]);
+            setJiraError(null);
         }
-    }, [isOpen]);
+    }, [isOpen, settings.jira]);
 
     // Periodically recheck permissions when on the permissions step
     useEffect(() => {
@@ -139,14 +161,90 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
         onClose();
     };
 
-    const handleSkipAll = () => {
-        localStorage.setItem('timeportal-onboarding-complete', 'true');
-        onClose();
+    // Test Jira connection
+    const handleTestJiraConnection = async () => {
+        if (!jiraBaseUrl || !jiraEmail || !jiraApiToken) {
+            setJiraError('Please fill in all Jira fields first.');
+            return;
+        }
+
+        setIsTestingJira(true);
+        setJiraError(null);
+        try {
+            const { JiraService } = await import('../services/jiraService');
+            const service = new JiraService(jiraBaseUrl, jiraEmail, jiraApiToken);
+            const isConnected = await service.testConnection();
+
+            if (isConnected) {
+                setJiraConnected(true);
+                setShowCredentials(false);
+                // Load available projects after successful connection
+                loadJiraProjects();
+            } else {
+                setJiraError('Connection failed. Please check your credentials and URL.');
+            }
+        } catch (error) {
+            setJiraError(`Connection failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        } finally {
+            setIsTestingJira(false);
+        }
     };
 
-    const handleConfigureJira = () => {
-        // Mark onboarding as complete and close
-        // Users can navigate to Settings > Time Tracking Integration to configure
+    // Load available Jira projects
+    const loadJiraProjects = async () => {
+        if (!jiraBaseUrl || !jiraEmail || !jiraApiToken) {
+            return;
+        }
+
+        setLoadingProjects(true);
+        try {
+            const { JiraService } = await import('../services/jiraService');
+            const service = new JiraService(jiraBaseUrl, jiraEmail, jiraApiToken);
+            const projects = await service.getProjects();
+            setAvailableProjects(projects);
+        } catch (error) {
+            console.error('Failed to load projects:', error);
+            setAvailableProjects([]);
+        } finally {
+            setLoadingProjects(false);
+        }
+    };
+
+    // Handle project toggle
+    const handleProjectToggle = (projectKey: string) => {
+        setSelectedProjects(prev => {
+            const isSelected = prev.includes(projectKey);
+            return isSelected
+                ? prev.filter(key => key !== projectKey)
+                : [...prev, projectKey];
+        });
+    };
+
+    // Select/clear all projects
+    const selectAllProjects = () => {
+        setSelectedProjects(availableProjects.map(p => p.key));
+    };
+
+    const clearAllProjects = () => {
+        setSelectedProjects([]);
+    };
+
+    // Save Jira settings and continue
+    const handleSaveJiraAndContinue = async () => {
+        if (jiraConnected) {
+            await updateSettings({
+                jira: {
+                    enabled: true,
+                    baseUrl: jiraBaseUrl,
+                    email: jiraEmail,
+                    apiToken: jiraApiToken,
+                    selectedProjects: selectedProjects,
+                    autoSync: true,
+                    syncInterval: 15,
+                    lastSyncTimestamp: 0
+                }
+            });
+        }
         localStorage.setItem('timeportal-onboarding-complete', 'true');
         onClose();
     };
@@ -157,7 +255,7 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
     return (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 animate-fade-in">
             <div
-                className="bg-[var(--color-bg-secondary)] rounded-[32px] shadow-2xl w-full max-w-2xl mx-4 border border-[var(--color-border-primary)] max-h-[90vh] flex flex-col"
+                className="bg-[var(--color-bg-secondary)] rounded-[12px] shadow-2xl w-full max-w-2xl mx-4 border border-[var(--color-border-primary)] max-h-[85vh] sm:max-h-[90vh] flex flex-col overflow-hidden"
                 style={{
                     animation: 'fadeInScale 0.3s ease-out',
                 }}
@@ -179,7 +277,7 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                     >
                         {/* Step 0: System Permissions */}
                         {currentStep === 0 && (
-                            <div className="p-8">
+                            <div className="p-6 sm:p-8">
                                 {/* Header */}
                                 <div className="text-center mb-8">
                                     <div className="inline-flex items-center justify-center w-16 h-16 bg-[var(--color-warning-muted)] rounded-2xl mb-4 shadow-lg">
@@ -317,13 +415,7 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                                 )}
 
                                 {/* Actions */}
-                                <div className="flex justify-between gap-3 pt-6 border-t border-[var(--color-border-primary)]">
-                                    <button
-                                        onClick={handleSkipAll}
-                                        className="px-5 py-2.5 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] text-sm font-medium transition-colors"
-                                    >
-                                        Skip Setup
-                                    </button>
+                                <div className="flex justify-end gap-3 pt-6 border-t border-[var(--color-border-primary)]">
                                     <button
                                         onClick={handleNext}
                                         className="px-6 py-2.5 bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white text-sm font-semibold rounded-full transition-all transform hover:scale-105 active:scale-95 shadow-lg"
@@ -336,7 +428,7 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
 
                         {/* Step 1: Create First Bucket */}
                         {currentStep === 1 && (
-                            <div className="p-8">
+                            <div className="p-6 sm:p-8">
                                 {/* Header */}
                                 <div className="text-center mb-8">
                                     <div className="inline-flex items-center justify-center w-16 h-16 bg-[var(--color-accent-muted)] rounded-2xl mb-4 shadow-lg">
@@ -414,61 +506,53 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                                 </div>
 
                                 {/* Actions */}
-                                <div className="flex justify-between gap-3 mt-8 pt-6 border-t border-[var(--color-border-primary)]">
+                                <div className="flex justify-end gap-3 mt-8 pt-6 border-t border-[var(--color-border-primary)]">
                                     <button
-                                        onClick={handleSkipAll}
-                                        className="px-5 py-2.5 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] text-sm font-medium transition-colors"
+                                        onClick={handleSkipBucket}
+                                        className="px-5 py-2.5 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] text-sm font-medium transition-colors rounded-lg hover:bg-[var(--color-bg-tertiary)]"
                                     >
-                                        Skip Setup
+                                        Skip
                                     </button>
-                                    <div className="flex gap-3">
-                                        <button
-                                            onClick={handleSkipBucket}
-                                            className="px-5 py-2.5 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] text-sm font-medium transition-colors rounded-lg hover:bg-[var(--color-bg-tertiary)]"
-                                        >
-                                            Skip
-                                        </button>
-                                        <button
-                                            onClick={handleCreateBucket}
-                                            disabled={!bucketName.trim()}
-                                            className="px-6 py-2.5 bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] disabled:bg-[var(--color-bg-tertiary)] disabled:text-[var(--color-text-tertiary)] disabled:cursor-not-allowed text-white text-sm font-semibold rounded-full transition-all transform hover:scale-105 active:scale-95 shadow-lg disabled:shadow-none"
-                                        >
-                                            Create & Continue
-                                        </button>
-                                    </div>
+                                    <button
+                                        onClick={handleCreateBucket}
+                                        disabled={!bucketName.trim()}
+                                        className="px-6 py-2.5 bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] disabled:bg-[var(--color-bg-tertiary)] disabled:text-[var(--color-text-tertiary)] disabled:cursor-not-allowed text-white text-sm font-semibold rounded-full transition-all transform hover:scale-105 active:scale-95 shadow-lg disabled:shadow-none"
+                                    >
+                                        Create & Continue
+                                    </button>
                                 </div>
                             </div>
                         )}
 
                         {/* Step 2: AI-Powered Features */}
                         {currentStep === 2 && (
-                            <div className="p-8">
+                            <div className="p-6 sm:p-8">
                                 {/* Header */}
                                 <div className="text-center mb-8">
-                                    <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-purple-500 to-purple-600 rounded-2xl mb-4 shadow-lg shadow-purple-500/30">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <div className="inline-flex items-center justify-center w-16 h-16 bg-[var(--color-info-muted)] rounded-2xl mb-4 shadow-lg">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--color-info)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                             <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
                                         </svg>
                                     </div>
-                                    <h2 className="text-3xl font-bold text-white mb-2">AI-Powered Insights</h2>
-                                    <p className="text-gray-400 text-lg">Clearical works smarter, not harder</p>
+                                    <h2 className="text-3xl font-bold text-[var(--color-text-primary)] mb-2" style={{ fontFamily: 'var(--font-display)' }}>AI-Powered Insights</h2>
+                                    <p className="text-[var(--color-text-secondary)] text-lg">Clearical works smarter, not harder</p>
                                 </div>
 
                                 {/* Features List */}
                                 <div className="space-y-4 mb-8">
                                     {/* Feature 1 */}
-                                    <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-5 hover:bg-gray-800/70 transition-all">
+                                    <div className="bg-[var(--color-bg-tertiary)] border border-[var(--color-border-primary)] rounded-xl p-5 hover:bg-[var(--color-bg-quaternary)] transition-all">
                                         <div className="flex gap-4">
                                             <div className="flex-shrink-0">
-                                                <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg flex items-center justify-center">
-                                                    <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <div className="w-10 h-10 bg-[var(--color-info-muted)] rounded-lg flex items-center justify-center">
+                                                    <svg className="w-5 h-5 text-[var(--color-info)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                                                     </svg>
                                                 </div>
                                             </div>
                                             <div className="flex-1">
-                                                <h3 className="text-lg font-semibold text-white mb-1">Smart Summaries</h3>
-                                                <p className="text-sm text-gray-400">
+                                                <h3 className="text-lg font-semibold text-[var(--color-text-primary)] mb-1" style={{ fontFamily: 'var(--font-display)' }}>Smart Summaries</h3>
+                                                <p className="text-sm text-[var(--color-text-secondary)]">
                                                     AI analyzes your screenshots to automatically generate detailed descriptions
                                                     of what you worked on, saving you time on manual entry.
                                                 </p>
@@ -477,18 +561,18 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                                     </div>
 
                                     {/* Feature 2 */}
-                                    <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-5 hover:bg-gray-800/70 transition-all">
+                                    <div className="bg-[var(--color-bg-tertiary)] border border-[var(--color-border-primary)] rounded-xl p-5 hover:bg-[var(--color-bg-quaternary)] transition-all">
                                         <div className="flex gap-4">
                                             <div className="flex-shrink-0">
-                                                <div className="w-10 h-10 bg-gradient-to-br from-green-500 to-green-600 rounded-lg flex items-center justify-center">
-                                                    <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <div className="w-10 h-10 bg-[var(--color-success-muted)] rounded-lg flex items-center justify-center">
+                                                    <svg className="w-5 h-5 text-[var(--color-success)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
                                                     </svg>
                                                 </div>
                                             </div>
                                             <div className="flex-1">
-                                                <h3 className="text-lg font-semibold text-white mb-1">Auto-Assignment</h3>
-                                                <p className="text-sm text-gray-400">
+                                                <h3 className="text-lg font-semibold text-[var(--color-text-primary)] mb-1" style={{ fontFamily: 'var(--font-display)' }}>Auto-Assignment</h3>
+                                                <p className="text-sm text-[var(--color-text-secondary)]">
                                                     Based on your activity patterns, Clearical suggests the right bucket or Jira
                                                     issue for each time entry, making tracking effortless.
                                                 </p>
@@ -497,18 +581,18 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                                     </div>
 
                                     {/* Feature 3 */}
-                                    <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-5 hover:bg-gray-800/70 transition-all">
+                                    <div className="bg-[var(--color-bg-tertiary)] border border-[var(--color-border-primary)] rounded-xl p-5 hover:bg-[var(--color-bg-quaternary)] transition-all">
                                         <div className="flex gap-4">
                                             <div className="flex-shrink-0">
-                                                <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-purple-600 rounded-lg flex items-center justify-center">
-                                                    <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <div className="w-10 h-10 bg-[var(--color-accent-muted)] rounded-lg flex items-center justify-center">
+                                                    <svg className="w-5 h-5 text-[var(--color-accent)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
                                                     </svg>
                                                 </div>
                                             </div>
                                             <div className="flex-1">
-                                                <h3 className="text-lg font-semibold text-white mb-1">Learns Your Workflow</h3>
-                                                <p className="text-sm text-gray-400">
+                                                <h3 className="text-lg font-semibold text-[var(--color-text-primary)] mb-1" style={{ fontFamily: 'var(--font-display)' }}>Learns Your Workflow</h3>
+                                                <p className="text-sm text-[var(--color-text-secondary)]">
                                                     The more you use Clearical, the better it gets at understanding your work
                                                     patterns and providing accurate suggestions.
                                                 </p>
@@ -518,9 +602,9 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                                 </div>
 
                                 {/* Privacy Note */}
-                                <div className="bg-green-900/20 border border-green-700/50 rounded-lg px-4 py-3 mb-6">
-                                    <div className="flex items-center gap-2 text-sm text-green-300">
-                                        <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <div className="bg-[var(--color-success-muted)] border border-[var(--color-success)]/30 rounded-lg px-4 py-3 mb-6">
+                                    <div className="flex items-center gap-2 text-sm text-[var(--color-text-primary)]">
+                                        <svg className="w-4 h-4 flex-shrink-0 text-[var(--color-success)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                                         </svg>
                                         <span className="font-medium">All AI processing happens on-device. Your data never leaves your computer.</span>
@@ -528,16 +612,16 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                                 </div>
 
                                 {/* Actions */}
-                                <div className="flex justify-between gap-3 pt-6 border-t border-gray-700">
+                                <div className="flex justify-between gap-3 pt-6 border-t border-[var(--color-border-primary)]">
                                     <button
                                         onClick={handleBack}
-                                        className="px-5 py-2.5 text-gray-400 hover:text-white text-sm font-medium transition-colors"
+                                        className="px-5 py-2.5 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] text-sm font-medium transition-colors"
                                     >
                                         Back
                                     </button>
                                     <button
                                         onClick={handleNext}
-                                        className="px-6 py-2.5 bg-gradient-to-r from-green-600 to-green-500 hover:from-green-500 hover:to-green-400 text-white text-sm font-semibold rounded-lg transition-all transform hover:scale-105 active:scale-95 shadow-lg shadow-green-600/30"
+                                        className="px-6 py-2.5 bg-[var(--color-success)] hover:bg-[var(--color-success)]/90 text-white text-sm font-semibold rounded-full transition-all transform hover:scale-105 active:scale-95 shadow-lg"
                                     >
                                         Continue
                                     </button>
@@ -547,11 +631,11 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
 
                         {/* Step 3: Jira Integration */}
                         {currentStep === 3 && (
-                            <div className="p-8">
+                            <div className="p-6 sm:p-8">
                                 {/* Header */}
-                                <div className="text-center mb-8">
-                                    <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl mb-4 shadow-lg shadow-blue-500/30">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <div className="text-center mb-6">
+                                    <div className="inline-flex items-center justify-center w-16 h-16 bg-[var(--color-info-muted)] rounded-2xl mb-4 shadow-lg">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--color-info)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                             <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
                                             <polyline points="7.5 4.21 12 6.81 16.5 4.21"/>
                                             <polyline points="7.5 19.79 7.5 14.6 3 12"/>
@@ -560,114 +644,254 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                                             <line x1="12" y1="22.08" x2="12" y2="12"/>
                                         </svg>
                                     </div>
-                                    <h2 className="text-3xl font-bold text-white mb-2">Connect Jira & Tempo</h2>
-                                    <p className="text-gray-400 text-lg">Supercharge your time tracking workflow</p>
+                                    <h2 className="text-3xl font-bold text-[var(--color-text-primary)] mb-2" style={{ fontFamily: 'var(--font-display)' }}>Connect Jira</h2>
+                                    <p className="text-[var(--color-text-secondary)] text-lg">Link your Jira issues for smarter time tracking</p>
                                 </div>
 
-                                {/* Benefits */}
-                                <div className="space-y-3 mb-8">
-                                    <div className="flex items-start gap-3 bg-gray-800/30 border border-gray-700 rounded-lg p-4">
-                                        <div className="flex-shrink-0 mt-0.5">
-                                            <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center">
-                                                <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                                                </svg>
-                                            </div>
-                                        </div>
-                                        <div>
-                                            <h4 className="font-semibold text-white mb-0.5">Automatic Issue Linking</h4>
-                                            <p className="text-sm text-gray-400">
-                                                Track time directly to Jira issues with AI-powered suggestions
-                                            </p>
+                                {/* Connection Status - with animation */}
+                                {jiraConnected && (
+                                    <div className="bg-[var(--color-success-muted)] border border-[var(--color-success)]/30 rounded-lg px-4 py-3 mb-6 animate-slide-down">
+                                        <div className="flex items-center gap-2 text-sm text-[var(--color-text-primary)]">
+                                            <svg className="w-5 h-5 text-[var(--color-success)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                            </svg>
+                                            <span className="font-medium">Connected to Jira successfully!</span>
                                         </div>
                                     </div>
+                                )}
 
-                                    <div className="flex items-start gap-3 bg-gray-800/30 border border-gray-700 rounded-lg p-4">
-                                        <div className="flex-shrink-0 mt-0.5">
-                                            <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center">
-                                                <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                                                </svg>
-                                            </div>
-                                        </div>
-                                        <div>
-                                            <h4 className="font-semibold text-white mb-0.5">One-Click Tempo Logging</h4>
-                                            <p className="text-sm text-gray-400">
-                                                Log time entries to Tempo with a single click, no manual entry needed
-                                            </p>
+                                {/* Error Message */}
+                                {jiraError && (
+                                    <div className="bg-[var(--color-error-muted)] border border-[var(--color-error)]/30 rounded-lg px-4 py-3 mb-6">
+                                        <div className="flex items-center gap-2 text-sm text-[var(--color-error)]">
+                                            <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                            </svg>
+                                            <span>{jiraError}</span>
                                         </div>
                                     </div>
+                                )}
 
-                                    <div className="flex items-start gap-3 bg-gray-800/30 border border-gray-700 rounded-lg p-4">
-                                        <div className="flex-shrink-0 mt-0.5">
-                                            <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center">
-                                                <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                                                </svg>
+                                {/* Configuration Form or Connected Summary */}
+                                {jiraConnected && !showCredentials ? (
+                                    <div className="bg-[var(--color-bg-tertiary)] border border-[var(--color-border-primary)] rounded-xl p-5 mb-6">
+                                        <div className="flex items-start justify-between gap-4">
+                                            <div className="flex-1">
+                                                <h3 className="text-sm font-semibold text-[var(--color-text-primary)] mb-1" style={{ fontFamily: 'var(--font-display)' }}>
+                                                    Connected to Jira
+                                                </h3>
+                                                <p className="text-sm text-[var(--color-text-secondary)]">
+                                                    {jiraBaseUrl}
+                                                </p>
                                             </div>
-                                        </div>
-                                        <div>
-                                            <h4 className="font-semibold text-white mb-0.5">Smart Account Selection</h4>
-                                            <p className="text-sm text-gray-400">
-                                                AI automatically selects the correct Tempo account for each issue
-                                            </p>
+                                            <button
+                                                onClick={() => setShowCredentials(true)}
+                                                className="px-3 py-1.5 text-xs text-[var(--color-accent)] hover:text-[var(--color-accent-hover)] font-medium border border-[var(--color-accent)]/30 hover:border-[var(--color-accent)]/50 rounded-lg transition-all"
+                                            >
+                                                Change
+                                            </button>
                                         </div>
                                     </div>
-                                </div>
-
-                                {/* Current Status */}
-                                <div className="bg-gray-800 border border-gray-700 rounded-xl p-4 mb-6">
-                                    <div className="flex items-center justify-between">
+                                ) : (
+                                    <div className="space-y-4 mb-6">
                                         <div>
-                                            <h4 className="text-sm font-semibold text-white mb-1">Integration Status</h4>
-                                            <p className="text-xs text-gray-400">
-                                                {settings.jira?.enabled && settings.tempo?.enabled
-                                                    ? 'Jira and Tempo are configured'
-                                                    : settings.jira?.enabled
-                                                    ? 'Jira is configured, Tempo needs setup'
-                                                    : settings.tempo?.enabled
-                                                    ? 'Tempo is configured, Jira needs setup'
-                                                    : 'Not configured yet'}
+                                            <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-2" style={{ fontFamily: 'var(--font-display)' }}>
+                                                Jira Base URL
+                                            </label>
+                                            <input
+                                                type="text"
+                                                value={jiraBaseUrl}
+                                                onChange={(e) => setJiraBaseUrl(e.target.value)}
+                                                className="w-full bg-[var(--color-bg-tertiary)] border border-[var(--color-border-primary)] text-[var(--color-text-primary)] text-sm rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:border-transparent transition-all"
+                                                placeholder="https://your-domain.atlassian.net"
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-2" style={{ fontFamily: 'var(--font-display)' }}>
+                                                Email
+                                            </label>
+                                            <input
+                                                type="email"
+                                                value={jiraEmail}
+                                                onChange={(e) => setJiraEmail(e.target.value)}
+                                                className="w-full bg-[var(--color-bg-tertiary)] border border-[var(--color-border-primary)] text-[var(--color-text-primary)] text-sm rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:border-transparent transition-all"
+                                                placeholder="your.email@company.com"
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-2" style={{ fontFamily: 'var(--font-display)' }}>
+                                                API Token
+                                            </label>
+                                            <div className="relative">
+                                                <input
+                                                    type={showApiToken ? "text" : "password"}
+                                                    value={jiraApiToken}
+                                                    onChange={(e) => setJiraApiToken(e.target.value)}
+                                                    onKeyDown={(e) => {
+                                                        if (e.key === 'Enter' && jiraBaseUrl && jiraEmail && jiraApiToken) {
+                                                            handleTestJiraConnection();
+                                                        }
+                                                    }}
+                                                    className="w-full bg-[var(--color-bg-tertiary)] border border-[var(--color-border-primary)] text-[var(--color-text-primary)] text-sm rounded-lg px-4 py-3 pr-10 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:border-transparent transition-all"
+                                                    placeholder="Enter your Jira API token"
+                                                />
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setShowApiToken(!showApiToken)}
+                                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--color-text-tertiary)] hover:text-[var(--color-text-secondary)] transition-colors"
+                                                >
+                                                    {showApiToken ? (
+                                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+                                                        </svg>
+                                                    ) : (
+                                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                                        </svg>
+                                                    )}
+                                                </button>
+                                            </div>
+                                            <p className="text-xs text-[var(--color-text-tertiary)] mt-1.5">
+                                                Generate at: Jira → Profile → Security → Create API token
                                             </p>
                                         </div>
-                                        <div className="flex items-center gap-2">
-                                            <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${
-                                                settings.jira?.enabled && settings.tempo?.enabled
-                                                    ? 'bg-green-900 text-green-400'
-                                                    : settings.jira?.enabled || settings.tempo?.enabled
-                                                    ? 'bg-yellow-900 text-yellow-400'
-                                                    : 'bg-gray-700 text-gray-400'
-                                            }`}>
-                                                {settings.jira?.enabled && settings.tempo?.enabled
-                                                    ? 'Ready'
-                                                    : settings.jira?.enabled || settings.tempo?.enabled
-                                                    ? 'Partial'
-                                                    : 'Not Set Up'}
-                                            </span>
-                                        </div>
+
+                                        {/* Test Connection Button */}
+                                        {!jiraConnected && (
+                                            <button
+                                                onClick={handleTestJiraConnection}
+                                                disabled={isTestingJira || !jiraBaseUrl || !jiraEmail || !jiraApiToken}
+                                                className="w-full px-4 py-3 bg-[var(--color-info)] hover:bg-[var(--color-info)]/90 disabled:bg-[var(--color-bg-tertiary)] disabled:text-[var(--color-text-tertiary)] disabled:cursor-not-allowed text-white text-sm font-semibold rounded-lg transition-all flex items-center justify-center gap-2"
+                                            >
+                                                {isTestingJira ? (
+                                                    <>
+                                                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                                        Testing Connection...
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                                        </svg>
+                                                        Test Connection
+                                                    </>
+                                                )}
+                                            </button>
+                                        )}
+                                    </div>
+                                )}
+
+                                {/* Project Selection */}
+                                {jiraConnected && (
+                                    <div className="mb-6">
+                                        <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-2" style={{ fontFamily: 'var(--font-display)' }}>
+                                            Select Projects
+                                        </label>
+                                        <p className="text-xs text-[var(--color-text-tertiary)] mb-3">
+                                            Choose which projects to sync. This improves AI suggestions.
+                                        </p>
+
+                                        {loadingProjects ? (
+                                            <div className="flex items-center justify-center py-6 text-sm text-[var(--color-text-secondary)]">
+                                                <div className="w-5 h-5 border-2 border-[var(--color-accent)] border-t-transparent rounded-full animate-spin mr-2"></div>
+                                                Loading projects...
+                                            </div>
+                                        ) : availableProjects.length > 0 ? (
+                                            <>
+                                                <div className="flex items-center gap-2 mb-3">
+                                                    <button
+                                                        onClick={selectAllProjects}
+                                                        className="text-xs text-[var(--color-accent)] hover:text-[var(--color-accent-hover)] underline"
+                                                    >
+                                                        Select All
+                                                    </button>
+                                                    <span className="text-xs text-[var(--color-text-tertiary)]">|</span>
+                                                    <button
+                                                        onClick={clearAllProjects}
+                                                        className="text-xs text-[var(--color-accent)] hover:text-[var(--color-accent-hover)] underline"
+                                                    >
+                                                        Clear All
+                                                    </button>
+                                                    <span className="text-xs text-[var(--color-text-tertiary)] ml-2">
+                                                        {selectedProjects.length} of {availableProjects.length} selected
+                                                    </span>
+                                                </div>
+
+                                                <div className="max-h-40 overflow-y-auto bg-[var(--color-bg-tertiary)] border border-[var(--color-border-primary)] rounded-lg">
+                                                    {availableProjects.map((project) => (
+                                                        <div
+                                                            key={project.key}
+                                                            className="flex items-center gap-3 px-4 py-2.5 border-b border-[var(--color-border-primary)] last:border-b-0 hover:bg-[var(--color-bg-quaternary)] transition-colors"
+                                                        >
+                                                            <input
+                                                                type="checkbox"
+                                                                id={`onboard-project-${project.key}`}
+                                                                checked={selectedProjects.includes(project.key)}
+                                                                onChange={() => handleProjectToggle(project.key)}
+                                                                className="w-4 h-4 text-[var(--color-accent)] bg-[var(--color-bg-tertiary)] border border-[var(--color-border-primary)] rounded focus:ring-[var(--color-accent)] focus:ring-1"
+                                                            />
+                                                            <label
+                                                                htmlFor={`onboard-project-${project.key}`}
+                                                                className="flex-1 text-sm cursor-pointer"
+                                                            >
+                                                                <span className="font-medium text-[var(--color-accent)]">{project.key}</span>
+                                                                <span className="text-[var(--color-text-tertiary)] ml-2">- {project.name}</span>
+                                                            </label>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </>
+                                        ) : !loadingProjects ? (
+                                            <div className="bg-[var(--color-warning-muted)] border border-[var(--color-warning)]/30 rounded-lg px-4 py-3">
+                                                <div className="flex items-start gap-2 text-sm text-[var(--color-text-primary)]">
+                                                    <svg className="w-4 h-4 flex-shrink-0 mt-0.5 text-[var(--color-warning)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                                    </svg>
+                                                    <span>
+                                                        No projects found. Make sure your Jira account has access to at least one project.
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        ) : null}
+                                    </div>
+                                )}
+
+                                {/* Info Note */}
+                                <div className="bg-[var(--color-accent-muted)] border border-[var(--color-accent)]/30 rounded-lg px-4 py-3 mb-6">
+                                    <div className="flex items-start gap-2 text-sm text-[var(--color-text-secondary)]">
+                                        <svg className="w-4 h-4 flex-shrink-0 mt-0.5 text-[var(--color-accent)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                        <span>
+                                            Tempo integration can be configured later in Settings → Time Tracking Integration.
+                                        </span>
                                     </div>
                                 </div>
 
                                 {/* Actions */}
-                                <div className="flex justify-between gap-3 pt-6 border-t border-gray-700">
+                                <div className="flex justify-between gap-3 pt-6 border-t border-[var(--color-border-primary)]">
                                     <button
                                         onClick={handleBack}
-                                        className="px-5 py-2.5 text-gray-400 hover:text-white text-sm font-medium transition-colors"
+                                        className="px-5 py-2.5 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] text-sm font-medium transition-colors"
                                     >
                                         Back
                                     </button>
                                     <div className="flex gap-3">
                                         <button
                                             onClick={handleFinish}
-                                            className="px-5 py-2.5 text-gray-300 hover:text-white text-sm font-medium transition-colors rounded-lg hover:bg-gray-800"
+                                            className="px-5 py-2.5 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] text-sm font-medium transition-colors rounded-lg hover:bg-[var(--color-bg-tertiary)]"
                                         >
                                             Skip
                                         </button>
                                         <button
-                                            onClick={handleConfigureJira}
-                                            className="px-6 py-2.5 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white text-sm font-semibold rounded-lg transition-all transform hover:scale-105 active:scale-95 shadow-lg shadow-blue-600/30"
+                                            onClick={handleSaveJiraAndContinue}
+                                            disabled={!jiraConnected}
+                                            className="px-6 py-2.5 bg-[var(--color-success)] hover:bg-[var(--color-success)]/90 disabled:bg-[var(--color-bg-tertiary)] disabled:text-[var(--color-text-tertiary)] disabled:cursor-not-allowed text-white text-sm font-semibold rounded-full transition-all transform hover:scale-105 active:scale-95 shadow-lg disabled:shadow-none"
                                         >
-                                            Configure Now
+                                            Start Syncing
                                         </button>
                                     </div>
                                 </div>
@@ -677,7 +901,7 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                 </div>
 
                 {/* Step Indicators - Sticky Footer */}
-                <div className="flex justify-center gap-2 py-6 border-t border-[var(--color-border-primary)] flex-shrink-0 bg-[var(--color-bg-secondary)]">
+                <div className="flex justify-center gap-2 py-5 sm:py-6 border-t border-[var(--color-border-primary)] flex-shrink-0 bg-[var(--color-bg-secondary)]">
                     {Array.from({ length: totalSteps }).map((_, index) => (
                         <button
                             key={index}
@@ -693,10 +917,10 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                             disabled={index > currentStep}
                             className={`transition-all duration-300 rounded-full ${
                                 index === currentStep
-                                    ? 'w-8 h-2 bg-green-500'
+                                    ? 'w-8 h-2 bg-[var(--color-success)]'
                                     : index < currentStep
-                                    ? 'w-2 h-2 bg-green-600 hover:bg-green-500 cursor-pointer'
-                                    : 'w-2 h-2 bg-gray-700'
+                                    ? 'w-2 h-2 bg-[var(--color-success)] opacity-60 hover:opacity-100 cursor-pointer'
+                                    : 'w-2 h-2 bg-[var(--color-bg-tertiary)]'
                             }`}
                         />
                     ))}
@@ -713,6 +937,19 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                         opacity: 1;
                         transform: scale(1);
                     }
+                }
+                @keyframes slide-down {
+                    from {
+                        opacity: 0;
+                        transform: translateY(-8px);
+                    }
+                    to {
+                        opacity: 1;
+                        transform: translateY(0);
+                    }
+                }
+                .animate-slide-down {
+                    animation: slide-down 0.3s ease-out;
                 }
             `}</style>
         </div>

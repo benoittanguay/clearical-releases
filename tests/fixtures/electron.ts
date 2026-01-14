@@ -122,7 +122,8 @@ export const test = base.extend<ElectronFixtures>({
       });
 
       // Wait for the main nav to be visible with extended timeout
-      await window.waitForSelector('nav.w-20', { timeout: 20000, state: 'visible' });
+      // Note: nav element uses CSS variables for width, so we look for the nav with drag-handle class
+      await window.waitForSelector('nav.drag-handle, nav', { timeout: 20000, state: 'visible' });
 
       // Extra stabilization time for React hydration
       await window.waitForTimeout(1000);

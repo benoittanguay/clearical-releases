@@ -7,17 +7,17 @@ import { HistoryDetail } from './components/HistoryDetail';
 import { ExportDialog } from './components/ExportDialog';
 import { DeleteButton } from './components/DeleteButton';
 import { JiraIssuesSection } from './components/JiraIssuesSection';
-import { AssignmentPicker } from './components/AssignmentPicker';
 import { FolderTree } from './components/FolderTree';
 import { CreateBucketModal } from './components/CreateBucketModal';
 import { CreateFolderModal } from './components/CreateFolderModal';
 import { CrawlerProgressBar } from './components/CrawlerProgressBar';
 import { OnboardingModal } from './components/OnboardingModal';
-import { IntegrationConfigModal } from './components/IntegrationConfigModal';
+import { JiraConfigModal } from './components/JiraConfigModal';
+import { TempoConfigModal } from './components/TempoConfigModal';
 import { UpdateNotification } from './components/UpdateNotification';
 import { UpdateSuccessModal } from './components/UpdateSuccessModal';
 import { PermissionRequestModal } from './components/PermissionRequestModal';
-import { SplitFlapDisplay } from './components/SplitFlapDisplay';
+import { SplitFlapDisplay, FlipClockContainer } from './components/SplitFlapDisplay';
 import type { WorkAssignment } from './context/StorageContext';
 import './App.css'
 
@@ -34,10 +34,14 @@ function App() {
   const [showCreateFolderModal, setShowCreateFolderModal] = useState(false);
   const [, setMigrationComplete] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
-  const [showIntegrationModal, setShowIntegrationModal] = useState(false);
+  const [showJiraModal, setShowJiraModal] = useState(false);
+  const [showTempoModal, setShowTempoModal] = useState(false);
   const [showUpdateSuccessModal, setShowUpdateSuccessModal] = useState(false);
+  const [appVersion, setAppVersion] = useState<string>('');
+  const [releaseNotes, setReleaseNotes] = useState<string>('');
   const [showPermissionModal, setShowPermissionModal] = useState(false);
   const [isStopping, setIsStopping] = useState(false);
+  const [bucketsTab, setBucketsTab] = useState<'buckets' | 'jira'>('buckets');
 
   const { isRunning, isPaused, elapsed, start: startTimer, stop: stopTimer, pause: pauseTimer, resume: resumeTimer, formatTime, checkPermissions } = useTimer();
 
@@ -54,17 +58,37 @@ function App() {
   // The modal will show once per version when the app detects a new version number
   // To test manually: Open DevTools Console and run: localStorage.removeItem('timeportal-last-seen-version')
   useEffect(() => {
-    const currentVersion = '0.1.7'; // This should match package.json version
-    const lastSeenVersion = localStorage.getItem('timeportal-last-seen-version');
+    const checkVersion = async () => {
+        try {
+            // Get the actual app version from Electron
+            const envInfo = await window.electron.ipcRenderer.getEnvironmentInfo();
+            const currentVersion = envInfo.version;
+            setAppVersion(currentVersion);
 
-    // Show modal if this is a new version and onboarding is complete
-    const onboardingComplete = localStorage.getItem('timeportal-onboarding-complete');
-    if (onboardingComplete && lastSeenVersion !== currentVersion) {
-      // Delay slightly to ensure app is fully loaded
-      setTimeout(() => {
-        setShowUpdateSuccessModal(true);
-      }, 1000);
-    }
+            const lastSeenVersion = localStorage.getItem('timeportal-last-seen-version');
+            const onboardingComplete = localStorage.getItem('timeportal-onboarding-complete');
+
+            // Show modal if this is a new version and onboarding is complete
+            if (onboardingComplete && lastSeenVersion !== currentVersion) {
+                // Try to get release notes from updater status
+                try {
+                    const updaterStatus = await window.electron.ipcRenderer.updater.getStatus();
+                    if (updaterStatus.success && updaterStatus.status?.releaseNotes) {
+                        setReleaseNotes(updaterStatus.status.releaseNotes);
+                    }
+                } catch {
+                    // Release notes not available, that's ok
+                }
+
+                setTimeout(() => {
+                    setShowUpdateSuccessModal(true);
+                }, 1000);
+            }
+        } catch (error) {
+            console.error('[App] Failed to get version info:', error);
+        }
+    };
+    checkVersion();
   }, []);
 
   // Migration trigger logic - runs once on app startup
@@ -181,8 +205,9 @@ function App() {
   }, []);
 
   const handleCloseUpdateSuccessModal = () => {
-    const currentVersion = '0.1.7';
-    localStorage.setItem('timeportal-last-seen-version', currentVersion);
+    if (appVersion) {
+        localStorage.setItem('timeportal-last-seen-version', appVersion);
+    }
     setShowUpdateSuccessModal(false);
   };
 
@@ -565,54 +590,36 @@ function App() {
                 </div>
               )}
 
-              {/* Assignment Picker - Above the counter */}
-              <div className="w-full max-w-sm mb-12">
-                <label style={{
-                  fontSize: 'var(--text-xs)',
-                  color: 'var(--color-text-secondary)',
-                  textTransform: 'uppercase',
-                  fontWeight: 'var(--font-bold)',
-                  letterSpacing: 'var(--tracking-wider)',
-                  fontFamily: 'var(--font-display)',
-                  display: 'block',
-                  marginBottom: 'var(--space-2)'
-                }}>
-                  Assignment
-                </label>
-                <AssignmentPicker
-                  value={selectedAssignment}
-                  onChange={setSelectedAssignment}
-                  placeholder={isRunning && !isPaused ? "Assignment locked while running" : "Select assignment..."}
-                  className={isRunning && !isPaused ? 'pointer-events-none opacity-60' : ''}
-                />
-              </div>
-
-              {/* Timer Display - Split-flap display */}
-              <div className="relative mb-16">
-                <SplitFlapDisplay value={formatTime(elapsed)} size="large" />
-                {isPaused && (
-                  <div className="absolute -top-10 left-1/2 transform -translate-x-1/2 animate-fade-in">
-                    <div style={{
-                      backgroundColor: 'var(--color-warning-muted)',
-                      color: 'var(--color-warning)',
-                      fontSize: 'var(--text-xs)',
-                      fontWeight: 'var(--font-bold)',
-                      textTransform: 'uppercase',
-                      letterSpacing: 'var(--tracking-wider)',
-                      fontFamily: 'var(--font-display)',
-                      padding: 'var(--space-1) var(--space-3)',
-                      borderRadius: 'var(--radius-full)',
-                      border: '1px solid var(--color-warning)',
-                      boxShadow: '0 0 20px rgba(254, 188, 46, 0.3)'
-                    }}>
-                      Paused
+              {/* Timer and Buttons Container - Ensures buttons match timer width exactly */}
+              <div className="relative mb-8 inline-flex flex-col items-stretch gap-6">
+                {/* Timer Display - Split-flap display with retro flip clock housing */}
+                <div className="relative flex justify-center">
+                  <FlipClockContainer>
+                    <SplitFlapDisplay value={formatTime(elapsed)} size="large" />
+                  </FlipClockContainer>
+                  {isPaused && (
+                    <div className="absolute -top-10 left-1/2 transform -translate-x-1/2 animate-fade-in">
+                      <div style={{
+                        backgroundColor: 'var(--color-warning-muted)',
+                        color: 'var(--color-warning)',
+                        fontSize: 'var(--text-xs)',
+                        fontWeight: 'var(--font-bold)',
+                        textTransform: 'uppercase',
+                        letterSpacing: 'var(--tracking-wider)',
+                        fontFamily: 'var(--font-display)',
+                        padding: 'var(--space-1) var(--space-3)',
+                        borderRadius: 'var(--radius-full)',
+                        border: '1px solid var(--color-warning)',
+                        boxShadow: '0 0 20px rgba(254, 188, 46, 0.3)'
+                      }}>
+                        Paused
+                      </div>
                     </div>
-                  </div>
-                )}
-              </div>
+                  )}
+                </div>
 
-              {/* Buttons - Pill style with design system colors */}
-              <div className="w-full max-w-lg flex gap-3 min-h-[56px]">
+                {/* Buttons - Pill style with design system colors - Full width of timer */}
+                <div className="flex gap-3 min-h-[56px] w-full">
                 <button
                   onClick={handleStartStop}
                   disabled={isStopping}
@@ -732,15 +739,17 @@ function App() {
                     </span>
                   )}
                 </button>
+                </div>
               </div>
             </div>
           )}
 
           {currentView === 'buckets' && (
             <>
-              {/* Sticky Header */}
-              <div className="flex-shrink-0 px-6 py-5 z-20 drag-handle" style={{ backgroundColor: 'var(--color-bg-primary)', borderBottom: '1px solid var(--color-border-primary)' }}>
-                <div className="flex justify-between items-center">
+              {/* Sticky Header with Tabs */}
+              <div className="flex-shrink-0 z-20 drag-handle" style={{ backgroundColor: 'var(--color-bg-primary)', borderBottom: '1px solid var(--color-border-primary)' }}>
+                {/* Title Section */}
+                <div className="px-6 pt-5 pb-3">
                   <h2
                     className="text-2xl font-bold tracking-tight"
                     style={{
@@ -751,73 +760,144 @@ function App() {
                     Manage Buckets
                   </h2>
                 </div>
+
+                {/* Tab Bar */}
+                <div className="px-6 pb-3">
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setBucketsTab('buckets')}
+                      className="px-4 py-2 text-sm font-semibold rounded-lg transition-all"
+                      style={{
+                        backgroundColor: bucketsTab === 'buckets' ? 'var(--color-accent)' : 'transparent',
+                        color: bucketsTab === 'buckets' ? 'white' : 'var(--color-text-secondary)',
+                        fontFamily: 'var(--font-display)',
+                        border: bucketsTab === 'buckets' ? 'none' : '1px solid var(--color-border-primary)',
+                        boxShadow: bucketsTab === 'buckets' ? 'var(--shadow-accent)' : 'none',
+                        transitionDuration: 'var(--duration-base)',
+                        transitionTimingFunction: 'var(--ease-out)'
+                      }}
+                      onMouseEnter={(e) => {
+                        if (bucketsTab !== 'buckets') {
+                          e.currentTarget.style.backgroundColor = 'var(--color-bg-secondary)';
+                          e.currentTarget.style.borderColor = 'var(--color-border-secondary)';
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (bucketsTab !== 'buckets') {
+                          e.currentTarget.style.backgroundColor = 'transparent';
+                          e.currentTarget.style.borderColor = 'var(--color-border-primary)';
+                        }
+                      }}
+                    >
+                      My Buckets
+                    </button>
+
+                    {(settings.jira?.enabled || settings.tempo?.enabled) && (
+                      <button
+                        onClick={() => setBucketsTab('jira')}
+                        className="px-4 py-2 text-sm font-semibold rounded-lg transition-all flex items-center gap-2"
+                        style={{
+                          backgroundColor: bucketsTab === 'jira' ? 'var(--color-accent)' : 'transparent',
+                          color: bucketsTab === 'jira' ? 'white' : 'var(--color-text-secondary)',
+                          fontFamily: 'var(--font-display)',
+                          border: bucketsTab === 'jira' ? 'none' : '1px solid var(--color-border-primary)',
+                          boxShadow: bucketsTab === 'jira' ? 'var(--shadow-accent)' : 'none',
+                          transitionDuration: 'var(--duration-base)',
+                          transitionTimingFunction: 'var(--ease-out)'
+                        }}
+                        onMouseEnter={(e) => {
+                          if (bucketsTab !== 'jira') {
+                            e.currentTarget.style.backgroundColor = 'var(--color-bg-secondary)';
+                            e.currentTarget.style.borderColor = 'var(--color-border-secondary)';
+                          }
+                        }}
+                        onMouseLeave={(e) => {
+                          if (bucketsTab !== 'jira') {
+                            e.currentTarget.style.backgroundColor = 'transparent';
+                            e.currentTarget.style.borderColor = 'var(--color-border-primary)';
+                          }
+                        }}
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <rect x="2" y="3" width="20" height="14" rx="2"/>
+                          <line x1="8" y1="21" x2="16" y2="21"/>
+                          <line x1="12" y1="17" x2="12" y2="21"/>
+                        </svg>
+                        Jira Issues
+                      </button>
+                    )}
+                  </div>
+                </div>
               </div>
 
-              {/* Scrollable Content */}
+              {/* Scrollable Content - Tab Content */}
               <div className="flex-1 overflow-y-auto px-6 pb-6 pt-4" style={{ backgroundColor: 'var(--color-bg-primary)' }}>
-                {/* Action Buttons */}
-                <div className="flex gap-3 mb-6">
-                  <button
-                    onClick={() => setShowCreateBucketModal(true)}
-                    className="flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-semibold transition-all hover:-translate-y-0.5 active:scale-95"
-                    style={{
-                      backgroundColor: 'var(--color-accent)',
-                      color: 'white',
-                      fontFamily: 'var(--font-body)',
-                      transitionDuration: 'var(--duration-base)',
-                      transitionTimingFunction: 'var(--ease-out)',
-                      boxShadow: 'var(--shadow-accent)'
-                    }}
-                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--color-accent-hover)'}
-                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'var(--color-accent)'}
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <line x1="12" y1="5" x2="12" y2="19" />
-                      <line x1="5" y1="12" x2="19" y2="12" />
-                    </svg>
-                    New Bucket
-                  </button>
+                {bucketsTab === 'buckets' && (
+                  <>
+                    {/* Action Buttons */}
+                    <div className="flex gap-3 mb-6">
+                      <button
+                        onClick={() => setShowCreateBucketModal(true)}
+                        className="flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-semibold transition-all hover:-translate-y-0.5 active:scale-95"
+                        style={{
+                          backgroundColor: 'var(--color-accent)',
+                          color: 'white',
+                          fontFamily: 'var(--font-body)',
+                          transitionDuration: 'var(--duration-base)',
+                          transitionTimingFunction: 'var(--ease-out)',
+                          boxShadow: 'var(--shadow-accent)'
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--color-accent-hover)'}
+                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'var(--color-accent)'}
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <line x1="12" y1="5" x2="12" y2="19" />
+                          <line x1="5" y1="12" x2="19" y2="12" />
+                        </svg>
+                        New Bucket
+                      </button>
 
-                  <button
-                    onClick={() => setShowCreateFolderModal(true)}
-                    className="flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-semibold transition-all hover:-translate-y-0.5 active:scale-95"
-                    style={{
-                      backgroundColor: 'var(--color-bg-tertiary)',
-                      color: 'var(--color-warning)',
-                      fontFamily: 'var(--font-body)',
-                      transitionDuration: 'var(--duration-base)',
-                      transitionTimingFunction: 'var(--ease-out)',
-                      border: '1px solid var(--color-warning)',
-                      boxShadow: '0 4px 12px -2px rgba(254, 188, 46, 0.15)'
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.backgroundColor = 'var(--color-warning)';
-                      e.currentTarget.style.color = 'var(--color-bg-primary)';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)';
-                      e.currentTarget.style.color = 'var(--color-warning)';
-                    }}
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z" />
-                    </svg>
-                    New Folder
-                  </button>
-                </div>
+                      <button
+                        onClick={() => setShowCreateFolderModal(true)}
+                        className="flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-semibold transition-all hover:-translate-y-0.5 active:scale-95"
+                        style={{
+                          backgroundColor: 'var(--color-bg-tertiary)',
+                          color: 'var(--color-warning)',
+                          fontFamily: 'var(--font-body)',
+                          transitionDuration: 'var(--duration-base)',
+                          transitionTimingFunction: 'var(--ease-out)',
+                          border: '1px solid var(--color-warning)',
+                          boxShadow: '0 4px 12px -2px rgba(254, 188, 46, 0.15)'
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.backgroundColor = 'var(--color-warning)';
+                          e.currentTarget.style.color = 'var(--color-bg-primary)';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)';
+                          e.currentTarget.style.color = 'var(--color-warning)';
+                        }}
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z" />
+                        </svg>
+                        New Folder
+                      </button>
+                    </div>
 
-                {/* Hierarchical bucket/folder display */}
-                <FolderTree
-                  buckets={buckets}
-                  onRename={renameBucket}
-                  onDelete={removeBucket}
-                  onUnlinkJira={unlinkJiraIssueFromBucket}
-                  onMove={moveBucket}
-                />
+                    {/* Hierarchical bucket/folder display */}
+                    <FolderTree
+                      buckets={buckets}
+                      onRename={renameBucket}
+                      onDelete={removeBucket}
+                      onUnlinkJira={unlinkJiraIssueFromBucket}
+                      onMove={moveBucket}
+                    />
+                  </>
+                )}
 
-                {/* Jira Issues Section */}
-                {(settings.jira?.enabled || settings.tempo?.enabled) && (
-                  <div className="mt-8">
+                {bucketsTab === 'jira' && (settings.jira?.enabled || settings.tempo?.enabled) && (
+                  <div className="mt-2">
                     <JiraIssuesSection />
                   </div>
                 )}
@@ -834,7 +914,8 @@ function App() {
               {/* Scrollable Content */}
               <div className="flex-1 overflow-y-auto" style={{ backgroundColor: 'var(--color-bg-primary)' }}>
                 <Settings
-                  onOpenIntegrationModal={() => setShowIntegrationModal(true)}
+                  onOpenJiraModal={() => setShowJiraModal(true)}
+                  onOpenTempoModal={() => setShowTempoModal(true)}
                 />
               </div>
             </>
@@ -1278,15 +1359,13 @@ function App() {
         onClose={() => setShowOnboarding(false)}
       />
 
-      {/* Integration Configuration Modal - for post-onboarding Jira setup */}
-      <IntegrationConfigModal
-        isOpen={showIntegrationModal}
-        onClose={() => setShowIntegrationModal(false)}
-        currentTempoSettings={settings.tempo || { enabled: false, apiToken: '', baseUrl: 'https://api.tempo.io' }}
+      {/* Jira Configuration Modal */}
+      <JiraConfigModal
+        isOpen={showJiraModal}
+        onClose={() => setShowJiraModal(false)}
         currentJiraSettings={settings.jira || { enabled: false, apiToken: '', baseUrl: '', email: '', selectedProjects: [], autoSync: true, syncInterval: 30, lastSyncTimestamp: 0 }}
-        onSave={(tempoSettings, jiraSettings) => {
+        onSave={(jiraSettings) => {
           updateSettings({
-            tempo: tempoSettings,
             jira: {
               ...jiraSettings,
               // Preserve sync settings when updating integration config
@@ -1295,7 +1374,18 @@ function App() {
               lastSyncTimestamp: settings.jira?.lastSyncTimestamp || 0,
             }
           });
-          setShowIntegrationModal(false);
+        }}
+      />
+
+      {/* Tempo Configuration Modal */}
+      <TempoConfigModal
+        isOpen={showTempoModal}
+        onClose={() => setShowTempoModal(false)}
+        currentTempoSettings={settings.tempo || { enabled: false, apiToken: '', baseUrl: 'https://api.tempo.io' }}
+        onSave={(tempoSettings) => {
+          updateSettings({
+            tempo: tempoSettings,
+          });
         }}
       />
 
@@ -1306,6 +1396,8 @@ function App() {
       <UpdateSuccessModal
         isOpen={showUpdateSuccessModal}
         onClose={handleCloseUpdateSuccessModal}
+        version={appVersion}
+        releaseNotes={releaseNotes}
       />
 
       {/* Permission Request Modal - shows when permissions are missing */}

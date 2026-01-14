@@ -1,18 +1,20 @@
 interface UpdateSuccessModalProps {
     isOpen: boolean;
     onClose: () => void;
+    version?: string;
+    releaseNotes?: string;
 }
 
-export function UpdateSuccessModal({ isOpen, onClose }: UpdateSuccessModalProps) {
-    // Hardcoded version for simplicity - this is just a test feature
-    const appVersion = '0.1.7';
-
+export function UpdateSuccessModal({ isOpen, onClose, version, releaseNotes }: UpdateSuccessModalProps) {
     if (!isOpen) return null;
+
+    // Fallback to a default version if none provided
+    const displayVersion = version || '0.1.7';
 
     return (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 animate-fade-in">
             <div
-                className="bg-[var(--color-bg-secondary)] rounded-[32px] shadow-2xl w-full max-w-md mx-4 overflow-hidden border border-[var(--color-border-primary)]"
+                className="bg-[var(--color-bg-secondary)] rounded-[12px] shadow-2xl w-full max-w-md mx-4 overflow-hidden border border-[var(--color-border-primary)]"
                 style={{
                     animation: 'fadeInScale 0.3s ease-out',
                 }}
@@ -37,10 +39,10 @@ export function UpdateSuccessModal({ isOpen, onClose }: UpdateSuccessModalProps)
                             </svg>
                         </div>
                         <h2 className="text-3xl font-bold text-[var(--color-text-primary)] mb-2 font-['Syne']">
-                            Auto-Updater Worked!
+                            Update Complete!
                         </h2>
                         <p className="text-[var(--color-text-secondary)] text-lg">
-                            Your app has been successfully updated
+                            Clearical has been updated to the latest version
                         </p>
                     </div>
 
@@ -48,9 +50,9 @@ export function UpdateSuccessModal({ isOpen, onClose }: UpdateSuccessModalProps)
                     <div className="bg-[var(--color-bg-tertiary)] border border-[var(--color-border-primary)] rounded-xl p-4 mb-6">
                         <div className="flex items-center justify-between">
                             <div>
-                                <h4 className="text-sm font-semibold text-[var(--color-text-secondary)] mb-1 font-['Syne']">Current Version</h4>
+                                <h4 className="text-sm font-semibold text-[var(--color-text-secondary)] mb-1 font-['Syne']">Version</h4>
                                 <p className="text-2xl font-mono font-bold text-[var(--color-success)]">
-                                    v{appVersion}
+                                    v{displayVersion}
                                 </p>
                             </div>
                             <div className="flex-shrink-0">
@@ -76,25 +78,27 @@ export function UpdateSuccessModal({ isOpen, onClose }: UpdateSuccessModalProps)
                         </div>
                     </div>
 
-                    {/* Success Message */}
-                    <div className="bg-[var(--color-success-muted)] border border-[var(--color-success)]/30 rounded-lg px-4 py-3 mb-6">
-                        <div className="flex items-start gap-2 text-sm text-[var(--color-text-primary)]">
-                            <svg
-                                className="w-5 h-5 flex-shrink-0 mt-0.5 text-[var(--color-success)]"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                            >
-                                <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth={2}
-                                    d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                                />
-                            </svg>
-                            <span className="font-medium">
-                                The auto-update system is working correctly. You're now running the latest version of Clearical.
-                            </span>
+                    {/* Release Notes Section */}
+                    <div className="mb-6">
+                        <h3 className="text-lg font-bold text-[var(--color-text-primary)] mb-3 font-['Syne']">
+                            What's New
+                        </h3>
+                        <div
+                            className="bg-[var(--color-bg-tertiary)] border border-[var(--color-border-primary)] rounded-xl p-4 max-h-[200px] overflow-y-auto"
+                            style={{
+                                scrollbarWidth: 'thin',
+                                scrollbarColor: 'var(--color-border-primary) transparent',
+                            }}
+                        >
+                            {releaseNotes ? (
+                                <div className="text-sm text-[var(--color-text-secondary)] leading-relaxed whitespace-pre-wrap">
+                                    {releaseNotes}
+                                </div>
+                            ) : (
+                                <div className="text-sm text-[var(--color-text-tertiary)] italic">
+                                    Release notes will be available in future updates. Thank you for using Clearical!
+                                </div>
+                            )}
                         </div>
                     </div>
 
@@ -118,6 +122,26 @@ export function UpdateSuccessModal({ isOpen, onClose }: UpdateSuccessModalProps)
                         opacity: 1;
                         transform: scale(1);
                     }
+                }
+
+                /* Custom scrollbar styling for webkit browsers */
+                div::-webkit-scrollbar {
+                    width: 8px;
+                }
+
+                div::-webkit-scrollbar-track {
+                    background: transparent;
+                    border-radius: 4px;
+                }
+
+                div::-webkit-scrollbar-thumb {
+                    background: var(--color-border-primary);
+                    border-radius: 4px;
+                    transition: background 0.2s ease;
+                }
+
+                div::-webkit-scrollbar-thumb:hover {
+                    background: var(--color-text-tertiary);
                 }
             `}</style>
         </div>
