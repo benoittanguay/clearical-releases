@@ -22,7 +22,7 @@ import {
     SubscriptionStatus,
     DEFAULT_SUBSCRIPTION_CONFIG,
 } from './index.js';
-import { DeviceFingerprintService } from '../licensing/deviceFingerprint.js';
+import { DeviceFingerprintService } from './deviceFingerprint.js';
 import { getConfig } from '../config.js';
 import { getEdgeFunctionClient } from './edgeFunctionClient.js';
 import { initializeTrialNotifications, cleanupTrialNotifications } from './trialNotifications.js';

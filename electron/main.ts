@@ -16,7 +16,6 @@ if (fs.existsSync(envPath)) {
 }
 import { saveEncryptedFile, decryptFile, getEncryptionKey, isFileEncrypted } from './encryption.js';
 import { storeCredential, getCredential, deleteCredential, hasCredential, listCredentialKeys, isSecureStorageAvailable } from './credentialStorage.js';
-import { initializeLicensing } from './licensing/ipcHandlers.js';
 import { initializeSubscription, cleanupSubscription } from './subscription/ipcHandlers.js';
 import { requirePremium } from './subscription/premiumGuard.js';
 import { initializeAuth } from './auth/ipcHandlers.js';
@@ -2853,15 +2852,6 @@ app.whenReady().then(() => {
     } catch (error) {
         console.error('[Main] Failed to initialize encryption:', error);
         console.warn('[Main] Screenshots will be saved unencrypted as fallback');
-    }
-
-    // Initialize licensing system (legacy - being replaced by Stripe)
-    try {
-        initializeLicensing();
-        console.log('[Main] Licensing system initialized (legacy)');
-    } catch (error) {
-        console.error('[Main] Failed to initialize licensing:', error);
-        console.warn('[Main] App will run without licensing (development mode)');
     }
 
     // Initialize auth system (Supabase)

@@ -6,6 +6,22 @@
  */
 
 /**
+ * Device fingerprint for device identification
+ */
+export interface DeviceFingerprint {
+    deviceId: string;           // Unique device identifier (hash)
+    hardwareUUID: string;       // macOS hardware UUID (IOPlatformUUID)
+    machineId: string;          // Electron machine ID
+    hostname: string;           // Computer hostname
+    username: string;           // OS username
+    deviceName: string;         // User-friendly device name
+    platform: string;           // OS platform (darwin, win32, linux)
+    osVersion: string;          // OS version string
+    activatedAt: number;        // Unix timestamp of activation
+    lastSeenAt: number;         // Last successful validation timestamp
+}
+
+/**
  * Subscription status enum
  * Maps to Stripe subscription statuses
  */

@@ -26,7 +26,7 @@ import {
 } from './types.js';
 import { SubscriptionStorage } from './subscriptionStorage.js';
 import { StripeClient } from './stripeClient.js';
-import { DeviceFingerprintService } from '../licensing/deviceFingerprint.js';
+import { DeviceFingerprintService } from './deviceFingerprint.js';
 import { getEdgeFunctionClient } from './edgeFunctionClient.js';
 
 /**
