@@ -1008,12 +1008,25 @@ ipcMain.handle('get-environment-info', async () => {
     // Check if we're in production mode based on BUILD_ENV or app.isPackaged
     const isProduction = process.env.BUILD_ENV === 'production' || app.isPackaged;
 
+    // Get app version - in dev mode app.getVersion() returns Electron version,
+    // so we read from package.json directly
+    let version = app.getVersion();
+    if (!app.isPackaged) {
+        try {
+            const pkgPath = path.resolve(__dirnameTemp, '../package.json');
+            const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
+            version = pkg.version;
+        } catch (error) {
+            console.warn('[Main] Could not read package.json version:', error);
+        }
+    }
+
     return {
         isProduction,
         isDevelopment: !isProduction,
         isPackaged: app.isPackaged,
         buildEnv: process.env.BUILD_ENV || 'not-set',
-        version: app.getVersion(),
+        version,
     };
 });
 
