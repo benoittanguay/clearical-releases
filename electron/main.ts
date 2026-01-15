@@ -18,6 +18,7 @@ import { saveEncryptedFile, decryptFile, getEncryptionKey, isFileEncrypted } fro
 import { storeCredential, getCredential, deleteCredential, hasCredential, listCredentialKeys, isSecureStorageAvailable } from './credentialStorage.js';
 import { initializeLicensing } from './licensing/ipcHandlers.js';
 import { initializeSubscription, cleanupSubscription } from './subscription/ipcHandlers.js';
+import { requirePremium } from './subscription/premiumGuard.js';
 import { initializeAuth } from './auth/ipcHandlers.js';
 import { AIAssignmentService, ActivityContext, AssignmentSuggestion } from './aiAssignmentService.js';
 import { AIAccountService, TempoAccount, AccountSelection, HistoricalAccountUsage } from './aiAccountService.js';
@@ -1525,7 +1526,8 @@ ipcMain.handle('show-item-in-folder', async (event, filePath: string) => {
 });
 
 // Tempo API handlers - Proxy requests through main process to avoid CORS
-ipcMain.handle('tempo-api-request', async (event, { url, method = 'GET', headers = {}, body }) => {
+// PREMIUM FEATURE: Requires Workplace Plan subscription
+ipcMain.handle('tempo-api-request', requirePremium('Tempo Integration', async (event, { url, method = 'GET', headers = {}, body }) => {
     console.log('[Main] Tempo API request:', method, url);
     if (body) {
         console.log('[Main] Tempo API request body type:', typeof body);
@@ -1589,10 +1591,11 @@ ipcMain.handle('tempo-api-request', async (event, { url, method = 'GET', headers
             error: error instanceof Error ? error.message : 'Unknown error',
         };
     }
-});
+}));
 
 // Jira API handlers - Proxy requests through main process to avoid CORS
-ipcMain.handle('jira-api-request', async (event, { url, method = 'GET', headers = {}, body }) => {
+// PREMIUM FEATURE: Requires Workplace Plan subscription
+ipcMain.handle('jira-api-request', requirePremium('Jira Integration', async (event, { url, method = 'GET', headers = {}, body }) => {
     console.log('[Main] Jira API request:', method, url);
     if (body) {
         console.log('[Main] Jira API request body type:', typeof body);
@@ -1656,7 +1659,7 @@ ipcMain.handle('jira-api-request', async (event, { url, method = 'GET', headers 
             error: error instanceof Error ? error.message : 'Unknown error',
         };
     }
-});
+}));
 
 // Secure Credential Storage handlers
 ipcMain.handle('secure-store-credential', async (event, key: string, value: string) => {
@@ -2891,7 +2894,7 @@ app.whenReady().then(() => {
 
     // Hide dock icon on macOS - app only appears in menu bar
     // Do this before showing window to avoid visual glitches
-    if (process.platform === 'darwin') {
+    if (process.platform === 'darwin' && app.dock) {
         app.dock.hide();
         console.log('[Main] Dock icon hidden - app runs from menu bar only');
     }

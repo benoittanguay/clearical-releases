@@ -16,3 +16,14 @@ export { WebhookServer } from './webhookServer.js';
 
 // IPC Handlers
 export { initializeSubscription, getSubscriptionValidator } from './ipcHandlers.js';
+
+// Premium Feature Gating
+export {
+    requirePremium,
+    createPremiumHandler,
+    isPremiumUser,
+    checkPremiumAccess,
+    PremiumRequiredError,
+    PREMIUM_FEATURES,
+    getPremiumFeatureNames,
+} from './premiumGuard.js';
