@@ -1601,9 +1601,9 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                                                 strokeLinecap="round"
                                                 strokeLinejoin="round"
                                                 className="flex-shrink-0 transition-transform"
-                                                style={{ color: 'var(--color-text-secondary)', transform: isExpanded ? 'rotate(180deg)' : 'none', transition: 'transform var(--duration-base) var(--ease-out)' }}
+                                                style={{ color: 'var(--color-text-secondary)', transform: isExpanded ? 'rotate(90deg)' : 'none', transition: 'transform var(--duration-base) var(--ease-out)' }}
                                             >
-                                                <polyline points="6 9 12 15 18 9" />
+                                                <polyline points="9 18 15 12 9 6" />
                                             </svg>
                                             {group.appName === 'Manual Entry' ? (
                                                 <div className="w-6 h-6 rounded flex items-center justify-center flex-shrink-0" style={{ backgroundColor: 'var(--color-bg-primary)' }}>
@@ -1844,8 +1844,8 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                     <div className="rounded-xl border p-6 max-w-sm w-full mx-4 shadow-2xl" style={{ backgroundColor: 'var(--color-bg-secondary)', borderColor: 'var(--color-border-primary)', borderRadius: 'var(--radius-3xl)' }}>
                         <div className="text-center">
                             {/* Lock Icon */}
-                            <div className="w-16 h-16 rounded-full mx-auto mb-4 flex items-center justify-center" style={{ background: 'linear-gradient(135deg, var(--color-info) 0%, var(--color-accent) 100%)' }}>
-                                <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <div className="w-16 h-16 rounded-full mx-auto mb-4 flex items-center justify-center" style={{ backgroundColor: 'rgba(255, 72, 0, 0.12)' }}>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--color-accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                     <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
                                     <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
                                 </svg>
@@ -1861,9 +1861,11 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                                     onClick={handleOpenUpgradeUrl}
                                     className="w-full py-3 text-white font-medium rounded-lg transition-all active:scale-95 flex items-center justify-center gap-2"
                                     style={{
-                                        background: 'linear-gradient(135deg, var(--color-info) 0%, var(--color-accent) 100%)',
+                                        backgroundColor: 'var(--color-accent)',
                                         borderRadius: 'var(--btn-radius)'
                                     }}
+                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--color-accent-hover)'}
+                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'var(--color-accent)'}
                                 >
                                     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                         <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>

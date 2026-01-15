@@ -103,8 +103,8 @@ export const BucketItem: React.FC<BucketItemProps> = ({
                 e.currentTarget.style.boxShadow = 'var(--shadow-sm)';
             }}
         >
-            <div className="p-4">
-                <div className="flex justify-between items-start">
+            <div className="py-2 px-4">
+                <div className="flex justify-between items-center">
                     <div className="flex items-center gap-3 flex-1 min-w-0">
                         {/* Expand/Collapse chevron for folders */}
                         {bucket.isFolder && onToggleExpand && (

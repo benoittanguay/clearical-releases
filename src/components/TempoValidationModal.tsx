@@ -244,7 +244,7 @@ export function TempoValidationModal({
             >
                 {/* Modal */}
                 <div
-                    className="bg-[var(--color-bg-secondary)] rounded-[12px] border border-[var(--color-border-primary)] max-w-lg w-full shadow-2xl animate-scale-in max-h-[90vh] flex flex-col"
+                    className="bg-[var(--color-bg-secondary)] rounded-[12px] border border-[var(--color-border-primary)] max-w-lg w-full shadow-2xl animate-scale-in max-h-[90vh] flex flex-col overflow-hidden"
                     onClick={(e) => e.stopPropagation()}
                     style={{ boxShadow: 'var(--shadow-xl)' }}
                 >
@@ -263,6 +263,7 @@ export function TempoValidationModal({
                             onClick={onClose}
                             className="p-1 hover:bg-[var(--color-bg-tertiary)] rounded transition-colors text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
                             disabled={isLogging}
+                            aria-label="Close dialog"
                         >
                             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                 <line x1="18" y1="6" x2="6" y2="18" />

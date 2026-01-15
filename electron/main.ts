@@ -737,8 +737,39 @@ ipcMain.handle('analyze-screenshot', async (event, imagePath: string, requestId?
         console.log('[Main] Could not parse app info from filename:', parseError);
     }
 
+    // Get user role from settings for AI context optimization
+    let userRole: string | undefined;
+    let roleContext: string | undefined;
     try {
-        const fastVLMResult = await fastVLMServer.analyzeScreenshot(analyzeImagePath, appName, windowTitle, requestId);
+        const db = DatabaseService.getInstance();
+        const aiSettings = db.getSetting('ai');
+        if (aiSettings?.userRole) {
+            userRole = aiSettings.userRole;
+            // Build role context string based on role metadata
+            const roleMetadata: Record<string, { context: string }> = {
+                software_developer: { context: 'software development, coding, debugging, code review, testing' },
+                designer: { context: 'design, user interface, user experience, visual design, prototyping' },
+                product_manager: { context: 'product management, roadmap planning, feature prioritization' },
+                project_manager: { context: 'project management, scheduling, resource allocation, status tracking' },
+                data_analyst: { context: 'data analysis, reporting, visualization, insights, modeling' },
+                marketing: { context: 'marketing, content creation, campaigns, analytics, social media' },
+                sales: { context: 'sales, business development, client relationships, proposals' },
+                finance: { context: 'finance, accounting, budgeting, financial analysis' },
+                customer_support: { context: 'customer support, ticket resolution, customer communication' },
+                executive: { context: 'executive management, strategic planning, leadership, decision-making' },
+                researcher: { context: 'research, analysis, documentation, literature review' },
+                other: { context: aiSettings.customRoleDescription || 'general knowledge work' }
+            };
+            roleContext = userRole ? roleMetadata[userRole]?.context : undefined;
+            roleContext = roleContext || 'general knowledge work';
+            console.log('[Main] Using role context for analysis - role:', userRole);
+        }
+    } catch (settingsError) {
+        console.log('[Main] Could not get user role from settings:', settingsError);
+    }
+
+    try {
+        const fastVLMResult = await fastVLMServer.analyzeScreenshot(analyzeImagePath, appName, windowTitle, requestId, userRole, roleContext);
 
         // Clean up temp decrypted file if we created one
         if (tempDecryptedPath) {

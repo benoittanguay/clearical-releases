@@ -119,7 +119,7 @@ export function PermissionRequestModal({ isOpen, onClose, onPermissionsGranted }
 
     return (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 animate-fade-in">
-            <div className="bg-[var(--color-bg-secondary)] rounded-[12px] shadow-2xl w-full max-w-2xl mx-4 border border-[var(--color-border-primary)] max-h-[90vh] flex flex-col">
+            <div className="bg-[var(--color-bg-secondary)] rounded-[12px] shadow-2xl w-full max-w-2xl mx-4 border border-[var(--color-border-primary)] max-h-[90vh] flex flex-col overflow-hidden">
                 {/* Header */}
                 <div className="bg-[var(--color-warning-muted)] border-b border-[var(--color-border-primary)] px-6 py-4 flex-shrink-0">
                     <div className="flex items-center gap-3">

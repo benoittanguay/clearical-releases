@@ -909,7 +909,7 @@ function App() {
             <>
               {/* Sticky Header */}
               <div className="flex-shrink-0 px-4 py-3 z-20 drag-handle" style={{ backgroundColor: 'var(--color-bg-primary)', borderBottom: '1px solid var(--color-border-primary)' }}>
-                <h2 className="text-xl font-bold" style={{ color: 'var(--color-text-primary)' }}>Settings</h2>
+                <h2 className="text-2xl font-bold" style={{ color: 'var(--color-text-primary)', fontFamily: 'var(--font-display)' }}>Settings</h2>
               </div>
               {/* Scrollable Content */}
               <div className="flex-1 overflow-y-auto" style={{ backgroundColor: 'var(--color-bg-primary)' }}>
@@ -949,7 +949,7 @@ function App() {
               {/* Fixed Header */}
               <div className="flex-shrink-0 px-6 py-4 z-20 drag-handle" style={{ backgroundColor: 'var(--color-bg-primary)', borderBottom: '1px solid var(--color-border-primary)' }}>
                 <div className="flex items-center justify-between">
-                  <h2 className="text-2xl font-bold" style={{ color: 'var(--color-text-primary)' }}>Worklog</h2>
+                  <h2 className="text-2xl font-bold" style={{ color: 'var(--color-text-primary)', fontFamily: 'var(--font-display)' }}>Worklog</h2>
                   {entries.length > 0 && (
                     <div className="flex items-center gap-3 no-drag">
                       <button
@@ -1074,7 +1074,7 @@ function App() {
                           <div key={weekKey} className="mb-6 last:mb-0">
                             {/* Week Header - Sticky and more prominent */}
                             <div
-                              className="sticky top-0 z-20 px-4 py-3 mb-3 -mx-4 flex items-center justify-between shadow-md"
+                              className="sticky top-0 z-20 px-4 py-3 -mx-4 flex items-center justify-between shadow-md"
                               style={{
                                 backgroundColor: 'var(--color-bg-primary)',
                                 borderBottom: '2px solid var(--color-border-secondary)',

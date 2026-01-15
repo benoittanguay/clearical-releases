@@ -304,81 +304,69 @@ export function Settings({ onOpenJiraModal, onOpenTempoModal }: SettingsProps = 
         }
     };
 
-    // Handle download latest version
-    const handleDownloadLatest = async () => {
-        const downloadUrl = 'https://github.com/benoittanguay/clearical-releases/releases/latest/download/Clearical-arm64.dmg';
-        try {
-            await window.electron.ipcRenderer.openExternal(downloadUrl);
-        } catch (error) {
-            console.error('[Settings] Failed to open download URL:', error);
-        }
-    };
-
     const hasJiraAccess = hasFeature('jira');
     const hasTempoAccess = hasFeature('tempo');
 
     return (
         <div className="w-full flex-1 flex flex-col px-4 pb-4">
             {/* Account & Subscription */}
-            <div className="bg-[var(--color-bg-secondary)] p-4 rounded-2xl mb-3 border border-[var(--color-border-primary)] transition-all duration-200 hover:border-[var(--color-border-primary)]/60">
-                <h3 className="text-[10px] font-bold text-[var(--color-text-secondary)] uppercase tracking-wider mb-3 font-[var(--font-display)]">Account</h3>
+            <div className="bg-[var(--color-bg-secondary)] p-4 rounded-2xl mb-3 border border-[var(--color-border-primary)] transition-all duration-200 hover:border-[var(--color-border-primary)]/60 mt-3">
+                <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-[10px] font-bold text-[var(--color-text-secondary)] uppercase tracking-wider font-[var(--font-display)]">Account</h3>
+                    <div className="flex items-center gap-2">
+                        {subscription.isTrial && (
+                            <button
+                                onClick={handleUpgrade}
+                                disabled={isOpeningPortal}
+                                className="px-3 py-1.5 bg-[var(--color-accent)] hover:bg-[var(--color-accent)]/90 disabled:opacity-50 text-white text-xs rounded-lg transition-all font-medium"
+                            >
+                                {isOpeningPortal ? 'Opening...' : 'Upgrade'}
+                            </button>
+                        )}
+                        {!subscription.isTrial && subscription.tier === 'workplace' && subscription.isActive && (
+                            <button
+                                onClick={handleOpenPortal}
+                                disabled={isOpeningPortal}
+                                className="px-3 py-1.5 bg-[var(--color-accent)] hover:bg-[var(--color-accent)]/90 disabled:opacity-50 text-white text-xs rounded-lg transition-all font-medium"
+                            >
+                                {isOpeningPortal ? 'Opening...' : 'Manage'}
+                            </button>
+                        )}
+                        {!subscription.isTrial && subscription.tier === 'free' && (
+                            <button
+                                onClick={handleUpgrade}
+                                disabled={isOpeningPortal}
+                                className="px-3 py-1.5 bg-[var(--color-accent)] hover:bg-[var(--color-accent)]/90 disabled:opacity-50 text-white text-xs rounded-lg transition-all font-medium"
+                            >
+                                {isOpeningPortal ? 'Opening...' : 'Upgrade'}
+                            </button>
+                        )}
+                        <button
+                            onClick={handleSignOut}
+                            className="px-3 py-1.5 bg-[var(--color-bg-secondary)] hover:bg-[var(--color-bg-secondary)]/70 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] text-xs rounded-lg transition-all border border-[var(--color-border-primary)] font-medium"
+                        >
+                            Sign Out
+                        </button>
+                    </div>
+                </div>
                 <div className="space-y-2.5">
                     {/* User info */}
                     <div className="bg-[var(--color-bg-tertiary)] p-3 rounded-xl border border-[var(--color-border-primary)] transition-all duration-200 hover:border-[var(--color-accent)]/20">
-                        <div className="flex items-start justify-between gap-3">
-                            <div className="flex-1 min-w-0">
-                                <div className="text-sm font-medium text-[var(--color-text-primary)] mb-1">{user?.email || 'Unknown'}</div>
-                                <div className="text-xs text-[var(--color-text-secondary)] font-mono">
-                                    {subscription.isTrial && (
-                                        <>
-                                            <span className="text-[var(--color-info)] font-semibold">TRIAL</span>
-                                            <span className="mx-1.5">·</span>
-                                            <span>{subscription.trialDaysRemaining} days remaining</span>
-                                        </>
-                                    )}
-                                    {!subscription.isTrial && subscription.tier === 'workplace' && subscription.isActive && (
-                                        <span>Workplace Plan</span>
-                                    )}
-                                    {!subscription.isTrial && subscription.tier === 'free' && (
-                                        <span>Free Plan</span>
-                                    )}
-                                </div>
-                            </div>
-                            <div className="flex items-center gap-2 flex-shrink-0">
-                                {subscription.isTrial && (
-                                    <button
-                                        onClick={handleUpgrade}
-                                        disabled={isOpeningPortal}
-                                        className="px-3 py-1.5 bg-[var(--color-accent)] hover:bg-[var(--color-accent)]/90 disabled:opacity-50 text-white text-xs rounded-lg transition-all font-medium"
-                                    >
-                                        {isOpeningPortal ? 'Opening...' : 'Upgrade Now'}
-                                    </button>
-                                )}
-                                {!subscription.isTrial && subscription.tier === 'workplace' && subscription.isActive && (
-                                    <button
-                                        onClick={handleOpenPortal}
-                                        disabled={isOpeningPortal}
-                                        className="px-3 py-1.5 bg-[var(--color-accent)] hover:bg-[var(--color-accent)]/90 disabled:opacity-50 text-white text-xs rounded-lg transition-all font-medium"
-                                    >
-                                        {isOpeningPortal ? 'Opening...' : 'Manage'}
-                                    </button>
-                                )}
-                                {!subscription.isTrial && subscription.tier === 'free' && (
-                                    <button
-                                        onClick={handleUpgrade}
-                                        disabled={isOpeningPortal}
-                                        className="px-3 py-1.5 bg-[var(--color-accent)] hover:bg-[var(--color-accent)]/90 disabled:opacity-50 text-white text-xs rounded-lg transition-all font-medium"
-                                    >
-                                        {isOpeningPortal ? 'Opening...' : 'Upgrade Now'}
-                                    </button>
-                                )}
-                                <button
-                                    onClick={handleSignOut}
-                                    className="px-3 py-1.5 bg-[var(--color-bg-secondary)] hover:bg-[var(--color-bg-secondary)]/70 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] text-xs rounded-lg transition-all border border-[var(--color-border-primary)] font-medium"
-                                >
-                                    Sign Out
-                                </button>
-                            </div>
+                        <div className="text-sm font-medium text-[var(--color-text-primary)] mb-1">{user?.email || 'Unknown'}</div>
+                        <div className="text-xs text-[var(--color-text-secondary)] font-mono">
+                            {subscription.isTrial && (
+                                <>
+                                    <span className="text-[var(--color-info)] font-semibold">TRIAL</span>
+                                    <span className="mx-1.5">·</span>
+                                    <span>{subscription.trialDaysRemaining} days remaining</span>
+                                </>
+                            )}
+                            {!subscription.isTrial && subscription.tier === 'workplace' && subscription.isActive && (
+                                <span>Workplace Plan</span>
+                            )}
+                            {!subscription.isTrial && subscription.tier === 'free' && (
+                                <span>Free Plan</span>
+                            )}
                         </div>
                     </div>
 
@@ -446,7 +434,15 @@ export function Settings({ onOpenJiraModal, onOpenTempoModal }: SettingsProps = 
 
             {/* Activity Filtering Settings */}
             <div className="bg-[var(--color-bg-secondary)] p-4 rounded-2xl mb-3 border border-[var(--color-border-primary)]">
-                <h3 className="text-[10px] font-bold text-[var(--color-text-secondary)] uppercase tracking-wider mb-3 font-[var(--font-display)]">Activity Filtering</h3>
+                <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-[10px] font-bold text-[var(--color-text-secondary)] uppercase tracking-wider font-[var(--font-display)]">Activity Filtering</h3>
+                    <button
+                        onClick={handleResetSettings}
+                        className="px-3 py-1.5 bg-[var(--color-bg-tertiary)] hover:bg-[var(--color-bg-tertiary)]/70 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] text-xs rounded-lg transition-all border border-[var(--color-border-primary)] font-medium"
+                    >
+                        Reset to Defaults
+                    </button>
+                </div>
 
                 <div className="space-y-3">
                     <div>
@@ -493,15 +489,6 @@ export function Settings({ onOpenJiraModal, onOpenTempoModal }: SettingsProps = 
                                 Maximum time gap between same-app activities to keep short activities
                             </div>
                         </div>
-                    </div>
-
-                    <div className="flex gap-2 pt-1.5">
-                        <button
-                            onClick={handleResetSettings}
-                            className="px-3 py-1.5 bg-[var(--color-bg-tertiary)] hover:bg-[var(--color-bg-tertiary)]/70 text-[var(--color-text-primary)] text-xs rounded-lg transition-all"
-                        >
-                            Reset to Defaults
-                        </button>
                     </div>
                 </div>
             </div>
@@ -897,7 +884,35 @@ export function Settings({ onOpenJiraModal, onOpenTempoModal }: SettingsProps = 
 
             {/* App Version & Updates */}
             <div className="bg-[var(--color-bg-secondary)] p-4 rounded-2xl mb-3 border border-[var(--color-border-primary)]">
-                <h3 className="text-[10px] font-bold text-[var(--color-text-secondary)] uppercase tracking-wider mb-3 font-[var(--font-display)]">App Version & Updates</h3>
+                <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-[10px] font-bold text-[var(--color-text-secondary)] uppercase tracking-wider font-[var(--font-display)]">App Version & Updates</h3>
+                    <button
+                        onClick={handleCheckForUpdates}
+                        disabled={isCheckingUpdate}
+                        className={`px-3 py-1.5 text-xs rounded-lg transition-all flex items-center gap-1.5 font-medium ${
+                            isCheckingUpdate
+                                ? 'bg-[var(--color-bg-tertiary)] text-[var(--color-text-secondary)] cursor-not-allowed'
+                                : 'bg-[var(--color-accent)] hover:bg-[var(--color-accent)]/90 text-white'
+                        }`}
+                    >
+                        {isCheckingUpdate ? (
+                            <>
+                                <svg className="animate-spin h-3.5 w-3.5" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                Checking...
+                            </>
+                        ) : (
+                            <>
+                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                </svg>
+                                Check for Updates
+                            </>
+                        )}
+                    </button>
+                </div>
 
                 <div className="space-y-2">
                     {/* Current Version */}
@@ -929,46 +944,6 @@ export function Settings({ onOpenJiraModal, onOpenTempoModal }: SettingsProps = 
                             </div>
                         </div>
                     )}
-
-                    {/* Update Buttons */}
-                    <div className="grid grid-cols-2 gap-2">
-                        <button
-                            onClick={handleCheckForUpdates}
-                            disabled={isCheckingUpdate}
-                            className={`px-3 py-2 text-sm rounded-lg transition-all flex items-center justify-center gap-2 ${
-                                isCheckingUpdate
-                                    ? 'bg-[var(--color-bg-tertiary)] text-[var(--color-text-secondary)] cursor-not-allowed'
-                                    : 'bg-[var(--color-accent)] hover:bg-[var(--color-accent)]/90 text-white'
-                            }`}
-                        >
-                            {isCheckingUpdate ? (
-                                <>
-                                    <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
-                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                    </svg>
-                                    Checking...
-                                </>
-                            ) : (
-                                <>
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                                    </svg>
-                                    Check for Updates
-                                </>
-                            )}
-                        </button>
-
-                        <button
-                            onClick={handleDownloadLatest}
-                            className="px-3 py-2 text-sm rounded-lg transition-all flex items-center justify-center gap-2 bg-[var(--color-success)] hover:bg-[var(--color-success)]/90 text-white"
-                        >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                            </svg>
-                            Download Latest
-                        </button>
-                    </div>
 
                     {/* Update error message */}
                     {updateStatus?.error && (
