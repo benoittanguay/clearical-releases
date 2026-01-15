@@ -149,7 +149,12 @@ export class JiraService {
             console.log(`[JiraService] ✅ Response received in ${requestDuration}ms:`, { success: result.success, status: result.status });
             
             if (!result.success) {
-                if (result.error) {
+                // Check for premium requirement error
+                if (result.code === 'PREMIUM_REQUIRED') {
+                    const error = new Error(result.error || 'Premium subscription required');
+                    (error as any).code = 'PREMIUM_REQUIRED';
+                    throw error;
+                } else if (result.error) {
                     throw new Error(`Network error: ${result.error}`);
                 } else {
                     throw new Error(`API error (${result.status}): ${result.statusText}`);
@@ -171,6 +176,10 @@ export class JiraService {
             return true;
         } catch (error) {
             console.error('[JiraService] Connection test failed:', error);
+            // Rethrow premium errors so they can be displayed to the user
+            if ((error as any)?.code === 'PREMIUM_REQUIRED') {
+                throw error;
+            }
             return false;
         }
     }

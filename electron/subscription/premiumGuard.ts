@@ -17,6 +17,7 @@
 
 import { SubscriptionStorage } from './subscriptionStorage.js';
 import { SubscriptionStatus, isPremiumStatus } from './types.js';
+import { getSubscriptionValidator } from './ipcHandlers.js';
 
 /**
  * Error thrown when a user tries to access a premium feature without a valid subscription
@@ -37,10 +38,30 @@ export class PremiumRequiredError extends Error {
 /**
  * Check if the current user has premium access
  * Returns true if user has an active trial, active subscription, or is in grace period
+ *
+ * If no subscription exists, triggers validation to create a trial automatically.
  */
 export async function isPremiumUser(): Promise<boolean> {
     try {
-        const subscription = await SubscriptionStorage.getSubscription();
+        let subscription = await SubscriptionStorage.getSubscription();
+
+        // If no subscription exists, trigger validation to create trial
+        if (!subscription) {
+            console.log('[PremiumGuard] No subscription found, triggering validation to create trial');
+            const validator = getSubscriptionValidator();
+            if (validator) {
+                const result = await validator.validate();
+                subscription = result.subscription;
+                console.log('[PremiumGuard] Validation result:', {
+                    valid: result.valid,
+                    mode: result.mode,
+                    status: subscription?.status,
+                });
+            } else {
+                console.warn('[PremiumGuard] Subscription validator not initialized');
+                return false;
+            }
+        }
 
         if (!subscription) {
             return false;
