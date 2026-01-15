@@ -9,7 +9,7 @@ export function UpdateSuccessModal({ isOpen, onClose, version, releaseNotes }: U
     if (!isOpen) return null;
 
     // Fallback to a default version if none provided
-    const displayVersion = version || '0.1.7';
+    const displayVersion = version || 'Unknown';
 
     return (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 animate-fade-in">
