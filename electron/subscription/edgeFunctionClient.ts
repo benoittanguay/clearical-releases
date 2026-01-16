@@ -63,6 +63,12 @@ export class EdgeFunctionClient {
             );
         }
 
+        // Debug: Log token expiry info
+        const now = Date.now();
+        const expiresIn = session.expiresAt ? Math.floor((session.expiresAt - now) / 1000) : 'unknown';
+        console.log('[EdgeFunctionClient] Using token expiring in', expiresIn, 'seconds');
+        console.log('[EdgeFunctionClient] Token prefix:', session.accessToken?.substring(0, 20) + '...');
+
         const response = await fetch(this.config.api.stripeCheckout, {
             method: 'POST',
             headers: {

@@ -91,26 +91,40 @@ export class SupabaseAuthService {
 
     /**
      * Get current session from storage
+     * Automatically refreshes the token if expired
      */
     async getSession(): Promise<AuthSession | null> {
-        if (this.currentSession) {
-            return this.currentSession;
-        }
-
-        // Try to load from encrypted file
-        try {
-            if (fs.existsSync(this.sessionFilePath)) {
-                const encryptedData = fs.readFileSync(this.sessionFilePath);
-                const decrypted = this.decrypt(encryptedData);
-                this.currentSession = JSON.parse(decrypted);
-                return this.currentSession;
+        // Load from file if not in memory
+        if (!this.currentSession) {
+            try {
+                if (fs.existsSync(this.sessionFilePath)) {
+                    const encryptedData = fs.readFileSync(this.sessionFilePath);
+                    const decrypted = this.decrypt(encryptedData);
+                    this.currentSession = JSON.parse(decrypted);
+                }
+            } catch (error) {
+                console.error('[SupabaseAuth] Failed to load session:', error);
+                this.clearSession();
+                return null;
             }
-        } catch (error) {
-            console.error('[SupabaseAuth] Failed to load session:', error);
-            this.clearSession();
         }
 
-        return null;
+        if (!this.currentSession) {
+            return null;
+        }
+
+        // Check if session is expired or about to expire (within 5 minutes)
+        const expiryBuffer = 5 * 60 * 1000; // 5 minutes
+        if (Date.now() >= this.currentSession.expiresAt - expiryBuffer) {
+            console.log('[SupabaseAuth] Token expired or expiring soon, refreshing...');
+            const refreshed = await this.refreshSession();
+            if (!refreshed) {
+                console.error('[SupabaseAuth] Failed to refresh expired token');
+                return null;
+            }
+        }
+
+        return this.currentSession;
     }
 
     /**
