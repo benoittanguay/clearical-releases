@@ -1176,7 +1176,7 @@ function App() {
                                     </div>
 
                                     {/* Activities for this date */}
-                                    <div className="space-y-2 mt-2">
+                                    <div className="space-y-2 mt-4">
                                       {dateEntries.map(entry => {
                                         // Get assignment info from unified model or fallback to legacy fields
                                         const assignment = entry.assignment ||
