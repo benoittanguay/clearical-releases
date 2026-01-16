@@ -171,7 +171,7 @@ export function ScreenshotGallery({ screenshotPaths, metadata, onClose, onScreen
             tabIndex={-1}
         >
             {/* Simple Header */}
-            <div className="absolute top-4 right-4 flex items-center gap-2 z-20">
+            <div className="absolute top-4 right-4 flex items-center gap-2 z-20 no-drag">
                     {/* Info Toggle Button */}
                     {currentMetadata && (
                         <button
@@ -243,7 +243,7 @@ export function ScreenshotGallery({ screenshotPaths, metadata, onClose, onScreen
                             e.stopPropagation();
                             prevScreenshot();
                         }}
-                        className="absolute left-4 top-1/2 -translate-y-1/2 text-white hover:text-gray-300 hover:scale-110 active:scale-95 transition-all z-10 bg-black/50 hover:bg-black/70 rounded-full p-3"
+                        className="absolute left-4 top-1/2 -translate-y-1/2 text-white hover:text-gray-300 hover:scale-110 active:scale-95 transition-all z-10 bg-black/50 hover:bg-black/70 rounded-full p-3 no-drag"
                         style={{ transitionDuration: 'var(--duration-fast)', transitionTimingFunction: 'var(--ease-out)' }}
                     >
                         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -255,7 +255,7 @@ export function ScreenshotGallery({ screenshotPaths, metadata, onClose, onScreen
                             e.stopPropagation();
                             nextScreenshot();
                         }}
-                        className="absolute right-4 top-1/2 -translate-y-1/2 text-white hover:text-gray-300 hover:scale-110 active:scale-95 transition-all z-10 bg-black/50 hover:bg-black/70 rounded-full p-3"
+                        className="absolute right-4 top-1/2 -translate-y-1/2 text-white hover:text-gray-300 hover:scale-110 active:scale-95 transition-all z-10 bg-black/50 hover:bg-black/70 rounded-full p-3 no-drag"
                         style={{ transitionDuration: 'var(--duration-fast)', transitionTimingFunction: 'var(--ease-out)' }}
                     >
                         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -299,7 +299,7 @@ export function ScreenshotGallery({ screenshotPaths, metadata, onClose, onScreen
 
             {/* Metadata Panel */}
             {showMetadata && currentMetadata && (
-                <div className="absolute top-20 left-4 bg-black/70 backdrop-blur-sm text-white rounded-lg p-4 max-w-lg z-20 animate-slide-in-right" style={{ boxShadow: 'var(--shadow-lg)' }}>
+                <div className="absolute top-20 left-4 bg-black/70 backdrop-blur-sm text-white rounded-lg p-4 max-w-lg z-20 animate-slide-in-right no-drag" style={{ boxShadow: 'var(--shadow-lg)' }}>
                     <div className="flex items-center justify-between mb-3">
                         <h3 className="text-lg font-semibold">Screenshot Info</h3>
                         <button
