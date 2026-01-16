@@ -761,69 +761,42 @@ function App() {
                   </h2>
                 </div>
 
-                {/* Tab Bar */}
-                <div className="px-6 pb-3">
-                  <div className="flex gap-2">
+                {/* Tab Bar - Underline style */}
+                <div className="px-6" style={{ borderBottom: '1px solid var(--color-border-primary)' }}>
+                  <div className="flex gap-6">
                     <button
                       onClick={() => setBucketsTab('buckets')}
-                      className="px-4 py-2 text-sm font-semibold rounded-lg transition-all"
+                      className="relative pb-3 text-sm font-medium transition-colors"
                       style={{
-                        backgroundColor: bucketsTab === 'buckets' ? 'var(--color-accent)' : 'transparent',
-                        color: bucketsTab === 'buckets' ? 'white' : 'var(--color-text-secondary)',
-                        fontFamily: 'var(--font-display)',
-                        border: bucketsTab === 'buckets' ? 'none' : '1px solid var(--color-border-primary)',
-                        boxShadow: bucketsTab === 'buckets' ? 'var(--shadow-accent)' : 'none',
-                        transitionDuration: 'var(--duration-base)',
-                        transitionTimingFunction: 'var(--ease-out)'
-                      }}
-                      onMouseEnter={(e) => {
-                        if (bucketsTab !== 'buckets') {
-                          e.currentTarget.style.backgroundColor = 'var(--color-bg-secondary)';
-                          e.currentTarget.style.borderColor = 'var(--color-border-secondary)';
-                        }
-                      }}
-                      onMouseLeave={(e) => {
-                        if (bucketsTab !== 'buckets') {
-                          e.currentTarget.style.backgroundColor = 'transparent';
-                          e.currentTarget.style.borderColor = 'var(--color-border-primary)';
-                        }
+                        color: bucketsTab === 'buckets' ? 'var(--color-accent)' : 'var(--color-text-tertiary)',
+                        fontFamily: 'var(--font-body)',
                       }}
                     >
                       My Buckets
+                      {bucketsTab === 'buckets' && (
+                        <span
+                          className="absolute bottom-0 left-0 right-0 h-0.5"
+                          style={{ backgroundColor: 'var(--color-accent)' }}
+                        />
+                      )}
                     </button>
 
                     {(settings.jira?.enabled || settings.tempo?.enabled) && (
                       <button
                         onClick={() => setBucketsTab('jira')}
-                        className="px-4 py-2 text-sm font-semibold rounded-lg transition-all flex items-center gap-2"
+                        className="relative pb-3 text-sm font-medium transition-colors flex items-center gap-1.5"
                         style={{
-                          backgroundColor: bucketsTab === 'jira' ? 'var(--color-accent)' : 'transparent',
-                          color: bucketsTab === 'jira' ? 'white' : 'var(--color-text-secondary)',
-                          fontFamily: 'var(--font-display)',
-                          border: bucketsTab === 'jira' ? 'none' : '1px solid var(--color-border-primary)',
-                          boxShadow: bucketsTab === 'jira' ? 'var(--shadow-accent)' : 'none',
-                          transitionDuration: 'var(--duration-base)',
-                          transitionTimingFunction: 'var(--ease-out)'
-                        }}
-                        onMouseEnter={(e) => {
-                          if (bucketsTab !== 'jira') {
-                            e.currentTarget.style.backgroundColor = 'var(--color-bg-secondary)';
-                            e.currentTarget.style.borderColor = 'var(--color-border-secondary)';
-                          }
-                        }}
-                        onMouseLeave={(e) => {
-                          if (bucketsTab !== 'jira') {
-                            e.currentTarget.style.backgroundColor = 'transparent';
-                            e.currentTarget.style.borderColor = 'var(--color-border-primary)';
-                          }
+                          color: bucketsTab === 'jira' ? 'var(--color-accent)' : 'var(--color-text-tertiary)',
+                          fontFamily: 'var(--font-body)',
                         }}
                       >
-                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <rect x="2" y="3" width="20" height="14" rx="2"/>
-                          <line x1="8" y1="21" x2="16" y2="21"/>
-                          <line x1="12" y1="17" x2="12" y2="21"/>
-                        </svg>
                         Jira Issues
+                        {bucketsTab === 'jira' && (
+                          <span
+                            className="absolute bottom-0 left-0 right-0 h-0.5"
+                            style={{ backgroundColor: 'var(--color-accent)' }}
+                          />
+                        )}
                       </button>
                     )}
                   </div>
