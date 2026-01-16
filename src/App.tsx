@@ -1281,21 +1281,21 @@ function App() {
                                               {entry.description && (
                                                 <p className="text-xs mb-1 truncate" style={{ color: 'var(--color-text-secondary)' }}>{entry.description}</p>
                                               )}
-                                              <span className="text-xs" style={{ color: 'var(--color-text-primary)', fontFamily: 'var(--font-mono)' }}>{new Date(entry.startTime).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true })} - {new Date(entry.startTime + entry.duration).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true })}</span>
+                                              <div className="flex flex-col gap-0.5">
+                                                <span className="text-xs" style={{ color: 'var(--color-text-primary)', fontFamily: 'var(--font-mono)' }}>{new Date(entry.startTime).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true })} - {new Date(entry.startTime + entry.duration).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true })}</span>
+                                                {roundedDiff > 0 && (
+                                                  <span className="text-xs" style={{ color: 'var(--color-text-tertiary)', fontFamily: 'var(--font-mono)' }}>
+                                                    +{formatTime(roundedDiff)}
+                                                  </span>
+                                                )}
+                                              </div>
                                             </div>
                                             <div className="flex items-center gap-3">
                                               {entry.windowActivity && entry.windowActivity.length > 0 && (
                                                 <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{entry.windowActivity.length} activities</span>
                                               )}
-                                              <div className="flex flex-col items-end gap-0.5">
-                                                <div className="font-mono font-bold" style={{ color: 'var(--color-accent)', fontFamily: 'var(--font-mono)' }}>
-                                                  {formatTime(entry.duration)}
-                                                </div>
-                                                {roundedDiff > 0 && (
-                                                  <span className="text-xs" style={{ color: 'var(--color-text-tertiary)', fontFamily: 'var(--font-mono)' }}>
-                                                    Rounded +{formatTime(roundedDiff)}
-                                                  </span>
-                                                )}
+                                              <div className="font-mono font-bold" style={{ color: 'var(--color-accent)', fontFamily: 'var(--font-mono)' }}>
+                                                {formatTime(roundedDuration)}
                                               </div>
                                               <DeleteButton
                                                 onDelete={() => removeEntry(entry.id)}

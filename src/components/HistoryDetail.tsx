@@ -1092,16 +1092,17 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                 <div className="border rounded-lg mt-4" style={{ backgroundColor: 'var(--color-bg-secondary)', borderColor: 'var(--color-border-primary)', borderRadius: 'var(--radius-2xl)', boxShadow: 'var(--shadow-md)' }}>
                     {/* Time Summary Section - Start/End times and Duration counter */}
                     <div className="flex items-center justify-between p-4 border-b" style={{ borderColor: 'var(--color-border-secondary)' }}>
-                        <div className="flex flex-col gap-1.5">
-                            {/* Start and End times - Side by side */}
-                            <div className="flex items-center gap-3 text-xs" style={{ color: 'var(--color-text-secondary)', fontFamily: 'var(--font-mono)' }}>
-                                <span><span className="font-semibold">Start:</span> {new Date(entry.startTime).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true })}</span>
-                                <span><span className="font-semibold">End:</span> {new Date(entry.startTime + entry.duration).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true })}</span>
-                            </div>
-                            {/* Elapsed time */}
-                            <div className="text-xs" style={{ color: 'var(--color-text-tertiary)', fontFamily: 'var(--font-mono)' }}>
-                                <span className="font-semibold">Elapsed:</span> {formatTime(entry.duration)}
-                            </div>
+                        <div className="flex flex-col gap-1">
+                            {/* Start - End time range (matching Worklog format) */}
+                            <span className="text-xs" style={{ color: 'var(--color-text-primary)', fontFamily: 'var(--font-mono)' }}>
+                                {new Date(entry.startTime).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true })} - {new Date(entry.startTime + entry.duration).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true })}
+                            </span>
+                            {/* Rounded difference label - aligned with time */}
+                            {isRoundingEnabled && roundTime(entry.duration).isRounded && (
+                                <span className="text-xs" style={{ color: 'var(--color-text-tertiary)', fontFamily: 'var(--font-mono)' }}>
+                                    {roundTime(entry.duration).formattedDifference}
+                                </span>
+                            )}
                         </div>
                         <div className="flex flex-col items-end gap-1" style={{ fontFamily: 'var(--font-mono)' }}>
                             {/* Recorded time - showing rounded time, edit icon on LEFT, using accent color */}
@@ -1110,12 +1111,6 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                                 onChange={handleDurationChange}
                                 formatTime={formatTime}
                             />
-                            {/* Label showing rounded difference */}
-                            {isRoundingEnabled && roundTime(entry.duration).isRounded && (
-                                <div className="text-xs" style={{ color: 'var(--color-text-secondary)', fontFamily: 'var(--font-mono)' }}>
-                                    Rounded {roundTime(entry.duration).formattedDifference}
-                                </div>
-                            )}
                         </div>
                     </div>
 
