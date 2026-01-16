@@ -1,11 +1,11 @@
 {
   "name": "activity-summary",
   "model": "Qwen2.5-0.5B-Instruct-4bit",
-  "description": "Synthesizes multiple activity descriptions into a professional timesheet entry",
-  "version": "1.0.0",
-  "template": "Synthesize these screen activities into ONE professional timesheet entry (2-4 sentences).\n\nRules:\n1. SYNTHESIZE into a cohesive narrative - do not list or paraphrase\n2. Focus on OUTCOMES and accomplishments, not screen descriptions\n3. Write for a client or manager - what billable work was done?\n4. Mention specific deliverables: files edited, features built, issues resolved\n5. Do NOT mention UI elements, tabs, cursors, or screens\n6. Do NOT repeat input phrases verbatim\n\nActivities:\n{activities}\n\n{apps_context}\n\nProfessional summary:",
+  "description": "Summarizes multiple activity descriptions - optimized for 0.5B model",
+  "version": "1.1.0",
+  "template": "Summarize these activities in 2-3 sentences.\n\nRules:\n1. Describe what was done, not who did it\n2. Mention specific files, documents, or pages that were worked on\n3. Only mention apps that appear in the list below\n4. Do NOT invent job titles or roles\n5. Do NOT say \"the user\" or \"the person\" - just describe the work\n\nActivities:\n{activities}\n\n{apps_context}\n\nSummary:",
   "parameters": {
     "max_tokens": 150,
-    "temperature": 0.4
+    "temperature": 0.3
   }
 }

@@ -194,22 +194,20 @@ def summarize_activities(descriptions: List[str], app_names: List[str] = None) -
         unique_apps = list(set(app_names))[:5]
         apps_context = f"\n\nApplications used: {', '.join(unique_apps)}"
 
-    prompt = f"""Synthesize these activities into a professional timesheet entry (2-4 sentences).
+    prompt = f"""Summarize these activities in 2-3 sentences.
 
 Rules:
-1. SYNTHESIZE into one cohesive narrative - do not list or paraphrase
-2. Focus on OUTCOMES and accomplishments
-3. Write for a client/manager - what billable work was completed?
-4. Mention specific deliverables: files edited, features built, issues resolved
-5. Do NOT mention UI elements, tabs, cursors, or screens
-6. Do NOT invent tools or applications not mentioned in the activities
-7. Only mention applications that appear in the activities below
+1. Describe what was done, not who did it
+2. Mention specific files, documents, or pages that were worked on
+3. Only mention apps that appear in the list below
+4. Do NOT invent job titles or roles
+5. Do NOT say "the user" or "the person" - just describe the work
 
 Activities:
 {context}
 {apps_context}
 
-Professional summary:"""
+Summary:"""
 
     try:
         import time

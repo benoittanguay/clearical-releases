@@ -30,24 +30,82 @@ _model_cache: Optional[Tuple[Any, Any]] = None
 
 # Default prompt for screenshot analysis
 # Note: nanoLLaVA requires the <image> token to be present in the prompt
+#
+# IMPORTANT: This prompt is designed for a 0.5B parameter model with limited
+# instruction-following capability. Keep it simple and direct. Complex negations
+# like "don't assume" are often ignored by small models.
 DEFAULT_PROMPT = """<image>
 App: {app_name}
 Window: {window_title}
 
-Describe the work visible in this screenshot in 2-3 sentences.
+What is shown on screen? Write 2 sentences.
 
-Include:
-- Specific file, document, or page names visible
-- Concrete details: function names, error messages, data being edited
-- The task: editing, reviewing, debugging, designing, analyzing, etc.
+Sentence 1: The app name and what type of content is visible (code, document, spreadsheet, webpage, etc.)
+Sentence 2: Specific details you can read: file names, tab titles, visible text, or error messages.
 
-Avoid:
-- Generic phrases like "working on a project"
-- Listing UI elements unless relevant to the task
-- Assumptions about intent
-
-Be specific and factual. Describe only what is visible.
+Only describe what you can see. Do not guess the person's job or role.
 """
+
+
+# Patterns that indicate hallucinated content (job titles, roles, assumptions)
+# These are common outputs from small VLMs that go beyond what's visible
+HALLUCINATION_PATTERNS = [
+    # Job titles and roles
+    r'\b(knowledge worker|product manager|marketing manager|software engineer|developer|designer|'
+    r'data analyst|project manager|business analyst|executive|researcher|accountant|'
+    r'the person|the user|the worker|they are|he is|she is|someone is)\b',
+    # Role assumptions
+    r'\b(working as a|employed as|in their role as|focused on .* tasks|'
+    r'in the image is a|appears to be a professional)\b',
+    # Intent assumptions
+    r'\b(trying to|planning to|about to|intends to|wants to|needs to|'
+    r'preparing to|getting ready to)\b',
+    # Work type assumptions
+    r'\b(billable work|client work|professional work|business activities|'
+    r'knowledge work|office work)\b',
+]
+
+import re
+_hallucination_regex = re.compile('|'.join(HALLUCINATION_PATTERNS), re.IGNORECASE)
+
+
+def clean_hallucinations(text: str) -> str:
+    """
+    Remove hallucinated content from model output.
+
+    Small VLMs often hallucinate job titles, roles, and intent that aren't
+    visible in the screenshot. This function strips those out to keep
+    descriptions factual and grounded in what's actually visible.
+    """
+    if not text:
+        return text
+
+    # Split into sentences for finer-grained filtering
+    sentences = re.split(r'(?<=[.!?])\s+', text.strip())
+    cleaned_sentences = []
+
+    for sentence in sentences:
+        # Skip sentences that are primarily hallucination
+        if _hallucination_regex.search(sentence):
+            # Check if the sentence has substantial non-hallucinated content
+            cleaned = _hallucination_regex.sub('', sentence).strip()
+            # If more than half the sentence was hallucination, skip it
+            if len(cleaned) < len(sentence) * 0.5:
+                logger.info(f"Filtered hallucinated sentence: {sentence[:50]}...")
+                continue
+            # Otherwise, use the cleaned version if it's still coherent
+            if len(cleaned) > 20 and cleaned[0].isupper():
+                sentence = cleaned
+
+        cleaned_sentences.append(sentence)
+
+    result = ' '.join(cleaned_sentences).strip()
+
+    # If we filtered everything, return a safe fallback
+    if not result:
+        return "Screenshot captured."
+
+    return result
 
 
 def get_model_path() -> str:
@@ -374,9 +432,23 @@ def analyze_screenshot(
             logger.warning(f"Generated description is very short ({len(description)} chars): '{description}'")
             logger.warning(f"Full model output was: '{output[:200]}'")
 
+        # Clean hallucinated content (job titles, roles, intent assumptions)
+        # Small VLMs often hallucinate things not visible in the screenshot
+        original_description = description
+        description = clean_hallucinations(description)
+        if description != original_description:
+            logger.info(f"Cleaned hallucinations from output")
+            logger.info(f"Original: {original_description[:100]}...")
+            logger.info(f"Cleaned: {description[:100]}...")
+
         # Calculate a simple confidence score based on output length and quality
         # This is a heuristic - longer, more detailed outputs typically indicate higher confidence
-        confidence = min(0.95, 0.5 + (len(description) / 500))
+        # Reduce confidence if we had to clean hallucinations
+        base_confidence = min(0.95, 0.5 + (len(description) / 500))
+        if description != original_description:
+            confidence = base_confidence * 0.8  # Reduce confidence for cleaned outputs
+        else:
+            confidence = base_confidence
 
         logger.info(f"Generated description: {description[:100]}...")
         logger.info(f"Confidence: {confidence:.2f}")
