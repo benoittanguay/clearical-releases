@@ -769,7 +769,7 @@ ipcMain.handle('analyze-screenshot', async (event, imagePath: string, requestId?
     }
 
     try {
-        const fastVLMResult = await fastVLMServer.analyzeScreenshot(analyzeImagePath, appName, windowTitle, requestId, userRole, roleContext);
+        const fastVLMResult = await fastVLMServer.analyzeScreenshot(analyzeImagePath, appName, windowTitle, requestId);
 
         // Clean up temp decrypted file if we created one
         if (tempDecryptedPath) {
