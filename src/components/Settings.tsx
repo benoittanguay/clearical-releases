@@ -416,18 +416,6 @@ export function Settings({ onOpenJiraModal, onOpenTempoModal }: SettingsProps = 
                         <div className="text-xs text-[var(--color-text-secondary)] mt-1.5">
                             Time entries will be rounded UP to the nearest {tempSettings.timeRoundingIncrement} {tempSettings.timeRoundingIncrement === 1 ? 'minute' : 'minutes'}. This affects display and export to Tempo/Jira.
                         </div>
-
-                        {/* Example showing rounding */}
-                        {tempSettings.timeRoundingIncrement > 1 && (
-                            <div className="mt-2 p-2 bg-[var(--color-bg-tertiary)] rounded-lg border border-[var(--color-border-primary)]">
-                                <div className="text-xs text-[var(--color-text-primary)] font-semibold mb-1">Examples:</div>
-                                <div className="text-xs text-[var(--color-text-secondary)] space-y-0.5">
-                                    <div>• 0:01 to 0:{tempSettings.timeRoundingIncrement.toString().padStart(2, '0')} → 0:{tempSettings.timeRoundingIncrement.toString().padStart(2, '0')}</div>
-                                    <div>• 0:{(tempSettings.timeRoundingIncrement + 1).toString().padStart(2, '0')} to 0:{(tempSettings.timeRoundingIncrement * 2).toString().padStart(2, '0')} → 0:{(tempSettings.timeRoundingIncrement * 2).toString().padStart(2, '0')}</div>
-                                    <div>• 1:01 to 1:{tempSettings.timeRoundingIncrement.toString().padStart(2, '0')} → 1:{tempSettings.timeRoundingIncrement.toString().padStart(2, '0')}</div>
-                                </div>
-                            </div>
-                        )}
                     </div>
                 </div>
             </div>
