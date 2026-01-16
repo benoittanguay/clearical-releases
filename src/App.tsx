@@ -341,9 +341,6 @@ function App() {
 
   return (
     <div className="flex h-screen overflow-hidden font-sans w-full flex-col" style={{ backgroundColor: 'var(--color-bg-primary)', color: 'var(--color-text-primary)' }}>
-      {/* Global Crawler Progress Bar - Fixed at top */}
-      <CrawlerProgressBar />
-
       {/* Main app content */}
       <div className="flex flex-1 overflow-hidden">
         {/* Sidebar - Dark sidebar for contrast against light content */}
@@ -1376,6 +1373,9 @@ function App() {
         onClose={() => setShowPermissionModal(false)}
         onPermissionsGranted={handlePermissionsGranted}
       />
+
+      {/* Global Crawler Progress Bar - Fixed at bottom */}
+      <CrawlerProgressBar />
 
       </div>
     </div>

@@ -1,94 +1,117 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useCrawlerProgress } from '../context/CrawlerProgressContext';
 
 export function CrawlerProgressBar() {
-    const { isActive, projects, overallProgress, totalIssuesFound } = useCrawlerProgress();
+    const { isActive, projects, totalIssuesFound } = useCrawlerProgress();
     const [isExpanded, setIsExpanded] = useState(false);
-
-    // Don't render if not active
-    if (!isActive) {
-        return null;
-    }
+    const [isVisible, setIsVisible] = useState(false);
 
     const projectList = Object.values(projects);
     const activeProjects = projectList.filter(p => !p.isComplete);
     const completedProjects = projectList.filter(p => p.isComplete);
 
-    // Format project status for display
-    const getProjectStatusText = () => {
-        if (activeProjects.length === 0) {
-            return 'Sync complete';
+    // Show banner when syncing starts, hide 3 seconds after complete
+    useEffect(() => {
+        if (isActive || projectList.length > 0) {
+            setIsVisible(true);
         }
 
-        const parts: string[] = [];
-        activeProjects.forEach(p => {
-            parts.push(p.projectKey);
-        });
+        if (!isActive && projectList.length > 0 && activeProjects.length === 0) {
+            // All projects complete - hide after delay
+            const timer = setTimeout(() => {
+                setIsVisible(false);
+            }, 3000);
+            return () => clearTimeout(timer);
+        }
+    }, [isActive, projectList.length, activeProjects.length]);
 
-        return `Syncing: ${parts.join(', ')}`;
-    };
+    // Don't render if nothing to show
+    if (!isVisible || projectList.length === 0) {
+        return null;
+    }
+
+    const allComplete = activeProjects.length === 0;
 
     return (
-        <div className="fixed top-0 left-0 right-0 z-50">
-            {/* Collapsed view - thin bar at top */}
+        <div className="fixed bottom-0 left-[var(--sidebar-width)] right-0 z-40">
+            {/* Main banner */}
             <div
-                className="bg-gray-800 border-b border-gray-700 shadow-lg cursor-pointer select-none"
+                className="cursor-pointer select-none transition-all duration-300"
+                style={{
+                    backgroundColor: 'var(--color-surface-dark)',
+                    borderTop: '1px solid var(--color-border-primary)',
+                    boxShadow: '0 -4px 20px rgba(0, 0, 0, 0.15)',
+                }}
                 onClick={() => setIsExpanded(!isExpanded)}
             >
-                <div className="px-4 py-2 flex items-center">
-                    <div className="flex items-center gap-3 flex-1">
-                        {/* Animated sync icon */}
-                        <div className="relative">
+                <div className="px-4 py-2.5 flex items-center gap-3">
+                    {/* Loading indicator - pulsing dots or checkmark */}
+                    <div className="flex items-center justify-center w-6">
+                        {allComplete ? (
                             <svg
-                                className={`w-4 h-4 text-green-400 ${isActive ? 'animate-spin' : ''}`}
-                                style={{ animationDuration: '2s' }}
-                                xmlns="http://www.w3.org/2000/svg"
-                                fill="none"
-                                viewBox="0 0 24 24"
+                                className="w-5 h-5"
+                                style={{ color: 'var(--color-success)' }}
+                                fill="currentColor"
+                                viewBox="0 0 20 20"
                             >
-                                <path
-                                    stroke="currentColor"
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth={2}
-                                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                                />
+                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                             </svg>
-                        </div>
-
-                        {/* Status text */}
-                        <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                                <span className="text-xs font-medium text-gray-300 truncate">
-                                    {getProjectStatusText()}
-                                </span>
-                                <span className="text-xs text-gray-500">
-                                    ({totalIssuesFound} issues)
-                                </span>
+                        ) : (
+                            <div className="flex items-center gap-1">
+                                <div className="w-1.5 h-1.5 rounded-full animate-pulse-dot-1" style={{ backgroundColor: 'var(--color-accent)' }} />
+                                <div className="w-1.5 h-1.5 rounded-full animate-pulse-dot-2" style={{ backgroundColor: 'var(--color-accent)' }} />
+                                <div className="w-1.5 h-1.5 rounded-full animate-pulse-dot-3" style={{ backgroundColor: 'var(--color-accent)' }} />
                             </div>
+                        )}
+                    </div>
 
-                            {/* Progress bar */}
-                            <div className="mt-1 w-full bg-gray-700 rounded-full h-1 overflow-hidden">
-                                <div
-                                    className="h-full bg-gradient-to-r from-green-600 to-green-400 transition-all duration-300 ease-out relative"
-                                    style={{ width: `${overallProgress}%` }}
-                                >
-                                    {/* Animated shimmer effect */}
-                                    {isActive && (
-                                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-shimmer"></div>
-                                    )}
-                                </div>
+                    {/* Project status chips */}
+                    <div className="flex-1 flex items-center gap-2 overflow-x-auto">
+                        {projectList.map(project => (
+                            <div
+                                key={project.projectKey}
+                                className="flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium whitespace-nowrap transition-all"
+                                style={{
+                                    backgroundColor: project.isComplete
+                                        ? 'rgba(34, 197, 94, 0.1)'
+                                        : 'rgba(255, 72, 0, 0.1)',
+                                    border: `1px solid ${project.isComplete
+                                        ? 'rgba(34, 197, 94, 0.3)'
+                                        : 'rgba(255, 72, 0, 0.3)'}`,
+                                    color: project.isComplete
+                                        ? 'var(--color-success)'
+                                        : 'var(--color-accent)',
+                                }}
+                            >
+                                {project.isComplete ? (
+                                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                    </svg>
+                                ) : (
+                                    <div className="w-2 h-2 rounded-full animate-pulse" style={{ backgroundColor: 'currentColor' }} />
+                                )}
+                                <span>{project.projectKey}</span>
+                                <span style={{ opacity: 0.7 }}>({project.issuesFound})</span>
                             </div>
-                        </div>
+                        ))}
+                    </div>
 
-                        {/* Expand indicator */}
+                    {/* Total count and expand indicator */}
+                    <div className="flex items-center gap-3">
+                        <span
+                            className="text-xs font-mono"
+                            style={{ color: 'var(--color-text-secondary)' }}
+                        >
+                            {totalIssuesFound} total
+                        </span>
                         <svg
-                            className={`w-4 h-4 text-gray-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                            className={`w-4 h-4 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}
+                            style={{ color: 'var(--color-text-tertiary)' }}
                             fill="none"
                             stroke="currentColor"
                             viewBox="0 0 24 24"
                         >
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
                         </svg>
                     </div>
                 </div>
@@ -96,74 +119,153 @@ export function CrawlerProgressBar() {
 
             {/* Expanded view - detailed per-project progress */}
             {isExpanded && (
-                <div className="absolute top-full left-0 right-0 bg-gray-800 border-b border-gray-700 shadow-xl z-[60] animate-fade-in">
+                <div
+                    className="absolute bottom-full left-0 right-0 animate-slide-up"
+                    style={{
+                        backgroundColor: 'var(--color-surface-dark)',
+                        borderTop: '1px solid var(--color-border-primary)',
+                        boxShadow: '0 -8px 30px rgba(0, 0, 0, 0.2)',
+                    }}
+                >
                     <div className="px-4 py-3 max-h-64 overflow-y-auto">
-                        <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
-                            Project Details
+                        <div
+                            className="text-xs font-semibold uppercase tracking-wider mb-3"
+                            style={{
+                                color: 'var(--color-text-secondary)',
+                                fontFamily: 'var(--font-display)',
+                            }}
+                        >
+                            Sync Progress
                         </div>
 
                         {/* Active projects */}
                         {activeProjects.length > 0 && (
                             <div className="space-y-2 mb-3">
                                 {activeProjects.map(project => (
-                                    <div key={project.projectKey} className="bg-gray-750 rounded p-2 border border-gray-600">
-                                        <div className="flex items-center justify-between mb-1.5">
-                                            <span className="text-sm font-medium text-white">
-                                                {project.projectKey}
+                                    <div
+                                        key={project.projectKey}
+                                        className="rounded-lg p-3"
+                                        style={{
+                                            backgroundColor: 'var(--color-bg-secondary)',
+                                            border: '1px solid var(--color-border-primary)',
+                                        }}
+                                    >
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-2">
+                                                <div className="flex items-center gap-0.5">
+                                                    <div className="w-1 h-1 rounded-full animate-pulse-dot-1" style={{ backgroundColor: 'var(--color-accent)' }} />
+                                                    <div className="w-1 h-1 rounded-full animate-pulse-dot-2" style={{ backgroundColor: 'var(--color-accent)' }} />
+                                                    <div className="w-1 h-1 rounded-full animate-pulse-dot-3" style={{ backgroundColor: 'var(--color-accent)' }} />
+                                                </div>
+                                                <span
+                                                    className="text-sm font-semibold"
+                                                    style={{ color: 'var(--color-text-primary)' }}
+                                                >
+                                                    {project.projectKey}
+                                                </span>
+                                                <span
+                                                    className="text-xs px-1.5 py-0.5 rounded"
+                                                    style={{
+                                                        backgroundColor: 'rgba(255, 72, 0, 0.1)',
+                                                        color: 'var(--color-accent)',
+                                                    }}
+                                                >
+                                                    Syncing
+                                                </span>
+                                            </div>
+                                            <span
+                                                className="text-xs font-mono"
+                                                style={{ color: 'var(--color-text-secondary)' }}
+                                            >
+                                                {project.issuesFound} issues found
                                             </span>
-                                            <span className="text-xs text-gray-400">
-                                                {project.issuesFound} issues
-                                            </span>
-                                        </div>
-
-                                        {/* Unified progress bar */}
-                                        <div className="bg-gray-700 rounded-full h-1.5 overflow-hidden">
-                                            <div
-                                                className="h-full bg-green-500 transition-all duration-300"
-                                                style={{ width: `${project.totalProgress}%` }}
-                                            />
                                         </div>
                                     </div>
                                 ))}
                             </div>
                         )}
 
-                        {/* Completed projects (if any) */}
+                        {/* Completed projects */}
                         {completedProjects.length > 0 && (
-                            <div className="border-t border-gray-700 pt-2">
-                                <div className="text-xs text-gray-500 mb-1.5">Completed</div>
-                                <div className="flex flex-wrap gap-2">
+                            <div className={activeProjects.length > 0 ? 'pt-2 border-t' : ''} style={{ borderColor: 'var(--color-border-primary)' }}>
+                                {activeProjects.length > 0 && (
+                                    <div className="text-xs mb-2" style={{ color: 'var(--color-text-tertiary)' }}>Completed</div>
+                                )}
+                                <div className="space-y-2">
                                     {completedProjects.map(project => (
                                         <div
                                             key={project.projectKey}
-                                            className="px-2 py-1 bg-green-600/10 border border-green-600/30 rounded text-xs text-green-400"
+                                            className="rounded-lg p-3"
+                                            style={{
+                                                backgroundColor: 'rgba(34, 197, 94, 0.05)',
+                                                border: '1px solid rgba(34, 197, 94, 0.2)',
+                                            }}
                                         >
-                                            {project.projectKey} ({project.issuesFound})
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-2">
+                                                    <svg
+                                                        className="w-4 h-4"
+                                                        style={{ color: 'var(--color-success)' }}
+                                                        fill="currentColor"
+                                                        viewBox="0 0 20 20"
+                                                    >
+                                                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                                    </svg>
+                                                    <span
+                                                        className="text-sm font-semibold"
+                                                        style={{ color: 'var(--color-success)' }}
+                                                    >
+                                                        {project.projectKey}
+                                                    </span>
+                                                </div>
+                                                <span
+                                                    className="text-xs font-mono"
+                                                    style={{ color: 'var(--color-text-secondary)' }}
+                                                >
+                                                    {project.issuesFound} issues
+                                                </span>
+                                            </div>
                                         </div>
                                     ))}
                                 </div>
                             </div>
                         )}
-
-                        {/* Info note */}
-                        <div className="mt-3 pt-2 border-t border-gray-700">
-                            <p className="text-xs text-gray-500">
-                                The crawler discovers all issues in your projects by scanning issue numbers.
-                                This runs in the background and updates automatically.
-                            </p>
-                        </div>
                     </div>
                 </div>
             )}
 
-            {/* Shimmer animation */}
+            {/* Animations */}
             <style>{`
-                @keyframes shimmer {
-                    0% { transform: translateX(-100%); }
-                    100% { transform: translateX(100%); }
+                @keyframes pulse-dot-1 {
+                    0%, 100% { opacity: 0.3; transform: scale(0.8); }
+                    50% { opacity: 1; transform: scale(1); }
                 }
-                .animate-shimmer {
-                    animation: shimmer 2s infinite;
+                @keyframes pulse-dot-2 {
+                    0%, 100% { opacity: 0.3; transform: scale(0.8); }
+                    50% { opacity: 1; transform: scale(1); }
+                }
+                @keyframes pulse-dot-3 {
+                    0%, 100% { opacity: 0.3; transform: scale(0.8); }
+                    50% { opacity: 1; transform: scale(1); }
+                }
+                .animate-pulse-dot-1 {
+                    animation: pulse-dot-1 1.4s ease-in-out infinite;
+                    animation-delay: 0s;
+                }
+                .animate-pulse-dot-2 {
+                    animation: pulse-dot-2 1.4s ease-in-out infinite;
+                    animation-delay: 0.2s;
+                }
+                .animate-pulse-dot-3 {
+                    animation: pulse-dot-3 1.4s ease-in-out infinite;
+                    animation-delay: 0.4s;
+                }
+                @keyframes slide-up {
+                    from { opacity: 0; transform: translateY(10px); }
+                    to { opacity: 1; transform: translateY(0); }
+                }
+                .animate-slide-up {
+                    animation: slide-up 0.2s ease-out;
                 }
             `}</style>
         </div>

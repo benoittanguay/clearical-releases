@@ -1,3 +1,5 @@
+import { useState, useEffect } from 'react';
+
 interface UpdateSuccessModalProps {
     isOpen: boolean;
     onClose: () => void;
@@ -5,7 +7,66 @@ interface UpdateSuccessModalProps {
     releaseNotes?: string;
 }
 
-export function UpdateSuccessModal({ isOpen, onClose, version, releaseNotes }: UpdateSuccessModalProps) {
+export function UpdateSuccessModal({ isOpen, onClose, version, releaseNotes: initialReleaseNotes }: UpdateSuccessModalProps) {
+    const [releaseNotes, setReleaseNotes] = useState<string | undefined>(initialReleaseNotes);
+    const [isLoadingNotes, setIsLoadingNotes] = useState(false);
+
+    // Fetch release notes from GitHub if not provided
+    useEffect(() => {
+        if (!isOpen || !version || initialReleaseNotes) return;
+
+        const fetchReleaseNotes = async () => {
+            setIsLoadingNotes(true);
+            try {
+                // Fetch from both repos and use whichever responds
+                const repos = [
+                    'benoittanguay/clearical-releases',
+                    'benoittanguay/TimePortal'
+                ];
+
+                for (const repo of repos) {
+                    try {
+                        const response = await fetch(
+                            `https://api.github.com/repos/${repo}/releases/tags/v${version}`
+                        );
+                        if (response.ok) {
+                            const data = await response.json();
+                            if (data.body) {
+                                // Parse markdown release notes - extract "What's New" section or use full body
+                                let notes = data.body;
+
+                                // Try to extract the relevant section
+                                const whatsNewMatch = notes.match(/## What's New\s*([\s\S]*?)(?=##|$)/i);
+                                if (whatsNewMatch) {
+                                    notes = whatsNewMatch[1].trim();
+                                }
+
+                                // Clean up markdown formatting for plain text display
+                                notes = notes
+                                    .replace(/\*\*/g, '') // Remove bold
+                                    .replace(/\*/g, '•') // Convert bullets
+                                    .replace(/^-\s/gm, '• ') // Convert dashes to bullets
+                                    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1') // Remove links, keep text
+                                    .trim();
+
+                                setReleaseNotes(notes || 'See commit history for changes in this release.');
+                                break;
+                            }
+                        }
+                    } catch {
+                        // Try next repo
+                    }
+                }
+            } catch (error) {
+                console.error('[UpdateSuccessModal] Failed to fetch release notes:', error);
+            } finally {
+                setIsLoadingNotes(false);
+            }
+        };
+
+        fetchReleaseNotes();
+    }, [isOpen, version, initialReleaseNotes]);
+
     if (!isOpen) return null;
 
     // Fallback to a default version if none provided
@@ -90,13 +151,18 @@ export function UpdateSuccessModal({ isOpen, onClose, version, releaseNotes }: U
                                 scrollbarColor: 'var(--color-border-primary) transparent',
                             }}
                         >
-                            {releaseNotes ? (
+                            {isLoadingNotes ? (
+                                <div className="flex items-center gap-2 text-sm text-[var(--color-text-tertiary)]">
+                                    <div className="w-4 h-4 border-2 border-[var(--color-accent)] border-t-transparent rounded-full animate-spin" />
+                                    <span>Loading release notes...</span>
+                                </div>
+                            ) : releaseNotes ? (
                                 <div className="text-sm text-[var(--color-text-secondary)] leading-relaxed whitespace-pre-wrap">
                                     {releaseNotes}
                                 </div>
                             ) : (
                                 <div className="text-sm text-[var(--color-text-tertiary)] italic">
-                                    Release notes will be available in future updates. Thank you for using Clearical!
+                                    See commit history for changes in this release. Thank you for using Clearical!
                                 </div>
                             )}
                         </div>
