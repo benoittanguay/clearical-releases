@@ -1264,9 +1264,6 @@ function App() {
                                               </div>
                                             </div>
                                             <div className="flex items-center gap-3">
-                                              {entry.windowActivity && entry.windowActivity.length > 0 && (
-                                                <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>{entry.windowActivity.length} activities</span>
-                                              )}
                                               <div className="font-mono font-bold" style={{ color: 'var(--color-accent)', fontFamily: 'var(--font-mono)' }}>
                                                 {formatTime(roundedDuration)}
                                               </div>

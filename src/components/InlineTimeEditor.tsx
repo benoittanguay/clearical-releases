@@ -148,9 +148,6 @@ export function InlineTimeEditor({ value, onChange, formatTime, className = '' }
                         {error}
                     </div>
                 )}
-                <div className="text-xs whitespace-nowrap" style={{ color: 'var(--color-text-tertiary)' }}>
-                    Formats: 1:30, 1:30:00, 90m, 1h 30m
-                </div>
             </div>
         );
     }

@@ -2608,21 +2608,46 @@ ipcMain.handle('get-app-icon-base64', async (_event, iconPath: string) => {
     }
 
     try {
-        // Use nativeImage to convert .icns to PNG
+        // Method 1: Use nativeImage to convert .icns to PNG
         const image = nativeImage.createFromPath(iconPath);
-        if (image.isEmpty()) {
-            console.log(`[Main] get-app-icon-base64: Failed to load icon (empty image): ${iconPath}`);
-            return { success: false, error: 'Failed to load icon (empty image)' };
+        if (!image.isEmpty()) {
+            // Resize to a reasonable size (64x64) to keep data URL small
+            const resized = image.resize({ width: 64, height: 64 });
+            const png = resized.toPNG();
+            const base64 = png.toString('base64');
+            const dataUrl = `data:image/png;base64,${base64}`;
+
+            console.log(`[Main] get-app-icon-base64: Successfully converted icon via nativeImage (${Math.round(dataUrl.length / 1024)}KB)`);
+            return { success: true, dataUrl };
         }
 
-        // Resize to a reasonable size (64x64) to keep data URL small
-        const resized = image.resize({ width: 64, height: 64 });
-        const png = resized.toPNG();
-        const base64 = png.toString('base64');
-        const dataUrl = `data:image/png;base64,${base64}`;
+        // Method 2: Fallback to sips command for .icns files that nativeImage can't handle
+        console.log(`[Main] get-app-icon-base64: nativeImage failed, trying sips fallback for: ${iconPath}`);
+        const { exec } = await import('child_process');
+        const { promisify } = await import('util');
+        const execAsync = promisify(exec);
 
-        console.log(`[Main] get-app-icon-base64: Successfully converted icon (${Math.round(dataUrl.length / 1024)}KB)`);
-        return { success: true, dataUrl };
+        const tempPngPath = path.join(os.tmpdir(), `icon-blacklist-${Date.now()}.png`);
+        const convertScript = `sips -s format png -z 64 64 "${iconPath}" --out "${tempPngPath}" 2>/dev/null`;
+
+        await execAsync(convertScript, { timeout: 5000 });
+
+        if (fs.existsSync(tempPngPath)) {
+            const iconBuffer = await fs.promises.readFile(tempPngPath);
+            const base64 = iconBuffer.toString('base64');
+            const dataUrl = `data:image/png;base64,${base64}`;
+
+            // Clean up temp file
+            await fs.promises.unlink(tempPngPath).catch(() => {});
+
+            if (base64 && base64.length > 100) {
+                console.log(`[Main] get-app-icon-base64: Successfully converted icon via sips (${Math.round(dataUrl.length / 1024)}KB)`);
+                return { success: true, dataUrl };
+            }
+        }
+
+        console.log(`[Main] get-app-icon-base64: Both methods failed for: ${iconPath}`);
+        return { success: false, error: 'Failed to convert icon' };
     } catch (error) {
         console.error('[Main] get-app-icon-base64 failed:', error);
         return {

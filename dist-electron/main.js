@@ -258,10 +258,20 @@ ipcMain.handle('capture-screenshot', async () => {
         console.log('[Main] Current Screen Access Status:', status);
     }
     try {
-        // Get current active window info first
+        // IMPORTANT: To avoid race conditions, we capture window sources FIRST,
+        // then immediately get the active window info. This minimizes the window
+        // where the user could switch apps between detection and capture.
+        // Step 1: Get all window sources immediately
+        const sources = await desktopCapturer.getSources({
+            types: ['window'],
+            thumbnailSize: { width: 1920, height: 1080 },
+            fetchWindowIcons: true
+        });
+        const captureTimestamp = Date.now(); // Record when we captured
+        console.log('[Main] Window sources captured at:', captureTimestamp, 'count:', sources.length);
+        // Step 2: IMMEDIATELY get current active window info (minimize race window)
         let currentWindow = null;
         try {
-            // Get the active window using our existing handler
             if (process.platform === 'darwin') {
                 const { exec } = await import('child_process');
                 const { promisify } = await import('util');
@@ -358,20 +368,11 @@ ipcMain.handle('capture-screenshot', async () => {
                     console.log(`[Main] capture-screenshot - App is blacklisted (${appName}, ${bundleId}), skipping screenshot`);
                     return null;
                 }
-                // NOTE: We don't skip here based on active window - we'll filter Clearical
-                // from the window sources later. This allows screenshots to be taken even
-                // when Clearical is in focus (we'll capture other windows).
             }
         }
         catch (error) {
             console.log('[Main] Could not get active window info for screenshot:', error);
         }
-        // Get all window sources
-        const sources = await desktopCapturer.getSources({
-            types: ['window'],
-            thumbnailSize: { width: 1920, height: 1080 },
-            fetchWindowIcons: true
-        });
         console.log('[Main] Window sources found:', sources.length);
         // Log all available windows for debugging
         console.log('[Main] Available windows:');
@@ -417,13 +418,16 @@ ipcMain.handle('capture-screenshot', async () => {
         }
         if (validSources.length > 0) {
             // Try to find the window that matches the active window
+            // Track match confidence for debugging and validation
             let targetSource = null;
+            let matchConfidence = 'none';
             if (currentWindow && currentWindow.appName && currentWindow.windowTitle) {
                 console.log('[Main] Looking for window match - App:', currentWindow.appName, 'Title:', currentWindow.windowTitle);
-                // Strategy 1: Exact window title match
+                // Strategy 1: Exact window title match (highest confidence)
                 const exactTitleMatch = validSources.find(source => source.name === currentWindow.windowTitle);
                 if (exactTitleMatch) {
                     targetSource = exactTitleMatch;
+                    matchConfidence = 'exact';
                     console.log('[Main] Found exact window title match:', targetSource.name);
                 }
                 else {
@@ -439,6 +443,7 @@ ipcMain.handle('capture-screenshot', async () => {
                         const titleMatch = appNameMatches.find(source => source.name.includes(currentWindow.windowTitle) ||
                             currentWindow.windowTitle.includes(source.name));
                         targetSource = titleMatch || appNameMatches[0];
+                        matchConfidence = 'app_match';
                         console.log('[Main] Found app name match:', targetSource.name, 'from', appNameMatches.length, 'candidates');
                     }
                     else {
@@ -469,6 +474,7 @@ ipcMain.handle('capture-screenshot', async () => {
                         });
                         if (partialMatch) {
                             targetSource = partialMatch;
+                            matchConfidence = 'partial';
                             console.log('[Main] Found partial window title match:', partialMatch.name);
                         }
                         else {
@@ -481,47 +487,75 @@ ipcMain.handle('capture-screenshot', async () => {
             else {
                 console.log('[Main] No active window info available');
             }
-            // If we still don't have a target, use a heuristic fallback
+            // If we still don't have a target, use conservative fallback strategies
+            // IMPORTANT: We prioritize accuracy over capturing something - a skipped
+            // capture is better than a misattributed one
             if (!targetSource) {
                 console.log('[Main] No matching window found for app:', currentWindow?.appName || 'unknown');
                 console.log('[Main] Available windows:', validSources.map(s => `"${s.name}"`).join(', '));
-                // Fallback strategy: If there's only one valid window, use it
-                // This handles cases where the window title doesn't match but there's clearly
-                // only one active work window
+                // Fallback strategy 1: If there's only one valid window, use it
+                // This is safe because there's no ambiguity
                 if (validSources.length === 1) {
                     targetSource = validSources[0];
+                    matchConfidence = 'single_window';
                     console.log('[Main] Using single available window as fallback:', targetSource.name);
                 }
                 else if (validSources.length > 1 && currentWindow?.appName) {
-                    // Try a more lenient matching: find any window containing part of the app name
+                    // Fallback strategy 2: Try lenient app name matching
+                    // Look for any window containing significant words from the app name
                     const appNameWords = currentWindow.appName.toLowerCase().split(/\s+/);
                     const possibleMatches = validSources.filter(source => {
                         const sourceLower = source.name.toLowerCase();
                         return appNameWords.some(word => word.length > 3 && sourceLower.includes(word));
                     });
-                    if (possibleMatches.length > 0) {
+                    if (possibleMatches.length === 1) {
+                        // Only use lenient match if it's unambiguous (single match)
                         targetSource = possibleMatches[0];
-                        console.log('[Main] Using lenient app name match:', targetSource.name);
+                        matchConfidence = 'lenient';
+                        console.log('[Main] Using lenient app name match (unambiguous):', targetSource.name);
+                    }
+                    else if (possibleMatches.length > 1) {
+                        // Multiple lenient matches - too ambiguous, skip this capture
+                        console.log('[Main] Multiple lenient matches found, skipping to avoid misattribution:', possibleMatches.map(s => s.name).join(', '));
+                        console.log('[Main] SKIPPING CAPTURE - cannot confidently match window to app');
+                        return null;
                     }
                     else {
-                        // Last resort: use the largest window by area (most likely the active work window)
-                        targetSource = validSources.reduce((largest, current) => {
-                            const currentSize = current.thumbnail.getSize();
-                            const largestSize = largest.thumbnail.getSize();
-                            const currentArea = currentSize.width * currentSize.height;
-                            const largestArea = largestSize.width * largestSize.height;
-                            return currentArea > largestArea ? current : largest;
-                        });
-                        console.log('[Main] Using largest window as last resort fallback:', targetSource.name);
+                        // No matches at all - skip capture rather than guess
+                        // REMOVED: "largest window" fallback - this caused misattributions
+                        console.log('[Main] No window matches detected app. SKIPPING CAPTURE to avoid misattribution.');
+                        console.log('[Main] Active app was:', currentWindow.appName);
+                        console.log('[Main] Available windows were:', validSources.map(s => s.name).join(', '));
+                        return null;
                     }
                 }
-                // If still no target after all fallbacks, give up
+                // If still no target after safe fallbacks, skip the capture
                 if (!targetSource) {
-                    console.log('[Main] No suitable window found after all fallback strategies');
+                    console.log('[Main] No suitable window found after conservative fallback strategies');
+                    console.log('[Main] SKIPPING CAPTURE - better to skip than misattribute');
                     return null;
                 }
             }
-            console.log('[Main] Capturing window:', targetSource.name, `(${targetSource.thumbnail.getSize().width}x${targetSource.thumbnail.getSize().height})`);
+            // Final validation: Verify the captured window reasonably belongs to the detected app
+            // This catches edge cases where the window switched between capture and detection
+            if (currentWindow?.appName && matchConfidence !== 'exact') {
+                const windowNameLower = targetSource.name.toLowerCase();
+                const appNameLower = currentWindow.appName.toLowerCase();
+                // For non-exact matches, verify there's SOME relationship between app and window
+                const hasAppRelation = windowNameLower.includes(appNameLower) ||
+                    appNameLower.includes(windowNameLower) ||
+                    // Check for common app name patterns (e.g., "Code" in "Visual Studio Code")
+                    appNameLower.split(/\s+/).some(word => word.length > 3 && windowNameLower.includes(word)) ||
+                    // Single window fallback is acceptable - no ambiguity
+                    matchConfidence === 'single_window';
+                if (!hasAppRelation && matchConfidence !== 'single_window') {
+                    console.log('[Main] VALIDATION FAILED: Captured window does not appear to belong to detected app');
+                    console.log('[Main] App:', currentWindow.appName, '| Window:', targetSource.name, '| Match type:', matchConfidence);
+                    console.log('[Main] SKIPPING CAPTURE - possible race condition detected');
+                    return null;
+                }
+            }
+            console.log('[Main] Capturing window:', targetSource.name, `(${targetSource.thumbnail.getSize().width}x${targetSource.thumbnail.getSize().height})`, '| Match confidence:', matchConfidence);
             const image = targetSource.thumbnail.toPNG();
             // Create a more descriptive filename with app name and timestamp
             // Format: timestamp|||AppName|||WindowTitle.png
@@ -534,7 +568,7 @@ ipcMain.handle('capture-screenshot', async () => {
             // Save screenshot with encryption
             try {
                 await saveEncryptedFile(filePath, image);
-                console.log('[Main] Window screenshot saved (encrypted):', filePath);
+                console.log('[Main] Window screenshot saved (encrypted):', filePath, '| Match:', matchConfidence);
             }
             catch (encryptError) {
                 console.error('[Main] Failed to encrypt screenshot, saving unencrypted:', encryptError);
@@ -2354,19 +2388,38 @@ ipcMain.handle('get-app-icon-base64', async (_event, iconPath) => {
         return { success: false, error: 'Icon path does not exist' };
     }
     try {
-        // Use nativeImage to convert .icns to PNG
+        // Method 1: Use nativeImage to convert .icns to PNG
         const image = nativeImage.createFromPath(iconPath);
-        if (image.isEmpty()) {
-            console.log(`[Main] get-app-icon-base64: Failed to load icon (empty image): ${iconPath}`);
-            return { success: false, error: 'Failed to load icon (empty image)' };
+        if (!image.isEmpty()) {
+            // Resize to a reasonable size (64x64) to keep data URL small
+            const resized = image.resize({ width: 64, height: 64 });
+            const png = resized.toPNG();
+            const base64 = png.toString('base64');
+            const dataUrl = `data:image/png;base64,${base64}`;
+            console.log(`[Main] get-app-icon-base64: Successfully converted icon via nativeImage (${Math.round(dataUrl.length / 1024)}KB)`);
+            return { success: true, dataUrl };
         }
-        // Resize to a reasonable size (64x64) to keep data URL small
-        const resized = image.resize({ width: 64, height: 64 });
-        const png = resized.toPNG();
-        const base64 = png.toString('base64');
-        const dataUrl = `data:image/png;base64,${base64}`;
-        console.log(`[Main] get-app-icon-base64: Successfully converted icon (${Math.round(dataUrl.length / 1024)}KB)`);
-        return { success: true, dataUrl };
+        // Method 2: Fallback to sips command for .icns files that nativeImage can't handle
+        console.log(`[Main] get-app-icon-base64: nativeImage failed, trying sips fallback for: ${iconPath}`);
+        const { exec } = await import('child_process');
+        const { promisify } = await import('util');
+        const execAsync = promisify(exec);
+        const tempPngPath = path.join(os.tmpdir(), `icon-blacklist-${Date.now()}.png`);
+        const convertScript = `sips -s format png -z 64 64 "${iconPath}" --out "${tempPngPath}" 2>/dev/null`;
+        await execAsync(convertScript, { timeout: 5000 });
+        if (fs.existsSync(tempPngPath)) {
+            const iconBuffer = await fs.promises.readFile(tempPngPath);
+            const base64 = iconBuffer.toString('base64');
+            const dataUrl = `data:image/png;base64,${base64}`;
+            // Clean up temp file
+            await fs.promises.unlink(tempPngPath).catch(() => { });
+            if (base64 && base64.length > 100) {
+                console.log(`[Main] get-app-icon-base64: Successfully converted icon via sips (${Math.round(dataUrl.length / 1024)}KB)`);
+                return { success: true, dataUrl };
+            }
+        }
+        console.log(`[Main] get-app-icon-base64: Both methods failed for: ${iconPath}`);
+        return { success: false, error: 'Failed to convert icon' };
     }
     catch (error) {
         console.error('[Main] get-app-icon-base64 failed:', error);
