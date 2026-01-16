@@ -122,7 +122,12 @@ export class SubscriptionValidator {
                 };
 
                 if (supabaseStatus.periodEnd) {
-                    subscription.currentPeriodEnd = new Date(supabaseStatus.periodEnd).getTime();
+                    const periodEndMs = new Date(supabaseStatus.periodEnd).getTime();
+                    subscription.currentPeriodEnd = periodEndMs;
+                    // For trialing status, also set trialEndsAt for isTrialValid() check
+                    if (status === SubscriptionStatus.TRIAL) {
+                        subscription.trialEndsAt = periodEndMs;
+                    }
                 }
             } else {
                 // Update existing subscription with Supabase data
@@ -133,7 +138,12 @@ export class SubscriptionValidator {
                 subscription.updatedAt = Date.now();
 
                 if (supabaseStatus.periodEnd) {
-                    subscription.currentPeriodEnd = new Date(supabaseStatus.periodEnd).getTime();
+                    const periodEndMs = new Date(supabaseStatus.periodEnd).getTime();
+                    subscription.currentPeriodEnd = periodEndMs;
+                    // For trialing status, also set trialEndsAt for isTrialValid() check
+                    if (status === SubscriptionStatus.TRIAL) {
+                        subscription.trialEndsAt = periodEndMs;
+                    }
                 }
             }
 

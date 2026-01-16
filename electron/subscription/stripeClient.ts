@@ -333,8 +333,6 @@ export class StripeClient {
         const priceMap: Record<string, SubscriptionPlan> = {
             // Workplace Plan - Monthly ($2/month)
             'price_1Snpiv2O2zPtqFKn0fGJ9Gvi': SubscriptionPlan.WORKPLACE_MONTHLY,
-            // Freelancer plan maps to FREE (will be $0)
-            'price_1Snpzr2O2zPtqFKnroWooOqt': SubscriptionPlan.FREE,
         };
 
         return priceMap[priceId] || SubscriptionPlan.FREE;
