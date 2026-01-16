@@ -1136,8 +1136,8 @@ function App() {
                             </div>
 
                             {/* Days within the week */}
-                            <div className="space-y-4">
-                              {weekDays.map(([dateKey, dateEntries]) => {
+                            <div>
+                              {weekDays.map(([dateKey, dateEntries], dayIndex) => {
                                 const totalDuration = dateEntries.reduce((sum, entry) => sum + entry.duration, 0);
 
                                 // Check if this day has any Jira activities with all required info
@@ -1152,10 +1152,10 @@ function App() {
                                 });
 
                                 return (
-                                  <div key={dateKey} className="mb-4 last:mb-0">
+                                  <div key={dateKey} className={dayIndex > 0 ? 'mt-4' : ''}>
                                     {/* Date Separator Header - Sticky below week header */}
                                     <div
-                                      className="sticky z-10 px-3 py-2 mb-2 -mx-4 flex items-center justify-between shadow-sm"
+                                      className="sticky z-10 px-3 py-2 -mx-4 flex items-center justify-between shadow-sm"
                                       style={{
                                         backgroundColor: 'var(--color-bg-secondary)',
                                         borderBottom: '1px solid var(--color-border-primary)',
@@ -1203,7 +1203,7 @@ function App() {
                                     </div>
 
                                     {/* Activities for this date */}
-                                    <div className="space-y-2">
+                                    <div className="space-y-2 mt-2">
                                       {dateEntries.map(entry => {
                                         // Get assignment info from unified model or fallback to legacy fields
                                         const assignment = entry.assignment ||
