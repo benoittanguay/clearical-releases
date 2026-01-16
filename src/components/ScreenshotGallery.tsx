@@ -33,7 +33,7 @@ interface ScreenshotGalleryProps {
 
 export function ScreenshotGallery({ screenshotPaths, metadata, onClose, onScreenshotDeleted }: ScreenshotGalleryProps) {
     const [selectedIndex, setSelectedIndex] = useState(0);
-    const [showMetadata, setShowMetadata] = useState(true);
+    const [showMetadata, setShowMetadata] = useState(false);
     // Raw vision data is always shown, no toggle needed
     const [loadedImages, setLoadedImages] = useState<Map<string, string>>(new Map());
     const { isAnalyzing } = useScreenshotAnalysis();
@@ -170,69 +170,71 @@ export function ScreenshotGallery({ screenshotPaths, metadata, onClose, onScreen
             onKeyDown={handleKeyDown}
             tabIndex={-1}
         >
-            {/* Simple Header */}
-            <div className="absolute top-4 right-4 flex items-center gap-2 z-20 no-drag">
-                    {/* Info Toggle Button */}
-                    {currentMetadata && (
-                        <button
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                setShowMetadata(!showMetadata);
-                            }}
-                            className={`transition-all bg-black/50 hover:bg-black/70 rounded-lg p-2 active:scale-95 ${
-                                showMetadata
-                                    ? 'text-green-400 hover:text-green-300'
-                                    : 'text-white hover:text-blue-400'
-                            }`}
-                            style={{ transitionDuration: 'var(--duration-fast)', transitionTimingFunction: 'var(--ease-out)' }}
-                            title={showMetadata ? "Hide screenshot info" : "Show screenshot info"}
-                        >
-                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <circle cx="12" cy="12" r="10"/>
-                                <line x1="12" y1="16" x2="12" y2="12"/>
-                                <line x1="12" y1="8" x2="12.01" y2="8"/>
-                            </svg>
-                        </button>
-                    )}
-
-                    {/* Open in Finder Button */}
+            {/* Header - Left Side Buttons */}
+            <div className="absolute top-4 left-4 flex items-center gap-2 z-20 no-drag">
+                {/* Info Toggle Button */}
+                {currentMetadata && (
                     <button
                         onClick={(e) => {
                             e.stopPropagation();
-                            handleOpenInFinder();
+                            setShowMetadata(!showMetadata);
                         }}
-                        className="text-white hover:text-blue-400 transition-all bg-black/50 hover:bg-black/70 rounded-lg p-2 active:scale-95"
+                        className={`transition-all bg-black/50 hover:bg-black/70 rounded-lg p-2 active:scale-95 ${
+                            showMetadata
+                                ? 'text-green-400 hover:text-green-300'
+                                : 'text-white hover:text-blue-400'
+                        }`}
                         style={{ transitionDuration: 'var(--duration-fast)', transitionTimingFunction: 'var(--ease-out)' }}
-                        title="Open in Finder"
+                        title={showMetadata ? "Hide screenshot info" : "Show screenshot info"}
                     >
                         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M3 7v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-6l-2-2H5a2 2 0 0 0-2 2Z"/>
+                            <circle cx="12" cy="12" r="10"/>
+                            <line x1="12" y1="16" x2="12" y2="12"/>
+                            <line x1="12" y1="8" x2="12.01" y2="8"/>
                         </svg>
                     </button>
+                )}
 
-                    {/* Delete Button */}
-                    <div className="bg-black/50 rounded-lg p-1">
-                        <DeleteButton
-                            onDelete={handleDeleteScreenshot}
-                            confirmMessage="Delete this screenshot?"
-                            size="md"
-                            variant="subtle"
-                            className="text-white hover:text-red-400"
-                        />
-                    </div>
+                {/* Open in Finder Button */}
+                <button
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        handleOpenInFinder();
+                    }}
+                    className="text-white hover:text-blue-400 transition-all bg-black/50 hover:bg-black/70 rounded-lg p-2 active:scale-95"
+                    style={{ transitionDuration: 'var(--duration-fast)', transitionTimingFunction: 'var(--ease-out)' }}
+                    title="Open in Finder"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M3 7v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-6l-2-2H5a2 2 0 0 0-2 2Z"/>
+                    </svg>
+                </button>
 
-                    {/* Close Button */}
-                    <button
-                        onClick={onClose}
-                        className="text-white hover:text-gray-300 transition-all bg-black/50 hover:bg-black/70 rounded-lg p-2 active:scale-95"
-                        style={{ transitionDuration: 'var(--duration-fast)', transitionTimingFunction: 'var(--ease-out)' }}
-                        title="Close (Esc)"
-                    >
-                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <line x1="18" y1="6" x2="6" y2="18" />
-                            <line x1="6" y1="6" x2="18" y2="18" />
-                        </svg>
-                    </button>
+                {/* Delete Button */}
+                <div className="bg-black/50 rounded-lg p-1">
+                    <DeleteButton
+                        onDelete={handleDeleteScreenshot}
+                        confirmMessage="Delete this screenshot?"
+                        size="md"
+                        variant="subtle"
+                        className="text-white hover:text-red-400"
+                    />
+                </div>
+            </div>
+
+            {/* Header - Right Side Close Button */}
+            <div className="absolute top-4 right-4 z-20 no-drag">
+                <button
+                    onClick={onClose}
+                    className="text-white hover:text-gray-300 transition-all bg-black/50 hover:bg-black/70 rounded-lg p-2 active:scale-95"
+                    style={{ transitionDuration: 'var(--duration-fast)', transitionTimingFunction: 'var(--ease-out)' }}
+                    title="Close (Esc)"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18" />
+                        <line x1="6" y1="6" x2="18" y2="18" />
+                    </svg>
+                </button>
             </div>
 
             {/* Navigation Buttons */}

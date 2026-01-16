@@ -16,8 +16,8 @@ else {
 }
 import { saveEncryptedFile, decryptFile, getEncryptionKey, isFileEncrypted } from './encryption.js';
 import { storeCredential, getCredential, deleteCredential, hasCredential, listCredentialKeys, isSecureStorageAvailable } from './credentialStorage.js';
-import { initializeLicensing } from './licensing/ipcHandlers.js';
 import { initializeSubscription, cleanupSubscription } from './subscription/ipcHandlers.js';
+import { requirePremium } from './subscription/premiumGuard.js';
 import { initializeAuth } from './auth/ipcHandlers.js';
 import { AIAssignmentService } from './aiAssignmentService.js';
 import { AIAccountService } from './aiAccountService.js';
@@ -664,6 +664,37 @@ ipcMain.handle('analyze-screenshot', async (event, imagePath, requestId) => {
     catch (parseError) {
         console.log('[Main] Could not parse app info from filename:', parseError);
     }
+    // Get user role from settings for AI context optimization
+    let userRole;
+    let roleContext;
+    try {
+        const db = DatabaseService.getInstance();
+        const aiSettings = db.getSetting('ai');
+        if (aiSettings?.userRole) {
+            userRole = aiSettings.userRole;
+            // Build role context string based on role metadata
+            const roleMetadata = {
+                software_developer: { context: 'software development, coding, debugging, code review, testing' },
+                designer: { context: 'design, user interface, user experience, visual design, prototyping' },
+                product_manager: { context: 'product management, roadmap planning, feature prioritization' },
+                project_manager: { context: 'project management, scheduling, resource allocation, status tracking' },
+                data_analyst: { context: 'data analysis, reporting, visualization, insights, modeling' },
+                marketing: { context: 'marketing, content creation, campaigns, analytics, social media' },
+                sales: { context: 'sales, business development, client relationships, proposals' },
+                finance: { context: 'finance, accounting, budgeting, financial analysis' },
+                customer_support: { context: 'customer support, ticket resolution, customer communication' },
+                executive: { context: 'executive management, strategic planning, leadership, decision-making' },
+                researcher: { context: 'research, analysis, documentation, literature review' },
+                other: { context: aiSettings.customRoleDescription || 'general knowledge work' }
+            };
+            roleContext = userRole ? roleMetadata[userRole]?.context : undefined;
+            roleContext = roleContext || 'general knowledge work';
+            console.log('[Main] Using role context for analysis - role:', userRole);
+        }
+    }
+    catch (settingsError) {
+        console.log('[Main] Could not get user role from settings:', settingsError);
+    }
     try {
         const fastVLMResult = await fastVLMServer.analyzeScreenshot(analyzeImagePath, appName, windowTitle, requestId);
         // Clean up temp decrypted file if we created one
@@ -917,12 +948,25 @@ This is a known macOS issue with app updates. Your data is safe.`;
 ipcMain.handle('get-environment-info', async () => {
     // Check if we're in production mode based on BUILD_ENV or app.isPackaged
     const isProduction = process.env.BUILD_ENV === 'production' || app.isPackaged;
+    // Get app version - in dev mode app.getVersion() returns Electron version,
+    // so we read from package.json directly
+    let version = app.getVersion();
+    if (!app.isPackaged) {
+        try {
+            const pkgPath = path.resolve(__dirnameTemp, '../package.json');
+            const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
+            version = pkg.version;
+        }
+        catch (error) {
+            console.warn('[Main] Could not read package.json version:', error);
+        }
+    }
     return {
         isProduction,
         isDevelopment: !isProduction,
         isPackaged: app.isPackaged,
         buildEnv: process.env.BUILD_ENV || 'not-set',
-        version: app.getVersion(),
+        version,
     };
 });
 // Open external URL in default browser
@@ -1389,7 +1433,8 @@ ipcMain.handle('show-item-in-folder', async (event, filePath) => {
     }
 });
 // Tempo API handlers - Proxy requests through main process to avoid CORS
-ipcMain.handle('tempo-api-request', async (event, { url, method = 'GET', headers = {}, body }) => {
+// PREMIUM FEATURE: Requires Workplace Plan subscription
+ipcMain.handle('tempo-api-request', requirePremium('Tempo Integration', async (event, { url, method = 'GET', headers = {}, body }) => {
     console.log('[Main] Tempo API request:', method, url);
     if (body) {
         console.log('[Main] Tempo API request body type:', typeof body);
@@ -1446,9 +1491,10 @@ ipcMain.handle('tempo-api-request', async (event, { url, method = 'GET', headers
             error: error instanceof Error ? error.message : 'Unknown error',
         };
     }
-});
+}));
 // Jira API handlers - Proxy requests through main process to avoid CORS
-ipcMain.handle('jira-api-request', async (event, { url, method = 'GET', headers = {}, body }) => {
+// PREMIUM FEATURE: Requires Workplace Plan subscription
+ipcMain.handle('jira-api-request', requirePremium('Jira Integration', async (event, { url, method = 'GET', headers = {}, body }) => {
     console.log('[Main] Jira API request:', method, url);
     if (body) {
         console.log('[Main] Jira API request body type:', typeof body);
@@ -1505,7 +1551,7 @@ ipcMain.handle('jira-api-request', async (event, { url, method = 'GET', headers 
             error: error instanceof Error ? error.message : 'Unknown error',
         };
     }
-});
+}));
 // Secure Credential Storage handlers
 ipcMain.handle('secure-store-credential', async (event, key, value) => {
     console.log('[Main] secure-store-credential requested for key:', key);
@@ -2611,15 +2657,6 @@ app.whenReady().then(() => {
         console.error('[Main] Failed to initialize encryption:', error);
         console.warn('[Main] Screenshots will be saved unencrypted as fallback');
     }
-    // Initialize licensing system (legacy - being replaced by Stripe)
-    try {
-        initializeLicensing();
-        console.log('[Main] Licensing system initialized (legacy)');
-    }
-    catch (error) {
-        console.error('[Main] Failed to initialize licensing:', error);
-        console.warn('[Main] App will run without licensing (development mode)');
-    }
     // Initialize auth system (Supabase)
     try {
         initializeAuth();
@@ -2647,7 +2684,7 @@ app.whenReady().then(() => {
     createWindow();
     // Hide dock icon on macOS - app only appears in menu bar
     // Do this before showing window to avoid visual glitches
-    if (process.platform === 'darwin') {
+    if (process.platform === 'darwin' && app.dock) {
         app.dock.hide();
         console.log('[Main] Dock icon hidden - app runs from menu bar only');
     }
