@@ -8,6 +8,7 @@ import { ipcMain, shell } from 'electron';
 import { getAuthService, AuthUser, AuthSession } from './supabaseAuth.js';
 import { getConfig } from '../config.js';
 import { getEdgeFunctionClient } from '../subscription/edgeFunctionClient.js';
+import { getSubscriptionValidator } from '../subscription/ipcHandlers.js';
 
 /**
  * Initialize auth system
@@ -144,15 +145,30 @@ async function handleVerifyOtp(
         const authService = getAuthService();
         const result = await authService.verifyOtp(email, token);
 
-        // If OTP verification succeeded, ensure Stripe customer exists
+        // If OTP verification succeeded, ensure Stripe customer exists and refresh subscription
         if (result.success && result.user) {
-            console.log('[Auth] OTP verified, ensuring Stripe customer...');
+            console.log('[Auth] OTP verified, ensuring Stripe customer and refreshing subscription...');
             const edgeClient = getEdgeFunctionClient();
 
             // Call customer creation asynchronously - don't block login if it fails
             edgeClient.ensureStripeCustomer().catch((error) => {
                 console.error('[Auth] Failed to ensure Stripe customer (non-blocking):', error);
             });
+
+            // Force refresh subscription from Supabase to ensure local cache is up-to-date
+            // This overwrites any stale local subscription.dat with fresh Supabase data
+            const subscriptionValidator = getSubscriptionValidator();
+            if (subscriptionValidator) {
+                subscriptionValidator.validate().then((validationResult) => {
+                    console.log('[Auth] Subscription refreshed on login:', {
+                        status: validationResult.subscription?.status,
+                        plan: validationResult.subscription?.plan,
+                        mode: validationResult.mode,
+                    });
+                }).catch((error) => {
+                    console.error('[Auth] Failed to refresh subscription (non-blocking):', error);
+                });
+            }
         }
 
         return result;

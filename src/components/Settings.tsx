@@ -609,13 +609,23 @@ export function Settings({ onOpenJiraModal, onOpenTempoModal }: SettingsProps = 
                                 }
                             </div>
                         </div>
-                        <span className={`text-[10px] px-2 py-1 rounded-full font-semibold font-mono tracking-wide ${
-                            hasJiraAccess && tempSettings.jira?.enabled && tempSettings.jira?.apiToken && tempSettings.jira?.baseUrl && tempSettings.jira?.email
-                                ? 'bg-[var(--color-success-muted)] text-[var(--color-success)]'
-                                : 'bg-[var(--color-bg-quaternary)] text-[var(--color-text-tertiary)]'
-                        }`}>
-                            {hasJiraAccess && tempSettings.jira?.enabled && tempSettings.jira?.apiToken && tempSettings.jira?.baseUrl && tempSettings.jira?.email ? 'CONNECTED' : 'DISABLED'}
-                        </span>
+                        <div className="flex items-center gap-2">
+                            <span className={`text-[10px] px-2 py-1 rounded-full font-semibold font-mono tracking-wide ${
+                                hasJiraAccess && tempSettings.jira?.enabled && tempSettings.jira?.apiToken && tempSettings.jira?.baseUrl && tempSettings.jira?.email
+                                    ? 'bg-[var(--color-success-muted)] text-[var(--color-success)]'
+                                    : 'bg-[var(--color-bg-quaternary)] text-[var(--color-text-tertiary)]'
+                            }`}>
+                                {hasJiraAccess && tempSettings.jira?.enabled && tempSettings.jira?.apiToken && tempSettings.jira?.baseUrl && tempSettings.jira?.email ? 'CONNECTED' : 'DISABLED'}
+                            </span>
+                            {hasJiraAccess && (
+                                <button
+                                    onClick={handleOpenJiraModal}
+                                    className="px-3 py-1 bg-[var(--color-accent)] hover:bg-[var(--color-accent)]/90 text-white text-xs rounded-lg transition-all"
+                                >
+                                    Configure
+                                </button>
+                            )}
+                        </div>
                     </div>
 
                     {/* Tempo Status */}
@@ -640,34 +650,27 @@ export function Settings({ onOpenJiraModal, onOpenTempoModal }: SettingsProps = 
                                 }
                             </div>
                         </div>
-                        <span className={`text-[10px] px-2 py-1 rounded-full font-semibold font-mono tracking-wide ${
-                            hasTempoAccess && tempSettings.tempo?.enabled && tempSettings.tempo?.apiToken
-                                ? 'bg-[var(--color-success-muted)] text-[var(--color-success)]'
-                                : 'bg-[var(--color-bg-quaternary)] text-[var(--color-text-tertiary)]'
-                        }`}>
-                            {hasTempoAccess && tempSettings.tempo?.enabled && tempSettings.tempo?.apiToken ? 'CONNECTED' : 'DISABLED'}
-                        </span>
+                        <div className="flex items-center gap-2">
+                            <span className={`text-[10px] px-2 py-1 rounded-full font-semibold font-mono tracking-wide ${
+                                hasTempoAccess && tempSettings.tempo?.enabled && tempSettings.tempo?.apiToken
+                                    ? 'bg-[var(--color-success-muted)] text-[var(--color-success)]'
+                                    : 'bg-[var(--color-bg-quaternary)] text-[var(--color-text-tertiary)]'
+                            }`}>
+                                {hasTempoAccess && tempSettings.tempo?.enabled && tempSettings.tempo?.apiToken ? 'CONNECTED' : 'DISABLED'}
+                            </span>
+                            {hasTempoAccess && (
+                                <button
+                                    onClick={handleOpenTempoModal}
+                                    className="px-3 py-1 bg-[var(--color-accent)] hover:bg-[var(--color-accent)]/90 text-white text-xs rounded-lg transition-all"
+                                >
+                                    Configure
+                                </button>
+                            )}
+                        </div>
                     </div>
 
-                    {/* Configure or Upgrade Buttons */}
-                    {hasJiraAccess || hasTempoAccess ? (
-                        <div className="grid grid-cols-2 gap-2">
-                            <button
-                                onClick={handleOpenJiraModal}
-                                disabled={!hasJiraAccess}
-                                className="px-3 py-1.5 bg-[var(--color-accent)] hover:bg-[var(--color-accent)]/90 disabled:bg-[var(--color-bg-tertiary)] disabled:text-[var(--color-text-tertiary)] disabled:cursor-not-allowed text-white text-sm rounded-lg transition-all"
-                            >
-                                Configure Jira
-                            </button>
-                            <button
-                                onClick={handleOpenTempoModal}
-                                disabled={!hasTempoAccess}
-                                className="px-3 py-1.5 bg-[var(--color-accent)] hover:bg-[var(--color-accent)]/90 disabled:bg-[var(--color-bg-tertiary)] disabled:text-[var(--color-text-tertiary)] disabled:cursor-not-allowed text-white text-sm rounded-lg transition-all"
-                            >
-                                Configure Tempo
-                            </button>
-                        </div>
-                    ) : (
+                    {/* Upgrade Button (only shown when user has no access) */}
+                    {!hasJiraAccess && !hasTempoAccess && (
                         <button
                             onClick={handleUpgrade}
                             disabled={isOpeningPortal}

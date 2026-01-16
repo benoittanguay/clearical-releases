@@ -214,6 +214,9 @@ async function handleGetSubscriptionInfo(): Promise<{
 /**
  * Get subscription status handler (simplified for UI)
  * Returns a simplified status object for the SubscriptionContext
+ *
+ * IMPORTANT: Always validates from Supabase to ensure local cache is fresh.
+ * This prevents stale subscription data from being displayed to users.
  */
 async function handleGetSubscriptionStatus(): Promise<{
     tier: 'free' | 'workplace';
@@ -222,30 +225,36 @@ async function handleGetSubscriptionStatus(): Promise<{
     features: string[];
 }> {
     try {
-        let subscription = await SubscriptionStorage.getSubscription();
+        let subscription: Subscription | undefined;
 
-        // If no subscription exists, trigger validation to create trial
-        if (!subscription) {
-            console.log('[Subscription] No subscription found, triggering validation to create trial');
+        // Always trigger validation to ensure we have fresh data from Supabase
+        // This overwrites stale local cache with the authoritative Supabase data
+        if (subscriptionValidator) {
+            console.log('[Subscription] Validating subscription status from Supabase...');
+            const validationResult = await subscriptionValidator.validate();
+            subscription = validationResult.subscription;
 
-            if (subscriptionValidator) {
-                const validationResult = await subscriptionValidator.validate();
-                subscription = validationResult.subscription;
+            console.log('[Subscription] Validation result:', {
+                valid: validationResult.valid,
+                mode: validationResult.mode,
+                status: subscription.status,
+                plan: subscription.plan,
+            });
+        } else {
+            // Fallback to cached subscription if validator not initialized
+            console.warn('[Subscription] Validator not initialized, falling back to cached data');
+            const cachedSubscription = await SubscriptionStorage.getSubscription();
 
-                console.log('[Subscription] Validation result:', {
-                    valid: validationResult.valid,
-                    mode: validationResult.mode,
-                    status: subscription.status,
-                });
-            } else {
-                // Fallback if validator not initialized
-                console.warn('[Subscription] Validator not initialized, returning free tier');
+            if (!cachedSubscription) {
+                console.warn('[Subscription] No cached subscription, returning free tier');
                 return {
                     tier: 'free',
                     isActive: false,
                     features: [],
                 };
             }
+
+            subscription = cachedSubscription;
         }
 
         // Check if subscription allows premium features
