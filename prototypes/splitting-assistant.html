@@ -1,0 +1,1012 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Splitting Assistant - TimePortal Prototype</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Syne:wght@600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      /* Colors - Light Cream Theme */
+      --color-bg-primary: #F2F0ED;
+      --color-bg-secondary: #FFFFFF;
+      --color-bg-tertiary: #E8E6E3;
+      --color-bg-quaternary: #DAD8D5;
+
+      --color-accent: #FF4800;
+      --color-accent-hover: #E54100;
+      --color-accent-muted: rgba(255, 72, 0, 0.08);
+
+      --color-success: #16A34A;
+      --color-info: #2563EB;
+
+      --color-text-primary: #0D0C0C;
+      --color-text-secondary: #6B6560;
+      --color-text-tertiary: #8C877D;
+
+      --color-border-primary: #E4E0DC;
+      --color-border-secondary: #D4D0CC;
+
+      /* Bucket Colors */
+      --bucket-blue: #3B82F6;
+      --bucket-green: #22C55E;
+      --bucket-purple: #A855F7;
+      --bucket-orange: #F97316;
+      --bucket-pink: #EC4899;
+      --bucket-cyan: #06B6D4;
+
+      /* Typography */
+      --font-display: 'Syne', system-ui, sans-serif;
+      --font-body: 'JetBrains Mono', monospace;
+
+      /* Spacing */
+      --radius-md: 0.5rem;
+      --radius-lg: 0.75rem;
+      --radius-xl: 1rem;
+      --radius-2xl: 1.5rem;
+      --radius-full: 9999px;
+
+      /* Shadows */
+      --shadow-sm: 0 2px 4px 0 rgba(0, 0, 0, 0.06);
+      --shadow-md: 0 4px 8px -2px rgba(0, 0, 0, 0.08);
+      --shadow-lg: 0 8px 16px -4px rgba(0, 0, 0, 0.1);
+      --shadow-xl: 0 16px 32px -8px rgba(0, 0, 0, 0.12);
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: var(--font-body);
+      background: var(--color-bg-primary);
+      color: var(--color-text-primary);
+      min-height: 100vh;
+      padding: 2rem;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    /* Header */
+    .header {
+      margin-bottom: 2rem;
+    }
+
+    .header h1 {
+      font-family: var(--font-display);
+      font-size: 1.5rem;
+      font-weight: 700;
+      margin-bottom: 0.5rem;
+    }
+
+    .header p {
+      color: var(--color-text-secondary);
+      font-size: 0.875rem;
+    }
+
+    .recording-info {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin-top: 1rem;
+      padding: 1rem;
+      background: var(--color-bg-secondary);
+      border: 1px solid var(--color-border-primary);
+      border-radius: var(--radius-lg);
+    }
+
+    .recording-info .duration {
+      font-size: 1.25rem;
+      font-weight: 600;
+    }
+
+    .recording-info .time-range {
+      color: var(--color-text-secondary);
+    }
+
+    .recording-info .badge {
+      margin-left: auto;
+      padding: 0.25rem 0.75rem;
+      background: var(--color-accent-muted);
+      color: var(--color-accent);
+      border-radius: var(--radius-full);
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+
+    /* Timeline Container */
+    .timeline-container {
+      background: var(--color-bg-secondary);
+      border: 1px solid var(--color-border-primary);
+      border-radius: var(--radius-xl);
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .timeline-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1rem;
+    }
+
+    .timeline-header h2 {
+      font-family: var(--font-display);
+      font-size: 1rem;
+      font-weight: 600;
+    }
+
+    .timeline-actions {
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 1rem;
+      border: none;
+      border-radius: var(--radius-full);
+      font-family: var(--font-body);
+      font-size: 0.75rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .btn-secondary {
+      background: var(--color-bg-tertiary);
+      color: var(--color-text-primary);
+    }
+
+    .btn-secondary:hover {
+      background: var(--color-bg-quaternary);
+    }
+
+    .btn-primary {
+      background: var(--color-accent);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: var(--color-accent-hover);
+    }
+
+    /* Timeline */
+    .timeline {
+      position: relative;
+      height: 80px;
+      margin: 1.5rem 0;
+    }
+
+    .timeline-track {
+      position: absolute;
+      top: 50%;
+      left: 0;
+      right: 0;
+      height: 48px;
+      transform: translateY(-50%);
+      background: var(--color-bg-tertiary);
+      border-radius: var(--radius-md);
+      overflow: hidden;
+      display: flex;
+    }
+
+    .timeline-segment {
+      position: relative;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: filter 0.2s ease;
+      overflow: hidden;
+    }
+
+    .timeline-segment:hover {
+      filter: brightness(1.05);
+    }
+
+    .timeline-segment.active {
+      filter: brightness(1.1);
+      box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.3);
+    }
+
+    .segment-label {
+      font-size: 0.625rem;
+      font-weight: 600;
+      color: white;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      padding: 0 0.5rem;
+      opacity: 0.9;
+    }
+
+    .timeline-segment:hover .segment-label {
+      opacity: 1;
+    }
+
+    /* Cut Markers */
+    .cut-marker {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 20px;
+      transform: translateX(-50%);
+      cursor: ew-resize;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .cut-marker::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 2px;
+      background: var(--color-text-primary);
+      border-radius: 1px;
+    }
+
+    .cut-marker-handle {
+      width: 16px;
+      height: 24px;
+      background: var(--color-bg-secondary);
+      border: 2px solid var(--color-text-primary);
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: var(--shadow-md);
+      transition: all 0.15s ease;
+    }
+
+    .cut-marker:hover .cut-marker-handle {
+      background: var(--color-accent);
+      border-color: var(--color-accent);
+      transform: scale(1.1);
+    }
+
+    .cut-marker-handle::before {
+      content: '';
+      width: 4px;
+      height: 10px;
+      background: repeating-linear-gradient(
+        to bottom,
+        var(--color-text-secondary) 0px,
+        var(--color-text-secondary) 2px,
+        transparent 2px,
+        transparent 4px
+      );
+    }
+
+    .cut-marker:hover .cut-marker-handle::before {
+      background: repeating-linear-gradient(
+        to bottom,
+        white 0px,
+        white 2px,
+        transparent 2px,
+        transparent 4px
+      );
+    }
+
+    /* Time Labels */
+    .timeline-times {
+      display: flex;
+      justify-content: space-between;
+      padding-top: 0.5rem;
+      font-size: 0.625rem;
+      color: var(--color-text-tertiary);
+    }
+
+    /* Thumbnails */
+    .timeline-thumbnails {
+      display: flex;
+      gap: 0.25rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .thumbnail {
+      width: 60px;
+      height: 36px;
+      background: var(--color-bg-tertiary);
+      border-radius: 4px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .thumbnail img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .thumbnail-placeholder {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.5rem;
+      color: var(--color-text-tertiary);
+    }
+
+    /* Segment Preview Cards */
+    .segments-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .segment-card {
+      background: var(--color-bg-secondary);
+      border: 1px solid var(--color-border-primary);
+      border-radius: var(--radius-lg);
+      padding: 1rem;
+      transition: all 0.2s ease;
+      cursor: pointer;
+    }
+
+    .segment-card:hover {
+      border-color: var(--color-border-secondary);
+      box-shadow: var(--shadow-md);
+    }
+
+    .segment-card.active {
+      border-color: var(--color-accent);
+      box-shadow: 0 0 0 3px var(--color-accent-muted);
+    }
+
+    .segment-card-header {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .segment-color {
+      width: 4px;
+      height: 32px;
+      border-radius: 2px;
+      flex-shrink: 0;
+    }
+
+    .segment-time {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .segment-time-range {
+      font-weight: 600;
+      font-size: 0.875rem;
+    }
+
+    .segment-duration {
+      font-size: 0.75rem;
+      color: var(--color-text-secondary);
+    }
+
+    .segment-actions {
+      margin-left: auto;
+      display: flex;
+      gap: 0.25rem;
+    }
+
+    .btn-icon {
+      width: 28px;
+      height: 28px;
+      padding: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: transparent;
+      border: none;
+      border-radius: var(--radius-md);
+      color: var(--color-text-tertiary);
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .btn-icon:hover {
+      background: var(--color-bg-tertiary);
+      color: var(--color-text-primary);
+    }
+
+    .btn-icon.danger:hover {
+      background: rgba(220, 38, 38, 0.1);
+      color: #DC2626;
+    }
+
+    .segment-description {
+      font-size: 0.8125rem;
+      line-height: 1.6;
+      color: var(--color-text-primary);
+      margin-bottom: 0.75rem;
+    }
+
+    .segment-suggestions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+
+    .suggestion-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.375rem;
+      padding: 0.25rem 0.625rem;
+      background: var(--color-bg-tertiary);
+      border-radius: var(--radius-full);
+      font-size: 0.6875rem;
+      font-weight: 500;
+      color: var(--color-text-secondary);
+    }
+
+    .suggestion-tag .dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+    }
+
+    .suggestion-tag.bucket .dot {
+      background: var(--bucket-blue);
+    }
+
+    .suggestion-tag.jira {
+      background: rgba(37, 99, 235, 0.1);
+      color: var(--color-info);
+    }
+
+    /* Footer Actions */
+    .footer-actions {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-top: 1rem;
+      border-top: 1px solid var(--color-border-primary);
+      margin-top: 1.5rem;
+    }
+
+    .footer-info {
+      font-size: 0.75rem;
+      color: var(--color-text-secondary);
+    }
+
+    .footer-buttons {
+      display: flex;
+      gap: 0.75rem;
+    }
+
+    /* Tooltip */
+    .tooltip {
+      position: absolute;
+      bottom: calc(100% + 8px);
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 0.5rem 0.75rem;
+      background: var(--color-text-primary);
+      color: var(--color-bg-primary);
+      font-size: 0.6875rem;
+      border-radius: var(--radius-md);
+      white-space: nowrap;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.15s ease;
+      z-index: 20;
+    }
+
+    .tooltip::after {
+      content: '';
+      position: absolute;
+      top: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      border: 4px solid transparent;
+      border-top-color: var(--color-text-primary);
+    }
+
+    .cut-marker:hover .tooltip {
+      opacity: 1;
+    }
+
+    /* Add Split Button */
+    .add-split-zone {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+    }
+
+    .timeline:hover .add-split-zone {
+      opacity: 1;
+    }
+
+    .add-split-indicator {
+      position: absolute;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      width: 24px;
+      height: 24px;
+      background: var(--color-bg-secondary);
+      border: 2px dashed var(--color-text-tertiary);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      color: var(--color-text-tertiary);
+      cursor: pointer;
+      opacity: 0;
+      transition: all 0.15s ease;
+      pointer-events: none;
+    }
+
+    .add-split-indicator.visible {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .add-split-indicator:hover {
+      background: var(--color-accent);
+      border-color: var(--color-accent);
+      color: white;
+      border-style: solid;
+    }
+
+    /* Calendar indicator */
+    .calendar-events {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .calendar-event {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.375rem;
+      padding: 0.25rem 0.5rem;
+      background: rgba(37, 99, 235, 0.08);
+      border-radius: var(--radius-md);
+      font-size: 0.625rem;
+      color: var(--color-info);
+    }
+
+    .calendar-event svg {
+      width: 10px;
+      height: 10px;
+    }
+
+    /* Instructions */
+    .instructions {
+      background: var(--color-accent-muted);
+      border: 1px solid rgba(255, 72, 0, 0.15);
+      border-radius: var(--radius-lg);
+      padding: 1rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .instructions h3 {
+      font-family: var(--font-display);
+      font-size: 0.875rem;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+      color: var(--color-accent);
+    }
+
+    .instructions ul {
+      list-style: none;
+      font-size: 0.75rem;
+      color: var(--color-text-secondary);
+    }
+
+    .instructions li {
+      padding: 0.25rem 0;
+      padding-left: 1rem;
+      position: relative;
+    }
+
+    .instructions li::before {
+      content: '>';
+      position: absolute;
+      left: 0;
+      color: var(--color-accent);
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>Splitting Assistant</h1>
+      <p>AI has detected multiple projects in this recording. Review and adjust the suggested splits.</p>
+
+      <div class="recording-info">
+        <div class="duration">4h 32m</div>
+        <div class="time-range">9:00 AM - 1:32 PM</div>
+        <div class="badge">3 splits suggested</div>
+      </div>
+    </div>
+
+    <div class="instructions">
+      <h3>How to use</h3>
+      <ul>
+        <li>Drag cut markers to adjust split points</li>
+        <li>Hover over timeline to add new splits</li>
+        <li>Click segments to see details</li>
+        <li>Remove unwanted splits with the X button</li>
+      </ul>
+    </div>
+
+    <div class="timeline-container">
+      <div class="timeline-header">
+        <h2>Timeline</h2>
+        <div class="timeline-actions">
+          <button class="btn btn-secondary">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+              <path d="M3 3v5h5"/>
+            </svg>
+            Reset
+          </button>
+          <button class="btn btn-secondary">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="12" y1="5" x2="12" y2="19"/>
+              <line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+            Add Split
+          </button>
+        </div>
+      </div>
+
+      <div class="calendar-events">
+        <div class="calendar-event">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+            <line x1="16" y1="2" x2="16" y2="6"/>
+            <line x1="8" y1="2" x2="8" y2="6"/>
+            <line x1="3" y1="10" x2="21" y2="10"/>
+          </svg>
+          9:00 - 10:30 Sprint Planning
+        </div>
+        <div class="calendar-event">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+            <line x1="16" y1="2" x2="16" y2="6"/>
+            <line x1="8" y1="2" x2="8" y2="6"/>
+            <line x1="3" y1="10" x2="21" y2="10"/>
+          </svg>
+          12:00 - 12:30 1:1 with Sarah
+        </div>
+      </div>
+
+      <div class="timeline" id="timeline">
+        <div class="timeline-track">
+          <div class="timeline-segment" style="width: 33%; background: var(--bucket-blue);" data-segment="0">
+            <span class="segment-label">Sprint Planning</span>
+          </div>
+          <div class="timeline-segment" style="width: 30%; background: var(--bucket-purple);" data-segment="1">
+            <span class="segment-label">Calendar Integration</span>
+          </div>
+          <div class="timeline-segment" style="width: 12%; background: var(--bucket-green);" data-segment="2">
+            <span class="segment-label">1:1</span>
+          </div>
+          <div class="timeline-segment" style="width: 25%; background: var(--bucket-orange);" data-segment="3">
+            <span class="segment-label">Documentation</span>
+          </div>
+        </div>
+
+        <!-- Cut Markers -->
+        <div class="cut-marker" style="left: 33%;" data-position="33">
+          <div class="cut-marker-handle"></div>
+          <div class="tooltip">10:30 AM</div>
+        </div>
+        <div class="cut-marker" style="left: 63%;" data-position="63">
+          <div class="cut-marker-handle"></div>
+          <div class="tooltip">12:00 PM</div>
+        </div>
+        <div class="cut-marker" style="left: 75%;" data-position="75">
+          <div class="cut-marker-handle"></div>
+          <div class="tooltip">12:30 PM</div>
+        </div>
+
+        <!-- Add split indicator (follows mouse) -->
+        <div class="add-split-indicator" id="addSplitIndicator">+</div>
+      </div>
+
+      <div class="timeline-times">
+        <span>9:00 AM</span>
+        <span>10:00 AM</span>
+        <span>11:00 AM</span>
+        <span>12:00 PM</span>
+        <span>1:00 PM</span>
+        <span>1:32 PM</span>
+      </div>
+    </div>
+
+    <div class="segments-list">
+      <div class="segment-card active" data-segment="0">
+        <div class="segment-card-header">
+          <div class="segment-color" style="background: var(--bucket-blue);"></div>
+          <div class="segment-time">
+            <div class="segment-time-range">9:00 AM - 10:30 AM</div>
+            <div class="segment-duration">1h 30m</div>
+          </div>
+          <div class="segment-actions">
+            <button class="btn-icon" title="Edit">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+              </svg>
+            </button>
+            <button class="btn-icon danger" title="Remove split">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="18" y1="6" x2="6" y2="18"/>
+                <line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+        <div class="segment-description">
+          Sprint planning for the Acme Corp mobile app project, reviewing and estimating tickets in the authentication epic, prioritizing the social login feature and discussing technical approach for OAuth implementation.
+        </div>
+        <div class="segment-suggestions">
+          <span class="suggestion-tag bucket"><span class="dot" style="background: var(--bucket-blue);"></span> Meetings</span>
+          <span class="suggestion-tag jira">ACME-142</span>
+        </div>
+      </div>
+
+      <div class="segment-card" data-segment="1">
+        <div class="segment-card-header">
+          <div class="segment-color" style="background: var(--bucket-purple);"></div>
+          <div class="segment-time">
+            <div class="segment-time-range">10:30 AM - 12:00 PM</div>
+            <div class="segment-duration">1h 30m</div>
+          </div>
+          <div class="segment-actions">
+            <button class="btn-icon" title="Edit">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+              </svg>
+            </button>
+            <button class="btn-icon danger" title="Remove split">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="18" y1="6" x2="6" y2="18"/>
+                <line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+        <div class="segment-description">
+          Development of the calendar integration feature for TimePortal, implementing the Google OAuth authentication flow in the CalendarService, handling token refresh logic and building the background sync mechanism for calendar events.
+        </div>
+        <div class="segment-suggestions">
+          <span class="suggestion-tag bucket"><span class="dot" style="background: var(--bucket-purple);"></span> Development</span>
+          <span class="suggestion-tag jira">TP-89</span>
+        </div>
+      </div>
+
+      <div class="segment-card" data-segment="2">
+        <div class="segment-card-header">
+          <div class="segment-color" style="background: var(--bucket-green);"></div>
+          <div class="segment-time">
+            <div class="segment-time-range">12:00 PM - 12:30 PM</div>
+            <div class="segment-duration">30m</div>
+          </div>
+          <div class="segment-actions">
+            <button class="btn-icon" title="Edit">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+              </svg>
+            </button>
+            <button class="btn-icon danger" title="Remove split">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="18" y1="6" x2="6" y2="18"/>
+                <line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+        <div class="segment-description">
+          Weekly 1:1 meeting with Sarah discussing project priorities, reviewing last week's progress on the analytics implementation, and planning next steps for the calendar integration feature rollout.
+        </div>
+        <div class="segment-suggestions">
+          <span class="suggestion-tag bucket"><span class="dot" style="background: var(--bucket-green);"></span> 1:1 Meetings</span>
+        </div>
+      </div>
+
+      <div class="segment-card" data-segment="3">
+        <div class="segment-card-header">
+          <div class="segment-color" style="background: var(--bucket-orange);"></div>
+          <div class="segment-time">
+            <div class="segment-time-range">12:30 PM - 1:32 PM</div>
+            <div class="segment-duration">1h 2m</div>
+          </div>
+          <div class="segment-actions">
+            <button class="btn-icon" title="Edit">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+              </svg>
+            </button>
+            <button class="btn-icon danger" title="Remove split">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="18" y1="6" x2="6" y2="18"/>
+                <line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+        <div class="segment-description">
+          Writing technical documentation for the calendar integration API, documenting the OAuth flow, background sync behavior, and Focus Time event creation process for the developer handbook.
+        </div>
+        <div class="segment-suggestions">
+          <span class="suggestion-tag bucket"><span class="dot" style="background: var(--bucket-orange);"></span> Documentation</span>
+          <span class="suggestion-tag jira">TP-91</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-actions">
+      <div class="footer-info">
+        4 segments will be created from this recording
+      </div>
+      <div class="footer-buttons">
+        <button class="btn btn-secondary">Cancel</button>
+        <button class="btn btn-primary">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="20 6 9 17 4 12"/>
+          </svg>
+          Apply Splits
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Interactive prototype JavaScript
+
+    // Segment card selection
+    const segmentCards = document.querySelectorAll('.segment-card');
+    const timelineSegments = document.querySelectorAll('.timeline-segment');
+
+    segmentCards.forEach(card => {
+      card.addEventListener('click', () => {
+        // Remove active from all
+        segmentCards.forEach(c => c.classList.remove('active'));
+        timelineSegments.forEach(s => s.classList.remove('active'));
+
+        // Add active to clicked
+        card.classList.add('active');
+        const segmentId = card.dataset.segment;
+        const timelineSegment = document.querySelector(`.timeline-segment[data-segment="${segmentId}"]`);
+        if (timelineSegment) {
+          timelineSegment.classList.add('active');
+        }
+      });
+    });
+
+    timelineSegments.forEach(segment => {
+      segment.addEventListener('click', () => {
+        segmentCards.forEach(c => c.classList.remove('active'));
+        timelineSegments.forEach(s => s.classList.remove('active'));
+
+        segment.classList.add('active');
+        const segmentId = segment.dataset.segment;
+        const card = document.querySelector(`.segment-card[data-segment="${segmentId}"]`);
+        if (card) {
+          card.classList.add('active');
+          card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+      });
+    });
+
+    // Cut marker dragging
+    const cutMarkers = document.querySelectorAll('.cut-marker');
+    const timeline = document.getElementById('timeline');
+
+    cutMarkers.forEach(marker => {
+      let isDragging = false;
+
+      marker.addEventListener('mousedown', (e) => {
+        isDragging = true;
+        e.preventDefault();
+      });
+
+      document.addEventListener('mousemove', (e) => {
+        if (!isDragging) return;
+
+        const rect = timeline.getBoundingClientRect();
+        let x = e.clientX - rect.left;
+        let percent = (x / rect.width) * 100;
+
+        // Clamp between 5% and 95%
+        percent = Math.max(5, Math.min(95, percent));
+
+        marker.style.left = `${percent}%`;
+
+        // Update tooltip time
+        const tooltip = marker.querySelector('.tooltip');
+        const startHour = 9;
+        const totalMinutes = 272; // 4h 32m
+        const minutesIn = (percent / 100) * totalMinutes;
+        const hours = Math.floor((startHour * 60 + minutesIn) / 60);
+        const minutes = Math.floor(minutesIn % 60);
+        const ampm = hours >= 12 ? 'PM' : 'AM';
+        const displayHour = hours > 12 ? hours - 12 : hours;
+        tooltip.textContent = `${displayHour}:${minutes.toString().padStart(2, '0')} ${ampm}`;
+      });
+
+      document.addEventListener('mouseup', () => {
+        isDragging = false;
+      });
+    });
+
+    // Add split indicator follows mouse
+    const addSplitIndicator = document.getElementById('addSplitIndicator');
+
+    timeline.addEventListener('mousemove', (e) => {
+      const rect = timeline.getBoundingClientRect();
+      let x = e.clientX - rect.left;
+      let percent = (x / rect.width) * 100;
+
+      // Check if near existing cut markers
+      const isNearMarker = Array.from(cutMarkers).some(marker => {
+        const markerPercent = parseFloat(marker.style.left);
+        return Math.abs(percent - markerPercent) < 5;
+      });
+
+      if (!isNearMarker && percent > 5 && percent < 95) {
+        addSplitIndicator.style.left = `${percent}%`;
+        addSplitIndicator.classList.add('visible');
+      } else {
+        addSplitIndicator.classList.remove('visible');
+      }
+    });
+
+    timeline.addEventListener('mouseleave', () => {
+      addSplitIndicator.classList.remove('visible');
+    });
+
+    addSplitIndicator.addEventListener('click', () => {
+      alert('New split would be added at this position');
+    });
+
+    // Remove split buttons
+    document.querySelectorAll('.btn-icon.danger').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (confirm('Remove this split? The segments will be merged.')) {
+          const card = btn.closest('.segment-card');
+          card.style.opacity = '0.5';
+          card.style.pointerEvents = 'none';
+        }
+      });
+    });
+
+    // Apply splits button
+    document.querySelector('.btn-primary').addEventListener('click', () => {
+      alert('Splits applied! 4 separate activities will be created.');
+    });
+  </script>
+</body>
+</html>
