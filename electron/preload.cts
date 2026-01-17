@@ -108,6 +108,9 @@ contextBridge.exposeInMainWorld('electron', {
                 detectedActivities: string[];
                 duration: number;
                 startTime: number;
+                currentCalendarEvent: string | null;
+                recentCalendarEvents: string[];
+                upcomingCalendarEvents: string[];
             };
             buckets: any[];
             jiraIssues: any[];

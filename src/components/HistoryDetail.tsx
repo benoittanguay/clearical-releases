@@ -331,6 +331,26 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                 }
             }
 
+            // Fetch calendar context for the activity's start time
+            let calendarContext = {
+                currentEvent: null as string | null,
+                recentEvents: [] as string[],
+                upcomingEvents: [] as string[]
+            };
+            try {
+                const calendarResult = await window.electron.ipcRenderer.calendar.getContext(entry.startTime);
+                if (calendarResult?.success) {
+                    calendarContext = {
+                        currentEvent: calendarResult.currentEvent,
+                        recentEvents: calendarResult.recentEvents || [],
+                        upcomingEvents: calendarResult.upcomingEvents || []
+                    };
+                }
+            } catch (error) {
+                console.log('[HistoryDetail] Failed to fetch calendar context:', error);
+                // Continue with empty calendar context
+            }
+
             // Call the suggest-assignment IPC handler
             const result = await window.electron?.ipcRenderer?.suggestAssignment({
                 context: {
@@ -341,10 +361,10 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                     detectedActivities: metadata?.activities || [],
                     duration: entry.duration,
                     startTime: entry.startTime,
-                    // Calendar context fields (will be populated in Task 6.2)
-                    currentCalendarEvent: null,
-                    recentCalendarEvents: [],
-                    upcomingCalendarEvents: []
+                    // Calendar context from CalendarService
+                    currentCalendarEvent: calendarContext.currentEvent,
+                    recentCalendarEvents: calendarContext.recentEvents,
+                    upcomingCalendarEvents: calendarContext.upcomingEvents
                 },
                 buckets: buckets,
                 jiraIssues: jiraIssues,

@@ -1934,9 +1934,36 @@ ipcMain.handle('generate-activity-summary', async (event, context: {
     console.log('[Main] App names:', context.appNames);
 
     try {
-        // Use Gemini AI to generate narrative summary
+        // Fetch calendar context for the activity's start time
+        const calendarService = getCalendarService();
+        const calendarContext = calendarService.getCalendarContext(context.startTime);
+        console.log('[Main] Calendar context:', {
+            currentEvent: calendarContext.currentEvent,
+            recentCount: calendarContext.recentEvents.length,
+            upcomingCount: calendarContext.upcomingEvents.length
+        });
+
+        // Build enhanced context with calendar information
+        let enhancedContext = '';
+        if (calendarContext.currentEvent) {
+            enhancedContext += `Current calendar event: ${calendarContext.currentEvent}. `;
+        }
+        if (calendarContext.recentEvents.length > 0) {
+            enhancedContext += `Recent events: ${calendarContext.recentEvents.join(', ')}. `;
+        }
+        if (calendarContext.upcomingEvents.length > 0) {
+            enhancedContext += `Upcoming events: ${calendarContext.upcomingEvents.join(', ')}. `;
+        }
+
+        // Add calendar context to the descriptions if available
+        const contextualizedDescriptions = [...context.screenshotDescriptions];
+        if (enhancedContext.trim()) {
+            contextualizedDescriptions.unshift(`Calendar context: ${enhancedContext.trim()}`);
+        }
+
+        // Use Gemini AI to generate narrative summary with calendar context
         const result = await aiService.summarizeActivities(
-            context.screenshotDescriptions,
+            contextualizedDescriptions,
             context.appNames
         );
 

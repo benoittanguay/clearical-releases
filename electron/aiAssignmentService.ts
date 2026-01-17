@@ -281,6 +281,17 @@ export class AIAssignmentService {
                 contextParts.push(`Activities: ${context.detectedActivities.join(', ')}`);
             }
 
+            // Add calendar context if available
+            if (context.currentCalendarEvent) {
+                contextParts.push(`Current calendar event: ${context.currentCalendarEvent}`);
+            }
+            if (context.recentCalendarEvents && context.recentCalendarEvents.length > 0) {
+                contextParts.push(`Recent events: ${context.recentCalendarEvents.join(', ')}`);
+            }
+            if (context.upcomingCalendarEvents && context.upcomingCalendarEvents.length > 0) {
+                contextParts.push(`Upcoming events: ${context.upcomingCalendarEvents.join(', ')}`);
+            }
+
             const contextStr = contextParts.join('. ');
 
             console.log('[AIAssignmentService] Calling AI classification with', options.length, 'options');
