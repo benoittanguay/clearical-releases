@@ -49,6 +49,17 @@ interface Setting {
     updated_at: number;
 }
 
+export interface CalendarEvent {
+    id: string;
+    provider: string;
+    providerEventId: string;
+    title: string;
+    startTime: number;
+    endTime: number;
+    isAllDay: boolean;
+    syncedAt?: number;
+}
+
 export class DatabaseService {
     private db: Database.Database;
     private static instance: DatabaseService | null = null;
@@ -216,6 +227,22 @@ export class DatabaseService {
 
             CREATE INDEX IF NOT EXISTS idx_tempo_accounts_status ON tempo_accounts(status);
             CREATE INDEX IF NOT EXISTS idx_tempo_accounts_cached_at ON tempo_accounts(cached_at);
+        `);
+
+        // Calendar events cache
+        this.db.exec(`
+            CREATE TABLE IF NOT EXISTS calendar_events (
+                id TEXT PRIMARY KEY,
+                provider TEXT NOT NULL DEFAULT 'google',
+                provider_event_id TEXT NOT NULL,
+                title TEXT NOT NULL,
+                start_time INTEGER NOT NULL,
+                end_time INTEGER NOT NULL,
+                is_all_day INTEGER DEFAULT 0,
+                synced_at INTEGER NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_calendar_events_time
+                ON calendar_events(start_time, end_time);
         `);
 
         console.log('[DatabaseService] Schema initialized');
@@ -773,6 +800,55 @@ export class DatabaseService {
     }
 
     // ========================================================================
+    // CALENDAR EVENTS
+    // ========================================================================
+
+    public getCalendarEvents(startTime: number, endTime: number): CalendarEvent[] {
+        const stmt = this.db.prepare(`
+            SELECT * FROM calendar_events
+            WHERE start_time <= ? AND end_time >= ?
+            ORDER BY start_time ASC
+        `);
+        const rows = stmt.all(endTime, startTime) as any[];
+        return rows.map(row => this.rowToCalendarEvent(row));
+    }
+
+    public upsertCalendarEvents(events: CalendarEvent[]): void {
+        const stmt = this.db.prepare(`
+            INSERT OR REPLACE INTO calendar_events
+            (id, provider, provider_event_id, title, start_time, end_time, is_all_day, synced_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `);
+        const now = Date.now();
+        const upsertMany = this.db.transaction((events: CalendarEvent[]) => {
+            for (const event of events) {
+                stmt.run(
+                    event.id,
+                    event.provider,
+                    event.providerEventId,
+                    event.title,
+                    event.startTime,
+                    event.endTime,
+                    event.isAllDay ? 1 : 0,
+                    now
+                );
+            }
+        });
+        upsertMany(events);
+    }
+
+    public deleteStaleCalendarEvents(olderThan: number): void {
+        const stmt = this.db.prepare(`
+            DELETE FROM calendar_events WHERE synced_at < ?
+        `);
+        stmt.run(olderThan);
+    }
+
+    public clearCalendarEvents(): void {
+        this.db.exec('DELETE FROM calendar_events');
+    }
+
+    // ========================================================================
     // UTILITY METHODS
     // ========================================================================
 
@@ -805,6 +881,19 @@ export class DatabaseService {
             parentId: row.parent_id,
             isFolder: row.is_folder === 1,
             linkedIssue: row.linked_issue ? JSON.parse(row.linked_issue) : undefined
+        };
+    }
+
+    private rowToCalendarEvent(row: any): CalendarEvent {
+        return {
+            id: row.id,
+            provider: row.provider,
+            providerEventId: row.provider_event_id,
+            title: row.title,
+            startTime: row.start_time,
+            endTime: row.end_time,
+            isAllDay: row.is_all_day === 1,
+            syncedAt: row.synced_at
         };
     }
 
