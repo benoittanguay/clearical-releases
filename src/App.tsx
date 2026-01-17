@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useTimer } from './hooks/useTimer';
 import { useStorage } from './context/StorageContext';
 import { useSettings } from './context/SettingsContext';
+import { analytics } from './services/analytics';
 import { Settings } from './components/Settings';
 import { HistoryDetail } from './components/HistoryDetail';
 import { ExportDialog } from './components/ExportDialog';
@@ -51,6 +52,17 @@ function App() {
     if (!onboardingComplete) {
       setShowOnboarding(true);
     }
+  }, []);
+
+  // Initialize analytics service
+  useEffect(() => {
+    analytics.initialize();
+    analytics.refreshEnabledState();
+    analytics.track('app.started');
+
+    return () => {
+      analytics.destroy();
+    };
   }, []);
 
   // Check if we should show the update success modal
