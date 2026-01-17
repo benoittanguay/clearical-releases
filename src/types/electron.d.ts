@@ -333,6 +333,12 @@ export interface ElectronAPI {
             removeBlacklistedAccount: (accountKey: string) => Promise<{ success: boolean; error?: string }>;
             isAccountBlacklisted: (accountKey: string) => Promise<{ success: boolean; isBlacklisted: boolean; error?: string }>;
         };
+        // Analytics
+        analytics: {
+            sendEvents: (events: { event_name: string; properties?: Record<string, unknown> }[], sessionId: string) => Promise<{ success: boolean; error?: string }>;
+            getEnabled: () => Promise<{ success: boolean; enabled: boolean; error?: string }>;
+            setEnabled: (enabled: boolean) => Promise<{ success: boolean; error?: string }>;
+        };
     };
 }
 
