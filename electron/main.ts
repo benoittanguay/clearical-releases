@@ -27,7 +27,7 @@ import { MigrationService } from './migration.js';
 import { updater } from './autoUpdater.js';
 import { AppDiscoveryService } from './appDiscoveryService.js';
 import { BlacklistService } from './blacklistService.js';
-import { fastVLMServer } from './fastvlm.js';
+import { aiService } from './ai/aiService.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -683,10 +683,10 @@ ipcMain.handle('capture-screenshot', async () => {
     return null;
 });
 
-// FastVLM Python server for VLM analysis
+// AI Screenshot Analysis (via Gemini cloud service)
 ipcMain.handle('analyze-screenshot', async (event, imagePath: string, requestId?: string) => {
     console.log('[Main] analyze-screenshot requested for:', imagePath);
-    console.log('[Main] Using FastVLM backend for screenshot analysis');
+    console.log('[Main] Using Gemini cloud AI for screenshot analysis');
 
     // Check if the image file exists
     if (!fs.existsSync(imagePath)) {
@@ -755,9 +755,8 @@ ipcMain.handle('analyze-screenshot', async (event, imagePath: string, requestId?
         return 'Screenshot captured';
     };
 
-    // TRY FASTVLM FIRST (PRIMARY METHOD)
-    // Note: analyzeScreenshot() will start the server on-demand if not running
-    console.log('[Main] Attempting analysis with FastVLM (will start server if needed)...');
+    // Use Gemini AI service for screenshot analysis
+    console.log('[Main] Attempting analysis with Gemini cloud AI...');
 
     // Parse app name and window title from filename
     // Filename format: {timestamp}|||{app_name}|||{window_title}.png
@@ -809,7 +808,7 @@ ipcMain.handle('analyze-screenshot', async (event, imagePath: string, requestId?
     }
 
     try {
-        const fastVLMResult = await fastVLMServer.analyzeScreenshot(analyzeImagePath, appName, windowTitle, requestId);
+        const aiResult = await aiService.analyzeScreenshot(analyzeImagePath, appName, windowTitle, requestId);
 
         // Clean up temp decrypted file if we created one
         if (tempDecryptedPath) {
@@ -821,34 +820,34 @@ ipcMain.handle('analyze-screenshot', async (event, imagePath: string, requestId?
             }
         }
 
-        if (fastVLMResult.success && fastVLMResult.description) {
-            console.log('[Main] FastVLM analysis successful');
-            console.log('[Main] Description:', fastVLMResult.description);
+        if (aiResult.success && aiResult.description) {
+            console.log('[Main] AI analysis successful');
+            console.log('[Main] Description:', aiResult.description);
             return {
                 success: true,
-                description: fastVLMResult.description,
-                confidence: fastVLMResult.confidence || 0.9,
-                requestId: fastVLMResult.requestId,
+                description: aiResult.description,
+                confidence: aiResult.confidence || 0.9,
+                requestId: aiResult.requestId,
                 rawVisionData: null,
-                aiDescription: fastVLMResult.description,
+                aiDescription: aiResult.description,
                 llmError: null,
-                analyzer: 'fastvlm'
+                analyzer: 'gemini'
             };
         } else {
-            // FastVLM analysis failed - return error with fallback description
-            console.warn('[Main] FastVLM analysis failed:', fastVLMResult.error);
+            // AI analysis failed - return error with fallback description
+            console.warn('[Main] AI analysis failed:', aiResult.error);
             const fallbackDescription = generateFallbackFromFilename(imagePath);
             return {
                 success: false,
-                error: fastVLMResult.error || 'FastVLM analysis failed',
+                error: aiResult.error || 'AI analysis failed',
                 description: fallbackDescription,
                 rawVisionData: null,
                 aiDescription: null,
                 analyzer: 'fallback'
             };
         }
-    } catch (fastVLMError) {
-        console.error('[Main] FastVLM error:', fastVLMError);
+    } catch (aiError) {
+        console.error('[Main] AI error:', aiError);
 
         // Clean up temp decrypted file if we created one
         if (tempDecryptedPath) {
@@ -864,7 +863,7 @@ ipcMain.handle('analyze-screenshot', async (event, imagePath: string, requestId?
 
         return {
             success: false,
-            error: fastVLMError instanceof Error ? fastVLMError.message : 'Unknown error',
+            error: aiError instanceof Error ? aiError.message : 'Unknown error',
             description: fallbackDescription,
             rawVisionData: null,
             aiDescription: null,
@@ -1914,8 +1913,8 @@ ipcMain.handle('generate-activity-summary', async (event, context: {
     console.log('[Main] App names:', context.appNames);
 
     try {
-        // Use the Qwen3 reasoning model via FastVLM server to generate narrative summary
-        const result = await fastVLMServer.summarizeActivities(
+        // Use Gemini AI to generate narrative summary
+        const result = await aiService.summarizeActivities(
             context.screenshotDescriptions,
             context.appNames
         );
@@ -2980,10 +2979,9 @@ app.whenReady().then(() => {
         console.warn('[Main] App will run without subscription features');
     }
 
-    // FastVLM server is now on-demand - it will start automatically when needed
-    // and shut down after 60 seconds of inactivity to save resources
-    console.log('[Main] FastVLM server configured for on-demand startup');
-    console.log('[Main] Server will start when first screenshot analysis is requested');
+    // AI service uses cloud-based Gemini API via Supabase Edge Function
+    // No local server needed - requests are made on-demand
+    console.log('[Main] AI service configured (Gemini cloud via Supabase)');
 
     // Create tray first to ensure it's fully initialized before window positioning
     createTray();
