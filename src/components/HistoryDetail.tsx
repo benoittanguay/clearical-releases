@@ -6,6 +6,7 @@ import { AssignmentPicker } from './AssignmentPicker';
 import { TempoValidationModal } from './TempoValidationModal';
 import { TempoAccountPicker } from './TempoAccountPicker';
 import { InlineTimeEditor } from './InlineTimeEditor';
+import { AddToCalendarButton } from './AddToCalendarButton';
 import { useStorage } from '../context/StorageContext';
 import { useSettings } from '../context/SettingsContext';
 import { useSubscription } from '../context/SubscriptionContext';
@@ -1067,8 +1068,14 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                         <h2 className="text-xl font-bold" style={{ fontFamily: 'var(--font-display)', color: 'var(--color-text-primary)' }}>Activity Details</h2>
                     </div>
 
-                    {/* Log to Tempo Button - moved to header */}
-                    <div className="no-drag">
+                    {/* Action Buttons - Log to Tempo and Add to Calendar */}
+                    <div className="no-drag flex items-center gap-2">
+                        <AddToCalendarButton
+                            entry={entry}
+                            bucketName={selectedAssignment?.type === 'bucket' ? selectedAssignment.bucket?.name : undefined}
+                            onNavigateToSettings={onNavigateToSettings}
+                            jiraBaseUrl={settings.jira?.baseUrl}
+                        />
                         <button
                             onClick={handleOpenTempoModal}
                             className={`px-3 py-1.5 text-sm flex items-center justify-center gap-1.5 transition-all active:scale-95`}
