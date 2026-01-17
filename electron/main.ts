@@ -29,6 +29,7 @@ import { updater } from './autoUpdater.js';
 import { AppDiscoveryService } from './appDiscoveryService.js';
 import { BlacklistService } from './blacklistService.js';
 import { aiService } from './ai/aiService.js';
+import { getCalendarService, initializeCalendarService } from './calendar/calendarService.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -2746,6 +2747,89 @@ ipcMain.handle('is-tempo-account-blacklisted', async (event, accountKey: string)
     }
 });
 
+// Calendar Integration
+ipcMain.handle('calendar:connect', async () => {
+    try {
+        const service = getCalendarService();
+        await service.connectGoogle();
+        return { success: true };
+    } catch (error) {
+        console.error('[Main] calendar:connect failed:', error);
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+});
+
+ipcMain.handle('calendar:disconnect', async () => {
+    try {
+        const service = getCalendarService();
+        await service.disconnect();
+        return { success: true };
+    } catch (error) {
+        console.error('[Main] calendar:disconnect failed:', error);
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+});
+
+ipcMain.handle('calendar:is-connected', async () => {
+    try {
+        const service = getCalendarService();
+        return { success: true, connected: await service.isConnected() };
+    } catch (error) {
+        console.error('[Main] calendar:is-connected failed:', error);
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error', connected: false };
+    }
+});
+
+ipcMain.handle('calendar:get-account', async () => {
+    try {
+        const service = getCalendarService();
+        const email = await service.getAccountEmail();
+        const provider = await service.getProviderName();
+        return { success: true, email, provider };
+    } catch (error) {
+        console.error('[Main] calendar:get-account failed:', error);
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error', email: null, provider: null };
+    }
+});
+
+ipcMain.handle('calendar:sync', async () => {
+    try {
+        const service = getCalendarService();
+        await service.syncEvents();
+        return { success: true };
+    } catch (error) {
+        console.error('[Main] calendar:sync failed:', error);
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+});
+
+ipcMain.handle('calendar:get-context', async (_, timestamp: number) => {
+    try {
+        const service = getCalendarService();
+        const context = service.getCalendarContext(timestamp);
+        return { success: true, ...context };
+    } catch (error) {
+        console.error('[Main] calendar:get-context failed:', error);
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error', currentEvent: null, recentEvents: [], upcomingEvents: [] };
+    }
+});
+
+ipcMain.handle('calendar:create-focus-time', async (_, input: {
+    title: string;
+    description: string;
+    startTime: number;
+    endTime: number;
+}) => {
+    try {
+        const service = getCalendarService();
+        const eventId = await service.createFocusTimeEvent(input);
+        return { success: true, eventId };
+    } catch (error) {
+        console.error('[Main] calendar:create-focus-time failed:', error);
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error', eventId: null };
+    }
+});
+
 /**
  * Comprehensive cleanup of all app resources
  * Ensures no orphan processes remain after quit
@@ -3006,6 +3090,15 @@ app.whenReady().then(() => {
         console.error('[Main] Failed to initialize subscription system:', error);
         console.warn('[Main] App will run without subscription features');
     }
+
+    // Initialize calendar service (async)
+    initializeCalendarService()
+        .then(() => {
+            console.log('[Main] Calendar service initialized');
+        })
+        .catch((error) => {
+            console.error('[Main] Failed to initialize calendar service:', error);
+        });
 
     // AI service uses cloud-based Gemini API via Supabase Edge Function
     // No local server needed - requests are made on-demand
