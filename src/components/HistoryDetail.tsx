@@ -14,6 +14,7 @@ import { useToast } from '../context/ToastContext';
 import { useJiraCache } from '../context/JiraCacheContext';
 import { useTimeRounding } from '../hooks/useTimeRounding';
 import { useScreenshotAnalysis } from '../context/ScreenshotAnalysisContext';
+import { analytics } from '../services/analytics';
 import { TempoService, type TempoAccount } from '../services/tempoService';
 import { JiraService } from '../services/jiraService';
 
@@ -355,6 +356,9 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                 // Auto-assign with notification
                 console.log('[HistoryDetail] Auto-assigning with confidence:', result.suggestion.confidence);
                 handleAssignmentChange(result.suggestion.assignment, true);
+
+                // Track AI assignment usage
+                analytics.track('assignment.ai_used');
 
                 // Show success toast with undo action
                 const assignmentName = result.suggestion.assignment.type === 'bucket'

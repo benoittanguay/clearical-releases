@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import type { TimeEntry, TimeBucket } from '../context/StorageContext';
 import { generateCSV, getDefaultFilename, type ExportOptions } from '../services/exportService';
+import { analytics } from '../services/analytics';
 
 interface ExportDialogProps {
     entries: TimeEntry[];
@@ -27,6 +28,11 @@ export function ExportDialog({ entries, buckets, onClose, onExport }: ExportDial
 
         setDateTo(today.toISOString().split('T')[0]);
         setDateFrom(thirtyDaysAgo.toISOString().split('T')[0]);
+    }, []);
+
+    // Track when export dialog is opened
+    useEffect(() => {
+        analytics.track('export.opened');
     }, []);
 
     const handleBucketToggle = (bucketId: string) => {
@@ -134,6 +140,9 @@ export function ExportDialog({ entries, buckets, onClose, onExport }: ExportDial
             if (!writeResult || !writeResult.success) {
                 throw new Error(writeResult?.error || 'Failed to write file');
             }
+
+            // Track successful export
+            analytics.track('export.completed', { format: 'csv', row_count: filteredCount });
 
             onExport();
             onClose();

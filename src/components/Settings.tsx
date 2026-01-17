@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { useJiraCache } from '../context/JiraCacheContext';
 import { AppBlacklistManager } from './AppBlacklistManager';
 import { getTimeIncrementOptions } from '../utils/timeRounding';
+import { analytics } from '../services/analytics';
 import type { SyncStatus } from '../services/jiraSyncScheduler';
 import type { UpdateStatus } from '../types/electron';
 
@@ -186,6 +187,11 @@ export function Settings({ onOpenJiraModal, onOpenTempoModal }: SettingsProps = 
             }
         };
         loadAnalyticsPreference();
+    }, []);
+
+    // Track when settings is opened
+    useEffect(() => {
+        analytics.track('settings.opened');
     }, []);
 
     const handleAnalyticsToggle = async (enabled: boolean) => {

@@ -4,6 +4,7 @@ import type { WorkAssignment, TimeBucket } from '../context/StorageContext';
 import { useSettings } from '../context/SettingsContext';
 import { useSubscription } from '../context/SubscriptionContext';
 import { useJiraCache } from '../context/JiraCacheContext';
+import { analytics } from '../services/analytics';
 import type { JiraIssue } from '../services/jiraService';
 
 interface AssignmentPickerProps {
@@ -69,6 +70,7 @@ export function AssignmentPicker({ value, onChange, placeholder = "Select assign
                 color: bucket.color
             }
         });
+        analytics.track('assignment.selected', { source: 'picker' });
         setSearchQuery('');
         setIsOpen(false);
     };
@@ -85,6 +87,7 @@ export function AssignmentPicker({ value, onChange, placeholder = "Select assign
                 projectName: issue.fields.project.name
             }
         });
+        analytics.track('assignment.selected', { source: 'picker' });
         setSearchQuery('');
         setIsOpen(false);
     };

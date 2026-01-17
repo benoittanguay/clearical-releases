@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useStorage } from '../context/StorageContext';
 import { useSettings } from '../context/SettingsContext';
+import { analytics } from '../services/analytics';
 import type { JiraProject } from '../services/jiraService';
 
 interface OnboardingModalProps {
@@ -61,6 +62,8 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
             setSelectedProjects(settings.jira?.selectedProjects || []);
             setAvailableProjects([]);
             setJiraError(null);
+            // Track onboarding started
+            analytics.track('onboarding.started');
         }
     }, [isOpen, settings.jira]);
 
@@ -127,7 +130,13 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
 
     if (!isOpen) return null;
 
+    const stepNames = ['permissions', 'bucket', 'ai_features', 'jira'];
+
     const handleNext = () => {
+        // Track step completion before transitioning
+        const currentStepName = stepNames[currentStep];
+        analytics.track('onboarding.step_completed', { step: currentStepName });
+
         setIsTransitioning(true);
         setTimeout(() => {
             setCurrentStep((prev) => prev + 1);
@@ -158,6 +167,7 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
     const handleFinish = () => {
         // Mark onboarding as complete
         localStorage.setItem('timeportal-onboarding-complete', 'true');
+        analytics.track('onboarding.completed');
         onClose();
     };
 
@@ -246,6 +256,9 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
             });
         }
         localStorage.setItem('timeportal-onboarding-complete', 'true');
+        // Track the final step completion and overall completion
+        analytics.track('onboarding.step_completed', { step: 'jira' });
+        analytics.track('onboarding.completed');
         onClose();
     };
 
