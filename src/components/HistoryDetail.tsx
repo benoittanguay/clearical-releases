@@ -340,7 +340,11 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                     detectedTechnologies: metadata?.technologies || [],
                     detectedActivities: metadata?.activities || [],
                     duration: entry.duration,
-                    startTime: entry.startTime
+                    startTime: entry.startTime,
+                    // Calendar context fields (will be populated in Task 6.2)
+                    currentCalendarEvent: null,
+                    recentCalendarEvents: [],
+                    upcomingCalendarEvents: []
                 },
                 buckets: buckets,
                 jiraIssues: jiraIssues,

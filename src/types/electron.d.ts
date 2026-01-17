@@ -185,6 +185,10 @@ export interface ElectronAPI {
                 detectedActivities: string[];
                 duration: number;
                 startTime: number;
+                // Calendar context fields
+                currentCalendarEvent: string | null;
+                recentCalendarEvents: string[];
+                upcomingCalendarEvents: string[];
             };
             buckets: TimeBucket[];
             jiraIssues: LinkedJiraIssue[];

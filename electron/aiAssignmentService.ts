@@ -13,6 +13,10 @@ export interface ActivityContext {
     detectedActivities: string[];
     duration: number;
     startTime: number;
+    // Calendar context fields
+    currentCalendarEvent: string | null;
+    recentCalendarEvents: string[];
+    upcomingCalendarEvents: string[];
 }
 
 /**
