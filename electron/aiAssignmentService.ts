@@ -1,6 +1,6 @@
 import { WorkAssignment, TimeBucket, LinkedJiraIssue, TimeEntry } from '../src/types/shared.js';
 import { HistoricalMatchingService } from './historicalMatchingService.js';
-import { fastVLMServer } from './fastvlm.js';
+import { aiService } from './ai/aiService.js';
 
 /**
  * Activity context for AI assignment suggestions
@@ -282,8 +282,8 @@ export class AIAssignmentService {
             console.log('[AIAssignmentService] Calling AI classification with', options.length, 'options');
             console.log('[AIAssignmentService] Description:', context.description.substring(0, 100));
 
-            // Call the Qwen3 classify endpoint
-            const result = await fastVLMServer.classifyActivity(
+            // Call the Gemini classification endpoint
+            const result = await aiService.classifyActivity(
                 context.description,
                 options,
                 contextStr

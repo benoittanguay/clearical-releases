@@ -1,6 +1,6 @@
 import { LinkedJiraIssue, TimeEntry } from '../src/types/shared.js';
 import { HistoricalMatchingService } from './historicalMatchingService.js';
-import { fastVLMServer } from './fastvlm.js';
+import { aiService } from './ai/aiService.js';
 
 /**
  * Tempo Account structure
@@ -238,8 +238,8 @@ export class AIAccountService {
             console.log('[AIAccountService] Calling AI classification with', options.length, 'accounts');
             console.log('[AIAccountService] Issue:', issue.key, '-', issue.summary.substring(0, 80));
 
-            // Call the Qwen3 classify endpoint
-            const result = await fastVLMServer.classifyActivity(
+            // Call the Gemini classification endpoint
+            const result = await aiService.classifyActivity(
                 textToClassify,
                 options,
                 contextStr

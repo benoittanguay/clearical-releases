@@ -145,4 +145,10 @@ electron_1.contextBridge.exposeInMainWorld('electron', {
             isAccountBlacklisted: (accountKey) => electron_1.ipcRenderer.invoke('is-tempo-account-blacklisted', accountKey),
         },
     },
+    // Analytics (top-level, not inside ipcRenderer)
+    analytics: {
+        sendEvents: (events, sessionId) => electron_1.ipcRenderer.invoke('analytics:send-events', events, sessionId),
+        getEnabled: () => electron_1.ipcRenderer.invoke('analytics:get-enabled'),
+        setEnabled: (enabled) => electron_1.ipcRenderer.invoke('analytics:set-enabled', enabled),
+    },
 });

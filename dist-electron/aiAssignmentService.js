@@ -1,5 +1,5 @@
 import { HistoricalMatchingService } from './historicalMatchingService.js';
-import { fastVLMServer } from './fastvlm.js';
+import { aiService } from './ai/aiService.js';
 /**
  * Technology keyword mappings for matching
  */
@@ -219,8 +219,8 @@ export class AIAssignmentService {
             const contextStr = contextParts.join('. ');
             console.log('[AIAssignmentService] Calling AI classification with', options.length, 'options');
             console.log('[AIAssignmentService] Description:', context.description.substring(0, 100));
-            // Call the Qwen3 classify endpoint
-            const result = await fastVLMServer.classifyActivity(context.description, options, contextStr);
+            // Call the Gemini classification endpoint
+            const result = await aiService.classifyActivity(context.description, options, contextStr);
             if (result.success && result.selected_id) {
                 console.log('[AIAssignmentService] AI selected:', result.selected_name, 'confidence:', result.confidence);
                 return {

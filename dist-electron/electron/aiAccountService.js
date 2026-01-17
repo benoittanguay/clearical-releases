@@ -1,5 +1,5 @@
 import { HistoricalMatchingService } from './historicalMatchingService.js';
-import { fastVLMServer } from './fastvlm.js';
+import { aiService } from './ai/aiService.js';
 /**
  * Common stop words to exclude from keyword matching
  */
@@ -144,8 +144,8 @@ export class AIAccountService {
                 : issue.summary;
             console.log('[AIAccountService] Calling AI classification with', options.length, 'accounts');
             console.log('[AIAccountService] Issue:', issue.key, '-', issue.summary.substring(0, 80));
-            // Call the Qwen3 classify endpoint
-            const result = await fastVLMServer.classifyActivity(textToClassify, options, contextStr);
+            // Call the Gemini classification endpoint
+            const result = await aiService.classifyActivity(textToClassify, options, contextStr);
             if (result.success && result.selected_id) {
                 console.log('[AIAccountService] AI selected:', result.selected_name, 'confidence:', result.confidence);
                 return {
