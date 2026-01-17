@@ -27,15 +27,37 @@ export function AssignmentPicker({ value, onChange, placeholder = "Select assign
 
     // Load Jira issues when settings change
     useEffect(() => {
-        const { jira } = settings;
-        if (hasJiraAccess && jira?.enabled && jira?.apiToken && jira?.baseUrl && jira?.email) {
-            // Load assigned issues for the picker
-            jiraCache.getAssignedIssues().then(issues => {
-                setJiraIssues(issues);
-            });
-        } else {
-            setJiraIssues([]);
-        }
+        const loadJiraIssues = async () => {
+            const { jira } = settings;
+            if (hasJiraAccess && jira?.enabled && jira?.apiToken && jira?.baseUrl && jira?.email) {
+                try {
+                    // Load assigned issues
+                    const assignedIssues = await jiraCache.getAssignedIssues();
+
+                    // Also load issues from all selected projects
+                    const selectedProjects = jira.selectedProjects || [];
+                    const projectIssuesPromises = selectedProjects.map(projectKey =>
+                        jiraCache.getProjectIssues(projectKey).catch(() => [])
+                    );
+                    const projectIssuesArrays = await Promise.all(projectIssuesPromises);
+
+                    // Combine all issues and deduplicate by issue key
+                    const allIssues = [...assignedIssues, ...projectIssuesArrays.flat()];
+                    const uniqueIssues = allIssues.filter((issue, index, self) =>
+                        self.findIndex(i => i.key === issue.key) === index
+                    );
+
+                    setJiraIssues(uniqueIssues);
+                } catch (error) {
+                    console.error('[AssignmentPicker] Failed to load Jira issues:', error);
+                    setJiraIssues([]);
+                }
+            } else {
+                setJiraIssues([]);
+            }
+        };
+
+        loadJiraIssues();
     }, [settings.jira, jiraCache, hasJiraAccess]);
 
     const handleSelectBucket = (bucket: TimeBucket) => {

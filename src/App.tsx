@@ -760,13 +760,14 @@ function App() {
 
                 {/* Tab Bar - Underline style */}
                 <div className="px-6" style={{ borderBottom: '1px solid var(--color-border-primary)' }}>
-                  <div className="flex gap-6">
+                  <div className="flex gap-6 no-drag">
                     <button
                       onClick={() => setBucketsTab('buckets')}
-                      className="relative pb-3 text-sm font-medium transition-colors"
+                      className="relative pb-3 text-sm font-medium transition-colors hover:text-[var(--color-accent)]"
                       style={{
                         color: bucketsTab === 'buckets' ? 'var(--color-accent)' : 'var(--color-text-tertiary)',
                         fontFamily: 'var(--font-body)',
+                        cursor: 'pointer',
                       }}
                     >
                       My Buckets
@@ -781,10 +782,11 @@ function App() {
                     {(settings.jira?.enabled || settings.tempo?.enabled) && (
                       <button
                         onClick={() => setBucketsTab('jira')}
-                        className="relative pb-3 text-sm font-medium transition-colors flex items-center gap-1.5"
+                        className="relative pb-3 text-sm font-medium transition-colors flex items-center gap-1.5 hover:text-[var(--color-accent)]"
                         style={{
                           color: bucketsTab === 'jira' ? 'var(--color-accent)' : 'var(--color-text-tertiary)',
                           fontFamily: 'var(--font-body)',
+                          cursor: 'pointer',
                         }}
                       >
                         Jira Issues
@@ -1122,10 +1124,10 @@ function App() {
                                 });
 
                                 return (
-                                  <div key={dateKey} className={dayIndex > 0 ? 'mt-4' : ''}>
+                                  <div key={dateKey} className={dayIndex > 0 ? 'mt-3' : '-mt-px'}>
                                     {/* Date Separator Header - Sticky below week header */}
                                     <div
-                                      className="sticky z-10 px-3 py-2 -mx-4 flex items-center justify-between shadow-sm"
+                                      className="sticky z-10 px-3 py-2 -mx-4 flex items-center justify-between"
                                       style={{
                                         backgroundColor: 'var(--color-bg-secondary)',
                                         borderBottom: '1px solid var(--color-border-primary)',
