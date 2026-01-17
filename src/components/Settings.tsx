@@ -4,6 +4,7 @@ import { useSubscription } from '../context/SubscriptionContext';
 import { useAuth } from '../context/AuthContext';
 import { useJiraCache } from '../context/JiraCacheContext';
 import { AppBlacklistManager } from './AppBlacklistManager';
+import { CalendarSettings } from './CalendarSettings';
 import { getTimeIncrementOptions } from '../utils/timeRounding';
 import { analytics } from '../services/analytics';
 import type { SyncStatus } from '../services/jiraSyncScheduler';
@@ -720,6 +721,9 @@ export function Settings({ onOpenJiraModal, onOpenTempoModal }: SettingsProps = 
                     )}
                 </div>
             </div>
+
+            {/* Calendar Integration */}
+            <CalendarSettings />
 
             {/* Jira Sync Settings */}
             {hasJiraAccess && tempSettings.jira?.enabled && tempSettings.jira?.apiToken && (
