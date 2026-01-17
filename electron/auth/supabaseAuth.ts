@@ -366,6 +366,13 @@ export class SupabaseAuthService {
             await this.saveSession(this.currentSession);
         }
     }
+
+    /**
+     * Get the Supabase client for direct database operations
+     */
+    getSupabaseClient(): SupabaseClient | null {
+        return this.supabase;
+    }
 }
 
 // Singleton instance
