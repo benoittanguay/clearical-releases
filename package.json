@@ -74,13 +74,6 @@
       {
         "from": "public/tray-icon@2x.png",
         "to": "tray-icon@2x.png"
-      },
-      {
-        "from": "python/dist/fastvlm-server",
-        "to": "fastvlm-server",
-        "filter": [
-          "**/*"
-        ]
       }
     ],
     "mac": {
