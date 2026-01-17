@@ -1,4 +1,42 @@
-# React + TypeScript + Vite
+# TimePortal
+
+A time tracking and productivity application built with React, TypeScript, Vite, and Electron.
+
+## Environment Setup
+
+Copy `.env.example` to `.env.local` and configure the required values:
+
+```bash
+cp .env.example .env.local
+```
+
+### Google Calendar Integration
+
+To enable Google Calendar integration, you need to set up OAuth 2.0 credentials:
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+2. Create a new project or select an existing one
+3. Enable the **Google Calendar API**:
+   - Navigate to "APIs & Services" > "Library"
+   - Search for "Google Calendar API"
+   - Click "Enable"
+4. Create OAuth 2.0 credentials:
+   - Go to "APIs & Services" > "Credentials"
+   - Click "Create Credentials" > "OAuth client ID"
+   - Select "Desktop app" as the application type
+   - Name it (e.g., "TimePortal Desktop")
+5. Configure the OAuth consent screen if prompted
+6. Add `http://localhost:3847/oauth/callback` as an authorized redirect URI
+7. Copy the **Client ID** and **Client Secret** to your `.env.local`:
+
+```bash
+GOOGLE_CALENDAR_CLIENT_ID=your-client-id-here
+GOOGLE_CALENDAR_CLIENT_SECRET=your-client-secret-here
+```
+
+---
+
+## Development
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
