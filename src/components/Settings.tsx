@@ -29,6 +29,7 @@ export function Settings({ onOpenJiraModal, onOpenTempoModal }: SettingsProps = 
     const [appVersion, setAppVersion] = useState<string>('');
     const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null);
     const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
+    const [analyticsEnabled, setAnalyticsEnabled] = useState(true);
 
     const handleOpenJiraModal = () => {
         if (onOpenJiraModal) {
@@ -171,6 +172,35 @@ export function Settings({ onOpenJiraModal, onOpenTempoModal }: SettingsProps = 
             }
         };
     }, []);
+
+    // Load analytics preference
+    useEffect(() => {
+        const loadAnalyticsPreference = async () => {
+            try {
+                const result = await window.electron.analytics.getEnabled();
+                if (result.success) {
+                    setAnalyticsEnabled(result.enabled);
+                }
+            } catch (error) {
+                console.error('[Settings] Failed to load analytics preference:', error);
+            }
+        };
+        loadAnalyticsPreference();
+    }, []);
+
+    const handleAnalyticsToggle = async (enabled: boolean) => {
+        setAnalyticsEnabled(enabled);
+        try {
+            await window.electron.analytics.setEnabled(enabled);
+            // Update the analytics service
+            const { analytics } = await import('../services/analytics');
+            analytics.setEnabled(enabled);
+        } catch (error) {
+            console.error('[Settings] Failed to save analytics preference:', error);
+            // Revert on error
+            setAnalyticsEnabled(!enabled);
+        }
+    };
 
     // Subscribe to sync status updates
     useEffect(() => {
@@ -944,6 +974,26 @@ export function Settings({ onOpenJiraModal, onOpenTempoModal }: SettingsProps = 
                             </div>
                         </div>
                     )}
+                </div>
+            </div>
+
+            {/* Privacy Settings */}
+            <div className="bg-[var(--color-bg-secondary)] p-4 rounded-2xl mb-3 border border-[var(--color-border-primary)]">
+                <h3 className="text-[10px] font-bold text-[var(--color-text-secondary)] uppercase tracking-wider mb-3 font-[var(--font-display)]">Privacy</h3>
+                <div className="flex items-center justify-between bg-[var(--color-bg-tertiary)] p-2.5 rounded-lg border border-[var(--color-border-primary)]">
+                    <div>
+                        <div className="text-sm font-medium text-[var(--color-text-primary)]">Help improve Clearical</div>
+                        <div className="text-xs text-[var(--color-text-secondary)]">Send anonymous usage data to help us improve the app</div>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                        <input
+                            type="checkbox"
+                            checked={analyticsEnabled}
+                            onChange={(e) => handleAnalyticsToggle(e.target.checked)}
+                            className="sr-only peer"
+                        />
+                        <div className="w-11 h-6 bg-[var(--color-border-primary)] peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-[var(--color-success)] rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-[var(--color-border-primary)] after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[var(--color-success)]"></div>
+                    </label>
                 </div>
             </div>
 
