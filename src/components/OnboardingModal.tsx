@@ -34,6 +34,11 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
     const [screenRecordingGranted, setScreenRecordingGranted] = useState<boolean | null>(null);
     const [checkingPermissions, setCheckingPermissions] = useState(false);
 
+    // Calendar states
+    const [isConnectingCalendar, setIsConnectingCalendar] = useState(false);
+    const [calendarConnected, setCalendarConnected] = useState(false);
+    const [calendarError, setCalendarError] = useState<string | null>(null);
+
     // Jira configuration states
     const [jiraBaseUrl, setJiraBaseUrl] = useState('');
     const [jiraEmail, setJiraEmail] = useState('');
@@ -54,6 +59,10 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
             setBucketName('');
             setSelectedColor(BUCKET_COLORS[0].value);
             checkPermissions();
+            // Reset Calendar states
+            setIsConnectingCalendar(false);
+            setCalendarConnected(false);
+            setCalendarError(null);
             // Reset Jira states
             setJiraBaseUrl(settings.jira?.baseUrl || '');
             setJiraEmail(settings.jira?.email || '');
@@ -62,6 +71,18 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
             setSelectedProjects(settings.jira?.selectedProjects || []);
             setAvailableProjects([]);
             setJiraError(null);
+            // Check calendar connection status on modal open
+            const checkCalendarStatus = async () => {
+                try {
+                    const result = await window.electron.ipcRenderer.calendar.isConnected();
+                    if (result.success && result.connected) {
+                        setCalendarConnected(true);
+                    }
+                } catch (error) {
+                    console.error('[OnboardingModal] Failed to check calendar status:', error);
+                }
+            };
+            checkCalendarStatus();
             // Track onboarding started
             analytics.track('onboarding.started');
         }
@@ -130,7 +151,7 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
 
     if (!isOpen) return null;
 
-    const stepNames = ['permissions', 'bucket', 'ai_features', 'jira'];
+    const stepNames = ['permissions', 'bucket', 'ai_features', 'calendar', 'jira'];
 
     const handleNext = () => {
         // Track step completion before transitioning
@@ -169,6 +190,24 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
         localStorage.setItem('timeportal-onboarding-complete', 'true');
         analytics.track('onboarding.completed');
         onClose();
+    };
+
+    // Connect calendar
+    const handleConnectCalendar = async () => {
+        setIsConnectingCalendar(true);
+        setCalendarError(null);
+        try {
+            const result = await window.electron.ipcRenderer.calendar.connect();
+            if (result.success) {
+                setCalendarConnected(true);
+            } else {
+                setCalendarError(result.error || 'Failed to connect calendar');
+            }
+        } catch (error) {
+            setCalendarError(`Connection failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        } finally {
+            setIsConnectingCalendar(false);
+        }
     };
 
     // Test Jira connection
@@ -262,7 +301,7 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
         onClose();
     };
 
-    const totalSteps = 4;
+    const totalSteps = 5;
     const progressPercentage = ((currentStep + 1) / totalSteps) * 100;
 
     return (
@@ -642,8 +681,166 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                             </div>
                         )}
 
-                        {/* Step 3: Jira Integration */}
+                        {/* Step 3: Calendar Connection */}
                         {currentStep === 3 && (
+                            <div className="p-6 sm:p-8">
+                                {/* Header */}
+                                <div className="text-center mb-8">
+                                    <div className="inline-flex items-center justify-center w-16 h-16 bg-[var(--color-success-muted)] rounded-2xl mb-4 shadow-lg">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--color-success)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+                                            <line x1="16" y1="2" x2="16" y2="6"/>
+                                            <line x1="8" y1="2" x2="8" y2="6"/>
+                                            <line x1="3" y1="10" x2="21" y2="10"/>
+                                        </svg>
+                                    </div>
+                                    <h2 className="text-3xl font-bold text-[var(--color-text-primary)] mb-2" style={{ fontFamily: 'var(--font-display)' }}>Connect Your Calendar</h2>
+                                    <p className="text-[var(--color-text-secondary)] text-lg">Help AI understand your schedule and context</p>
+                                </div>
+
+                                {/* Connection Status */}
+                                {calendarConnected && (
+                                    <div className="bg-[var(--color-success-muted)] border border-[var(--color-success)]/30 rounded-lg px-4 py-3 mb-6 animate-slide-down">
+                                        <div className="flex items-center gap-2 text-sm text-[var(--color-text-primary)]">
+                                            <svg className="w-5 h-5 text-[var(--color-success)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                            </svg>
+                                            <span className="font-medium">Calendar connected successfully!</span>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Error Message */}
+                                {calendarError && (
+                                    <div className="bg-[var(--color-error-muted)] border border-[var(--color-error)]/30 rounded-lg px-4 py-3 mb-6">
+                                        <div className="flex items-center gap-2 text-sm text-[var(--color-error)]">
+                                            <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                            </svg>
+                                            <span>{calendarError}</span>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Info Box */}
+                                <div className="bg-[var(--color-accent-muted)] border border-[var(--color-accent)]/30 rounded-xl p-4 mb-6">
+                                    <div className="flex gap-3">
+                                        <div className="flex-shrink-0 mt-0.5">
+                                            <svg className="w-5 h-5 text-[var(--color-accent)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                            </svg>
+                                        </div>
+                                        <div>
+                                            <h4 className="text-sm font-semibold text-[var(--color-text-primary)] mb-1" style={{ fontFamily: 'var(--font-display)' }}>Why connect your calendar?</h4>
+                                            <p className="text-sm text-[var(--color-text-secondary)]">
+                                                Calendar integration helps the AI understand your meeting context and daily schedule,
+                                                providing more accurate activity summaries and time tracking suggestions.
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Benefits List */}
+                                <div className="space-y-3 mb-6">
+                                    <div className="flex items-start gap-3">
+                                        <div className="flex-shrink-0 mt-0.5">
+                                            <svg className="w-5 h-5 text-[var(--color-success)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                            </svg>
+                                        </div>
+                                        <p className="text-sm text-[var(--color-text-secondary)]">
+                                            Automatically include meeting context in time entries
+                                        </p>
+                                    </div>
+                                    <div className="flex items-start gap-3">
+                                        <div className="flex-shrink-0 mt-0.5">
+                                            <svg className="w-5 h-5 text-[var(--color-success)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                            </svg>
+                                        </div>
+                                        <p className="text-sm text-[var(--color-text-secondary)]">
+                                            Better understand your work patterns and schedule
+                                        </p>
+                                    </div>
+                                    <div className="flex items-start gap-3">
+                                        <div className="flex-shrink-0 mt-0.5">
+                                            <svg className="w-5 h-5 text-[var(--color-success)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                            </svg>
+                                        </div>
+                                        <p className="text-sm text-[var(--color-text-secondary)]">
+                                            Get more accurate AI-powered activity summaries
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {/* Connect Button */}
+                                {!calendarConnected && (
+                                    <button
+                                        onClick={handleConnectCalendar}
+                                        disabled={isConnectingCalendar}
+                                        className="w-full px-6 py-4 bg-[var(--color-success)] hover:bg-[var(--color-success)]/90 disabled:bg-[var(--color-bg-tertiary)] disabled:text-[var(--color-text-tertiary)] disabled:cursor-not-allowed text-white text-base font-semibold rounded-lg transition-all flex items-center justify-center gap-3 shadow-lg mb-4"
+                                    >
+                                        {isConnectingCalendar ? (
+                                            <>
+                                                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                                Connecting...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+                                                    <line x1="16" y1="2" x2="16" y2="6"/>
+                                                    <line x1="8" y1="2" x2="8" y2="6"/>
+                                                    <line x1="3" y1="10" x2="21" y2="10"/>
+                                                </svg>
+                                                Connect Google Calendar
+                                            </>
+                                        )}
+                                    </button>
+                                )}
+
+                                {/* Privacy Note */}
+                                <div className="bg-[var(--color-info-muted)] border border-[var(--color-info)]/30 rounded-lg px-4 py-3 mb-6">
+                                    <div className="flex items-start gap-2 text-sm text-[var(--color-text-primary)]">
+                                        <svg className="w-4 h-4 flex-shrink-0 mt-0.5 text-[var(--color-info)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                                        </svg>
+                                        <span>
+                                            Your calendar data stays private. We only read event titles and times to provide context.
+                                        </span>
+                                    </div>
+                                </div>
+
+                                {/* Actions */}
+                                <div className="flex justify-between gap-3 pt-6 border-t border-[var(--color-border-primary)]">
+                                    <button
+                                        onClick={handleBack}
+                                        className="px-5 py-2.5 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] text-sm font-medium transition-colors"
+                                    >
+                                        Back
+                                    </button>
+                                    <div className="flex gap-3">
+                                        <button
+                                            onClick={handleNext}
+                                            className="px-5 py-2.5 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] text-sm font-medium transition-colors rounded-lg hover:bg-[var(--color-bg-tertiary)]"
+                                        >
+                                            Skip for now
+                                        </button>
+                                        <button
+                                            onClick={handleNext}
+                                            disabled={!calendarConnected}
+                                            className="px-6 py-2.5 bg-[var(--color-success)] hover:bg-[var(--color-success)]/90 disabled:bg-[var(--color-bg-tertiary)] disabled:text-[var(--color-text-tertiary)] disabled:cursor-not-allowed text-white text-sm font-semibold rounded-full transition-all transform hover:scale-105 active:scale-95 shadow-lg disabled:shadow-none"
+                                        >
+                                            Continue
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Step 4: Jira Integration */}
+                        {currentStep === 4 && (
                             <div className="p-6 sm:p-8">
                                 {/* Header */}
                                 <div className="text-center mb-6">
