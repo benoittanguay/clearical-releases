@@ -291,6 +291,46 @@ ipcMain.handle('capture-screenshot', async () => {
         console.log('[Main] Current Screen Access Status:', status);
     }
 
+    // Helper function for robust screen capture fallback
+    // This ensures we ALWAYS get a screenshot when called, using the full screen if window matching fails
+    const captureScreenFallback = async (
+        currentWindow: { appName: string; windowTitle: string; bundleId: string } | null,
+        reason: string
+    ): Promise<string | null> => {
+        console.log(`[Main] Using screen capture fallback (reason: ${reason})`);
+        try {
+            const screenSources = await desktopCapturer.getSources({
+                types: ['screen'],
+                thumbnailSize: { width: 1920, height: 1080 }
+            });
+
+            if (screenSources.length > 0) {
+                const image = screenSources[0].thumbnail.toPNG();
+                const timestamp = Date.now();
+                // Use the active window info from AppleScript for proper attribution
+                const appNameSafe = (currentWindow?.appName || 'Unknown').replace(/[\/\\:*?"<>|]/g, '_');
+                const windowTitleSafe = (currentWindow?.windowTitle || 'Unknown').replace(/[\/\\:*?"<>|]/g, '_').substring(0, 100);
+                const filename = `${timestamp}|||${appNameSafe}|||${windowTitleSafe}.png`;
+                const filePath = path.join(SCREENSHOTS_DIR, filename);
+
+                try {
+                    await saveEncryptedFile(filePath, image);
+                    console.log('[Main] Screen screenshot saved (encrypted, fallback):', filePath);
+                } catch (encryptError) {
+                    console.error('[Main] Failed to encrypt screenshot, saving unencrypted:', encryptError);
+                    await fs.promises.writeFile(filePath, image);
+                    console.log('[Main] Screen screenshot saved (unencrypted fallback):', filePath);
+                }
+                return filePath;
+            }
+            console.error('[Main] No screen sources available for fallback');
+            return null;
+        } catch (error) {
+            console.error('[Main] Screen capture fallback failed:', error);
+            return null;
+        }
+    };
+
     try {
         // IMPORTANT: To avoid race conditions, we capture window sources FIRST,
         // then immediately get the active window info. This minimizes the window
@@ -578,26 +618,23 @@ ipcMain.handle('capture-screenshot', async () => {
                         matchConfidence = 'lenient';
                         console.log('[Main] Using lenient app name match (unambiguous):', targetSource.name);
                     } else if (possibleMatches.length > 1) {
-                        // Multiple lenient matches - too ambiguous, skip this capture
-                        console.log('[Main] Multiple lenient matches found, skipping to avoid misattribution:',
+                        // Multiple lenient matches - ambiguous, use screen capture fallback
+                        console.log('[Main] Multiple lenient matches found, using screen capture fallback:',
                             possibleMatches.map(s => s.name).join(', '));
-                        console.log('[Main] SKIPPING CAPTURE - cannot confidently match window to app');
-                        return null;
+                        return captureScreenFallback(currentWindow, 'multiple_lenient_matches');
                     } else {
-                        // No matches at all - skip capture rather than guess
-                        // REMOVED: "largest window" fallback - this caused misattributions
-                        console.log('[Main] No window matches detected app. SKIPPING CAPTURE to avoid misattribution.');
+                        // No matches at all - use screen capture fallback with active window info
+                        console.log('[Main] No window matches detected app, using screen capture fallback.');
                         console.log('[Main] Active app was:', currentWindow.appName);
                         console.log('[Main] Available windows were:', validSources.map(s => s.name).join(', '));
-                        return null;
+                        return captureScreenFallback(currentWindow, 'no_window_match');
                     }
                 }
 
-                // If still no target after safe fallbacks, skip the capture
+                // If still no target after safe fallbacks, use screen capture
                 if (!targetSource) {
-                    console.log('[Main] No suitable window found after conservative fallback strategies');
-                    console.log('[Main] SKIPPING CAPTURE - better to skip than misattribute');
-                    return null;
+                    console.log('[Main] No suitable window found, using screen capture fallback');
+                    return captureScreenFallback(currentWindow, 'no_suitable_window');
                 }
             }
             
@@ -619,8 +656,8 @@ ipcMain.handle('capture-screenshot', async () => {
                 if (!hasAppRelation && matchConfidence !== 'single_window') {
                     console.log('[Main] VALIDATION FAILED: Captured window does not appear to belong to detected app');
                     console.log('[Main] App:', currentWindow.appName, '| Window:', targetSource.name, '| Match type:', matchConfidence);
-                    console.log('[Main] SKIPPING CAPTURE - possible race condition detected');
-                    return null;
+                    console.log('[Main] Using screen capture fallback due to possible race condition');
+                    return captureScreenFallback(currentWindow, 'validation_failed_race_condition');
                 }
             }
 
@@ -652,34 +689,16 @@ ipcMain.handle('capture-screenshot', async () => {
             return filePath;
         } else {
             console.log('[Main] No valid window sources found for screenshot');
-            
-            // Fallback to screen capture if no windows available
-            const screenSources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 1920, height: 1080 } });
-            if (screenSources.length > 0) {
-                console.log('[Main] Falling back to screen capture');
-                const image = screenSources[0].thumbnail.toPNG();
-
-                // Use same naming convention for fallback
-                const timestamp = Date.now();
-                const appNameSafe = (currentWindow?.appName || 'Unknown').replace(/[\/\\:*?"<>|]/g, '_');
-                const filename = `${timestamp}|||${appNameSafe}|||SCREEN_FALLBACK.png`;
-                const filePath = path.join(SCREENSHOTS_DIR, filename);
-
-                // Save screenshot with encryption
-                try {
-                    await saveEncryptedFile(filePath, image);
-                    console.log('[Main] Screen screenshot saved (encrypted, fallback):', filePath);
-                } catch (encryptError) {
-                    console.error('[Main] Failed to encrypt screenshot, saving unencrypted:', encryptError);
-                    // Fallback to unencrypted if encryption fails
-                    await fs.promises.writeFile(filePath, image);
-                    console.log('[Main] Screen screenshot saved (unencrypted fallback):', filePath);
-                }
-                return filePath;
-            }
+            return captureScreenFallback(currentWindow, 'no_valid_window_sources');
         }
     } catch (error) {
         console.error('[Main] Failed to capture screenshot:', error);
+        // Even on error, try to capture something
+        try {
+            return await captureScreenFallback(null, 'error_recovery');
+        } catch {
+            return null;
+        }
     }
     return null;
 });
