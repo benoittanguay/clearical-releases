@@ -171,6 +171,7 @@ export class GoogleCalendarProvider implements CalendarProvider {
 
       authWindow.on('closed', () => {
         server.close();
+        reject(new Error('Authentication cancelled'));
       });
     });
   }
@@ -195,6 +196,11 @@ export class GoogleCalendarProvider implements CalendarProvider {
     }
 
     const data = await response.json() as GoogleOAuthTokenResponse;
+
+    if (!data.refresh_token) {
+      throw new Error('No refresh token received from Google. Please try again.');
+    }
+
     return {
       accessToken: data.access_token,
       refreshToken: data.refresh_token,
