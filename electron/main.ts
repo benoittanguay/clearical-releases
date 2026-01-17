@@ -19,6 +19,7 @@ import { storeCredential, getCredential, deleteCredential, hasCredential, listCr
 import { initializeSubscription, cleanupSubscription } from './subscription/ipcHandlers.js';
 import { requirePremium } from './subscription/premiumGuard.js';
 import { initializeAuth } from './auth/ipcHandlers.js';
+import { initializeAnalytics } from './analytics/ipcHandlers.js';
 import { AIAssignmentService, ActivityContext, AssignmentSuggestion } from './aiAssignmentService.js';
 import { AIAccountService, TempoAccount, AccountSelection, HistoricalAccountUsage } from './aiAccountService.js';
 import { LinkedJiraIssue } from '../src/types/shared.js';
@@ -2968,6 +2969,14 @@ app.whenReady().then(() => {
         console.log('[Main] Auth system initialized (Supabase)');
     } catch (error) {
         console.error('[Main] Failed to initialize auth:', error);
+    }
+
+    // Initialize analytics system
+    try {
+        initializeAnalytics();
+        console.log('[Main] Analytics system initialized');
+    } catch (error) {
+        console.error('[Main] Failed to initialize analytics:', error);
     }
 
     // Initialize subscription system (Stripe-based)
