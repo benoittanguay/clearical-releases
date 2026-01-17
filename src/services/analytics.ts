@@ -93,7 +93,7 @@ class AnalyticsService {
         const events = [...this.queue];
 
         try {
-            await window.electron.ipcRenderer.invoke('analytics:send-events', events, this.sessionId);
+            await window.electron.analytics.sendEvents(events, this.sessionId);
             // Only clear queue after successful send
             this.queue = this.queue.filter(e => !events.includes(e));
         } catch (error) {
@@ -129,7 +129,7 @@ class AnalyticsService {
      */
     async refreshEnabledState(): Promise<void> {
         try {
-            const result = await window.electron.ipcRenderer.invoke('analytics:get-enabled');
+            const result = await window.electron.analytics.getEnabled();
             if (result.success) {
                 this.analyticsEnabled = result.enabled;
             }
