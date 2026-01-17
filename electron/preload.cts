@@ -206,6 +206,21 @@ contextBridge.exposeInMainWorld('electron', {
             isAccountBlacklisted: (accountKey: string) =>
                 ipcRenderer.invoke('is-tempo-account-blacklisted', accountKey),
         },
+        // Calendar operations
+        calendar: {
+            connect: () => ipcRenderer.invoke('calendar:connect'),
+            disconnect: () => ipcRenderer.invoke('calendar:disconnect'),
+            isConnected: () => ipcRenderer.invoke('calendar:is-connected'),
+            getAccount: () => ipcRenderer.invoke('calendar:get-account'),
+            sync: () => ipcRenderer.invoke('calendar:sync'),
+            getContext: (timestamp: number) => ipcRenderer.invoke('calendar:get-context', timestamp),
+            createFocusTime: (input: {
+                title: string;
+                description: string;
+                startTime: number;
+                endTime: number;
+            }) => ipcRenderer.invoke('calendar:create-focus-time', input),
+        },
     },
     // Analytics (top-level, not inside ipcRenderer)
     analytics: {

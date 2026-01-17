@@ -333,6 +333,27 @@ export interface ElectronAPI {
             removeBlacklistedAccount: (accountKey: string) => Promise<{ success: boolean; error?: string }>;
             isAccountBlacklisted: (accountKey: string) => Promise<{ success: boolean; isBlacklisted: boolean; error?: string }>;
         };
+        // Calendar operations
+        calendar: {
+            connect: () => Promise<{ success: boolean; error?: string }>;
+            disconnect: () => Promise<{ success: boolean; error?: string }>;
+            isConnected: () => Promise<{ success: boolean; connected: boolean; error?: string }>;
+            getAccount: () => Promise<{ success: boolean; email: string | null; provider: string | null; error?: string }>;
+            sync: () => Promise<{ success: boolean; error?: string }>;
+            getContext: (timestamp: number) => Promise<{
+                success: boolean;
+                currentEvent: string | null;
+                recentEvents: string[];
+                upcomingEvents: string[];
+                error?: string;
+            }>;
+            createFocusTime: (input: {
+                title: string;
+                description: string;
+                startTime: number;
+                endTime: number;
+            }) => Promise<{ success: boolean; eventId: string | null; error?: string }>;
+        };
     };
     // Analytics (top-level, not inside ipcRenderer)
     analytics: {
