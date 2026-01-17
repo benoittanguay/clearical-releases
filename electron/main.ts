@@ -2857,6 +2857,179 @@ ipcMain.handle('calendar:create-focus-time', async (_, input: {
     }
 });
 
+// Helper function to build split analysis prompt
+function buildSplitAnalysisPrompt(
+    activityData: {
+        startTime: number;
+        endTime: number;
+        duration: number;
+        screenshots: Array<{ timestamp: number; description: string }>;
+    },
+    calendarContext: {
+        currentEvent: string | null;
+        recentEvents: string[];
+        upcomingEvents: string[];
+    }
+): string {
+    const formatTime = (timestamp: number) => new Date(timestamp).toLocaleTimeString();
+    const formatDuration = (ms: number) => `${Math.round(ms / 60000)} minutes`;
+
+    let prompt = `Analyze the following sequence of work activities and identify points where the user clearly switched to a different project or task.
+
+**Time Range:** ${formatTime(activityData.startTime)} - ${formatTime(activityData.endTime)} (${formatDuration(activityData.duration)})
+
+**Calendar Context:**`;
+
+    if (calendarContext.currentEvent) {
+        prompt += `\n- Current Event: ${calendarContext.currentEvent}`;
+    }
+    if (calendarContext.recentEvents.length > 0) {
+        prompt += `\n- Recent Events: ${calendarContext.recentEvents.join(', ')}`;
+    }
+    if (calendarContext.upcomingEvents.length > 0) {
+        prompt += `\n- Upcoming Events: ${calendarContext.upcomingEvents.join(', ')}`;
+    }
+
+    prompt += `\n\n**Activity Screenshots (chronological order):**\n`;
+    activityData.screenshots.forEach((screenshot, i) => {
+        prompt += `${i + 1}. [${formatTime(screenshot.timestamp)}] ${screenshot.description}\n`;
+    });
+
+    prompt += `\n**Instructions:**
+1. Identify semantic boundaries where the user switched to a DIFFERENT project, task, or meeting
+2. DO NOT split for minor app switches within the same project (e.g., switching from IDE to browser while debugging)
+3. DO split when there's clear evidence of changing focus (e.g., switching from coding Project A to reviewing Project B)
+4. Consider calendar events as strong signals for context switches
+5. Each suggested split should have a clear description of what work was done in that segment
+6. Provide a confidence score (0.0 to 1.0) based on how clear the switch is
+
+**Output Format:**
+Return a JSON array of split suggestions. Each suggestion should have:
+{
+  "startTime": <timestamp in ms>,
+  "endTime": <timestamp in ms>,
+  "description": "<concise description of work done in this segment>",
+  "suggestedBucket": null,  // Will be filled in later by assignment AI
+  "suggestedJiraKey": null, // Will be filled in later by assignment AI
+  "confidence": <0.0 to 1.0>
+}
+
+If no meaningful splits are detected, return an empty array.
+
+Respond with ONLY valid JSON (no markdown, no explanation):`;
+
+    return prompt;
+}
+
+// Helper function to parse split suggestions from AI response
+interface SplitSuggestion {
+    startTime: number;
+    endTime: number;
+    description: string;
+    suggestedBucket: string | null;
+    suggestedJiraKey: string | null;
+    confidence: number;
+}
+
+function parseSplitSuggestions(rawSuggestions: any[]): SplitSuggestion[] {
+    try {
+        if (!Array.isArray(rawSuggestions)) {
+            console.warn('[Main] parseSplitSuggestions: expected array, got:', typeof rawSuggestions);
+            return [];
+        }
+
+        return rawSuggestions.map((suggestion: any) => ({
+            startTime: suggestion.startTime || 0,
+            endTime: suggestion.endTime || 0,
+            description: suggestion.description || '',
+            suggestedBucket: suggestion.suggestedBucket || null,
+            suggestedJiraKey: suggestion.suggestedJiraKey || null,
+            confidence: typeof suggestion.confidence === 'number' ? suggestion.confidence : 0.5
+        }));
+    } catch (error) {
+        console.error('[Main] parseSplitSuggestions error:', error);
+        return [];
+    }
+}
+
+// AI Splitting Analysis
+ipcMain.handle('ai:analyze-splits', async (_, activityData: {
+    id: string;
+    startTime: number;
+    endTime: number;
+    duration: number;
+    screenshots: Array<{ timestamp: number; description: string }>;
+}) => {
+    try {
+        console.log('[Main] ai:analyze-splits called for activity:', activityData.id);
+
+        // Validate input
+        if (!activityData.screenshots || activityData.screenshots.length === 0) {
+            console.warn('[Main] ai:analyze-splits: no screenshots provided');
+            return { success: true, suggestions: [] };
+        }
+
+        // 1. Get calendar context for the activity period
+        const calendarService = getCalendarService();
+        const calendarContext = calendarService.getCalendarContext(activityData.startTime);
+
+        // 2. Build analysis prompt with all signals
+        const prompt = buildSplitAnalysisPrompt(activityData, calendarContext);
+
+        // 3. Call AI service to analyze and suggest splits
+        // For now, we use the summarize operation as a workaround since it accepts
+        // custom text and returns text output. In the future, we should add a dedicated
+        // 'analyze-splits' operation to the edge function.
+        const result = await aiService.summarizeActivities(
+            [prompt], // Send the full prompt as a single "activity"
+            []
+        );
+
+        if (!result.success || !result.summary) {
+            console.warn('[Main] ai:analyze-splits failed:', result.error);
+            return {
+                success: false,
+                error: result.error || 'Split analysis failed',
+                suggestions: []
+            };
+        }
+
+        // 4. Parse response - the summary should contain JSON
+        let suggestions: SplitSuggestion[] = [];
+        try {
+            // Try to extract JSON from the response (handling potential markdown wrapping)
+            let jsonText = result.summary.trim();
+
+            // Remove markdown code blocks if present
+            const jsonMatch = jsonText.match(/```(?:json)?\s*([\s\S]*?)```/);
+            if (jsonMatch) {
+                jsonText = jsonMatch[1].trim();
+            }
+
+            const parsed = JSON.parse(jsonText);
+            suggestions = parseSplitSuggestions(Array.isArray(parsed) ? parsed : []);
+        } catch (parseError) {
+            console.error('[Main] ai:analyze-splits: Failed to parse AI response:', parseError);
+            console.error('[Main] ai:analyze-splits: Response was:', result.summary);
+            return {
+                success: false,
+                error: 'Failed to parse AI response',
+                suggestions: []
+            };
+        }
+
+        console.log('[Main] ai:analyze-splits completed with', suggestions.length, 'suggestions');
+        return { success: true, suggestions };
+    } catch (error) {
+        console.error('[Main] ai:analyze-splits error:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error',
+            suggestions: []
+        };
+    }
+});
+
 /**
  * Comprehensive cleanup of all app resources
  * Ensures no orphan processes remain after quit

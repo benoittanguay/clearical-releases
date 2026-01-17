@@ -63,6 +63,23 @@ export interface ScreenshotAnalysisResult {
     requestId?: string;
 }
 
+export interface SplitSuggestion {
+    startTime: number;
+    endTime: number;
+    description: string;
+    suggestedBucket: string | null;
+    suggestedJiraKey: string | null;
+    confidence: number;
+}
+
+export interface ActivityDataForSplitting {
+    id: string;
+    startTime: number;
+    endTime: number;
+    duration: number;
+    screenshots: Array<{ timestamp: number; description: string }>;
+}
+
 export interface UpdateStatus {
     available: boolean;
     downloaded: boolean;
@@ -121,6 +138,11 @@ export interface ElectronAPI {
                 technologies?: string[];
                 activities?: string[];
             };
+            error?: string;
+        }>;
+        analyzeSplits: (activityData: ActivityDataForSplitting) => Promise<{
+            success: boolean;
+            suggestions: SplitSuggestion[];
             error?: string;
         }>;
         getActiveWindow: () => Promise<{ appName: string; windowTitle: string; bundleId: string }>;

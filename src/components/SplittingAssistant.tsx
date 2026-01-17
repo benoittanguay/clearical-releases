@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { ConfirmationModal } from './ConfirmationModal';
+import type { SplitSuggestion } from '../types/electron';
 
-// Types
-export interface SplitSuggestion {
+// Internal UI state format - adds ID and transforms bucket for UI
+interface UISplitSuggestion {
   id: string;
   startTime: number;
   endTime: number;
@@ -18,13 +19,46 @@ export interface SplittingAssistantProps {
     endTime: number;
     duration: number;
   };
-  suggestions: SplitSuggestion[];
+  suggestions: SplitSuggestion[];  // API format from backend
   isLoading?: boolean;
   onClose: () => void;
-  onApply: (splits: SplitSuggestion[]) => void;
+  onApply: (splits: SplitSuggestion[]) => void;  // API format to backend
 }
 
-// Helper functions
+// Helper functions to transform between API and UI formats
+let suggestionIdCounter = 0;
+
+function apiToUISuggestion(apiSuggestion: SplitSuggestion, buckets: { id: string; name: string; color: string }[]): UISplitSuggestion {
+  // Generate a unique ID for UI state management
+  const id = `split-${++suggestionIdCounter}-${Date.now()}`;
+
+  // Find the bucket if suggestedBucket is a string (bucket name)
+  let suggestedBucket: { id: string; name: string; color: string } | undefined;
+  if (apiSuggestion.suggestedBucket) {
+    suggestedBucket = buckets.find(b => b.name === apiSuggestion.suggestedBucket);
+  }
+
+  return {
+    id,
+    startTime: apiSuggestion.startTime,
+    endTime: apiSuggestion.endTime,
+    description: apiSuggestion.description,
+    suggestedBucket,
+    suggestedJiraKey: apiSuggestion.suggestedJiraKey ?? undefined,
+  };
+}
+
+function uiToApiSuggestion(uiSuggestion: UISplitSuggestion): SplitSuggestion {
+  return {
+    startTime: uiSuggestion.startTime,
+    endTime: uiSuggestion.endTime,
+    description: uiSuggestion.description,
+    suggestedBucket: uiSuggestion.suggestedBucket?.name ?? null,
+    suggestedJiraKey: uiSuggestion.suggestedJiraKey ?? null,
+    confidence: 0.8, // Default confidence since UI doesn't expose this
+  };
+}
+
 function formatTime(timestamp: number): string {
   const date = new Date(timestamp);
   const hours = date.getHours();
@@ -58,10 +92,9 @@ export function SplittingAssistant({
   onClose,
   onApply,
 }: SplittingAssistantProps) {
-  const [segments, setSegments] = useState<SplitSuggestion[]>(initialSuggestions);
-  const [selectedSegmentId, setSelectedSegmentId] = useState<string | null>(
-    initialSuggestions[0]?.id || null
-  );
+  const [segments, setSegments] = useState<UISplitSuggestion[]>([]);
+  const [initialUISegments, setInitialUISegments] = useState<UISplitSuggestion[]>([]);
+  const [selectedSegmentId, setSelectedSegmentId] = useState<string | null>(null);
   const [editingSegmentId, setEditingSegmentId] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [draggedCutIndex, setDraggedCutIndex] = useState<number | null>(null);
@@ -74,6 +107,37 @@ export function SplittingAssistant({
   } | null>(null);
 
   const timelineRef = useRef<HTMLDivElement>(null);
+
+  // Load buckets and transform initial suggestions
+  useEffect(() => {
+    const loadBuckets = async () => {
+      try {
+        const result = await window.electron.ipcRenderer.db.getAllBuckets();
+        const buckets = result.success && result.data ? result.data : [];
+
+        // Transform API suggestions to UI format
+        const uiSuggestions = initialSuggestions.map(s => apiToUISuggestion(s, buckets));
+        setSegments(uiSuggestions);
+        setInitialUISegments(uiSuggestions);
+
+        // Set initial selection
+        if (uiSuggestions.length > 0) {
+          setSelectedSegmentId(uiSuggestions[0].id);
+        }
+      } catch (error) {
+        console.error('[SplittingAssistant] Failed to load buckets:', error);
+        // Fallback: transform without bucket lookup
+        const uiSuggestions = initialSuggestions.map(s => apiToUISuggestion(s, []));
+        setSegments(uiSuggestions);
+        setInitialUISegments(uiSuggestions);
+        if (uiSuggestions.length > 0) {
+          setSelectedSegmentId(uiSuggestions[0].id);
+        }
+      }
+    };
+
+    loadBuckets();
+  }, [initialSuggestions]);
 
   // Calculate cut points (boundaries between segments)
   const cutPoints = segments.slice(0, -1).map((seg) => seg.endTime);
@@ -203,12 +267,12 @@ export function SplittingAssistant({
 
     // Create two new segments
     const newSegments = [...segments];
-    const firstHalf: SplitSuggestion = {
+    const firstHalf: UISplitSuggestion = {
       ...segmentToSplit,
       id: `${segmentToSplit.id}-a`,
       endTime: newCutTime,
     };
-    const secondHalf: SplitSuggestion = {
+    const secondHalf: UISplitSuggestion = {
       ...segmentToSplit,
       id: `${segmentToSplit.id}-b`,
       startTime: newCutTime,
@@ -235,7 +299,7 @@ export function SplittingAssistant({
         const nextSegment = newSegments[segmentIndex + 1];
 
         // Merge current with next
-        const merged: SplitSuggestion = {
+        const merged: UISplitSuggestion = {
           ...currentSegment,
           endTime: nextSegment.endTime,
           description: currentSegment.description || nextSegment.description,
@@ -272,15 +336,16 @@ export function SplittingAssistant({
       title: 'Reset Changes',
       message: 'Reset all changes to original AI suggestions?',
       onConfirm: () => {
-        setSegments(initialSuggestions);
+        setSegments(initialUISegments);
         setConfirmationModal(null);
       },
     });
   };
 
-  // Apply splits
+  // Apply splits - transform UI format back to API format
   const handleApply = () => {
-    onApply(segments);
+    const apiSegments = segments.map(uiToApiSuggestion);
+    onApply(apiSegments);
   };
 
   // Select segment

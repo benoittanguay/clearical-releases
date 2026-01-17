@@ -29,6 +29,13 @@ contextBridge.exposeInMainWorld('electron', {
             startTime: number;
             endTime: number;
         }) => ipcRenderer.invoke('generate-activity-summary', context),
+        analyzeSplits: (activityData: {
+            id: string;
+            startTime: number;
+            endTime: number;
+            duration: number;
+            screenshots: Array<{ timestamp: number; description: string }>;
+        }) => ipcRenderer.invoke('ai:analyze-splits', activityData),
         getActiveWindow: () => ipcRenderer.invoke('get-active-window'),
         checkAccessibilityPermission: () => ipcRenderer.invoke('check-accessibility-permission'),
         checkScreenPermission: () => ipcRenderer.invoke('check-screen-permission'),
