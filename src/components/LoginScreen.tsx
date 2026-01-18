@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { SocialLoginButtons } from './SocialLoginButtons';
 
 type LoginStep = 'email' | 'otp';
 
 export function LoginScreen() {
-    const { sendOtp, verifyOtp } = useAuth();
+    const { sendOtp, verifyOtp, signInWithOAuth } = useAuth();
     const [step, setStep] = useState<LoginStep>('email');
     const [email, setEmail] = useState('');
     const [otpCode, setOtpCode] = useState('');
@@ -118,6 +119,34 @@ export function LoginScreen() {
                             >
                                 Enter your email to sign up or sign in
                             </p>
+
+                            <SocialLoginButtons
+                                onSignIn={signInWithOAuth}
+                                disabled={isLoading}
+                            />
+
+                            {/* Or divider */}
+                            <div className="flex items-center my-6" role="separator">
+                                <div
+                                    className="flex-1 h-px"
+                                    style={{ backgroundColor: 'var(--color-border-primary)' }}
+                                    aria-hidden="true"
+                                />
+                                <span
+                                    className="px-4 text-sm font-medium"
+                                    style={{
+                                        color: 'var(--color-text-secondary)',
+                                        fontFamily: 'var(--font-display)'
+                                    }}
+                                >
+                                    or
+                                </span>
+                                <div
+                                    className="flex-1 h-px"
+                                    style={{ backgroundColor: 'var(--color-border-primary)' }}
+                                    aria-hidden="true"
+                                />
+                            </div>
 
                             <div className="mb-5">
                                 <label

@@ -6,10 +6,11 @@
  */
 
 import { createClient, SupabaseClient, Session, User } from '@supabase/supabase-js';
-import { app } from 'electron';
+import { app, shell } from 'electron';
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
+import { createOAuthCallbackServer, OAuthProvider } from './oauthServer.js';
 
 export interface AuthUser {
     id: string;
@@ -33,6 +34,8 @@ export interface AuthResult {
     session?: AuthSession;
     needsOtp?: boolean;
 }
+
+export type { OAuthProvider } from './oauthServer.js';
 
 /**
  * Supabase Auth Service for Electron
@@ -220,6 +223,95 @@ export class SupabaseAuthService {
             return {
                 success: false,
                 error: error instanceof Error ? error.message : 'Failed to verify OTP'
+            };
+        }
+    }
+
+    /**
+     * Sign in with OAuth provider (Google, Microsoft, Apple)
+     */
+    async signInWithOAuth(provider: OAuthProvider): Promise<AuthResult> {
+        if (!this.supabase) {
+            return { success: false, error: 'Auth service not initialized' };
+        }
+
+        try {
+            console.log(`[SupabaseAuth] Starting OAuth flow for: ${provider}`);
+
+            // Map our provider names to Supabase provider names
+            const supabaseProvider = provider === 'azure' ? 'azure' : provider;
+
+            // Generate OAuth URL with PKCE
+            const { data, error } = await this.supabase.auth.signInWithOAuth({
+                provider: supabaseProvider,
+                options: {
+                    redirectTo: 'http://localhost:3848/auth/callback',
+                    skipBrowserRedirect: true,
+                },
+            });
+
+            if (error || !data.url) {
+                console.error('[SupabaseAuth] Failed to generate OAuth URL:', error);
+                return { success: false, error: error?.message || 'Failed to start sign in' };
+            }
+
+            // Start callback server before opening browser
+            const callbackPromise = createOAuthCallbackServer(60000);
+
+            // Open system browser for authentication
+            await shell.openExternal(data.url);
+
+            // Wait for callback
+            const { code } = await callbackPromise;
+
+            // Exchange code for session
+            const { data: sessionData, error: sessionError } =
+                await this.supabase.auth.exchangeCodeForSession(code);
+
+            if (sessionError || !sessionData.user || !sessionData.session) {
+                console.error('[SupabaseAuth] Failed to exchange code:', sessionError);
+                return { success: false, error: sessionError?.message || 'Failed to complete sign in' };
+            }
+
+            // Check if email exists after OAuth callback
+            if (!sessionData.user.email) {
+                console.warn('[SupabaseAuth] OAuth sign-in: no email from provider');
+                return { success: false, error: 'Email required for sign-in' };
+            }
+
+            // Create our auth session
+            const authUser: AuthUser = {
+                id: sessionData.user.id,
+                email: sessionData.user.email,  // Now guaranteed non-empty
+                createdAt: sessionData.user.created_at,
+                lastSignIn: new Date().toISOString(),
+            };
+
+            const authSession: AuthSession = {
+                user: authUser,
+                accessToken: sessionData.session.access_token,
+                refreshToken: sessionData.session.refresh_token,
+                expiresAt: sessionData.session.expires_at
+                    ? sessionData.session.expires_at * 1000
+                    : Date.now() + 3600000,
+            };
+
+            // Save session
+            await this.saveSession(authSession);
+
+            console.log('[SupabaseAuth] OAuth sign-in successful:', authUser.email);
+            return { success: true, user: authUser, session: authSession };
+        } catch (error) {
+            console.error('[SupabaseAuth] OAuth sign-in error:', error);
+
+            // Handle user cancellation gracefully
+            if (error instanceof Error && error.message.includes('timed out')) {
+                return { success: false, error: 'Sign in timed out. Please try again.' };
+            }
+
+            return {
+                success: false,
+                error: error instanceof Error ? error.message : 'Failed to sign in'
             };
         }
     }
