@@ -78,7 +78,7 @@ export function SocialLoginButtons({ onSignIn, disabled }: SocialLoginButtonsPro
     const providers: OAuthProvider[] = ['google', 'azure', 'apple'];
 
     return (
-        <div className="space-y-3">
+        <div className="space-y-2">
             {providers.map((provider) => {
                 const config = providerConfig[provider];
                 const isLoading = loadingProvider === provider;
@@ -90,24 +90,7 @@ export function SocialLoginButtons({ onSignIn, disabled }: SocialLoginButtonsPro
                         type="button"
                         onClick={() => handleSignIn(provider)}
                         disabled={isDisabled}
-                        className="w-full flex items-center justify-center gap-3 px-4 py-3 rounded-xl border transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                        style={{
-                            backgroundColor: 'var(--color-bg-tertiary)',
-                            borderColor: 'var(--color-border-primary)',
-                            color: 'var(--color-text-primary)',
-                            fontFamily: 'var(--font-display)',
-                            borderRadius: 'var(--radius-xl)',
-                        }}
-                        onMouseEnter={(e) => {
-                            if (!isDisabled) {
-                                e.currentTarget.style.borderColor = 'var(--color-border-secondary)';
-                                e.currentTarget.style.backgroundColor = 'var(--color-bg-secondary)';
-                            }
-                        }}
-                        onMouseLeave={(e) => {
-                            e.currentTarget.style.borderColor = 'var(--color-border-primary)';
-                            e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)';
-                        }}
+                        className="w-full flex items-center justify-center gap-3 px-4 py-2.5 bg-transparent hover:bg-[var(--color-bg-ghost-hover)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] font-medium rounded-full transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed border border-[var(--color-border-primary)]"
                     >
                         {isLoading ? (
                             <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24" aria-hidden="true">

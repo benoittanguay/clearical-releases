@@ -24,28 +24,14 @@ export function createOAuthCallbackServer(
       const errorDescription = reqUrl.searchParams.get('error_description');
       const state = reqUrl.searchParams.get('state');
 
-      // Send response to browser
-      res.writeHead(200, { 'Content-Type': 'text/html' });
+      // Send response to browser - redirect to clearical.io success/error page
       if (error) {
-        res.end(`
-          <html>
-            <body style="font-family: system-ui; padding: 40px; text-align: center;">
-              <h1>Sign in failed</h1>
-              <p>${errorDescription || error}</p>
-              <p>You can close this window.</p>
-            </body>
-          </html>
-        `);
+        const errorUrl = `https://www.clearical.io/auth/error?message=${encodeURIComponent(errorDescription || error)}`;
+        res.writeHead(302, { 'Location': errorUrl });
+        res.end();
       } else {
-        res.end(`
-          <html>
-            <body style="font-family: system-ui; padding: 40px; text-align: center;">
-              <h1>Sign in successful!</h1>
-              <p>You can close this window and return to the app.</p>
-              <script>window.close()</script>
-            </body>
-          </html>
-        `);
+        res.writeHead(302, { 'Location': 'https://www.clearical.io/auth/success' });
+        res.end();
       }
 
       // Cleanup

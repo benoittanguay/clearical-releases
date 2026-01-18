@@ -69,6 +69,7 @@ export class SupabaseAuthService {
                 autoRefreshToken: true,
                 persistSession: false, // We handle persistence ourselves
                 detectSessionInUrl: false,
+                flowType: 'pkce', // Use PKCE flow for OAuth (returns code instead of tokens)
             },
         });
 
@@ -241,12 +242,20 @@ export class SupabaseAuthService {
             // Map our provider names to Supabase provider names
             const supabaseProvider = provider === 'azure' ? 'azure' : provider;
 
+            // Provider-specific scopes to ensure email is returned
+            const scopesByProvider: Record<string, string> = {
+                azure: 'openid profile email',
+                google: 'openid profile email',
+                apple: 'name email',
+            };
+
             // Generate OAuth URL with PKCE
             const { data, error } = await this.supabase.auth.signInWithOAuth({
                 provider: supabaseProvider,
                 options: {
                     redirectTo: 'http://localhost:3848/auth/callback',
                     skipBrowserRedirect: true,
+                    scopes: scopesByProvider[supabaseProvider],
                 },
             });
 

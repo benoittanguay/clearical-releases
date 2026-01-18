@@ -65,17 +65,17 @@ export function LoginScreen() {
         <div
             className="min-h-screen flex items-center justify-center p-4 animate-fade-in"
             style={{
-                backgroundColor: 'var(--color-bg-primary)',
+                backgroundColor: 'var(--color-bg-login)',
                 fontFamily: 'var(--font-body)'
             }}
         >
             <div className="w-full max-w-sm">
                 {/* Logo/Brand */}
-                <div className="text-center mb-8 animate-slide-down">
+                <div className="text-center mb-4 animate-slide-down">
                     <img
                         src="./icon.png"
                         alt="Clearical"
-                        className="w-16 h-16 mx-auto mb-5"
+                        className="w-12 h-12 mx-auto mb-2"
                         style={{
                             boxShadow: 'var(--shadow-accent)'
                         }}
@@ -83,19 +83,13 @@ export function LoginScreen() {
                     <img
                         src="./Clearical_TypeLogo.png"
                         alt="Clearical"
-                        className="h-8 mx-auto mb-2"
+                        className="mx-auto"
                     />
-                    <p
-                        className="text-sm"
-                        style={{ color: 'var(--color-text-secondary)' }}
-                    >
-                        Track your time, boost productivity
-                    </p>
                 </div>
 
                 {/* Login Form */}
                 <div
-                    className="rounded-3xl p-8 shadow-lg border animate-slide-up"
+                    className="rounded-3xl p-5 shadow-lg border animate-slide-up"
                     style={{
                         backgroundColor: 'var(--color-bg-secondary)',
                         borderColor: 'var(--color-border-primary)',
@@ -105,7 +99,7 @@ export function LoginScreen() {
                     {step === 'email' ? (
                         <form onSubmit={handleSendOtp}>
                             <h2
-                                className="text-xl font-semibold mb-2"
+                                className="text-xl font-semibold"
                                 style={{
                                     fontFamily: 'var(--font-display)',
                                     color: 'var(--color-text-primary)'
@@ -114,7 +108,7 @@ export function LoginScreen() {
                                 Get started
                             </h2>
                             <p
-                                className="text-sm mb-6"
+                                className="text-sm mb-4"
                                 style={{ color: 'var(--color-text-secondary)' }}
                             >
                                 Enter your email to sign up or sign in
@@ -126,7 +120,7 @@ export function LoginScreen() {
                             />
 
                             {/* Or divider */}
-                            <div className="flex items-center my-6" role="separator">
+                            <div className="flex items-center my-4" role="separator">
                                 <div
                                     className="flex-1 h-px"
                                     style={{ backgroundColor: 'var(--color-border-primary)' }}
@@ -148,10 +142,10 @@ export function LoginScreen() {
                                 />
                             </div>
 
-                            <div className="mb-5">
+                            <div className="mb-3">
                                 <label
                                     htmlFor="email"
-                                    className="block text-xs font-semibold mb-2 uppercase"
+                                    className="block text-xs font-semibold mb-1.5 uppercase"
                                     style={{
                                         fontFamily: 'var(--font-display)',
                                         color: 'var(--color-text-secondary)',
@@ -166,21 +160,18 @@ export function LoginScreen() {
                                     value={email}
                                     onChange={(e) => setEmail(e.target.value)}
                                     placeholder="you@example.com"
-                                    className="w-full px-4 py-3 rounded-xl border transition-all duration-200 focus:outline-none"
+                                    className="w-full border text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:border-[var(--color-accent)] transition-all"
                                     style={{
-                                        backgroundColor: 'var(--color-bg-tertiary)',
+                                        backgroundColor: 'var(--color-bg-primary)',
                                         borderColor: 'var(--color-border-primary)',
                                         color: 'var(--color-text-primary)',
-                                        fontFamily: 'var(--font-body)',
-                                        borderRadius: 'var(--radius-xl)'
+                                        fontFamily: 'var(--font-body)'
                                     }}
-                                    onFocus={(e) => {
-                                        e.target.style.borderColor = 'var(--color-accent)';
-                                        e.target.style.boxShadow = 'var(--shadow-accent)';
+                                    onMouseEnter={(e) => {
+                                        e.currentTarget.style.borderColor = '#8c877d';
                                     }}
-                                    onBlur={(e) => {
-                                        e.target.style.borderColor = 'var(--color-border-primary)';
-                                        e.target.style.boxShadow = 'none';
+                                    onMouseLeave={(e) => {
+                                        e.currentTarget.style.borderColor = 'var(--color-border-primary)';
                                     }}
                                     disabled={isLoading}
                                     autoFocus
@@ -189,7 +180,7 @@ export function LoginScreen() {
 
                             {error && (
                                 <div
-                                    className="mb-5 p-4 rounded-xl border animate-slide-down"
+                                    className="mb-4 p-3 rounded-xl border animate-slide-down"
                                     style={{
                                         backgroundColor: 'var(--color-error-muted)',
                                         borderColor: 'var(--color-error)',
@@ -208,7 +199,7 @@ export function LoginScreen() {
                             <button
                                 type="submit"
                                 disabled={isLoading}
-                                className="w-full py-3.5 font-semibold rounded-full transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-60"
+                                className="w-full py-2.5 font-medium rounded-full transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-60"
                                 style={{
                                     backgroundColor: 'var(--color-accent)',
                                     color: 'var(--color-text-inverse)',
@@ -317,7 +308,7 @@ export function LoginScreen() {
 
                             {error && (
                                 <div
-                                    className="mb-5 p-4 rounded-xl border animate-slide-down"
+                                    className="mb-4 p-3 rounded-xl border animate-slide-down"
                                     style={{
                                         backgroundColor: 'var(--color-error-muted)',
                                         borderColor: 'var(--color-error)',
@@ -336,7 +327,7 @@ export function LoginScreen() {
                             <button
                                 type="submit"
                                 disabled={isLoading || otpCode.length < 6}
-                                className="w-full py-3.5 font-semibold rounded-full transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-60"
+                                className="w-full py-3 font-semibold rounded-full transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-60"
                                 style={{
                                     backgroundColor: 'var(--color-accent)',
                                     color: 'var(--color-text-inverse)',
@@ -395,7 +386,7 @@ export function LoginScreen() {
                 </div>
 
                 {/* Footer */}
-                <div className="mt-8 text-center">
+                <div className="mt-4 text-center">
                     <p
                         className="text-xs leading-relaxed"
                         style={{ color: 'var(--color-text-secondary)' }}

@@ -1,20 +1,12 @@
 import { useAuth } from '../context/AuthContext';
 import { LoginScreen } from './LoginScreen';
 
-// Skip auth in development mode for QA testing
-const DEV_SKIP_AUTH = import.meta.env.DEV;
-
 interface AuthGateProps {
     children: React.ReactNode;
 }
 
 export function AuthGate({ children }: AuthGateProps) {
     const { isAuthenticated, isLoading } = useAuth();
-
-    // Bypass auth in development mode
-    if (DEV_SKIP_AUTH) {
-        return <>{children}</>;
-    }
 
     // Show loading state while checking auth
     if (isLoading) {
