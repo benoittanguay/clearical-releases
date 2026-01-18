@@ -356,7 +356,7 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                                         </svg>
                                     </div>
                                     <h2 className="text-2xl font-bold text-[var(--color-text-primary)] mb-2 font-display tracking-tight">System Permissions</h2>
-                                    <p className="text-[var(--color-text-secondary)] text-lg">Clearical needs access to track your activity</p>
+                                    <p className="text-[var(--color-text-secondary)] text-lg">Clearical needs Accessibility access to track your activity</p>
                                 </div>
 
                                 {/* Info Box */}
@@ -370,7 +370,7 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                                         <div>
                                             <h4 className="text-sm font-semibold text-[var(--color-text-primary)] mb-1 font-display">Why these permissions?</h4>
                                             <p className="text-sm text-[var(--color-text-secondary)]">
-                                                These permissions allow Clearical to automatically track your work and capture screenshots. All data stays on your device.
+                                                <strong>Accessibility (Required):</strong> Tracks which apps you use. <strong>Screen Recording (Optional):</strong> Captures screenshots for better AI summaries. All data stays on your device.
                                             </p>
                                         </div>
                                     </div>
@@ -400,7 +400,12 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                                             </div>
                                             <div className="flex-1">
                                                 <div className="flex items-center justify-between mb-2">
-                                                    <h3 className="text-lg font-semibold text-[var(--color-text-primary)] font-display">Accessibility</h3>
+                                                    <div className="flex items-center gap-2">
+                                                        <h3 className="text-lg font-semibold text-[var(--color-text-primary)] font-display">Accessibility</h3>
+                                                        <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-[var(--color-error-muted)] text-[var(--color-error)] border border-[var(--color-error)]/30">
+                                                            Required
+                                                        </span>
+                                                    </div>
                                                     {accessibilityGranted && (
                                                         <span className="text-xs px-2.5 py-1 rounded-full font-medium bg-[var(--color-success-muted)] text-[var(--color-success)] border border-[var(--color-success)]/30">
                                                             Granted
@@ -445,7 +450,12 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                                             </div>
                                             <div className="flex-1">
                                                 <div className="flex items-center justify-between mb-2">
-                                                    <h3 className="text-lg font-semibold text-[var(--color-text-primary)] font-display">Screen Recording</h3>
+                                                    <div className="flex items-center gap-2">
+                                                        <h3 className="text-lg font-semibold text-[var(--color-text-primary)] font-display">Screen Recording</h3>
+                                                        <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-[var(--color-accent-muted)] text-[var(--color-accent)] border border-[var(--color-accent)]/30">
+                                                            Optional
+                                                        </span>
+                                                    </div>
                                                     {screenRecordingGranted && (
                                                         <span className="text-xs px-2.5 py-1 rounded-full font-medium bg-[var(--color-success-muted)] text-[var(--color-success)] border border-[var(--color-success)]/30">
                                                             Granted
@@ -453,7 +463,7 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                                                     )}
                                                 </div>
                                                 <p className="text-sm text-[var(--color-text-secondary)] mb-3">
-                                                    Required to capture screenshots of your work for AI-powered summaries
+                                                    Optional but recommended for AI-powered summaries and better activity insights
                                                 </p>
                                                 {!screenRecordingGranted && (
                                                     <button
@@ -469,15 +479,29 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                                     </div>
                                 </div>
 
-                                {/* Warning if permissions not granted */}
-                                {(!accessibilityGranted || !screenRecordingGranted) && (
-                                    <div className="bg-[var(--color-warning-muted)] border border-[var(--color-warning)]/30 rounded-lg px-4 py-3 mb-6">
+                                {/* Warning if accessibility not granted */}
+                                {!accessibilityGranted && (
+                                    <div className="bg-[var(--color-error-muted)] border border-[var(--color-error)]/30 rounded-lg px-4 py-3 mb-6">
                                         <div className="flex items-start gap-2 text-sm text-[var(--color-text-primary)]">
-                                            <svg className="w-4 h-4 flex-shrink-0 mt-0.5 text-[var(--color-warning)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <svg className="w-4 h-4 flex-shrink-0 mt-0.5 text-[var(--color-error)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                                             </svg>
                                             <span>
-                                                You can skip this step, but Clearical won't be able to automatically track your activity without these permissions.
+                                                Accessibility permission is required to track your activity. The timer cannot start without it.
+                                            </span>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Info box when accessibility granted but screen recording not */}
+                                {accessibilityGranted && !screenRecordingGranted && (
+                                    <div className="bg-[var(--color-accent-muted)] border border-[var(--color-accent)]/30 rounded-lg px-4 py-3 mb-6">
+                                        <div className="flex items-start gap-2 text-sm text-[var(--color-text-primary)]">
+                                            <svg className="w-4 h-4 flex-shrink-0 mt-0.5 text-[var(--color-accent)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                            </svg>
+                                            <span>
+                                                You can continue without Screen Recording, but AI-powered summaries will be less detailed. We recommend granting this permission for the best experience.
                                             </span>
                                         </div>
                                     </div>
@@ -1085,7 +1109,8 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                         {currentStep === 0 && (
                             <button
                                 onClick={handleNext}
-                                className="px-6 py-2.5 bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white text-sm font-semibold rounded-full transition-all transform hover:scale-105 active:scale-95 shadow-lg"
+                                disabled={!accessibilityGranted}
+                                className="px-6 py-2.5 bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] disabled:bg-[var(--color-bg-tertiary)] disabled:text-[var(--color-text-tertiary)] disabled:cursor-not-allowed text-white text-sm font-semibold rounded-full transition-all transform hover:scale-105 active:scale-95 shadow-lg disabled:shadow-none"
                             >
                                 Continue
                             </button>

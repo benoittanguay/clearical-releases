@@ -30,6 +30,7 @@ interface WindowActivity {
 export interface PermissionCheckResult {
     hasAccessibility: boolean;
     hasScreenRecording: boolean;
+    requiredGranted: boolean;  // Only accessibility is required
     allGranted: boolean;
 }
 
@@ -105,9 +106,22 @@ export function useTimer() {
         const captureScreenshotForCurrentWindow = async (reason: string) => {
             const now = Date.now();
             const currentWindow = lastWindowRef.current;
-            
+
             if (!currentWindow) {
                 console.log('[Renderer] ❌ No current window info, skipping screenshot capture');
+                return null;
+            }
+
+            // Check screen recording permission before capturing
+            try {
+                // @ts-ignore
+                const screenStatus = await window.electron.ipcRenderer.checkScreenPermission();
+                if (screenStatus !== 'granted') {
+                    console.log('[Renderer] ⏭️  Screen Recording permission not granted, skipping screenshot capture');
+                    return null;
+                }
+            } catch (error) {
+                console.error('[Renderer] ❌ Failed to check screen permission:', error);
                 return null;
             }
 
@@ -495,6 +509,7 @@ export function useTimer() {
             return {
                 hasAccessibility,
                 hasScreenRecording,
+                requiredGranted: hasAccessibility,  // Only accessibility is required
                 allGranted: hasAccessibility && hasScreenRecording
             };
         } catch (error) {
@@ -502,6 +517,7 @@ export function useTimer() {
             return {
                 hasAccessibility: false,
                 hasScreenRecording: false,
+                requiredGranted: false,
                 allGranted: false
             };
         }
