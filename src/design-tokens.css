@@ -17,6 +17,7 @@
   --color-bg-secondary: #FFFFFF;         /* Cards - pure white */
   --color-bg-tertiary: #E8E6E3;          /* Elevated elements, inputs - slightly darker cream */
   --color-bg-quaternary: #DAD8D5;        /* Hover states */
+  --color-bg-ghost-hover: #FAF5EE;       /* Ghost button hover - warm cream */
 
   /* Dark Surface Colors (for sidebar, contrast elements) */
   --color-surface-dark: #0D0C0C;         /* Dark backgrounds */
@@ -25,7 +26,7 @@
 
   /* Accent Colors */
   --color-accent: #FF4800;               /* Primary accent - vibrant orange */
-  --color-accent-hover: #E54100;         /* Accent hover state - slightly darker */
+  --color-accent-hover: #EB4403;         /* Accent hover state - slightly darker */
   --color-accent-light: #FF6B35;         /* Lighter accent for gradients */
   --color-accent-muted: rgba(255, 72, 0, 0.08);  /* Subtle accent bg on light */
   --color-accent-border: rgba(255, 72, 0, 0.15); /* Accent borders on light */
@@ -471,4 +472,13 @@
 .card:hover {
   box-shadow: var(--shadow-md);
   border-color: var(--color-border-secondary);
+}
+
+/* Button typography - JetBrains Mono for all buttons */
+button,
+[role="button"],
+input[type="button"],
+input[type="submit"],
+input[type="reset"] {
+  font-family: var(--font-mono);
 }

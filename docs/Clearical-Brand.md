@@ -22,7 +22,7 @@ Clearical is designed for developers and knowledge workers who value their time.
 | Name | Hex | Usage |
 |------|-----|-------|
 | **Accent Orange** | `#FF4800` | Primary CTAs, active states, brand highlight |
-| **Accent Hover** | `#E54100` | Hover state for accent elements |
+| **Accent Hover** | `#EB4403` | Hover state for accent elements |
 | **Accent Light** | `#FF6B35` | Gradients, lighter accents |
 
 ### Background Colors (Light Cream Theme)
@@ -76,7 +76,8 @@ Clearical is designed for developers and knowledge workers who value their time.
 
 - **Headlines & Section Titles**: DM Sans, Bold (700), tight tracking
 - **Body Text**: Inter, Regular (400)
-- **Buttons & Labels**: Inter, Semibold (600)
+- **Buttons**: JetBrains Mono, Semibold (600)
+- **Labels**: Inter, Semibold (600)
 - **Micro Labels**: 10px, uppercase, wider tracking
 - **Code/Data Values**: JetBrains Mono
 
@@ -103,6 +104,7 @@ Clearical is designed for developers and knowledge workers who value their time.
 background: var(--color-accent);
 color: white;
 border-radius: 9999px; /* pill shape */
+font-family: var(--font-mono); /* JetBrains Mono */
 font-weight: 600;
 padding: 10px 24px;
 ```
@@ -115,6 +117,8 @@ background: var(--color-bg-tertiary);
 color: var(--color-text-primary);
 border: 1px solid var(--color-border-primary);
 border-radius: 8px;
+font-family: var(--font-mono); /* JetBrains Mono */
+font-weight: 600;
 ```
 - Use for alternative actions: "Check Again", "Configure"
 
@@ -123,9 +127,12 @@ border-radius: 8px;
 background: transparent;
 color: var(--color-text-secondary);
 border-radius: 8px;
+font-family: var(--font-mono); /* JetBrains Mono */
+font-weight: 400;
 /* On hover: */
-background: var(--color-bg-tertiary);
+background: #FAF5EE; /* Warm cream hover */
 color: var(--color-text-primary);
+font-weight: 600; /* Semibold on hover */
 ```
 - Use for tertiary actions: "Back", "Cancel", "Skip for now"
 
@@ -134,6 +141,8 @@ color: var(--color-text-primary);
 background: var(--color-error);
 color: white;
 border-radius: 8px;
+font-family: var(--font-mono); /* JetBrains Mono */
+font-weight: 600;
 ```
 - Use for destructive actions: "Disconnect", "Delete"
 
