@@ -122,7 +122,7 @@ export const SplitFlapDigit: React.FC<SplitFlapDigitProps> = ({ digit, prevDigit
       {/* Only resets when key changes (next animation starts) */}
       <div
         key={`bottom-${animationKey}`}
-        className="flap-half flap-bottom-animated flap-bottom-persistent"
+        className={`flap-half flap-bottom-animated flap-bottom-persistent ${showAnimation ? 'flap-animating' : ''}`}
       >
         <div className="flap-content flap-content-bottom">
           {digit}

@@ -202,13 +202,20 @@
   /* Transform origin at top center - this is where the hinge is */
   transform-origin: center top;
 
+  will-change: transform, box-shadow;
+
+  /* Default state - fully visible (no rotation) */
+  transform: rotateX(0deg);
+}
+
+/* Animation only applied when actively flipping */
+.flap-bottom-animated.flap-animating {
   /* Starts at 90° (hidden behind top flap) */
   /* SLOWED DOWN: 500ms instead of 380ms, with 300ms delay instead of 220ms */
   /* Delayed start for realism - begins after top flap passes ~45° */
   /* Bounce easing for mechanical feel */
   /* Dramatic animation with enhanced shadow during motion */
   animation: flipBottomUp 500ms cubic-bezier(0.34, 1.56, 0.64, 1.0) 300ms forwards;
-  will-change: transform, box-shadow;
 
   /* Initial state - rotated 90° (perpendicular to screen) */
   transform: rotateX(90deg);
@@ -526,7 +533,8 @@
 
 @media (prefers-reduced-motion: reduce) {
   .flap-top-animated,
-  .flap-bottom-animated {
+  .flap-bottom-animated,
+  .flap-bottom-animated.flap-animating {
     animation: none;
     transition: opacity 150ms ease-out;
   }
@@ -536,7 +544,8 @@
     transform: rotateX(-90deg);
   }
 
-  .flap-bottom-animated {
+  .flap-bottom-animated,
+  .flap-bottom-animated.flap-animating {
     opacity: 1;
     transform: rotateX(0deg);
   }
