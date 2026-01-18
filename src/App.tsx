@@ -19,10 +19,12 @@ import { UpdateNotification } from './components/UpdateNotification';
 import { UpdateSuccessModal } from './components/UpdateSuccessModal';
 import { PermissionRequestModal } from './components/PermissionRequestModal';
 import { SplitFlapDisplay, FlipClockContainer } from './components/SplitFlapDisplay';
-import type { WorkAssignment } from './context/StorageContext';
+import { BucketDetailView } from './components/BucketDetailView';
+import { JiraDetailView } from './components/JiraDetailView';
+import type { WorkAssignment, TimeBucket, LinkedJiraIssue } from './context/StorageContext';
 import './App.css'
 
-type View = 'chrono' | 'worklog' | 'buckets' | 'settings' | 'worklog-detail';
+type View = 'chrono' | 'worklog' | 'buckets' | 'settings' | 'worklog-detail' | 'bucket-detail' | 'jira-detail';
 
 function App() {
   const { buckets, entries, addEntry, addBucket, removeBucket, renameBucket, createFolder, moveBucket, updateEntry, removeEntry, unlinkJiraIssueFromBucket } = useStorage();
@@ -30,6 +32,8 @@ function App() {
   const [selectedAssignment, setSelectedAssignment] = useState<WorkAssignment | null>(null);
   const [currentView, setCurrentView] = useState<View>('chrono');
   const [selectedEntry, setSelectedEntry] = useState<string | null>(null);
+  const [selectedBucket, setSelectedBucket] = useState<TimeBucket | null>(null);
+  const [selectedJiraIssue, setSelectedJiraIssue] = useState<LinkedJiraIssue | null>(null);
   const [showExportDialog, setShowExportDialog] = useState(false);
   const [showCreateBucketModal, setShowCreateBucketModal] = useState(false);
   const [showCreateFolderModal, setShowCreateFolderModal] = useState(false);
@@ -370,7 +374,7 @@ function App() {
           }}
         >
         {/* Logo */}
-        <div className="mb-10 select-none">
+        <div className="mb-6 select-none">
           <img
             src="./icon.png"
             alt="Clearical"
@@ -516,8 +520,10 @@ function App() {
               Buckets
             </span>
           </button>
+        </div>
 
-          {/* Settings */}
+        {/* Settings - Bottom aligned */}
+        <div className="mt-auto w-full items-center no-drag pb-2">
           <button
             onClick={() => setCurrentView('settings')}
             className="flex flex-col items-center gap-1.5 group w-full px-4 relative"
@@ -827,17 +833,23 @@ function App() {
                     <div className="flex gap-3 mb-6">
                       <button
                         onClick={() => setShowCreateBucketModal(true)}
-                        className="flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-semibold transition-all hover:-translate-y-0.5 active:scale-95"
+                        className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all active:scale-95"
                         style={{
                           backgroundColor: 'var(--color-accent)',
                           color: 'white',
                           fontFamily: 'var(--font-body)',
                           transitionDuration: 'var(--duration-base)',
                           transitionTimingFunction: 'var(--ease-out)',
-                          boxShadow: 'var(--shadow-accent)'
+                          border: '1px solid var(--color-accent)'
                         }}
-                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--color-accent-hover)'}
-                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'var(--color-accent)'}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.backgroundColor = 'var(--color-accent-hover)';
+                          e.currentTarget.style.borderColor = 'var(--color-accent-hover)';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.backgroundColor = 'var(--color-accent)';
+                          e.currentTarget.style.borderColor = 'var(--color-accent)';
+                        }}
                       >
                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                           <line x1="12" y1="5" x2="12" y2="19" />
@@ -848,23 +860,22 @@ function App() {
 
                       <button
                         onClick={() => setShowCreateFolderModal(true)}
-                        className="flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-semibold transition-all hover:-translate-y-0.5 active:scale-95"
+                        className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all active:scale-95"
                         style={{
-                          backgroundColor: 'var(--color-bg-tertiary)',
-                          color: 'var(--color-accent)',
+                          backgroundColor: 'white',
+                          color: 'var(--color-text-primary)',
                           fontFamily: 'var(--font-body)',
                           transitionDuration: 'var(--duration-base)',
                           transitionTimingFunction: 'var(--ease-out)',
-                          border: '1px solid var(--color-accent)',
-                          boxShadow: '0 4px 12px -2px rgba(255, 72, 0, 0.15)'
+                          border: '1px solid var(--color-border-primary)'
                         }}
                         onMouseEnter={(e) => {
-                          e.currentTarget.style.backgroundColor = 'var(--color-accent)';
-                          e.currentTarget.style.color = 'white';
+                          e.currentTarget.style.backgroundColor = '#FAF5EE';
+                          e.currentTarget.style.borderColor = 'var(--color-border-secondary)';
                         }}
                         onMouseLeave={(e) => {
-                          e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)';
-                          e.currentTarget.style.color = 'var(--color-accent)';
+                          e.currentTarget.style.backgroundColor = 'white';
+                          e.currentTarget.style.borderColor = 'var(--color-border-primary)';
                         }}
                       >
                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -881,13 +892,29 @@ function App() {
                       onDelete={removeBucket}
                       onUnlinkJira={unlinkJiraIssueFromBucket}
                       onMove={moveBucket}
+                      onBucketClick={(bucket) => {
+                        setSelectedBucket(bucket);
+                        setCurrentView('bucket-detail');
+                      }}
                     />
                   </>
                 )}
 
                 {bucketsTab === 'jira' && (settings.jira?.enabled || settings.tempo?.enabled) && (
                   <div className="mt-2">
-                    <JiraIssuesSection />
+                    <JiraIssuesSection
+                      onIssueClick={(issue) => {
+                        setSelectedJiraIssue({
+                          key: issue.key,
+                          summary: issue.fields.summary,
+                          issueType: issue.fields.issuetype.name,
+                          status: issue.fields.status.name,
+                          projectKey: issue.fields.project.key,
+                          projectName: issue.fields.project.name
+                        });
+                        setCurrentView('jira-detail');
+                      }}
+                    />
                   </div>
                 )}
               </div>
@@ -932,6 +959,40 @@ function App() {
               />
             );
           })()}
+
+          {currentView === 'bucket-detail' && selectedBucket && (
+            <BucketDetailView
+              bucket={selectedBucket}
+              entries={entries}
+              buckets={buckets}
+              formatTime={formatTime}
+              onBack={() => setCurrentView('buckets')}
+              onEntryClick={(entryId) => {
+                setSelectedEntry(entryId);
+                setCurrentView('worklog-detail');
+              }}
+              onDeleteEntry={removeEntry}
+              onBulkLogToTempo={handleBulkLogToTempo}
+              tempoEnabled={settings.tempo?.enabled}
+            />
+          )}
+
+          {currentView === 'jira-detail' && selectedJiraIssue && (
+            <JiraDetailView
+              jiraIssue={selectedJiraIssue}
+              entries={entries}
+              buckets={buckets}
+              formatTime={formatTime}
+              onBack={() => setCurrentView('buckets')}
+              onEntryClick={(entryId) => {
+                setSelectedEntry(entryId);
+                setCurrentView('worklog-detail');
+              }}
+              onDeleteEntry={removeEntry}
+              onBulkLogToTempo={handleBulkLogToTempo}
+              tempoEnabled={settings.tempo?.enabled}
+            />
+          )}
 
           {currentView === 'worklog' && (
             <>
@@ -1063,10 +1124,10 @@ function App() {
                           <div key={weekKey} className="mb-6 last:mb-0">
                             {/* Week Header - Sticky and more prominent */}
                             <div
-                              className="sticky top-0 z-20 px-4 py-3 -mx-4 flex items-center justify-between shadow-md"
+                              className="sticky top-0 z-20 px-4 py-2 -mx-4 flex items-center justify-between"
                               style={{
                                 backgroundColor: 'var(--color-bg-primary)',
-                                borderBottom: '2px solid var(--color-border-secondary)',
+                                borderBottom: '1px solid var(--color-border-primary)',
                                 backdropFilter: 'blur(8px)'
                               }}
                             >
@@ -1141,14 +1202,15 @@ function App() {
                                 });
 
                                 return (
-                                  <div key={dateKey} className={dayIndex > 0 ? 'mt-3' : '-mt-px'}>
+                                  <div key={dateKey} className={dayIndex > 0 ? 'mt-3' : ''}>
                                     {/* Date Separator Header - Sticky below week header */}
                                     <div
                                       className="sticky z-10 px-3 py-2 -mx-4 flex items-center justify-between"
                                       style={{
                                         backgroundColor: 'var(--color-bg-secondary)',
                                         borderBottom: '1px solid var(--color-border-primary)',
-                                        top: '52px' // Height of week header (py-3 = 12px top + 12px bottom + height of content ~28px)
+                                        top: '33px',
+                                        marginTop: dayIndex === 0 ? '-1px' : undefined
                                       }}
                                     >
                                       <h3 className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>
@@ -1216,18 +1278,23 @@ function App() {
                                               setSelectedEntry(entry.id);
                                               setCurrentView('worklog-detail');
                                             }}
-                                            className="flex justify-between items-center p-2.5 rounded-lg transition-colors cursor-pointer"
+                                            className="flex justify-between items-center p-2.5 rounded-lg cursor-pointer"
+                                            data-hoverable
+                                            data-default-bg="white"
+                                            data-default-border="var(--color-border-primary)"
+                                            data-hover-bg="#FAF5EE"
+                                            data-hover-border="var(--color-border-secondary)"
                                             style={{
-                                              backgroundColor: 'var(--color-bg-secondary)',
+                                              backgroundColor: 'white',
                                               border: '1px solid var(--color-border-primary)',
-                                              transition: 'all 0.2s ease-out'
+                                              transition: 'all var(--duration-base) var(--ease-out)'
                                             }}
                                             onMouseEnter={(e) => {
-                                              e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)';
+                                              e.currentTarget.style.backgroundColor = '#FAF5EE';
                                               e.currentTarget.style.borderColor = 'var(--color-border-secondary)';
                                             }}
                                             onMouseLeave={(e) => {
-                                              e.currentTarget.style.backgroundColor = 'var(--color-bg-secondary)';
+                                              e.currentTarget.style.backgroundColor = 'white';
                                               e.currentTarget.style.borderColor = 'var(--color-border-primary)';
                                             }}
                                           >

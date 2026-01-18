@@ -8,6 +8,7 @@ interface FolderTreeProps {
     onDelete: (id: string) => void;
     onUnlinkJira?: (bucketId: string) => void;
     onMove?: (bucketId: string, newParentId: string | null) => void;
+    onBucketClick?: (bucket: TimeBucket) => void;
 }
 
 interface TreeNode {
@@ -20,7 +21,8 @@ export const FolderTree: React.FC<FolderTreeProps> = ({
     onRename,
     onDelete,
     onUnlinkJira,
-    onMove
+    onMove,
+    onBucketClick
 }) => {
     // Track which folders are expanded
     const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
@@ -111,10 +113,11 @@ export const FolderTree: React.FC<FolderTreeProps> = ({
                         onUnlinkJira={onUnlinkJira}
                         onMove={onMove}
                         availableFolders={availableFolders}
+                        onClick={onBucketClick ? () => onBucketClick(node.bucket) : undefined}
                     />
                     {/* Render children if folder is expanded */}
                     {node.bucket.isFolder && isExpanded && hasChildren && (
-                        <div className="mt-2">
+                        <div className="mt-2 space-y-2">
                             {renderTree(node.children, level + 1)}
                         </div>
                     )}
@@ -126,7 +129,7 @@ export const FolderTree: React.FC<FolderTreeProps> = ({
     const tree = buildTree();
 
     return (
-        <ul className="space-y-3">
+        <ul className="space-y-2">
             {tree.length === 0 ? (
                 <li
                     className="text-center py-12 rounded-xl"

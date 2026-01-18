@@ -72,8 +72,9 @@ export function CreateBucketModal({ isOpen, onClose, onCreateBucket, availableFo
                     <h3 className="text-xl font-bold text-[var(--color-text-primary)]" style={{ fontFamily: 'var(--font-display)' }}>Create New Bucket</h3>
                     <button
                         onClick={onClose}
-                        className="p-1 -m-1 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-all duration-200 hover:scale-110 active:scale-95"
+                        className="p-1.5 rounded-lg text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-[#FAF5EE] transition-all active:scale-95"
                         aria-label="Close dialog"
+                        title="Close"
                     >
                         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                             <line x1="18" y1="6" x2="6" y2="18" />
@@ -95,8 +96,18 @@ export function CreateBucketModal({ isOpen, onClose, onCreateBucket, availableFo
                             onChange={(e) => setBucketName(e.target.value)}
                             onKeyDown={handleKeyDown}
                             autoFocus
-                            className="w-full bg-[var(--color-bg-tertiary)] border border-[var(--color-border-primary)] text-[var(--color-text-primary)] text-sm rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:border-transparent transition-all duration-200"
-                            style={{ fontFamily: 'var(--font-mono)' }}
+                            className="w-full bg-[var(--color-bg-primary)] border text-[var(--color-text-primary)] text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:border-[var(--color-accent)] transition-all duration-200"
+                            style={{ fontFamily: 'var(--font-body)', borderColor: 'var(--color-border-primary)' }}
+                            onMouseEnter={(e) => {
+                                if (document.activeElement !== e.currentTarget) {
+                                    e.currentTarget.style.borderColor = '#8c877d';
+                                }
+                            }}
+                            onMouseLeave={(e) => {
+                                if (document.activeElement !== e.currentTarget) {
+                                    e.currentTarget.style.borderColor = 'var(--color-border-primary)';
+                                }
+                            }}
                             placeholder="e.g. Client Work, Documentation, Research"
                         />
                     </div>
@@ -133,8 +144,8 @@ export function CreateBucketModal({ isOpen, onClose, onCreateBucket, availableFo
                             <select
                                 value={selectedParentId || ''}
                                 onChange={(e) => setSelectedParentId(e.target.value || null)}
-                                className="w-full bg-[var(--color-bg-tertiary)] border border-[var(--color-border-primary)] text-[var(--color-text-primary)] text-sm rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:border-transparent transition-all duration-200"
-                                style={{ fontFamily: 'var(--font-mono)' }}
+                                className="w-full bg-[var(--color-bg-primary)] border border-[var(--color-border-primary)] text-[var(--color-text-primary)] text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:border-[var(--color-accent)] transition-all duration-200"
+                                style={{ fontFamily: 'var(--font-body)' }}
                             >
                                 <option value="">Root Level</option>
                                 {availableFolders.map((folder) => (

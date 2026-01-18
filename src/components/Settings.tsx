@@ -423,7 +423,7 @@ export function Settings({ onOpenJiraModal, onOpenTempoModal }: SettingsProps = 
                             <button
                                 onClick={handleUpgrade}
                                 disabled={isOpeningPortal}
-                                className="px-3 py-1.5 bg-[var(--color-accent)] hover:bg-[var(--color-accent)]/90 disabled:opacity-50 text-white text-xs rounded-lg transition-all font-medium"
+                                className="px-3 py-1.5 bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] disabled:opacity-50 text-white text-xs rounded-lg transition-all font-medium"
                             >
                                 {isOpeningPortal ? 'Opening...' : 'Upgrade'}
                             </button>
@@ -432,7 +432,7 @@ export function Settings({ onOpenJiraModal, onOpenTempoModal }: SettingsProps = 
                             <button
                                 onClick={handleOpenPortal}
                                 disabled={isOpeningPortal}
-                                className="px-3 py-1.5 bg-[var(--color-accent)] hover:bg-[var(--color-accent)]/90 disabled:opacity-50 text-white text-xs rounded-lg transition-all font-medium"
+                                className="px-3 py-1.5 bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] disabled:opacity-50 text-white text-xs rounded-lg transition-all font-medium"
                             >
                                 {isOpeningPortal ? 'Opening...' : 'Manage'}
                             </button>
@@ -441,14 +441,14 @@ export function Settings({ onOpenJiraModal, onOpenTempoModal }: SettingsProps = 
                             <button
                                 onClick={handleUpgrade}
                                 disabled={isOpeningPortal}
-                                className="px-3 py-1.5 bg-[var(--color-accent)] hover:bg-[var(--color-accent)]/90 disabled:opacity-50 text-white text-xs rounded-lg transition-all font-medium"
+                                className="px-3 py-1.5 bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] disabled:opacity-50 text-white text-xs rounded-lg transition-all font-medium"
                             >
                                 {isOpeningPortal ? 'Opening...' : 'Upgrade'}
                             </button>
                         )}
                         <button
                             onClick={handleSignOut}
-                            className="px-3 py-1.5 bg-[var(--color-bg-secondary)] hover:bg-[var(--color-bg-secondary)]/70 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] text-xs rounded-lg transition-all border border-[var(--color-border-primary)] font-medium"
+                            className="px-3 py-1.5 bg-transparent hover:bg-[var(--color-bg-ghost-hover)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] text-xs rounded-lg transition-all border border-[var(--color-border-primary)]"
                         >
                             Sign Out
                         </button>
@@ -510,7 +510,22 @@ export function Settings({ onOpenJiraModal, onOpenTempoModal }: SettingsProps = 
                             onChange={(e) => {
                                 setTempSettings(prev => ({ ...prev, timeRoundingIncrement: parseInt(e.target.value) }));
                             }}
-                            className="w-full bg-[var(--color-bg-tertiary)] border border-[var(--color-border-primary)] text-[var(--color-text-primary)] text-xs rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]"
+                            className="w-full border text-sm rounded-lg pl-4 pr-8 py-3 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:border-[var(--color-accent)] cursor-pointer transition-all"
+                            style={{
+                                backgroundColor: 'var(--color-bg-secondary)',
+                                borderColor: 'var(--color-border-primary)',
+                                color: 'var(--color-text-primary)',
+                                fontFamily: 'var(--font-body)',
+                                boxShadow: 'var(--shadow-sm)'
+                            }}
+                            onMouseEnter={(e) => {
+                                e.currentTarget.style.backgroundColor = '#FAF5EE';
+                                e.currentTarget.style.borderColor = 'var(--color-border-secondary)';
+                            }}
+                            onMouseLeave={(e) => {
+                                e.currentTarget.style.backgroundColor = 'var(--color-bg-secondary)';
+                                e.currentTarget.style.borderColor = 'var(--color-border-primary)';
+                            }}
                         >
                             {getTimeIncrementOptions().map(option => (
                                 <option key={option.value} value={option.value}>
@@ -531,7 +546,7 @@ export function Settings({ onOpenJiraModal, onOpenTempoModal }: SettingsProps = 
                     <h3 className="text-[10px] font-bold text-[var(--color-text-secondary)] uppercase tracking-wider font-display">Activity Filtering</h3>
                     <button
                         onClick={handleResetSettings}
-                        className="px-3 py-1.5 bg-[var(--color-bg-tertiary)] hover:bg-[var(--color-bg-tertiary)]/70 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] text-xs rounded-lg transition-all border border-[var(--color-border-primary)] font-medium"
+                        className="px-3 py-1.5 bg-transparent hover:bg-[var(--color-bg-ghost-hover)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] text-xs rounded-lg transition-all border border-[var(--color-border-primary)]"
                     >
                         Reset to Defaults
                     </button>
@@ -552,7 +567,19 @@ export function Settings({ onOpenJiraModal, onOpenTempoModal }: SettingsProps = 
                                     const newDuration = parseDurationInput(e.target.value);
                                     setTempSettings(prev => ({ ...prev, minActivityDuration: newDuration }));
                                 }}
-                                className="w-full bg-[var(--color-bg-tertiary)] border border-[var(--color-border-primary)] text-[var(--color-text-primary)] text-xs rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]"
+                                className="w-full border text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:border-[var(--color-accent)] transition-all"
+                                style={{
+                                    backgroundColor: 'var(--color-bg-primary)',
+                                    borderColor: 'var(--color-border-primary)',
+                                    color: 'var(--color-text-primary)',
+                                    fontFamily: 'var(--font-body)'
+                                }}
+                                onMouseEnter={(e) => {
+                                    e.currentTarget.style.borderColor = '#8c877d';
+                                }}
+                                onMouseLeave={(e) => {
+                                    e.currentTarget.style.borderColor = 'var(--color-border-primary)';
+                                }}
                                 placeholder="e.g. 1s, 1000ms"
                             />
                             <div className="text-xs text-[var(--color-text-secondary)]">
@@ -575,7 +602,19 @@ export function Settings({ onOpenJiraModal, onOpenTempoModal }: SettingsProps = 
                                     const newThreshold = parseDurationInput(e.target.value);
                                     setTempSettings(prev => ({ ...prev, activityGapThreshold: newThreshold }));
                                 }}
-                                className="w-full bg-[var(--color-bg-tertiary)] border border-[var(--color-border-primary)] text-[var(--color-text-primary)] text-xs rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]"
+                                className="w-full border text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:border-[var(--color-accent)] transition-all"
+                                style={{
+                                    backgroundColor: 'var(--color-bg-primary)',
+                                    borderColor: 'var(--color-border-primary)',
+                                    color: 'var(--color-text-primary)',
+                                    fontFamily: 'var(--font-body)'
+                                }}
+                                onMouseEnter={(e) => {
+                                    e.currentTarget.style.borderColor = '#8c877d';
+                                }}
+                                onMouseLeave={(e) => {
+                                    e.currentTarget.style.borderColor = 'var(--color-border-primary)';
+                                }}
                                 placeholder="e.g. 2m, 120s"
                             />
                             <div className="text-xs text-[var(--color-text-secondary)]">
@@ -725,7 +764,7 @@ export function Settings({ onOpenJiraModal, onOpenTempoModal }: SettingsProps = 
                             {hasJiraAccess && (
                                 <button
                                     onClick={handleOpenJiraModal}
-                                    className="px-3 py-1 bg-[var(--color-accent)] hover:bg-[var(--color-accent)]/90 text-white text-xs rounded-lg transition-all"
+                                    className="px-3 py-1 bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white text-xs rounded-lg transition-all"
                                 >
                                     Configure
                                 </button>
@@ -766,7 +805,7 @@ export function Settings({ onOpenJiraModal, onOpenTempoModal }: SettingsProps = 
                             {hasTempoAccess && (
                                 <button
                                     onClick={handleOpenTempoModal}
-                                    className="px-3 py-1 bg-[var(--color-accent)] hover:bg-[var(--color-accent)]/90 text-white text-xs rounded-lg transition-all"
+                                    className="px-3 py-1 bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white text-xs rounded-lg transition-all"
                                 >
                                     Configure
                                 </button>
@@ -809,7 +848,7 @@ export function Settings({ onOpenJiraModal, onOpenTempoModal }: SettingsProps = 
                                 <button
                                     onClick={handleCalendarConnect}
                                     disabled={calendarConnecting || calendarLoading}
-                                    className="px-3 py-1 bg-[var(--color-accent)] hover:bg-[var(--color-accent)]/90 disabled:opacity-50 text-white text-xs rounded-lg transition-all"
+                                    className="px-3 py-1 bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] disabled:opacity-50 text-white text-xs rounded-lg transition-all"
                                 >
                                     {calendarConnecting ? 'Connecting...' : 'Connect'}
                                 </button>
@@ -882,7 +921,22 @@ export function Settings({ onOpenJiraModal, onOpenTempoModal }: SettingsProps = 
                                             }
                                         }));
                                     }}
-                                    className="w-full bg-[var(--color-bg-secondary)] border border-[var(--color-border-primary)] text-[var(--color-text-primary)] text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]"
+                                    className="w-full border text-sm rounded-lg pl-4 pr-8 py-3 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:border-[var(--color-accent)] cursor-pointer transition-all"
+                                    style={{
+                                        backgroundColor: 'var(--color-bg-secondary)',
+                                        borderColor: 'var(--color-border-primary)',
+                                        color: 'var(--color-text-primary)',
+                                        fontFamily: 'var(--font-body)',
+                                        boxShadow: 'var(--shadow-sm)'
+                                    }}
+                                    onMouseEnter={(e) => {
+                                        e.currentTarget.style.backgroundColor = '#FAF5EE';
+                                        e.currentTarget.style.borderColor = 'var(--color-border-secondary)';
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        e.currentTarget.style.backgroundColor = 'var(--color-bg-secondary)';
+                                        e.currentTarget.style.borderColor = 'var(--color-border-primary)';
+                                    }}
                                 >
                                     <option value={15}>Every 15 minutes</option>
                                     <option value={30}>Every 30 minutes</option>
@@ -962,7 +1016,7 @@ export function Settings({ onOpenJiraModal, onOpenTempoModal }: SettingsProps = 
                         {permissionStatus !== 'granted' && permissionStatus !== 'stale' && (
                             <button
                                 onClick={openSettings}
-                                className="px-3 py-1 bg-[var(--color-accent)] hover:bg-[var(--color-accent)]/90 text-white text-xs rounded-lg transition-all"
+                                className="px-3 py-1 bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white text-xs rounded-lg transition-all"
                             >
                                 Open Settings
                             </button>
@@ -1015,7 +1069,7 @@ export function Settings({ onOpenJiraModal, onOpenTempoModal }: SettingsProps = 
                         className={`px-3 py-1.5 text-xs rounded-lg transition-all flex items-center gap-1.5 font-medium ${
                             isCheckingUpdate
                                 ? 'bg-[var(--color-bg-tertiary)] text-[var(--color-text-secondary)] cursor-not-allowed'
-                                : 'bg-[var(--color-accent)] hover:bg-[var(--color-accent)]/90 text-white'
+                                : 'bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white'
                         }`}
                     >
                         {isCheckingUpdate ? (

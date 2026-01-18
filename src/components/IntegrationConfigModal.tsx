@@ -207,8 +207,9 @@ export function IntegrationConfigModal({
                     <h3 className="text-lg font-semibold text-[var(--color-text-primary)] font-display">Configure Time Tracking Integration</h3>
                     <button
                         onClick={onClose}
-                        className="p-1 -m-1 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
+                        className="p-1.5 rounded-lg text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-[#FAF5EE] transition-colors"
                         aria-label="Close dialog"
+                        title="Close"
                     >
                         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                             <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -292,13 +293,24 @@ export function IntegrationConfigModal({
                                         onChange={(e) => {
                                             setTempJiraSettings(prev => ({ ...prev, baseUrl: e.target.value }));
                                         }}
-                                        className="w-full bg-[var(--color-bg-tertiary)] border border-[var(--color-border-primary)] text-[var(--color-text-primary)] text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]"
+                                        className="w-full bg-[var(--color-bg-primary)] border text-[var(--color-text-primary)] text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:border-[var(--color-accent)] transition-all"
+                                        style={{ fontFamily: 'var(--font-body)', borderColor: 'var(--color-border-primary)' }}
+                                        onMouseEnter={(e) => {
+                                            if (document.activeElement !== e.currentTarget) {
+                                                e.currentTarget.style.borderColor = '#8c877d';
+                                            }
+                                        }}
+                                        onMouseLeave={(e) => {
+                                            if (document.activeElement !== e.currentTarget) {
+                                                e.currentTarget.style.borderColor = 'var(--color-border-primary)';
+                                            }
+                                        }}
                                         placeholder="https://your-domain.atlassian.net"
                                     />
                                 </div>
 
                                 <div>
-                                    <label className="block text-sm text-gray-400 mb-2">
+                                    <label className="block text-sm text-[var(--color-text-secondary)] mb-2">
                                         Email *
                                     </label>
                                     <input
@@ -307,13 +319,24 @@ export function IntegrationConfigModal({
                                         onChange={(e) => {
                                             setTempJiraSettings(prev => ({ ...prev, email: e.target.value }));
                                         }}
-                                        className="w-full bg-gray-900 border border-gray-700 text-white text-sm rounded px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                        className="w-full bg-[var(--color-bg-primary)] border text-[var(--color-text-primary)] text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:border-[var(--color-accent)] transition-all"
+                                        style={{ fontFamily: 'var(--font-body)', borderColor: 'var(--color-border-primary)' }}
+                                        onMouseEnter={(e) => {
+                                            if (document.activeElement !== e.currentTarget) {
+                                                e.currentTarget.style.borderColor = '#8c877d';
+                                            }
+                                        }}
+                                        onMouseLeave={(e) => {
+                                            if (document.activeElement !== e.currentTarget) {
+                                                e.currentTarget.style.borderColor = 'var(--color-border-primary)';
+                                            }
+                                        }}
                                         placeholder="your.email@company.com"
                                     />
                                 </div>
-                                
+
                                 <div>
-                                    <label className="block text-sm text-gray-400 mb-2">
+                                    <label className="block text-sm text-[var(--color-text-secondary)] mb-2">
                                         API Token *
                                     </label>
                                     <input
@@ -322,10 +345,21 @@ export function IntegrationConfigModal({
                                         onChange={(e) => {
                                             setTempJiraSettings(prev => ({ ...prev, apiToken: e.target.value }));
                                         }}
-                                        className="w-full bg-gray-900 border border-gray-700 text-white text-sm rounded px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                        className="w-full bg-[var(--color-bg-primary)] border text-[var(--color-text-primary)] text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:border-[var(--color-accent)] transition-all"
+                                        style={{ fontFamily: 'var(--font-body)', borderColor: 'var(--color-border-primary)' }}
+                                        onMouseEnter={(e) => {
+                                            if (document.activeElement !== e.currentTarget) {
+                                                e.currentTarget.style.borderColor = '#8c877d';
+                                            }
+                                        }}
+                                        onMouseLeave={(e) => {
+                                            if (document.activeElement !== e.currentTarget) {
+                                                e.currentTarget.style.borderColor = 'var(--color-border-primary)';
+                                            }
+                                        }}
                                         placeholder="Enter your Jira API token"
                                     />
-                                    <div className="text-xs text-gray-500 mt-1">
+                                    <div className="text-xs text-[var(--color-text-tertiary)] mt-1">
                                         Generate at: Jira → Profile → Security → Create and manage API tokens
                                     </div>
                                 </div>
@@ -348,48 +382,48 @@ export function IntegrationConfigModal({
                                 {/* Project Selection */}
                                 {availableProjects.length > 0 && (
                                     <div className="mt-6">
-                                        <label className="block text-sm text-gray-400 mb-2">
+                                        <label className="block text-sm text-[var(--color-text-secondary)] mb-2">
                                             Select Projects to Fetch Data From
                                         </label>
-                                        <div className="text-xs text-gray-500 mb-3">
+                                        <div className="text-xs text-[var(--color-text-tertiary)] mb-3">
                                             Choose which projects to include in issue fetching. This improves performance and focuses on relevant data for AI features.
                                         </div>
-                                        
+
                                         <div className="flex items-center gap-2 mb-3">
                                             <button
                                                 onClick={selectAllProjects}
-                                                className="text-xs text-blue-400 hover:text-blue-300 underline"
+                                                className="text-xs text-[var(--color-accent)] hover:text-[var(--color-accent-hover)] underline"
                                             >
                                                 Select All
                                             </button>
-                                            <span className="text-xs text-gray-500">|</span>
+                                            <span className="text-xs text-[var(--color-text-tertiary)]">|</span>
                                             <button
                                                 onClick={clearAllProjects}
-                                                className="text-xs text-blue-400 hover:text-blue-300 underline"
+                                                className="text-xs text-[var(--color-accent)] hover:text-[var(--color-accent-hover)] underline"
                                             >
                                                 Clear All
                                             </button>
-                                            <span className="text-xs text-gray-500 ml-2">
+                                            <span className="text-xs text-[var(--color-text-tertiary)] ml-2">
                                                 {tempJiraSettings.selectedProjects?.length || 0} of {availableProjects.length} selected
                                             </span>
                                         </div>
 
-                                        <div className="max-h-48 overflow-y-auto bg-gray-900 border border-gray-700 rounded px-3 py-2">
+                                        <div className="max-h-48 overflow-y-auto bg-[var(--color-bg-primary)] border border-[var(--color-border-primary)] rounded-lg px-3 py-2">
                                             {availableProjects.map((project) => (
-                                                <div key={project.key} className="flex items-center gap-2 py-2 border-b border-gray-800 last:border-b-0">
+                                                <div key={project.key} className="flex items-center gap-2 py-2 border-b border-[var(--color-border-primary)] last:border-b-0">
                                                     <input
                                                         type="checkbox"
                                                         id={`project-${project.key}`}
                                                         checked={tempJiraSettings.selectedProjects?.includes(project.key) || false}
                                                         onChange={() => handleProjectToggle(project.key)}
-                                                        className="w-4 h-4 text-blue-600 bg-gray-900 border border-gray-700 rounded focus:ring-blue-500 focus:ring-1"
+                                                        className="w-4 h-4 text-[var(--color-accent)] bg-[var(--color-bg-primary)] border border-[var(--color-border-primary)] rounded focus:ring-[var(--color-accent)] focus:ring-2"
                                                     />
                                                     <label
                                                         htmlFor={`project-${project.key}`}
-                                                        className="flex-1 text-sm text-gray-300 cursor-pointer"
+                                                        className="flex-1 text-sm text-[var(--color-text-primary)] cursor-pointer"
                                                     >
-                                                        <span className="font-medium text-blue-400">{project.key}</span>
-                                                        <span className="text-gray-500 ml-2">- {project.name}</span>
+                                                        <span className="font-medium text-[var(--color-accent)]">{project.key}</span>
+                                                        <span className="text-[var(--color-text-tertiary)] ml-2">- {project.name}</span>
                                                     </label>
                                                 </div>
                                             ))}
@@ -398,8 +432,8 @@ export function IntegrationConfigModal({
                                 )}
 
                                 {loadingProjects && (
-                                    <div className="mt-4 flex items-center justify-center py-4 text-sm text-gray-400">
-                                        <div className="w-4 h-4 border border-gray-400 border-t-transparent rounded-full animate-spin mr-2"></div>
+                                    <div className="mt-4 flex items-center justify-center py-4 text-sm text-[var(--color-text-secondary)]">
+                                        <div className="w-4 h-4 border border-[var(--color-text-secondary)] border-t-transparent rounded-full animate-spin mr-2"></div>
                                         Loading available projects...
                                     </div>
                                 )}
@@ -419,9 +453,9 @@ export function IntegrationConfigModal({
                                 onChange={(e) => {
                                     setTempTempoSettings(prev => ({ ...prev, enabled: e.target.checked }));
                                 }}
-                                className="w-4 h-4 text-blue-600 bg-gray-900 border border-gray-700 rounded focus:ring-blue-500 focus:ring-1"
+                                className="w-4 h-4 text-[var(--color-accent)] bg-[var(--color-bg-primary)] border border-[var(--color-border-primary)] rounded focus:ring-[var(--color-accent)] focus:ring-2"
                             />
-                            <label htmlFor="tempo-enabled-unified" className="text-sm text-gray-300">
+                            <label htmlFor="tempo-enabled-unified" className="text-sm text-[var(--color-text-primary)]">
                                 Enable Tempo Integration
                             </label>
                         </div>
@@ -429,7 +463,7 @@ export function IntegrationConfigModal({
                         {tempTempoSettings.enabled && (
                             <>
                                 <div>
-                                    <label className="block text-sm text-gray-400 mb-2">
+                                    <label className="block text-sm text-[var(--color-text-secondary)] mb-2">
                                         API Token *
                                     </label>
                                     <input
@@ -438,16 +472,27 @@ export function IntegrationConfigModal({
                                         onChange={(e) => {
                                             setTempTempoSettings(prev => ({ ...prev, apiToken: e.target.value }));
                                         }}
-                                        className="w-full bg-gray-900 border border-gray-700 text-white text-sm rounded px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                        className="w-full bg-[var(--color-bg-primary)] border text-[var(--color-text-primary)] text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:border-[var(--color-accent)] transition-all"
+                                        style={{ fontFamily: 'var(--font-body)', borderColor: 'var(--color-border-primary)' }}
+                                        onMouseEnter={(e) => {
+                                            if (document.activeElement !== e.currentTarget) {
+                                                e.currentTarget.style.borderColor = '#8c877d';
+                                            }
+                                        }}
+                                        onMouseLeave={(e) => {
+                                            if (document.activeElement !== e.currentTarget) {
+                                                e.currentTarget.style.borderColor = 'var(--color-border-primary)';
+                                            }
+                                        }}
                                         placeholder="Enter your Tempo API token"
                                     />
-                                    <div className="text-xs text-gray-500 mt-1">
+                                    <div className="text-xs text-[var(--color-text-tertiary)] mt-1">
                                         Get your API token from Tempo → Settings → API Integration
                                     </div>
                                 </div>
-                                
+
                                 <div>
-                                    <label className="block text-sm text-gray-400 mb-2">
+                                    <label className="block text-sm text-[var(--color-text-secondary)] mb-2">
                                         Base URL *
                                     </label>
                                     <select
@@ -455,7 +500,8 @@ export function IntegrationConfigModal({
                                         onChange={(e) => {
                                             setTempTempoSettings(prev => ({ ...prev, baseUrl: e.target.value }));
                                         }}
-                                        className="w-full bg-gray-900 border border-gray-700 text-white text-sm rounded px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                        className="w-full bg-[var(--color-bg-primary)] border border-[var(--color-border-primary)] text-[var(--color-text-primary)] text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:border-[var(--color-accent)]"
+                                        style={{ fontFamily: 'var(--font-body)' }}
                                     >
                                         <option value="https://api.tempo.io">Global (api.tempo.io)</option>
                                         <option value="https://api.eu.tempo.io">EU (api.eu.tempo.io)</option>
@@ -463,7 +509,7 @@ export function IntegrationConfigModal({
                                 </div>
 
                                 <div>
-                                    <label className="block text-sm text-gray-400 mb-2">
+                                    <label className="block text-sm text-[var(--color-text-secondary)] mb-2">
                                         Default Issue Key (Optional)
                                     </label>
                                     <input
@@ -472,10 +518,21 @@ export function IntegrationConfigModal({
                                         onChange={(e) => {
                                             setTempTempoSettings(prev => ({ ...prev, defaultIssueKey: e.target.value }));
                                         }}
-                                        className="w-full bg-gray-900 border border-gray-700 text-white text-sm rounded px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                        className="w-full bg-[var(--color-bg-primary)] border text-[var(--color-text-primary)] text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:border-[var(--color-accent)] transition-all"
+                                        style={{ fontFamily: 'var(--font-body)', borderColor: 'var(--color-border-primary)' }}
+                                        onMouseEnter={(e) => {
+                                            if (document.activeElement !== e.currentTarget) {
+                                                e.currentTarget.style.borderColor = '#8c877d';
+                                            }
+                                        }}
+                                        onMouseLeave={(e) => {
+                                            if (document.activeElement !== e.currentTarget) {
+                                                e.currentTarget.style.borderColor = 'var(--color-border-primary)';
+                                            }
+                                        }}
                                         placeholder="e.g. PROJECT-123"
                                     />
-                                    <div className="text-xs text-gray-500 mt-1">
+                                    <div className="text-xs text-[var(--color-text-tertiary)] mt-1">
                                         Default Jira issue for time logging (can be overridden per entry)
                                     </div>
                                 </div>

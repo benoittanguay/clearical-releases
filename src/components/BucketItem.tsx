@@ -11,6 +11,7 @@ interface BucketItemProps {
     onUnlinkJira?: (bucketId: string) => void;
     onMove?: (bucketId: string, newParentId: string | null) => void;
     availableFolders?: TimeBucket[];
+    onClick?: () => void;
 }
 
 export const BucketItem: React.FC<BucketItemProps> = ({
@@ -22,7 +23,8 @@ export const BucketItem: React.FC<BucketItemProps> = ({
     onDelete,
     onUnlinkJira,
     onMove,
-    availableFolders = []
+    availableFolders = [],
+    onClick
 }) => {
     const [isEditing, setIsEditing] = useState(false);
     const [editedName, setEditedName] = useState(bucket.name);
@@ -82,25 +84,59 @@ export const BucketItem: React.FC<BucketItemProps> = ({
 
     const paddingLeft = level * 20; // 20px per level
 
+    const isClickable = onClick && !bucket.isFolder;
+
+    // Helper to reset parent hover on ghost button hover
+    const resetParentHover = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        const parent = e.currentTarget.closest('[data-hoverable]') as HTMLElement;
+        if (parent) {
+            parent.style.backgroundColor = parent.dataset.defaultBg || '';
+            parent.style.borderColor = parent.dataset.defaultBorder || '';
+        }
+    };
+
+    // Helper to reinstate parent hover when leaving ghost button
+    const reinstateParentHover = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        const parent = e.currentTarget.closest('[data-hoverable]') as HTMLElement;
+        if (parent && parent.contains(e.relatedTarget as Node)) {
+            parent.style.backgroundColor = parent.dataset.hoverBg || '#FAF5EE';
+            if (parent.dataset.hoverBorder) {
+                parent.style.borderColor = parent.dataset.hoverBorder;
+            }
+        }
+    };
+
     return (
         <li
-            className="rounded-xl border transition-all group"
+            className="rounded-lg border transition-all group"
+            data-hoverable
+            data-default-bg="white"
+            data-default-border="var(--color-border-primary)"
+            data-hover-bg="#FAF5EE"
+            data-hover-border="var(--color-border-secondary)"
             style={{
                 marginLeft: `${paddingLeft}px`,
-                backgroundColor: 'var(--color-bg-secondary)',
+                backgroundColor: 'white',
                 borderColor: 'var(--color-border-primary)',
-                borderRadius: 'var(--radius-xl)',
                 transitionDuration: 'var(--duration-base)',
                 transitionTimingFunction: 'var(--ease-out)',
-                boxShadow: 'var(--shadow-sm)'
+                cursor: isClickable ? 'pointer' : 'default'
+            }}
+            onClick={(e) => {
+                // Only trigger onClick for non-folder buckets and if not clicking action buttons
+                if (isClickable && !(e.target as HTMLElement).closest('button')) {
+                    onClick();
+                }
             }}
             onMouseEnter={(e) => {
-                e.currentTarget.style.borderColor = 'var(--color-accent-border)';
-                e.currentTarget.style.boxShadow = 'var(--shadow-md)';
+                e.currentTarget.style.backgroundColor = '#FAF5EE';
+                e.currentTarget.style.borderColor = 'var(--color-border-secondary)';
             }}
             onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = 'white';
                 e.currentTarget.style.borderColor = 'var(--color-border-primary)';
-                e.currentTarget.style.boxShadow = 'var(--shadow-sm)';
             }}
         >
             <div className="py-2 px-4">
@@ -116,8 +152,14 @@ export const BucketItem: React.FC<BucketItemProps> = ({
                                     transitionDuration: 'var(--duration-fast)',
                                     transitionTimingFunction: 'var(--ease-out)'
                                 }}
-                                onMouseEnter={(e) => e.currentTarget.style.color = 'var(--color-text-secondary)'}
-                                onMouseLeave={(e) => e.currentTarget.style.color = 'var(--color-text-tertiary)'}
+                                onMouseEnter={(e) => {
+                                    resetParentHover(e);
+                                    e.currentTarget.style.color = 'var(--color-text-secondary)';
+                                }}
+                                onMouseLeave={(e) => {
+                                    reinstateParentHover(e);
+                                    e.currentTarget.style.color = 'var(--color-text-tertiary)';
+                                }}
                             >
                                 <svg
                                     xmlns="http://www.w3.org/2000/svg"
@@ -267,8 +309,14 @@ export const BucketItem: React.FC<BucketItemProps> = ({
                                                     fontFamily: 'var(--font-body)',
                                                     transitionDuration: 'var(--duration-fast)'
                                                 }}
-                                                onMouseEnter={(e) => e.currentTarget.style.color = 'var(--color-accent)'}
-                                                onMouseLeave={(e) => e.currentTarget.style.color = 'var(--color-error)'}
+                                                onMouseEnter={(e) => {
+                                                    resetParentHover(e);
+                                                    e.currentTarget.style.color = 'var(--color-accent)';
+                                                }}
+                                                onMouseLeave={(e) => {
+                                                    reinstateParentHover(e);
+                                                    e.currentTarget.style.color = 'var(--color-error)';
+                                                }}
                                             >
                                                 Unlink
                                             </button>
@@ -293,10 +341,12 @@ export const BucketItem: React.FC<BucketItemProps> = ({
                                         transitionTimingFunction: 'var(--ease-out)'
                                     }}
                                     onMouseEnter={(e) => {
+                                        resetParentHover(e);
                                         e.currentTarget.style.color = 'var(--color-accent)';
-                                        e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)';
+                                        e.currentTarget.style.backgroundColor = '#FAF5EE';
                                     }}
                                     onMouseLeave={(e) => {
+                                        reinstateParentHover(e);
                                         e.currentTarget.style.color = 'var(--color-text-tertiary)';
                                         e.currentTarget.style.backgroundColor = 'transparent';
                                     }}
@@ -339,7 +389,7 @@ export const BucketItem: React.FC<BucketItemProps> = ({
                                                     fontFamily: 'var(--font-body)',
                                                     transitionDuration: 'var(--duration-fast)'
                                                 }}
-                                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)'}
+                                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#FAF5EE'}
                                                 onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                                             >
                                                 Move to Root
@@ -356,7 +406,7 @@ export const BucketItem: React.FC<BucketItemProps> = ({
                                                             fontFamily: 'var(--font-body)',
                                                             transitionDuration: 'var(--duration-fast)'
                                                         }}
-                                                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)'}
+                                                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#FAF5EE'}
                                                         onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                                                     >
                                                         <svg
@@ -392,10 +442,12 @@ export const BucketItem: React.FC<BucketItemProps> = ({
                                 transitionTimingFunction: 'var(--ease-out)'
                             }}
                             onMouseEnter={(e) => {
+                                resetParentHover(e);
                                 e.currentTarget.style.color = 'var(--color-accent)';
-                                e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)';
+                                e.currentTarget.style.backgroundColor = '#FAF5EE';
                             }}
                             onMouseLeave={(e) => {
+                                reinstateParentHover(e);
                                 e.currentTarget.style.color = 'var(--color-text-tertiary)';
                                 e.currentTarget.style.backgroundColor = 'transparent';
                             }}
@@ -427,10 +479,12 @@ export const BucketItem: React.FC<BucketItemProps> = ({
                                 transitionTimingFunction: 'var(--ease-out)'
                             }}
                             onMouseEnter={(e) => {
+                                resetParentHover(e);
                                 e.currentTarget.style.color = 'var(--color-error)';
-                                e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)';
+                                e.currentTarget.style.backgroundColor = '#FAF5EE';
                             }}
                             onMouseLeave={(e) => {
+                                reinstateParentHover(e);
                                 e.currentTarget.style.color = 'var(--color-text-tertiary)';
                                 e.currentTarget.style.backgroundColor = 'transparent';
                             }}

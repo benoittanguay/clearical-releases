@@ -269,54 +269,59 @@ export function AppBlacklistManager({ className = '' }: AppBlacklistManagerProps
                 </div>
             )}
 
-            {/* Statistics */}
+            {/* Sticky Controls and Search */}
             {!loading && (
-                <div className="mb-4 flex items-center gap-4 text-xs">
-                    <div className="flex items-center gap-2">
-                        <span className="text-[var(--color-text-secondary)]">Total apps:</span>
-                        <span className="font-medium text-[var(--color-text-primary)]">{stats.total}</span>
+                <div className="sticky top-0 z-10 bg-white pt-3 pb-3 mb-3 -mx-1 px-1">
+                    {/* Statistics and Controls */}
+                    <div className="flex items-center justify-between text-xs mb-2">
+                        <div className="flex items-center gap-2">
+                            <span className="text-[var(--color-text-secondary)]">Blacklisted:</span>
+                            <span className="font-medium text-[var(--color-error)]">{stats.blacklisted}</span>
+                        </div>
+                        {groupedApps.length > 0 && (
+                            <div className="flex gap-2">
+                                <button
+                                    onClick={() => toggleAllCategories(true)}
+                                    className="px-2.5 py-1 text-xs bg-transparent hover:bg-[var(--color-bg-ghost-hover)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] rounded-lg transition-all border border-[var(--color-border-primary)]"
+                                >
+                                    Expand All
+                                </button>
+                                <button
+                                    onClick={() => toggleAllCategories(false)}
+                                    className="px-2.5 py-1 text-xs bg-transparent hover:bg-[var(--color-bg-ghost-hover)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] rounded-lg transition-all border border-[var(--color-border-primary)]"
+                                >
+                                    Collapse All
+                                </button>
+                            </div>
+                        )}
                     </div>
-                    <div className="flex items-center gap-2">
-                        <span className="text-[var(--color-text-secondary)]">Blacklisted:</span>
-                        <span className="font-medium text-[var(--color-error)]">{stats.blacklisted}</span>
+
+                    {/* Search Bar */}
+                    <div className="relative">
+                        <input
+                            type="text"
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            placeholder="Search apps by name or bundle ID..."
+                            className="w-full bg-[var(--color-bg-secondary)] border text-[var(--color-text-primary)] text-sm rounded-lg pl-9 pr-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:border-transparent transition-all placeholder:text-[var(--color-text-tertiary)]"
+                            style={{ borderColor: 'var(--color-border-primary)' }}
+                            onMouseEnter={(e) => {
+                                if (document.activeElement !== e.currentTarget) {
+                                    e.currentTarget.style.borderColor = '#8c877d';
+                                }
+                            }}
+                            onMouseLeave={(e) => {
+                                if (document.activeElement !== e.currentTarget) {
+                                    e.currentTarget.style.borderColor = 'var(--color-border-primary)';
+                                }
+                            }}
+                        />
+                        <svg className="w-4 h-4 text-[var(--color-text-tertiary)] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
                     </div>
                 </div>
             )}
-
-            {/* Search Bar */}
-            <div className="mb-4">
-                <div className="relative">
-                    <input
-                        type="text"
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        placeholder="Search apps by name or bundle ID..."
-                        className="w-full bg-[var(--color-bg-secondary)] border border-[var(--color-border-primary)] text-[var(--color-text-primary)] text-sm rounded-lg pl-9 pr-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:border-transparent transition-all placeholder:text-[var(--color-text-tertiary)]"
-                    />
-                    <svg className="w-4 h-4 text-[var(--color-text-tertiary)] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                    </svg>
-                </div>
-
-                {/* Expand/Collapse All */}
-                {groupedApps.length > 0 && (
-                    <div className="flex gap-2 mt-2">
-                        <button
-                            onClick={() => toggleAllCategories(true)}
-                            className="text-xs text-[var(--color-accent)] hover:text-[var(--color-accent-hover)] transition-colors font-medium"
-                        >
-                            Expand All
-                        </button>
-                        <span className="text-[var(--color-text-tertiary)]">•</span>
-                        <button
-                            onClick={() => toggleAllCategories(false)}
-                            className="text-xs text-[var(--color-accent)] hover:text-[var(--color-accent-hover)] transition-colors font-medium"
-                        >
-                            Collapse All
-                        </button>
-                    </div>
-                )}
-            </div>
 
             {/* Apps List */}
             {loading ? (
@@ -343,7 +348,7 @@ export function AppBlacklistManager({ className = '' }: AppBlacklistManagerProps
                                 {/* Category Header */}
                                 <button
                                     onClick={() => toggleCategory(category)}
-                                    className="w-full p-3 flex items-center justify-between hover:bg-[var(--color-bg-tertiary)] transition-colors group"
+                                    className="w-full p-3 flex items-center justify-between hover:bg-[var(--color-bg-ghost-hover)] transition-all group"
                                 >
                                     <div className="flex items-center gap-2.5">
                                         <svg
@@ -379,7 +384,7 @@ export function AppBlacklistManager({ className = '' }: AppBlacklistManagerProps
                                             return (
                                                 <label
                                                     key={app.bundleId}
-                                                    className="flex items-center gap-3 p-3 hover:bg-[var(--color-bg-tertiary)] transition-colors cursor-pointer border-b border-[var(--color-border-primary)] last:border-b-0 group"
+                                                    className="flex items-center gap-3 p-3 hover:bg-[var(--color-bg-ghost-hover)] transition-all cursor-pointer border-b border-[var(--color-border-primary)] last:border-b-0 group"
                                                 >
                                                     {/* Checkbox */}
                                                     <input
