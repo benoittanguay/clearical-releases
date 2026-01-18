@@ -122,6 +122,18 @@ export interface ElectronAPI {
         on: (channel: string, func: (...args: any[]) => void) => () => void;
         once: (channel: string, func: (...args: any[]) => void) => void;
         invoke: (channel: string, ...args: any[]) => Promise<any>;
+        // OAuth authentication
+        signInWithOAuth: (provider: 'google' | 'azure' | 'apple') => Promise<{
+            success: boolean;
+            user?: {
+                id: string;
+                email: string;
+                stripeCustomerId?: string;
+                createdAt: string;
+                lastSignIn?: string;
+            };
+            error?: string;
+        }>;
         captureScreenshot: () => Promise<string | null>;
         analyzeScreenshot: (imagePath: string, requestId?: string) => Promise<ScreenshotAnalysisResult>;
         generateActivitySummary: (context: {
