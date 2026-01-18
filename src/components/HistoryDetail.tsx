@@ -5,6 +5,7 @@ import { DeleteButton } from './DeleteButton';
 import { AssignmentPicker } from './AssignmentPicker';
 import { TempoValidationModal } from './TempoValidationModal';
 import { TempoAccountPicker } from './TempoAccountPicker';
+import { TempoConfigModal } from './TempoConfigModal';
 import { InlineTimeEditor } from './InlineTimeEditor';
 import { AddToCalendarButton } from './AddToCalendarButton';
 import { SplittingAssistant } from './SplittingAssistant';
@@ -81,7 +82,7 @@ interface AppGroup {
 
 export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSettings, formatTime }: HistoryDetailProps) {
     const { removeActivityFromEntry, removeAllActivitiesForApp, removeScreenshotFromEntry, addManualActivityToEntry, setEntryAssignment, createEntryFromActivity, entries } = useStorage();
-    const { settings } = useSettings();
+    const { settings, updateSettings } = useSettings();
     const { hasFeature, upgrade } = useSubscription();
     const { user } = useAuth();
     const { showToast } = useToast();
@@ -116,6 +117,7 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
     const [isAssigningBucket, setIsAssigningBucket] = useState(false);
     const [isAssigningTempoAccount, setIsAssigningTempoAccount] = useState(false);
     const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+    const [showTempoConfigModal, setShowTempoConfigModal] = useState(false);
     const previousAssignmentRef = useRef<WorkAssignment | null>(null);
     const accountsCacheRef = useRef<Map<string, TempoAccount[]>>(new Map());
     const isLoadingAccountsRef = useRef<Map<string, boolean>>(new Map());
@@ -765,9 +767,9 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
             return;
         }
 
-        // Check if Tempo is configured
+        // Check if Tempo is configured - show config modal if not
         if (!settings.tempo?.enabled || !settings.tempo?.apiToken || !settings.tempo?.baseUrl) {
-            onNavigateToSettings();
+            setShowTempoConfigModal(true);
             return;
         }
 
@@ -2051,6 +2053,18 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                     onClose={() => setShowAccountPicker(false)}
                 />
             )}
+
+            {/* Tempo Configuration Modal */}
+            <TempoConfigModal
+                isOpen={showTempoConfigModal}
+                onClose={() => setShowTempoConfigModal(false)}
+                currentTempoSettings={settings.tempo || { enabled: false, apiToken: '', baseUrl: 'https://api.tempo.io' }}
+                onSave={(tempoSettings) => {
+                    updateSettings({
+                        tempo: tempoSettings,
+                    });
+                }}
+            />
 
             {/* Upgrade Modal for Free Users */}
             {showUpgradeModal && (
