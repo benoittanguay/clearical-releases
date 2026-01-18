@@ -3077,7 +3077,7 @@ function createTray() {
         : path.join(process.env.VITE_PUBLIC || '', 'tray-icon.png');
     console.log('Tray Icon Path:', iconPath);
     const icon = nativeImage.createFromPath(iconPath);
-    tray = new Tray(icon.resize({ width: 16, height: 16 }));
+    tray = new Tray(icon.resize({ width: 22, height: 22 }));
 
     // Set initial title and tooltip
     tray.setTitle(''); // Start with empty title (icon only)
@@ -3241,8 +3241,7 @@ app.on('window-all-closed', () => {
     }
 });
 
-// Handle app activation (macOS)
-// Note: Since dock icon is hidden, this mainly handles edge cases
+// Handle app activation (macOS) - clicking dock icon shows the window
 app.on('activate', () => {
     if (win === null) {
         createTray();
@@ -3309,13 +3308,6 @@ app.whenReady().then(() => {
 
     // Create window (it will be positioned off-screen initially)
     createWindow();
-
-    // Hide dock icon on macOS - app only appears in menu bar
-    // Do this before showing window to avoid visual glitches
-    if (process.platform === 'darwin' && app.dock) {
-        app.dock.hide();
-        console.log('[Main] Dock icon hidden - app runs from menu bar only');
-    }
 
     // Now that both tray and window are created, show the window below the tray icon
     // The showWindowBelowTray function has built-in retry logic if tray bounds aren't ready
