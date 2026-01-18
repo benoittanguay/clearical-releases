@@ -28,7 +28,14 @@ import { MigrationService } from './migration.js';
 import { updater } from './autoUpdater.js';
 import { AppDiscoveryService } from './appDiscoveryService.js';
 import { BlacklistService } from './blacklistService.js';
-import { aiService } from './ai/aiService.js';
+import {
+    aiService,
+    signalAggregator,
+    AnyContextSignal,
+    createCalendarSignal,
+    createUserProfileSignal,
+    createTimeContextSignal
+} from './ai/aiService.js';
 import { getCalendarService, initializeCalendarService } from './calendar/calendarService.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -797,6 +804,9 @@ ipcMain.handle('analyze-screenshot', async (event, imagePath: string, requestId?
         console.log('[Main] Could not parse app info from filename:', parseError);
     }
 
+    // Build context signals for richer screenshot analysis
+    const contextSignals: AnyContextSignal[] = [];
+
     // Get user role from settings for AI context optimization
     let userRole: string | undefined;
     let roleContext: string | undefined;
@@ -823,13 +833,40 @@ ipcMain.handle('analyze-screenshot', async (event, imagePath: string, requestId?
             roleContext = userRole ? roleMetadata[userRole]?.context : undefined;
             roleContext = roleContext || 'general knowledge work';
             console.log('[Main] Using role context for analysis - role:', userRole);
+            // Add user profile signal
+            contextSignals.push(createUserProfileSignal(userRole, roleContext));
         }
     } catch (settingsError) {
         console.log('[Main] Could not get user role from settings:', settingsError);
     }
 
+    // Get calendar context for the current time
     try {
-        const aiResult = await aiService.analyzeScreenshot(analyzeImagePath, appName, windowTitle, requestId);
+        const calendarService = getCalendarService();
+        const calendarContext = calendarService.getCalendarContext(Date.now());
+        if (calendarContext.currentEvent || calendarContext.recentEvents.length > 0) {
+            contextSignals.push(createCalendarSignal(
+                calendarContext.currentEvent ?? undefined,
+                calendarContext.recentEvents,
+                calendarContext.upcomingEvents
+            ));
+            console.log('[Main] Added calendar context for analysis');
+        }
+    } catch (calendarError) {
+        console.log('[Main] Could not get calendar context:', calendarError);
+    }
+
+    // Add time context
+    contextSignals.push(createTimeContextSignal(Date.now()));
+
+    try {
+        const aiResult = await aiService.analyzeScreenshot(
+            analyzeImagePath,
+            appName,
+            windowTitle,
+            requestId,
+            contextSignals.length > 0 ? contextSignals : undefined
+        );
 
         // Clean up temp decrypted file if we created one
         if (tempDecryptedPath) {
@@ -1922,19 +1959,40 @@ ipcMain.handle('suggest-assignment', async (event, request: {
 
 // AI Activity Summary Generation Handler
 ipcMain.handle('generate-activity-summary', async (event, context: {
+    entryId: string;  // Entry ID for signal aggregation
     screenshotDescriptions: string[];
     windowTitles: string[];
     appNames: string[];
     duration: number;
     startTime: number;
     endTime: number;
+    userRole?: string;  // Optional user role for domain context
 }) => {
-    console.log('[Main] generate-activity-summary requested');
+    console.log('[Main] generate-activity-summary requested for entry:', context.entryId);
     console.log('[Main] Screenshot descriptions:', context.screenshotDescriptions.length);
+    console.log('[Main] Window titles:', context.windowTitles?.length || 0);
     console.log('[Main] App names:', context.appNames);
 
     try {
-        // Fetch calendar context for the activity's start time
+        // Use signal aggregator to collect and store signals for this entry
+        // This centralizes signal management and enables reuse across AI tasks
+
+        // ACTIVITY signals: Screenshot analysis
+        if (context.screenshotDescriptions && context.screenshotDescriptions.length > 0) {
+            signalAggregator.setScreenshotAnalysis(context.entryId, context.screenshotDescriptions);
+        }
+
+        // ACTIVITY signals: Window activity
+        if ((context.appNames && context.appNames.length > 0) ||
+            (context.windowTitles && context.windowTitles.length > 0)) {
+            signalAggregator.setWindowActivity(
+                context.entryId,
+                context.appNames || [],
+                context.windowTitles || []
+            );
+        }
+
+        // TEMPORAL signals: Calendar events
         const calendarService = getCalendarService();
         const calendarContext = calendarService.getCalendarContext(context.startTime);
         console.log('[Main] Calendar context:', {
@@ -1943,34 +2001,44 @@ ipcMain.handle('generate-activity-summary', async (event, context: {
             upcomingCount: calendarContext.upcomingEvents.length
         });
 
-        // Build enhanced context with calendar information
-        let enhancedContext = '';
-        if (calendarContext.currentEvent) {
-            enhancedContext += `Current calendar event: ${calendarContext.currentEvent}. `;
-        }
-        if (calendarContext.recentEvents.length > 0) {
-            enhancedContext += `Recent events: ${calendarContext.recentEvents.join(', ')}. `;
-        }
-        if (calendarContext.upcomingEvents.length > 0) {
-            enhancedContext += `Upcoming events: ${calendarContext.upcomingEvents.join(', ')}. `;
-        }
-
-        // Add calendar context to the descriptions if available
-        const contextualizedDescriptions = [...context.screenshotDescriptions];
-        if (enhancedContext.trim()) {
-            contextualizedDescriptions.unshift(`Calendar context: ${enhancedContext.trim()}`);
-        }
-
-        // Use Gemini AI to generate narrative summary with calendar context
-        const result = await aiService.summarizeActivities(
-            contextualizedDescriptions,
-            context.appNames
+        signalAggregator.setCalendarEvents(
+            context.entryId,
+            calendarContext.currentEvent || undefined,
+            calendarContext.recentEvents,
+            calendarContext.upcomingEvents
         );
+
+        // TEMPORAL signals: Time context
+        signalAggregator.setTimeContext(context.entryId, context.startTime);
+
+        // USER signals: User profile (stored globally, not per-entry)
+        if (context.userRole) {
+            signalAggregator.setUserProfile(context.userRole);
+        }
+
+        // Build task request using aggregator
+        // The aggregator will filter signals based on task requirements:
+        // - summarization task gets: activity + temporal signals
+        // - user context is NOT included by default (prevents cross-contamination)
+        const taskRequest = signalAggregator.buildTaskRequest(
+            context.entryId,
+            'summarization',
+            {
+                includeUserContext: false,  // Don't mix user context into summaries
+                duration: context.duration,
+                startTime: context.startTime,
+                endTime: context.endTime
+            }
+        );
+
+        console.log('[Main] Signal summary:', signalAggregator.getSignalSummaryForEntry(context.entryId));
+
+        // Execute the AI task with filtered signals
+        const result = await aiService.executeTask(taskRequest);
 
         if (result.success && result.summary) {
             console.log('[Main] Summary generated successfully:', result.summary.substring(0, 100));
 
-            // Return the narrative summary
             return {
                 success: true,
                 summary: result.summary,
@@ -2973,13 +3041,37 @@ ipcMain.handle('ai:analyze-splits', async (_, activityData: {
         const calendarService = getCalendarService();
         const calendarContext = calendarService.getCalendarContext(activityData.startTime);
 
-        // 2. Build analysis prompt with all signals
+        // 2. Collect signals using signal aggregator for consistency
+        const screenshotDescriptions = activityData.screenshots.map(s => s.description);
+        signalAggregator.setScreenshotAnalysis(activityData.id, screenshotDescriptions);
+        signalAggregator.setCalendarEvents(
+            activityData.id,
+            calendarContext.currentEvent ?? undefined,
+            calendarContext.recentEvents,
+            calendarContext.upcomingEvents
+        );
+        signalAggregator.setTimeContext(activityData.id, activityData.startTime);
+
+        // 3. Build analysis prompt with all signals
+        // Note: Split analysis requires a specific prompt format for JSON output,
+        // so we use a custom prompt builder rather than the generic signal-based approach
         const prompt = buildSplitAnalysisPrompt(activityData, calendarContext);
 
-        // 3. Call AI service to analyze and suggest splits
-        // For now, we use the summarize operation as a workaround since it accepts
-        // custom text and returns text output. In the future, we should add a dedicated
-        // 'analyze-splits' operation to the edge function.
+        // 4. Call AI service to analyze and suggest splits
+        // Build task request for 'split_suggestion' task type
+        const taskRequest = signalAggregator.buildTaskRequest(
+            activityData.id,
+            'split_suggestion',
+            {
+                duration: activityData.duration,
+                startTime: activityData.startTime,
+                endTime: activityData.endTime
+            }
+        );
+
+        // For split analysis, we still use the custom prompt approach since it
+        // requires specific JSON output format. The signals are collected for
+        // consistency and can be used by the proxy for additional context.
         const result = await aiService.summarizeActivities(
             [prompt], // Send the full prompt as a single "activity"
             []

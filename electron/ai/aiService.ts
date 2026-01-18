@@ -14,6 +14,42 @@
 import { getConfig } from '../config.js';
 import { getAuthService } from '../auth/supabaseAuth.js';
 import fs from 'fs';
+import {
+    AnyContextSignal,
+    AITaskType,
+    AITaskRequest,
+    SummarizeRequest,
+    SignalCategory,
+    hasSignalData,
+    getSignalSummary,
+    filterSignalsForTask
+} from './contextSignals.js';
+
+// Re-export signal types and utilities for convenience
+export {
+    AnyContextSignal,
+    AITaskType,
+    AITaskRequest,
+    SummarizeRequest,
+    SignalCategory,
+    createScreenshotSignal,
+    createWindowActivitySignal,
+    createCalendarSignal,
+    createUserProfileSignal,
+    createTechnologiesSignal,
+    createTimeContextSignal,
+    createHistoricalPatternsSignal,
+    createJiraContextSignal,
+    hasSignalData,
+    getSignalSummary,
+    filterSignalsForTask,
+    filterSignalsByCategory,
+    groupSignalsByCategory,
+    getRequiredCategories
+} from './contextSignals.js';
+
+// Re-export the signal aggregator
+export { signalAggregator } from './signalAggregator.js';
 
 // Response types matching the FastVLM interface for compatibility
 export interface AnalysisResponse {
@@ -114,14 +150,19 @@ class AIService {
      * @param appName - Optional application name for context
      * @param windowTitle - Optional window title for context
      * @param requestId - Optional request ID for tracking
+     * @param signals - Optional context signals for richer analysis (calendar, user profile, etc.)
      */
     async analyzeScreenshot(
         imagePath: string,
         appName?: string,
         windowTitle?: string,
-        requestId?: string
+        requestId?: string,
+        signals?: AnyContextSignal[]
     ): Promise<AnalysisResponse> {
         console.log('[AIService] Analyzing screenshot:', imagePath);
+        if (signals && signals.length > 0) {
+            console.log('[AIService] With context signals:', getSignalSummary(signals));
+        }
 
         // Read and encode the image
         let imageBase64: string;
@@ -142,7 +183,8 @@ class AIService {
             operation: 'analyze',
             imageBase64,
             appName,
-            windowTitle
+            windowTitle,
+            signals
         });
 
         if (result.success && result.description) {
@@ -204,21 +246,106 @@ class AIService {
     }
 
     /**
-     * Summarize multiple activity descriptions into a cohesive narrative
+     * Execute an AI task with proper signal filtering by category
      *
-     * @param descriptions - Array of activity descriptions
+     * This is the preferred method for running AI tasks. The proxy will filter
+     * signals based on the task type to prevent cross-contamination:
+     * - summarization: activity + temporal signals
+     * - classification: activity signals only
+     * - account_selection: activity + external signals
+     * - split_suggestion: activity + temporal signals
+     *
+     * @param request - AITaskRequest containing task type, signals, and options
+     */
+    async executeTask(request: AITaskRequest): Promise<SummarizeResponse> {
+        const { taskType, signals, includeUserContext, duration, startTime, endTime } = request;
+
+        // Check if we have meaningful signal data
+        if (!signals || signals.length === 0 || !hasSignalData(signals)) {
+            console.warn(`[AIService] No meaningful signal data available for ${taskType}`);
+            return {
+                success: false,
+                summary: 'No activity data available.',
+                error: 'No context signals available'
+            };
+        }
+
+        // Log signal summary for debugging
+        const summary = getSignalSummary(signals);
+        console.log(`[AIService] Executing ${taskType} with signals:`, JSON.stringify(summary));
+
+        const result = await this.makeRequest({
+            operation: 'summarize',
+            taskType,
+            includeUserContext,
+            signals,
+            duration,
+            startTime,
+            endTime
+        });
+
+        if (result.success && result.summary) {
+            console.log(`[AIService] ${taskType} task successful`);
+            return {
+                success: true,
+                summary: result.summary
+            };
+        }
+
+        // Return fallback summary on failure
+        console.warn(`[AIService] ${taskType} task failed:`, result.error);
+
+        // Filter signals locally for fallback generation
+        const filteredSignals = filterSignalsForTask(signals, taskType, includeUserContext);
+        return {
+            success: false,
+            summary: this.generateFallbackFromSignals(filteredSignals),
+            error: result.error || 'Task failed'
+        };
+    }
+
+    /**
+     * Summarize activities using the signal-based architecture
+     *
+     * This is a convenience method that calls executeTask with 'summarization' task type.
+     * Signals are filtered to only include activity and temporal categories.
+     *
+     * @param request - SummarizeRequest containing signals and optional timing info
+     */
+    async summarizeWithSignals(request: SummarizeRequest): Promise<SummarizeResponse> {
+        return this.executeTask({
+            taskType: 'summarization',
+            signals: request.signals,
+            includeUserContext: false,
+            duration: request.duration,
+            startTime: request.startTime,
+            endTime: request.endTime
+        });
+    }
+
+    /**
+     * @deprecated Use summarizeWithSignals() instead for new code.
+     * Summarize multiple activity descriptions into a cohesive narrative
+     * If no descriptions are provided, generates summary from activity context (appNames, windowTitles)
+     *
+     * @param descriptions - Array of activity descriptions (can be empty for context-only generation)
      * @param appNames - Optional array of app names used
+     * @param windowTitles - Optional array of window titles observed
      */
     async summarizeActivities(
         descriptions: string[],
-        appNames?: string[]
+        appNames?: string[],
+        windowTitles?: string[]
     ): Promise<SummarizeResponse> {
-        console.log('[AIService] Summarizing', descriptions.length, 'activities');
+        const hasDescriptions = descriptions && descriptions.length > 0;
+        console.log('[AIService] Summarizing', hasDescriptions ? `${descriptions.length} activities` : 'from context only');
+        console.log('[AIService] App names:', appNames?.length || 0, 'Window titles:', windowTitles?.length || 0);
 
         const result = await this.makeRequest({
             operation: 'summarize',
             descriptions,
-            appNames
+            appNames,
+            windowTitles
         });
 
         if (result.success && result.summary) {
@@ -231,7 +358,9 @@ class AIService {
 
         // Return fallback summary on failure
         console.warn('[AIService] Summarization failed:', result.error);
-        const fallbackSummary = this.generateFallbackSummary(descriptions, appNames);
+        const fallbackSummary = hasDescriptions
+            ? this.generateFallbackSummary(descriptions, appNames)
+            : this.generateFallbackFromContext(appNames, windowTitles);
         return {
             success: false,
             summary: fallbackSummary,
@@ -262,6 +391,93 @@ class AIService {
         const uniqueApps = appNames ? [...new Set(appNames)] : [];
         const appText = uniqueApps.length > 0 ? ` using ${uniqueApps.join(', ')}` : '';
         return `Completed ${descriptions.length} activities${appText}.`;
+    }
+
+    /**
+     * Generate a fallback description from activity context when AI fails (no screenshots)
+     */
+    private generateFallbackFromContext(appNames?: string[], windowTitles?: string[]): string {
+        const uniqueApps = appNames ? [...new Set(appNames)] : [];
+        const uniqueTitles = windowTitles ? [...new Set(windowTitles)].filter(t => t && t !== '(No window title available)') : [];
+
+        if (uniqueApps.length > 0 && uniqueTitles.length > 0) {
+            return `Worked in ${uniqueApps.slice(0, 3).join(', ')}${uniqueApps.length > 3 ? ' and more' : ''}, viewing ${uniqueTitles[0]}${uniqueTitles.length > 1 ? ` and ${uniqueTitles.length - 1} other windows` : ''}.`;
+        }
+        if (uniqueApps.length > 0) {
+            return `Worked in ${uniqueApps.join(', ')}.`;
+        }
+        if (uniqueTitles.length > 0) {
+            return `Worked on ${uniqueTitles[0]}${uniqueTitles.length > 1 ? ` and ${uniqueTitles.length - 1} other items` : ''}.`;
+        }
+        return 'Completed work session.';
+    }
+
+    /**
+     * Generate a fallback description from context signals when AI fails
+     */
+    private generateFallbackFromSignals(signals: AnyContextSignal[]): string {
+        const parts: string[] = [];
+        let screenshotCount = 0;
+        let appNames: string[] = [];
+        let windowTitles: string[] = [];
+        let currentEvent: string | undefined;
+
+        // Extract data from signals
+        for (const signal of signals) {
+            switch (signal.type) {
+                case 'screenshot_analysis': {
+                    const data = signal.data as { descriptions: string[]; count: number };
+                    screenshotCount = data.count || data.descriptions?.length || 0;
+                    break;
+                }
+                case 'window_activity': {
+                    const data = signal.data as { appNames: string[]; windowTitles: string[] };
+                    if (data.appNames) appNames = [...new Set([...appNames, ...data.appNames])];
+                    if (data.windowTitles) {
+                        const filtered = data.windowTitles.filter(t => t && t !== '(No window title available)');
+                        windowTitles = [...new Set([...windowTitles, ...filtered])];
+                    }
+                    break;
+                }
+                case 'calendar_events': {
+                    const data = signal.data as { currentEvent?: string };
+                    if (data.currentEvent) currentEvent = data.currentEvent;
+                    break;
+                }
+            }
+        }
+
+        // Build fallback description
+        if (screenshotCount > 0) {
+            parts.push(`Completed ${screenshotCount} activities`);
+        }
+
+        if (currentEvent) {
+            parts.push(`during "${currentEvent}"`);
+        }
+
+        if (appNames.length > 0) {
+            const apps = appNames.slice(0, 3).join(', ');
+            const more = appNames.length > 3 ? ' and more' : '';
+            if (parts.length > 0) {
+                parts.push(`using ${apps}${more}`);
+            } else {
+                parts.push(`Worked in ${apps}${more}`);
+            }
+        }
+
+        if (parts.length === 0 && windowTitles.length > 0) {
+            parts.push(`Worked on ${windowTitles[0]}`);
+            if (windowTitles.length > 1) {
+                parts.push(`and ${windowTitles.length - 1} other items`);
+            }
+        }
+
+        if (parts.length === 0) {
+            return 'Completed work session.';
+        }
+
+        return parts.join(' ') + '.';
     }
 
     /**

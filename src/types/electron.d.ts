@@ -125,12 +125,14 @@ export interface ElectronAPI {
         captureScreenshot: () => Promise<string | null>;
         analyzeScreenshot: (imagePath: string, requestId?: string) => Promise<ScreenshotAnalysisResult>;
         generateActivitySummary: (context: {
+            entryId: string;
             screenshotDescriptions: string[];
             windowTitles: string[];
             appNames: string[];
             duration: number;
             startTime: number;
             endTime: number;
+            userRole?: string;
         }) => Promise<{
             success: boolean;
             summary?: string;

@@ -22,12 +22,14 @@ contextBridge.exposeInMainWorld('electron', {
         captureScreenshot: () => ipcRenderer.invoke('capture-screenshot'),
         analyzeScreenshot: (imagePath: string, requestId?: string) => ipcRenderer.invoke('analyze-screenshot', imagePath, requestId),
         generateActivitySummary: (context: {
+            entryId: string;
             screenshotDescriptions: string[];
             windowTitles: string[];
             appNames: string[];
             duration: number;
             startTime: number;
             endTime: number;
+            userRole?: string;
         }) => ipcRenderer.invoke('generate-activity-summary', context),
         analyzeSplits: (activityData: {
             id: string;
