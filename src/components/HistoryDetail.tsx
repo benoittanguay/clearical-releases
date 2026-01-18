@@ -1362,7 +1362,7 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                                         }
                                     }}
                                     disabled={isAssigningBucket || !entry.description}
-                                    className="px-2.5 py-1 text-white text-xs rounded-md transition-all active:scale-95 flex items-center gap-1 disabled:cursor-not-allowed"
+                                    className="px-2.5 py-1 text-white text-xs rounded-md transition-all hover:scale-105 active:scale-95 flex items-center gap-1 disabled:cursor-not-allowed"
                                     style={{
                                         backgroundColor: isAssigningBucket || !entry.description ? 'var(--color-bg-tertiary)' : 'var(--color-surface-dark)',
                                         opacity: isAssigningBucket || !entry.description ? 0.6 : 1,
@@ -1436,7 +1436,7 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                                                 await autoSelectTempoAccount(currentAssignment.jiraIssue, availableAccounts, true);
                                             }
                                         }}
-                                        className="px-2.5 py-1 text-white text-xs rounded-md transition-all active:scale-95 flex items-center gap-1 disabled:cursor-not-allowed"
+                                        className="px-2.5 py-1 text-white text-xs rounded-md transition-all hover:scale-105 active:scale-95 flex items-center gap-1 disabled:cursor-not-allowed"
                                         style={{
                                             backgroundColor: isAssigningTempoAccount || !currentAssignment?.jiraIssue || availableAccounts.length === 0 ? 'var(--color-bg-tertiary)' : 'var(--color-surface-dark)',
                                             opacity: isAssigningTempoAccount || !currentAssignment?.jiraIssue || availableAccounts.length === 0 ? 0.6 : 1,
@@ -1574,7 +1574,7 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                                 <button
                                     onClick={() => handleGenerateSummary(false)}
                                     disabled={isGeneratingSummary}
-                                    className="px-2.5 py-1 text-white text-xs rounded-md transition-all active:scale-95 flex items-center gap-1 disabled:cursor-not-allowed"
+                                    className="px-2.5 py-1 text-white text-xs rounded-md transition-all hover:scale-105 active:scale-95 flex items-center gap-1 disabled:cursor-not-allowed"
                                     style={{
                                         backgroundColor: isGeneratingSummary ? 'var(--color-bg-tertiary)' : 'var(--color-surface-dark)',
                                         transitionDuration: 'var(--duration-fast)',
@@ -1645,14 +1645,14 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                         <h3 className="text-base font-semibold" style={{ color: 'var(--color-text-primary)' }}>Window Activity</h3>
                         <button
                             onClick={() => setShowManualEntryForm(!showManualEntryForm)}
-                            className="px-2.5 py-1 text-white text-xs rounded-md transition-all active:scale-95 flex items-center gap-1"
+                            className="px-2.5 py-1 text-white text-xs rounded-md transition-all hover:scale-105 active:scale-95 flex items-center gap-1"
                             style={{
                                 backgroundColor: 'var(--color-accent)',
                                 transitionDuration: 'var(--duration-fast)',
                                 transitionTimingFunction: 'var(--ease-out)'
                             }}
                         >
-                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                                 <line x1="12" y1="5" x2="12" y2="19" />
                                 <line x1="5" y1="12" x2="19" y2="12" />
                             </svg>
