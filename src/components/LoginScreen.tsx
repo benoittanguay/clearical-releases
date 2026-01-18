@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { SocialLoginButtons } from './SocialLoginButtons';
 
 type LoginStep = 'email' | 'otp';
 
 export function LoginScreen() {
-    const { sendOtp, verifyOtp } = useAuth();
+    const { sendOtp, verifyOtp, signInWithOAuth } = useAuth();
     const [step, setStep] = useState<LoginStep>('email');
     const [email, setEmail] = useState('');
     const [otpCode, setOtpCode] = useState('');
@@ -58,10 +59,6 @@ export function LoginScreen() {
         setStep('email');
         setOtpCode('');
         setError(null);
-    };
-
-    const handleOpenSignup = () => {
-        window.electron.ipcRenderer.invoke('open-external-url', 'https://clearical.io/signup');
     };
 
     return (
@@ -120,6 +117,34 @@ export function LoginScreen() {
                             >
                                 Sign in to your account
                             </h2>
+
+                            <SocialLoginButtons
+                                onSignIn={signInWithOAuth}
+                                disabled={isLoading}
+                            />
+
+                            {/* Or divider */}
+                            <div className="flex items-center my-6" role="separator">
+                                <div
+                                    className="flex-1 h-px"
+                                    style={{ backgroundColor: 'var(--color-border-primary)' }}
+                                    aria-hidden="true"
+                                />
+                                <span
+                                    className="px-4 text-sm font-medium"
+                                    style={{
+                                        color: 'var(--color-text-secondary)',
+                                        fontFamily: 'var(--font-display)'
+                                    }}
+                                >
+                                    or
+                                </span>
+                                <div
+                                    className="flex-1 h-px"
+                                    style={{ backgroundColor: 'var(--color-border-primary)' }}
+                                    aria-hidden="true"
+                                />
+                            </div>
 
                             <div className="mb-5">
                                 <label
@@ -365,34 +390,6 @@ export function LoginScreen() {
                             </button>
                         </form>
                     )}
-                </div>
-
-                {/* Sign up link */}
-                <div className="mt-6 text-center">
-                    <p
-                        className="text-sm"
-                        style={{ color: 'var(--color-text-secondary)' }}
-                    >
-                        Don't have an account?{' '}
-                        <button
-                            onClick={handleOpenSignup}
-                            className="font-semibold transition-colors duration-200"
-                            style={{
-                                color: 'var(--color-accent)',
-                                fontFamily: 'var(--font-display)'
-                            }}
-                            onMouseEnter={(e) => {
-                                e.currentTarget.style.color = 'var(--color-accent-hover)';
-                                e.currentTarget.style.textDecoration = 'underline';
-                            }}
-                            onMouseLeave={(e) => {
-                                e.currentTarget.style.color = 'var(--color-accent)';
-                                e.currentTarget.style.textDecoration = 'none';
-                            }}
-                        >
-                            Sign up for free
-                        </button>
-                    </p>
                 </div>
 
                 {/* Footer */}
