@@ -251,10 +251,15 @@ function App() {
       // Check permissions before starting
       const permissions = await checkPermissions();
 
-      if (!permissions.allGranted) {
-        // Show permission modal if permissions are not granted
+      if (!permissions.requiredGranted) {
+        // Show permission modal if required permissions (accessibility) are not granted
         setShowPermissionModal(true);
         return;
+      }
+
+      // Log if starting without screen recording
+      if (!permissions.hasScreenRecording) {
+        console.log('[App] Starting timer without screen recording permission - AI summaries will be limited');
       }
 
       // Start timer fresh (elapsed should be 0)
@@ -846,20 +851,20 @@ function App() {
                         className="flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-semibold transition-all hover:-translate-y-0.5 active:scale-95"
                         style={{
                           backgroundColor: 'var(--color-bg-tertiary)',
-                          color: 'var(--color-warning)',
+                          color: 'var(--color-accent)',
                           fontFamily: 'var(--font-body)',
                           transitionDuration: 'var(--duration-base)',
                           transitionTimingFunction: 'var(--ease-out)',
-                          border: '1px solid var(--color-warning)',
-                          boxShadow: '0 4px 12px -2px rgba(254, 188, 46, 0.15)'
+                          border: '1px solid var(--color-accent)',
+                          boxShadow: '0 4px 12px -2px rgba(255, 72, 0, 0.15)'
                         }}
                         onMouseEnter={(e) => {
-                          e.currentTarget.style.backgroundColor = 'var(--color-warning)';
-                          e.currentTarget.style.color = 'var(--color-bg-primary)';
+                          e.currentTarget.style.backgroundColor = 'var(--color-accent)';
+                          e.currentTarget.style.color = 'white';
                         }}
                         onMouseLeave={(e) => {
                           e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)';
-                          e.currentTarget.style.color = 'var(--color-warning)';
+                          e.currentTarget.style.color = 'var(--color-accent)';
                         }}
                       >
                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">

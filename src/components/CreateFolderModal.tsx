@@ -52,14 +52,14 @@ export function CreateFolderModal({ isOpen, onClose, onCreateFolder, availableFo
                 {/* Header */}
                 <div className="flex justify-between items-center mb-6">
                     <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-[var(--color-warning-muted)] flex items-center justify-center">
+                        <div className="w-10 h-10 rounded-xl bg-[var(--color-accent-muted)] flex items-center justify-center">
                             <svg
                                 xmlns="http://www.w3.org/2000/svg"
                                 width="20"
                                 height="20"
                                 viewBox="0 0 24 24"
                                 fill="none"
-                                stroke="var(--color-warning)"
+                                stroke="var(--color-accent)"
                                 strokeWidth="2"
                                 strokeLinecap="round"
                                 strokeLinejoin="round"
@@ -94,7 +94,7 @@ export function CreateFolderModal({ isOpen, onClose, onCreateFolder, availableFo
                             onChange={(e) => setFolderName(e.target.value)}
                             onKeyDown={handleKeyDown}
                             autoFocus
-                            className="w-full bg-[var(--color-bg-tertiary)] border border-[var(--color-border-primary)] text-[var(--color-text-primary)] text-sm rounded-lg px-4 py-3 font-mono focus:outline-none focus:ring-2 focus:ring-[var(--color-warning)] focus:border-transparent transition-all duration-200"
+                            className="w-full bg-[var(--color-bg-tertiary)] border border-[var(--color-border-primary)] text-[var(--color-text-primary)] text-sm rounded-lg px-4 py-3 font-mono focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:border-transparent transition-all duration-200"
                             placeholder="e.g. Projects, Clients, Internal"
                         />
                         <div className="text-xs text-[var(--color-text-tertiary)] mt-2 font-mono">
@@ -111,7 +111,7 @@ export function CreateFolderModal({ isOpen, onClose, onCreateFolder, availableFo
                             <select
                                 value={selectedParentId || ''}
                                 onChange={(e) => setSelectedParentId(e.target.value || null)}
-                                className="w-full bg-[var(--color-bg-tertiary)] border border-[var(--color-border-primary)] text-[var(--color-text-primary)] text-sm rounded-lg px-4 py-3 font-mono focus:outline-none focus:ring-2 focus:ring-[var(--color-warning)] focus:border-transparent transition-all duration-200"
+                                className="w-full bg-[var(--color-bg-tertiary)] border border-[var(--color-border-primary)] text-[var(--color-text-primary)] text-sm rounded-lg px-4 py-3 font-mono focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:border-transparent transition-all duration-200"
                             >
                                 <option value="">Root Level</option>
                                 {availableFolders.map((folder) => (
@@ -138,7 +138,7 @@ export function CreateFolderModal({ isOpen, onClose, onCreateFolder, availableFo
                     <button
                         onClick={handleCreate}
                         disabled={!folderName.trim()}
-                        className="px-6 py-2.5 bg-[var(--color-warning)] hover:bg-[var(--color-warning)]/90 disabled:bg-[var(--color-bg-tertiary)] disabled:text-[var(--color-text-tertiary)] disabled:cursor-not-allowed text-[var(--color-bg-primary)] text-sm font-semibold rounded-full transition-all duration-200 hover:scale-105 active:scale-95 shadow-lg flex items-center gap-2"
+                        className="px-6 py-2.5 bg-[var(--color-accent)] hover:bg-[var(--color-accent)]/90 disabled:bg-[var(--color-bg-tertiary)] disabled:text-[var(--color-text-tertiary)] disabled:cursor-not-allowed text-white text-sm font-semibold rounded-full transition-all duration-200 hover:scale-105 active:scale-95 shadow-lg flex items-center gap-2"
                     >
                         <svg
                             xmlns="http://www.w3.org/2000/svg"
