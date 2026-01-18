@@ -96,7 +96,7 @@ export function TempoConfigModal({
         <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 animate-fade-in">
             <div className="bg-[var(--color-bg-secondary)] rounded-[32px] p-6 w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto border border-[var(--color-border-primary)] shadow-2xl animate-scale-in">
                 <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-lg font-semibold text-[var(--color-text-primary)] font-['Syne']">Configure Tempo Integration</h3>
+                    <h3 className="text-lg font-semibold text-[var(--color-text-primary)] font-display">Configure Tempo Integration</h3>
                     <button
                         onClick={onClose}
                         className="p-1 -m-1 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
@@ -118,7 +118,7 @@ export function TempoConfigModal({
                                 <line x1="12" y1="9" x2="12" y2="13"/>
                                 <line x1="12" y1="17" x2="12.01" y2="17"/>
                             </svg>
-                            <span className="text-[var(--color-text-primary)] text-sm font-medium font-['Syne']">Testing Mode</span>
+                            <span className="text-[var(--color-text-primary)] text-sm font-medium font-display">Testing Mode</span>
                         </div>
                         <p className="text-[var(--color-text-secondary)] text-xs mt-1">
                             Development credentials are automatically loaded for testing purposes.
@@ -149,7 +149,7 @@ export function TempoConfigModal({
                     {tempTempoSettings.enabled && (
                         <>
                             <div>
-                                <label className="block text-sm text-[var(--color-text-secondary)] mb-2 font-['Syne']">
+                                <label className="block text-sm text-[var(--color-text-secondary)] mb-2 font-display">
                                     API Token *
                                 </label>
                                 <input
@@ -167,7 +167,7 @@ export function TempoConfigModal({
                             </div>
 
                             <div>
-                                <label className="block text-sm text-[var(--color-text-secondary)] mb-2 font-['Syne']">
+                                <label className="block text-sm text-[var(--color-text-secondary)] mb-2 font-display">
                                     Base URL *
                                 </label>
                                 <select
@@ -183,7 +183,7 @@ export function TempoConfigModal({
                             </div>
 
                             <div>
-                                <label className="block text-sm text-[var(--color-text-secondary)] mb-2 font-['Syne']">
+                                <label className="block text-sm text-[var(--color-text-secondary)] mb-2 font-display">
                                     Default Issue Key (Optional)
                                 </label>
                                 <input

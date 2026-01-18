@@ -77,8 +77,8 @@ export function ConfirmationModal({
                             <div
                                 className="flex-shrink-0 w-12 h-12 rounded-full flex items-center justify-center"
                                 style={{
-                                    backgroundColor: 'rgba(59, 130, 246, 0.15)',
-                                    border: '2px solid rgba(59, 130, 246, 0.3)'
+                                    backgroundColor: 'rgba(255, 72, 0, 0.1)',
+                                    border: '2px solid rgba(255, 72, 0, 0.2)'
                                 }}
                             >
                                 <svg
@@ -87,7 +87,7 @@ export function ConfirmationModal({
                                     height="24"
                                     viewBox="0 0 24 24"
                                     fill="none"
-                                    stroke="#3b82f6"
+                                    stroke="#FF4800"
                                     strokeWidth="2"
                                     strokeLinecap="round"
                                     strokeLinejoin="round"
@@ -99,10 +99,10 @@ export function ConfirmationModal({
                             </div>
                         )}
                         <div className="flex-1 pt-1">
-                            <h3 className="text-xl font-bold text-[var(--color-text-primary)] mb-2" style={{ fontFamily: 'var(--font-display)' }}>
+                            <h3 className="text-xl font-bold text-[var(--color-text-primary)] mb-2 font-display">
                                 {title}
                             </h3>
-                            <p className="text-sm text-[var(--color-text-secondary)] leading-relaxed" style={{ fontFamily: 'var(--font-body)' }}>
+                            <p className="text-sm text-[var(--color-text-secondary)] leading-relaxed font-body">
                                 {message}
                             </p>
                         </div>
@@ -114,23 +114,22 @@ export function ConfirmationModal({
                     <button
                         onClick={onClose}
                         disabled={isLoading}
-                        className="px-5 py-2.5 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] text-sm font-medium transition-all duration-200 hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-                        style={{ fontFamily: 'var(--font-body)' }}
+                        className="px-5 py-2.5 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] text-sm font-medium transition-all duration-200 hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed font-body"
                     >
                         Cancel
                     </button>
                     <button
                         onClick={onConfirm}
                         disabled={isLoading}
-                        className={`px-6 py-2.5 text-white text-sm font-semibold rounded-full transition-all duration-200 hover:scale-105 active:scale-95 shadow-lg disabled:cursor-not-allowed flex items-center gap-2 ${
+                        className={`px-6 py-2.5 text-white text-sm font-semibold rounded-full transition-all duration-200 hover:scale-105 active:scale-95 shadow-lg disabled:cursor-not-allowed flex items-center gap-2 font-body ${
                             confirmVariant === 'danger'
                                 ? 'bg-red-500 hover:bg-red-600 disabled:bg-red-900/30'
                                 : 'bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] disabled:bg-[var(--color-bg-tertiary)]'
                         }`}
                         style={
                             confirmVariant === 'danger'
-                                ? { fontFamily: 'var(--font-body)', boxShadow: '0 4px 14px rgba(239, 68, 68, 0.4)' }
-                                : { fontFamily: 'var(--font-body)' }
+                                ? { boxShadow: '0 4px 14px rgba(239, 68, 68, 0.4)' }
+                                : undefined
                         }
                     >
                         {isLoading ? (

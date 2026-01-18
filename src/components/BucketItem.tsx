@@ -207,8 +207,8 @@ export const BucketItem: React.FC<BucketItemProps> = ({
                                 <div
                                     className="mt-3 rounded-lg p-3 border"
                                     style={{
-                                        backgroundColor: 'rgba(59, 130, 246, 0.05)',
-                                        borderColor: 'rgba(59, 130, 246, 0.2)',
+                                        backgroundColor: 'var(--color-bg-tertiary)',
+                                        borderColor: 'var(--color-border-secondary)',
                                         borderRadius: 'var(--radius-lg)'
                                     }}
                                 >
@@ -293,7 +293,7 @@ export const BucketItem: React.FC<BucketItemProps> = ({
                                         transitionTimingFunction: 'var(--ease-out)'
                                     }}
                                     onMouseEnter={(e) => {
-                                        e.currentTarget.style.color = 'var(--color-info)';
+                                        e.currentTarget.style.color = 'var(--color-accent)';
                                         e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)';
                                     }}
                                     onMouseLeave={(e) => {

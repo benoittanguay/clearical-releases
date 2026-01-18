@@ -362,8 +362,8 @@ export function AssignmentPicker({ value, onChange, placeholder = "Select assign
                                                  style={{
                                                      width: '10px',
                                                      height: '10px',
-                                                     backgroundColor: 'var(--color-info)',
-                                                     boxShadow: '0 0 10px rgba(59, 130, 246, 0.5)'
+                                                     backgroundColor: 'var(--color-accent)',
+                                                     boxShadow: '0 0 10px rgba(255, 72, 0, 0.5)'
                                                  }} />
                                             <div className="flex-1 min-w-0">
                                                 <div className="flex items-center gap-2 mb-0.5">

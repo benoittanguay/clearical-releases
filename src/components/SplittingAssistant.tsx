@@ -640,8 +640,8 @@ export function SplittingAssistant({
                       <span
                         className="px-2.5 py-1 rounded-full text-[11px] font-medium"
                         style={{
-                          background: 'rgba(37, 99, 235, 0.1)',
-                          color: 'var(--color-info)',
+                          background: 'var(--color-accent-muted)',
+                          color: 'var(--color-accent)',
                         }}
                       >
                         {segment.suggestedJiraKey}

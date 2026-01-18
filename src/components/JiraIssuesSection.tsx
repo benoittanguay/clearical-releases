@@ -391,7 +391,7 @@ export function JiraIssuesSection({ onIssueClick }: JiraIssuesSectionProps = {})
                         onClick={() => setActiveTab(tab.key)}
                         className="px-2.5 py-1.5 text-xs font-medium rounded-lg transition-all flex items-center gap-1.5 whitespace-nowrap"
                         style={{
-                            backgroundColor: activeTab === tab.key ? 'var(--color-info)' : 'var(--color-bg-tertiary)',
+                            backgroundColor: activeTab === tab.key ? 'var(--color-accent)' : 'var(--color-bg-tertiary)',
                             color: activeTab === tab.key ? '#FFFFFF' : 'var(--color-text-primary)',
                             fontFamily: 'var(--font-body)',
                             borderRadius: 'var(--radius-lg)',
@@ -455,7 +455,7 @@ export function JiraIssuesSection({ onIssueClick }: JiraIssuesSectionProps = {})
                         style={{
                             backgroundColor: currentTabData.loading || !searchQuery.trim()
                                 ? 'var(--color-bg-tertiary)'
-                                : 'var(--color-info)',
+                                : 'var(--color-accent)',
                             color: currentTabData.loading || !searchQuery.trim()
                                 ? 'var(--color-text-tertiary)'
                                 : '#FFFFFF',

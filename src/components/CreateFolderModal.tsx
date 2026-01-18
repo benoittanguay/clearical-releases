@@ -67,7 +67,7 @@ export function CreateFolderModal({ isOpen, onClose, onCreateFolder, availableFo
                                 <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z" />
                             </svg>
                         </div>
-                        <h3 className="text-xl font-bold text-[var(--color-text-primary)] font-['Syne']">Create New Folder</h3>
+                        <h3 className="text-xl font-bold text-[var(--color-text-primary)] font-display">Create New Folder</h3>
                     </div>
                     <button
                         onClick={onClose}
@@ -85,7 +85,7 @@ export function CreateFolderModal({ isOpen, onClose, onCreateFolder, availableFo
                 <div className="space-y-5">
                     {/* Name Input */}
                     <div>
-                        <label className="block text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider mb-2 font-['Syne']">
+                        <label className="block text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider mb-2 font-display">
                             Folder Name *
                         </label>
                         <input
@@ -105,7 +105,7 @@ export function CreateFolderModal({ isOpen, onClose, onCreateFolder, availableFo
                     {/* Parent Folder Selection */}
                     {availableFolders.length > 0 && (
                         <div>
-                            <label className="block text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider mb-2 font-['Syne']">
+                            <label className="block text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider mb-2 font-display">
                                 Parent Folder (Optional)
                             </label>
                             <select

@@ -57,10 +57,10 @@
    * TYPOGRAPHY
    * =========================================== */
 
-  /* Font Families */
-  --font-display: 'Syne', system-ui, -apple-system, sans-serif;  /* Headlines */
-  --font-mono: 'JetBrains Mono', 'Fira Code', 'SF Mono', monospace; /* Body, code */
-  --font-body: 'JetBrains Mono', system-ui, sans-serif;  /* Default body */
+  /* Font Families - Matching clearical.io website */
+  --font-display: 'DM Sans', system-ui, -apple-system, sans-serif;  /* Headlines */
+  --font-body: 'Inter', system-ui, -apple-system, sans-serif;  /* Body text */
+  --font-mono: 'JetBrains Mono', 'Fira Code', 'SF Mono', monospace; /* Code, technical */
 
   /* Font Sizes - Using modular scale (1.25 ratio) */
   --text-xs: 0.625rem;      /* 10px - micro labels */

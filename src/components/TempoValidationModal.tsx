@@ -202,7 +202,7 @@ export function TempoValidationModal({
         if (assignment.type === 'jira' && assignment.jiraIssue) {
             return {
                 label: assignment.jiraIssue.key,
-                color: '#3b82f6',
+                color: 'var(--color-accent)',
                 details: assignment.jiraIssue.summary,
                 issueDetails: `${assignment.jiraIssue.projectName} - ${assignment.jiraIssue.issueType}`
             };

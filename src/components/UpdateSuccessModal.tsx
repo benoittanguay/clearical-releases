@@ -99,7 +99,7 @@ export function UpdateSuccessModal({ isOpen, onClose, version, releaseNotes: ini
                                 <path d="M5 13l4 4L19 7" />
                             </svg>
                         </div>
-                        <h2 className="text-3xl font-bold text-[var(--color-text-primary)] mb-2 font-['Syne']">
+                        <h2 className="text-3xl font-bold text-[var(--color-text-primary)] mb-2 font-display">
                             Update Complete!
                         </h2>
                         <p className="text-[var(--color-text-secondary)] text-lg">
@@ -111,7 +111,7 @@ export function UpdateSuccessModal({ isOpen, onClose, version, releaseNotes: ini
                     <div className="bg-[var(--color-bg-tertiary)] border border-[var(--color-border-primary)] rounded-xl p-4 mb-6">
                         <div className="flex items-center justify-between">
                             <div>
-                                <h4 className="text-sm font-semibold text-[var(--color-text-secondary)] mb-1 font-['Syne']">Version</h4>
+                                <h4 className="text-sm font-semibold text-[var(--color-text-secondary)] mb-1 font-display">Version</h4>
                                 <p className="text-2xl font-mono font-bold text-[var(--color-success)]">
                                     v{displayVersion}
                                 </p>
@@ -141,7 +141,7 @@ export function UpdateSuccessModal({ isOpen, onClose, version, releaseNotes: ini
 
                     {/* Release Notes Section */}
                     <div className="mb-6">
-                        <h3 className="text-lg font-bold text-[var(--color-text-primary)] mb-3 font-['Syne']">
+                        <h3 className="text-lg font-bold text-[var(--color-text-primary)] mb-3 font-display">
                             What's New
                         </h3>
                         <div

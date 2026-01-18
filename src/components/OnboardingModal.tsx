@@ -302,7 +302,6 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
     };
 
     const totalSteps = 5;
-    const progressPercentage = ((currentStep + 1) / totalSteps) * 100;
 
     return (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 animate-fade-in">
@@ -312,12 +311,30 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                     animation: 'fadeInScale 0.3s ease-out',
                 }}
             >
-                {/* Progress Bar */}
-                <div className="h-1.5 bg-[var(--color-bg-tertiary)] flex-shrink-0">
-                    <div
-                        className="h-full bg-[var(--color-accent)] transition-all duration-500 ease-out"
-                        style={{ width: `${progressPercentage}%` }}
-                    />
+                {/* Step Indicators - Header */}
+                <div className="flex justify-center gap-2 py-4 flex-shrink-0 bg-[var(--color-bg-secondary)]">
+                    {Array.from({ length: totalSteps }).map((_, index) => (
+                        <button
+                            key={index}
+                            onClick={() => {
+                                if (index < currentStep) {
+                                    setIsTransitioning(true);
+                                    setTimeout(() => {
+                                        setCurrentStep(index);
+                                        setIsTransitioning(false);
+                                    }, 200);
+                                }
+                            }}
+                            disabled={index > currentStep}
+                            className={`transition-all duration-300 rounded-full ${
+                                index === currentStep
+                                    ? 'w-8 h-2 bg-[var(--color-accent)]'
+                                    : index < currentStep
+                                    ? 'w-2 h-2 bg-[var(--color-accent)] opacity-60 hover:opacity-100 cursor-pointer'
+                                    : 'w-2 h-2 bg-[var(--color-bg-tertiary)]'
+                            }`}
+                        />
+                    ))}
                 </div>
 
                 {/* Content Container with Slide Animation - Scrollable */}
@@ -338,7 +355,7 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                                             <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
                                         </svg>
                                     </div>
-                                    <h2 className="text-3xl font-bold text-[var(--color-text-primary)] mb-2" style={{ fontFamily: 'var(--font-display)' }}>System Permissions</h2>
+                                    <h2 className="text-2xl font-bold text-[var(--color-text-primary)] mb-2 font-display tracking-tight">System Permissions</h2>
                                     <p className="text-[var(--color-text-secondary)] text-lg">Clearical needs access to track your activity</p>
                                 </div>
 
@@ -351,7 +368,7 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                                             </svg>
                                         </div>
                                         <div>
-                                            <h4 className="text-sm font-semibold text-[var(--color-text-primary)] mb-1" style={{ fontFamily: 'var(--font-display)' }}>Why these permissions?</h4>
+                                            <h4 className="text-sm font-semibold text-[var(--color-text-primary)] mb-1 font-display">Why these permissions?</h4>
                                             <p className="text-sm text-[var(--color-text-secondary)]">
                                                 These permissions allow Clearical to automatically track your work and capture screenshots. All data stays on your device.
                                             </p>
@@ -383,7 +400,7 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                                             </div>
                                             <div className="flex-1">
                                                 <div className="flex items-center justify-between mb-2">
-                                                    <h3 className="text-lg font-semibold text-[var(--color-text-primary)]" style={{ fontFamily: 'var(--font-display)' }}>Accessibility</h3>
+                                                    <h3 className="text-lg font-semibold text-[var(--color-text-primary)] font-display">Accessibility</h3>
                                                     {accessibilityGranted && (
                                                         <span className="text-xs px-2.5 py-1 rounded-full font-medium bg-[var(--color-success-muted)] text-[var(--color-success)] border border-[var(--color-success)]/30">
                                                             Granted
@@ -428,7 +445,7 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                                             </div>
                                             <div className="flex-1">
                                                 <div className="flex items-center justify-between mb-2">
-                                                    <h3 className="text-lg font-semibold text-[var(--color-text-primary)]" style={{ fontFamily: 'var(--font-display)' }}>Screen Recording</h3>
+                                                    <h3 className="text-lg font-semibold text-[var(--color-text-primary)] font-display">Screen Recording</h3>
                                                     {screenRecordingGranted && (
                                                         <span className="text-xs px-2.5 py-1 rounded-full font-medium bg-[var(--color-success-muted)] text-[var(--color-success)] border border-[var(--color-success)]/30">
                                                             Granted
@@ -466,15 +483,6 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                                     </div>
                                 )}
 
-                                {/* Actions */}
-                                <div className="flex justify-end gap-3 pt-6 border-t border-[var(--color-border-primary)]">
-                                    <button
-                                        onClick={handleNext}
-                                        className="px-6 py-2.5 bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white text-sm font-semibold rounded-full transition-all transform hover:scale-105 active:scale-95 shadow-lg"
-                                    >
-                                        Continue
-                                    </button>
-                                </div>
                             </div>
                         )}
 
@@ -491,7 +499,7 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                                             <path d="M10 16h4"/>
                                         </svg>
                                     </div>
-                                    <h2 className="text-3xl font-bold text-[var(--color-text-primary)] mb-2" style={{ fontFamily: 'var(--font-display)' }}>Welcome to Clearical</h2>
+                                    <h2 className="text-2xl font-bold text-[var(--color-text-primary)] mb-2 font-display tracking-tight">Welcome to Clearical</h2>
                                     <p className="text-[var(--color-text-secondary)] text-lg">Let's get you started with your first bucket</p>
                                 </div>
 
@@ -504,7 +512,7 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                                             </svg>
                                         </div>
                                         <div>
-                                            <h4 className="text-sm font-semibold text-[var(--color-text-primary)] mb-1" style={{ fontFamily: 'var(--font-display)' }}>What are buckets?</h4>
+                                            <h4 className="text-sm font-semibold text-[var(--color-text-primary)] mb-1 font-display">What are buckets?</h4>
                                             <p className="text-sm text-[var(--color-text-secondary)]">
                                                 Buckets are categories that help you organize your time entries.
                                                 Think of them as projects, clients, or types of work you want to track separately.
@@ -516,7 +524,7 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                                 {/* Form */}
                                 <div className="space-y-5">
                                     <div>
-                                        <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-2" style={{ fontFamily: 'var(--font-display)' }}>
+                                        <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-2 uppercase tracking-wide">
                                             Bucket Name
                                         </label>
                                         <input
@@ -535,7 +543,7 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                                     </div>
 
                                     <div>
-                                        <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-2" style={{ fontFamily: 'var(--font-display)' }}>
+                                        <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-2 uppercase tracking-wide">
                                             Choose a Color
                                         </label>
                                         <div className="grid grid-cols-8 gap-2.5">
@@ -557,22 +565,6 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                                     </div>
                                 </div>
 
-                                {/* Actions */}
-                                <div className="flex justify-end gap-3 mt-8 pt-6 border-t border-[var(--color-border-primary)]">
-                                    <button
-                                        onClick={handleSkipBucket}
-                                        className="px-5 py-2.5 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] text-sm font-medium transition-colors rounded-lg hover:bg-[var(--color-bg-tertiary)]"
-                                    >
-                                        Skip
-                                    </button>
-                                    <button
-                                        onClick={handleCreateBucket}
-                                        disabled={!bucketName.trim()}
-                                        className="px-6 py-2.5 bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] disabled:bg-[var(--color-bg-tertiary)] disabled:text-[var(--color-text-tertiary)] disabled:cursor-not-allowed text-white text-sm font-semibold rounded-full transition-all transform hover:scale-105 active:scale-95 shadow-lg disabled:shadow-none"
-                                    >
-                                        Create & Continue
-                                    </button>
-                                </div>
                             </div>
                         )}
 
@@ -586,7 +578,7 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                                             <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
                                         </svg>
                                     </div>
-                                    <h2 className="text-3xl font-bold text-[var(--color-text-primary)] mb-2" style={{ fontFamily: 'var(--font-display)' }}>AI-Powered Insights</h2>
+                                    <h2 className="text-2xl font-bold text-[var(--color-text-primary)] mb-2 font-display tracking-tight">AI-Powered Insights</h2>
                                     <p className="text-[var(--color-text-secondary)] text-lg">Clearical works smarter, not harder</p>
                                 </div>
 
@@ -603,7 +595,7 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                                                 </div>
                                             </div>
                                             <div className="flex-1">
-                                                <h3 className="text-lg font-semibold text-[var(--color-text-primary)] mb-1" style={{ fontFamily: 'var(--font-display)' }}>Smart Summaries</h3>
+                                                <h3 className="text-lg font-semibold text-[var(--color-text-primary)] mb-1 font-display">Smart Summaries</h3>
                                                 <p className="text-sm text-[var(--color-text-secondary)]">
                                                     AI analyzes your screenshots to automatically generate detailed descriptions
                                                     of what you worked on, saving you time on manual entry.
@@ -623,7 +615,7 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                                                 </div>
                                             </div>
                                             <div className="flex-1">
-                                                <h3 className="text-lg font-semibold text-[var(--color-text-primary)] mb-1" style={{ fontFamily: 'var(--font-display)' }}>Auto-Assignment</h3>
+                                                <h3 className="text-lg font-semibold text-[var(--color-text-primary)] mb-1 font-display">Auto-Assignment</h3>
                                                 <p className="text-sm text-[var(--color-text-secondary)]">
                                                     Based on your activity patterns, Clearical suggests the right bucket or Jira
                                                     issue for each time entry, making tracking effortless.
@@ -643,7 +635,7 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                                                 </div>
                                             </div>
                                             <div className="flex-1">
-                                                <h3 className="text-lg font-semibold text-[var(--color-text-primary)] mb-1" style={{ fontFamily: 'var(--font-display)' }}>Learns Your Workflow</h3>
+                                                <h3 className="text-lg font-semibold text-[var(--color-text-primary)] mb-1 font-display">Learns Your Workflow</h3>
                                                 <p className="text-sm text-[var(--color-text-secondary)]">
                                                     The more you use Clearical, the better it gets at understanding your work
                                                     patterns and providing accurate suggestions.
@@ -663,21 +655,6 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                                     </div>
                                 </div>
 
-                                {/* Actions */}
-                                <div className="flex justify-between gap-3 pt-6 border-t border-[var(--color-border-primary)]">
-                                    <button
-                                        onClick={handleBack}
-                                        className="px-5 py-2.5 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] text-sm font-medium transition-colors"
-                                    >
-                                        Back
-                                    </button>
-                                    <button
-                                        onClick={handleNext}
-                                        className="px-6 py-2.5 bg-[var(--color-success)] hover:bg-[var(--color-success)]/90 text-white text-sm font-semibold rounded-full transition-all transform hover:scale-105 active:scale-95 shadow-lg"
-                                    >
-                                        Continue
-                                    </button>
-                                </div>
                             </div>
                         )}
 
@@ -694,7 +671,7 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                                             <line x1="3" y1="10" x2="21" y2="10"/>
                                         </svg>
                                     </div>
-                                    <h2 className="text-3xl font-bold text-[var(--color-text-primary)] mb-2" style={{ fontFamily: 'var(--font-display)' }}>Connect Your Calendar</h2>
+                                    <h2 className="text-2xl font-bold text-[var(--color-text-primary)] mb-2 font-display tracking-tight">Connect Your Calendar</h2>
                                     <p className="text-[var(--color-text-secondary)] text-lg">Help AI understand your schedule and context</p>
                                 </div>
 
@@ -731,7 +708,7 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                                             </svg>
                                         </div>
                                         <div>
-                                            <h4 className="text-sm font-semibold text-[var(--color-text-primary)] mb-1" style={{ fontFamily: 'var(--font-display)' }}>Why connect your calendar?</h4>
+                                            <h4 className="text-sm font-semibold text-[var(--color-text-primary)] mb-1 font-display">Why connect your calendar?</h4>
                                             <p className="text-sm text-[var(--color-text-secondary)]">
                                                 Calendar integration helps the AI understand your meeting context and daily schedule,
                                                 providing more accurate activity summaries and time tracking suggestions.
@@ -812,30 +789,6 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                                     </div>
                                 </div>
 
-                                {/* Actions */}
-                                <div className="flex justify-between gap-3 pt-6 border-t border-[var(--color-border-primary)]">
-                                    <button
-                                        onClick={handleBack}
-                                        className="px-5 py-2.5 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] text-sm font-medium transition-colors"
-                                    >
-                                        Back
-                                    </button>
-                                    <div className="flex gap-3">
-                                        <button
-                                            onClick={handleNext}
-                                            className="px-5 py-2.5 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] text-sm font-medium transition-colors rounded-lg hover:bg-[var(--color-bg-tertiary)]"
-                                        >
-                                            Skip for now
-                                        </button>
-                                        <button
-                                            onClick={handleNext}
-                                            disabled={!calendarConnected}
-                                            className="px-6 py-2.5 bg-[var(--color-success)] hover:bg-[var(--color-success)]/90 disabled:bg-[var(--color-bg-tertiary)] disabled:text-[var(--color-text-tertiary)] disabled:cursor-not-allowed text-white text-sm font-semibold rounded-full transition-all transform hover:scale-105 active:scale-95 shadow-lg disabled:shadow-none"
-                                        >
-                                            Continue
-                                        </button>
-                                    </div>
-                                </div>
                             </div>
                         )}
 
@@ -854,7 +807,7 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                                             <line x1="12" y1="22.08" x2="12" y2="12"/>
                                         </svg>
                                     </div>
-                                    <h2 className="text-3xl font-bold text-[var(--color-text-primary)] mb-2" style={{ fontFamily: 'var(--font-display)' }}>Connect Jira</h2>
+                                    <h2 className="text-2xl font-bold text-[var(--color-text-primary)] mb-2 font-display tracking-tight">Connect Jira</h2>
                                     <p className="text-[var(--color-text-secondary)] text-lg">Link your Jira issues for smarter time tracking</p>
                                 </div>
 
@@ -887,7 +840,7 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                                     <div className="bg-[var(--color-bg-tertiary)] border border-[var(--color-border-primary)] rounded-xl p-5 mb-6">
                                         <div className="flex items-start justify-between gap-4">
                                             <div className="flex-1">
-                                                <h3 className="text-sm font-semibold text-[var(--color-text-primary)] mb-1" style={{ fontFamily: 'var(--font-display)' }}>
+                                                <h3 className="text-sm font-semibold text-[var(--color-text-primary)] mb-1 font-display">
                                                     Connected to Jira
                                                 </h3>
                                                 <p className="text-sm text-[var(--color-text-secondary)]">
@@ -905,7 +858,7 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                                 ) : (
                                     <div className="space-y-4 mb-6">
                                         <div>
-                                            <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-2" style={{ fontFamily: 'var(--font-display)' }}>
+                                            <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-2 uppercase tracking-wide">
                                                 Jira Base URL
                                             </label>
                                             <input
@@ -918,7 +871,7 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                                         </div>
 
                                         <div>
-                                            <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-2" style={{ fontFamily: 'var(--font-display)' }}>
+                                            <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-2 uppercase tracking-wide">
                                                 Email
                                             </label>
                                             <input
@@ -931,7 +884,7 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                                         </div>
 
                                         <div>
-                                            <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-2" style={{ fontFamily: 'var(--font-display)' }}>
+                                            <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-2 uppercase tracking-wide">
                                                 API Token
                                             </label>
                                             <div className="relative">
@@ -997,7 +950,7 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                                 {/* Project Selection */}
                                 {jiraConnected && (
                                     <div className="mb-6">
-                                        <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-2" style={{ fontFamily: 'var(--font-display)' }}>
+                                        <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-2 uppercase tracking-wide">
                                             Select Projects
                                         </label>
                                         <p className="text-xs text-[var(--color-text-tertiary)] mb-3">
@@ -1081,60 +1034,100 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                                     </div>
                                 </div>
 
-                                {/* Actions */}
-                                <div className="flex justify-between gap-3 pt-6 border-t border-[var(--color-border-primary)]">
-                                    <button
-                                        onClick={handleBack}
-                                        className="px-5 py-2.5 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] text-sm font-medium transition-colors"
-                                    >
-                                        Back
-                                    </button>
-                                    <div className="flex gap-3">
-                                        <button
-                                            onClick={handleFinish}
-                                            className="px-5 py-2.5 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] text-sm font-medium transition-colors rounded-lg hover:bg-[var(--color-bg-tertiary)]"
-                                        >
-                                            Skip
-                                        </button>
-                                        <button
-                                            onClick={handleSaveJiraAndContinue}
-                                            disabled={!jiraConnected}
-                                            className="px-6 py-2.5 bg-[var(--color-success)] hover:bg-[var(--color-success)]/90 disabled:bg-[var(--color-bg-tertiary)] disabled:text-[var(--color-text-tertiary)] disabled:cursor-not-allowed text-white text-sm font-semibold rounded-full transition-all transform hover:scale-105 active:scale-95 shadow-lg disabled:shadow-none"
-                                        >
-                                            Start Syncing
-                                        </button>
-                                    </div>
-                                </div>
                             </div>
                         )}
                     </div>
                 </div>
 
-                {/* Step Indicators - Sticky Footer */}
-                <div className="flex justify-center gap-2 py-5 sm:py-6 border-t border-[var(--color-border-primary)] flex-shrink-0 bg-[var(--color-bg-secondary)]">
-                    {Array.from({ length: totalSteps }).map((_, index) => (
-                        <button
-                            key={index}
-                            onClick={() => {
-                                if (index < currentStep) {
-                                    setIsTransitioning(true);
-                                    setTimeout(() => {
-                                        setCurrentStep(index);
-                                        setIsTransitioning(false);
-                                    }, 200);
-                                }
-                            }}
-                            disabled={index > currentStep}
-                            className={`transition-all duration-300 rounded-full ${
-                                index === currentStep
-                                    ? 'w-8 h-2 bg-[var(--color-success)]'
-                                    : index < currentStep
-                                    ? 'w-2 h-2 bg-[var(--color-success)] opacity-60 hover:opacity-100 cursor-pointer'
-                                    : 'w-2 h-2 bg-[var(--color-bg-tertiary)]'
-                            }`}
-                        />
-                    ))}
+                {/* Sticky Footer with Navigation Buttons */}
+                <div className="flex items-center px-6 py-4 border-t border-[var(--color-border-primary)] flex-shrink-0 bg-[var(--color-bg-secondary)]">
+                    {/* Left Side - Back Button */}
+                    <div className="flex-1 flex items-center">
+                        {currentStep > 0 && (
+                            <button
+                                onClick={handleBack}
+                                className="px-5 py-2.5 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] text-sm font-medium transition-colors rounded-lg hover:bg-[var(--color-bg-tertiary)]"
+                            >
+                                Back
+                            </button>
+                        )}
+                    </div>
+
+                    {/* Right Side Buttons */}
+                    <div className="flex gap-3">
+                        {/* Skip Button - show on steps 1, 3, 4 */}
+                        {currentStep === 1 && (
+                            <button
+                                onClick={handleSkipBucket}
+                                className="px-5 py-2.5 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] text-sm font-medium transition-colors rounded-lg hover:bg-[var(--color-bg-tertiary)]"
+                            >
+                                Skip
+                            </button>
+                        )}
+                        {currentStep === 3 && (
+                            <button
+                                onClick={handleNext}
+                                className="px-5 py-2.5 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] text-sm font-medium transition-colors rounded-lg hover:bg-[var(--color-bg-tertiary)]"
+                            >
+                                Skip for now
+                            </button>
+                        )}
+                        {currentStep === 4 && (
+                            <button
+                                onClick={handleFinish}
+                                className="px-5 py-2.5 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] text-sm font-medium transition-colors rounded-lg hover:bg-[var(--color-bg-tertiary)]"
+                            >
+                                Skip
+                            </button>
+                        )}
+
+                        {/* Primary Action Button */}
+                        {currentStep === 0 && (
+                            <button
+                                onClick={handleNext}
+                                className="px-6 py-2.5 bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white text-sm font-semibold rounded-full transition-all transform hover:scale-105 active:scale-95 shadow-lg"
+                            >
+                                Continue
+                            </button>
+                        )}
+                        {currentStep === 1 && (
+                            <button
+                                onClick={handleCreateBucket}
+                                disabled={!bucketName.trim()}
+                                className="px-6 py-2.5 bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] disabled:bg-[var(--color-bg-tertiary)] disabled:text-[var(--color-text-tertiary)] disabled:cursor-not-allowed text-white text-sm font-semibold rounded-full transition-all transform hover:scale-105 active:scale-95 shadow-lg disabled:shadow-none"
+                            >
+                                Create & Continue
+                            </button>
+                        )}
+                        {currentStep === 2 && (
+                            <button
+                                onClick={handleNext}
+                                className="px-6 py-2.5 bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white text-sm font-semibold rounded-full transition-all transform hover:scale-105 active:scale-95 shadow-lg"
+                            >
+                                Continue
+                            </button>
+                        )}
+                        {currentStep === 3 && (
+                            <button
+                                onClick={handleNext}
+                                disabled={!calendarConnected}
+                                className="px-6 py-2.5 bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] disabled:bg-[var(--color-bg-tertiary)] disabled:text-[var(--color-text-tertiary)] disabled:cursor-not-allowed text-white text-sm font-semibold rounded-full transition-all transform hover:scale-105 active:scale-95 shadow-lg disabled:shadow-none"
+                            >
+                                Continue
+                            </button>
+                        )}
+                        {currentStep === 4 && (
+                            <button
+                                onClick={handleSaveJiraAndContinue}
+                                disabled={!jiraConnected}
+                                className="px-6 py-2.5 bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] disabled:bg-[var(--color-bg-tertiary)] disabled:text-[var(--color-text-tertiary)] disabled:cursor-not-allowed text-white text-sm font-semibold rounded-full transition-all transform hover:scale-105 active:scale-95 shadow-lg disabled:shadow-none"
+                            >
+                                Start Syncing
+                            </button>
+                        )}
+                    </div>
                 </div>
+
             </div>
 
             <style>{`

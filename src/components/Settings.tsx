@@ -4,7 +4,6 @@ import { useSubscription } from '../context/SubscriptionContext';
 import { useAuth } from '../context/AuthContext';
 import { useJiraCache } from '../context/JiraCacheContext';
 import { AppBlacklistManager } from './AppBlacklistManager';
-import { CalendarSettings } from './CalendarSettings';
 import { getTimeIncrementOptions } from '../utils/timeRounding';
 import { analytics } from '../services/analytics';
 import type { SyncStatus } from '../services/jiraSyncScheduler';
@@ -32,6 +31,10 @@ export function Settings({ onOpenJiraModal, onOpenTempoModal }: SettingsProps = 
     const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null);
     const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
     const [analyticsEnabled, setAnalyticsEnabled] = useState(true);
+    const [calendarConnected, setCalendarConnected] = useState(false);
+    const [calendarEmail, setCalendarEmail] = useState<string | null>(null);
+    const [calendarLoading, setCalendarLoading] = useState(true);
+    const [calendarConnecting, setCalendarConnecting] = useState(false);
 
     const handleOpenJiraModal = () => {
         if (onOpenJiraModal) {
@@ -42,6 +45,66 @@ export function Settings({ onOpenJiraModal, onOpenTempoModal }: SettingsProps = 
     const handleOpenTempoModal = () => {
         if (onOpenTempoModal) {
             onOpenTempoModal();
+        }
+    };
+
+    // Check calendar connection status
+    const checkCalendarConnection = async () => {
+        setCalendarLoading(true);
+        try {
+            const result = await window.electron.ipcRenderer.calendar.isConnected();
+            if (result.success) {
+                setCalendarConnected(result.connected);
+                if (result.connected) {
+                    const accountResult = await window.electron.ipcRenderer.calendar.getAccount();
+                    if (accountResult.success) {
+                        setCalendarEmail(accountResult.email);
+                    }
+                }
+            }
+        } catch (err) {
+            console.error('[Settings] Failed to check calendar connection:', err);
+        } finally {
+            setCalendarLoading(false);
+        }
+    };
+
+    const handleCalendarConnect = async () => {
+        setCalendarConnecting(true);
+        try {
+            analytics.track('calendar.connect_initiated');
+            const result = await window.electron.ipcRenderer.calendar.connect();
+            if (result.success) {
+                analytics.track('calendar.connect_success');
+                await checkCalendarConnection();
+            } else {
+                analytics.track('calendar.connect_failed', { error: result.error });
+            }
+        } catch (err) {
+            console.error('[Settings] Failed to connect calendar:', err);
+            analytics.track('calendar.connect_error', { error: String(err) });
+        } finally {
+            setCalendarConnecting(false);
+        }
+    };
+
+    const handleCalendarDisconnect = async () => {
+        if (!confirm('Are you sure you want to disconnect your Google Calendar?')) {
+            return;
+        }
+        setCalendarConnecting(true);
+        try {
+            analytics.track('calendar.disconnect_initiated');
+            const result = await window.electron.ipcRenderer.calendar.disconnect();
+            if (result.success) {
+                analytics.track('calendar.disconnect_success');
+                setCalendarConnected(false);
+                setCalendarEmail(null);
+            }
+        } catch (err) {
+            console.error('[Settings] Failed to disconnect calendar:', err);
+        } finally {
+            setCalendarConnecting(false);
         }
     };
 
@@ -67,6 +130,11 @@ export function Settings({ onOpenJiraModal, onOpenTempoModal }: SettingsProps = 
         // Poll every few seconds in case user changed it
         const interval = setInterval(checkPermission, 2000);
         return () => clearInterval(interval);
+    }, []);
+
+    // Check calendar connection on mount
+    useEffect(() => {
+        checkCalendarConnection();
     }, []);
 
     // Get app version and update status on mount
@@ -349,7 +417,7 @@ export function Settings({ onOpenJiraModal, onOpenTempoModal }: SettingsProps = 
             {/* Account & Subscription */}
             <div className="bg-[var(--color-bg-secondary)] p-4 rounded-2xl mb-3 border border-[var(--color-border-primary)] transition-all duration-200 hover:border-[var(--color-border-primary)]/60 mt-3">
                 <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-[10px] font-bold text-[var(--color-text-secondary)] uppercase tracking-wider font-[var(--font-display)]">Account</h3>
+                    <h3 className="text-[10px] font-bold text-[var(--color-text-secondary)] uppercase tracking-wider font-display">Account</h3>
                     <div className="flex items-center gap-2">
                         {subscription.isTrial && (
                             <button
@@ -428,7 +496,7 @@ export function Settings({ onOpenJiraModal, onOpenTempoModal }: SettingsProps = 
 
             {/* Time Rounding Settings */}
             <div className="bg-[var(--color-bg-secondary)] p-4 rounded-2xl mb-3 border border-[var(--color-border-primary)]">
-                <h3 className="text-[10px] font-bold text-[var(--color-text-secondary)] uppercase tracking-wider mb-3 font-[var(--font-display)]">Time Rounding</h3>
+                <h3 className="text-[10px] font-bold text-[var(--color-text-secondary)] uppercase tracking-wider mb-3 font-display">Time Rounding</h3>
 
                 <div className="space-y-3">
                     <div>
@@ -460,7 +528,7 @@ export function Settings({ onOpenJiraModal, onOpenTempoModal }: SettingsProps = 
             {/* Activity Filtering Settings */}
             <div className="bg-[var(--color-bg-secondary)] p-4 rounded-2xl mb-3 border border-[var(--color-border-primary)]">
                 <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-[10px] font-bold text-[var(--color-text-secondary)] uppercase tracking-wider font-[var(--font-display)]">Activity Filtering</h3>
+                    <h3 className="text-[10px] font-bold text-[var(--color-text-secondary)] uppercase tracking-wider font-display">Activity Filtering</h3>
                     <button
                         onClick={handleResetSettings}
                         className="px-3 py-1.5 bg-[var(--color-bg-tertiary)] hover:bg-[var(--color-bg-tertiary)]/70 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] text-xs rounded-lg transition-all border border-[var(--color-border-primary)] font-medium"
@@ -520,13 +588,13 @@ export function Settings({ onOpenJiraModal, onOpenTempoModal }: SettingsProps = 
 
             {/* App Exclusions / Blacklist */}
             <div className="bg-[var(--color-bg-secondary)] p-4 rounded-2xl mb-3 border border-[var(--color-border-primary)]">
-                <h3 className="text-[10px] font-bold text-[var(--color-text-secondary)] uppercase tracking-wider mb-3 font-[var(--font-display)]">App Exclusions</h3>
+                <h3 className="text-[10px] font-bold text-[var(--color-text-secondary)] uppercase tracking-wider mb-3 font-display">App Exclusions</h3>
                 <AppBlacklistManager />
             </div>
 
             {/* AI Features Settings */}
             <div className="bg-[var(--color-bg-secondary)] p-4 rounded-2xl mb-3 border border-[var(--color-border-primary)]">
-                <h3 className="text-[10px] font-bold text-[var(--color-text-secondary)] uppercase tracking-wider mb-3 font-[var(--font-display)]">AI Features</h3>
+                <h3 className="text-[10px] font-bold text-[var(--color-text-secondary)] uppercase tracking-wider mb-3 font-display">AI Features</h3>
 
                 <div className="space-y-3">
                     {/* Auto-generate descriptions */}
@@ -615,7 +683,7 @@ export function Settings({ onOpenJiraModal, onOpenTempoModal }: SettingsProps = 
             {/* Time Tracking Integration Settings */}
             <div className="bg-[var(--color-bg-secondary)] p-4 rounded-2xl mb-3 border border-[var(--color-border-primary)]">
                 <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-[10px] font-bold text-[var(--color-text-secondary)] uppercase tracking-wider font-[var(--font-display)]">Time Tracking Integration</h3>
+                    <h3 className="text-[10px] font-bold text-[var(--color-text-secondary)] uppercase tracking-wider font-display">Time Tracking Integration</h3>
                     {!hasJiraAccess && !hasTempoAccess && (
                         <span className="text-[10px] px-2 py-1 bg-[var(--color-warning-muted)] text-[var(--color-warning)] rounded-full font-semibold font-mono tracking-wide">
                             WORKPLACE ONLY
@@ -629,7 +697,7 @@ export function Settings({ onOpenJiraModal, onOpenTempoModal }: SettingsProps = 
                         <div className="flex-1">
                             <div className="flex items-center gap-2">
                                 <div className="text-sm font-medium text-[var(--color-text-primary)]">
-                                    Jira Status
+                                    Jira
                                 </div>
                                 {!hasJiraAccess && (
                                     <svg className="w-4 h-4 text-[var(--color-warning)]" fill="currentColor" viewBox="0 0 20 20">
@@ -670,7 +738,7 @@ export function Settings({ onOpenJiraModal, onOpenTempoModal }: SettingsProps = 
                         <div className="flex-1">
                             <div className="flex items-center gap-2">
                                 <div className="text-sm font-medium text-[var(--color-text-primary)]">
-                                    Tempo Status
+                                    Tempo
                                 </div>
                                 {!hasTempoAccess && (
                                     <svg className="w-4 h-4 text-[var(--color-warning)]" fill="currentColor" viewBox="0 0 20 20">
@@ -706,6 +774,49 @@ export function Settings({ onOpenJiraModal, onOpenTempoModal }: SettingsProps = 
                         </div>
                     </div>
 
+                    {/* Google Calendar Status */}
+                    <div className="flex items-center justify-between bg-[var(--color-bg-tertiary)] p-2.5 rounded-lg border border-[var(--color-border-primary)]">
+                        <div className="flex-1">
+                            <div className="text-sm font-medium text-[var(--color-text-primary)]">
+                                Google Calendar
+                            </div>
+                            <div className="text-xs text-[var(--color-text-secondary)]">
+                                {calendarLoading
+                                    ? 'Checking connection...'
+                                    : calendarConnected
+                                        ? calendarEmail || 'Connected'
+                                        : 'Integration disabled'
+                                }
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <span className={`text-[10px] px-2 py-1 rounded-full font-semibold font-mono tracking-wide ${
+                                calendarConnected
+                                    ? 'bg-[var(--color-success-muted)] text-[var(--color-success)]'
+                                    : 'bg-[var(--color-bg-quaternary)] text-[var(--color-text-tertiary)]'
+                            }`}>
+                                {calendarConnected ? 'CONNECTED' : 'DISABLED'}
+                            </span>
+                            {calendarConnected ? (
+                                <button
+                                    onClick={handleCalendarDisconnect}
+                                    disabled={calendarConnecting}
+                                    className="px-3 py-1 bg-[var(--color-error)] hover:bg-[var(--color-error)]/90 disabled:opacity-50 text-white text-xs rounded-lg transition-all"
+                                >
+                                    {calendarConnecting ? 'Disconnecting...' : 'Disconnect'}
+                                </button>
+                            ) : (
+                                <button
+                                    onClick={handleCalendarConnect}
+                                    disabled={calendarConnecting || calendarLoading}
+                                    className="px-3 py-1 bg-[var(--color-accent)] hover:bg-[var(--color-accent)]/90 disabled:opacity-50 text-white text-xs rounded-lg transition-all"
+                                >
+                                    {calendarConnecting ? 'Connecting...' : 'Connect'}
+                                </button>
+                            )}
+                        </div>
+                    </div>
+
                     {/* Upgrade Button (only shown when user has no access) */}
                     {!hasJiraAccess && !hasTempoAccess && (
                         <button
@@ -722,13 +833,11 @@ export function Settings({ onOpenJiraModal, onOpenTempoModal }: SettingsProps = 
                 </div>
             </div>
 
-            {/* Calendar Integration */}
-            <CalendarSettings />
 
             {/* Jira Sync Settings */}
             {hasJiraAccess && tempSettings.jira?.enabled && tempSettings.jira?.apiToken && (
                 <div className="bg-[var(--color-bg-secondary)] p-4 rounded-2xl mb-3 border border-[var(--color-border-primary)]">
-                    <h3 className="text-[10px] font-bold text-[var(--color-text-secondary)] uppercase tracking-wider mb-3 font-[var(--font-display)]">Jira Sync Settings</h3>
+                    <h3 className="text-[10px] font-bold text-[var(--color-text-secondary)] uppercase tracking-wider mb-3 font-display">Jira Sync Settings</h3>
 
                     <div className="space-y-3">
                         {/* Auto-sync toggle */}
@@ -835,11 +944,11 @@ export function Settings({ onOpenJiraModal, onOpenTempoModal }: SettingsProps = 
             )}
 
             <div className="bg-[var(--color-bg-secondary)] p-4 rounded-2xl mb-3 border border-[var(--color-border-primary)]">
-                <h3 className="text-[10px] font-bold text-[var(--color-text-secondary)] uppercase tracking-wider mb-3 font-[var(--font-display)]">Permissions</h3>
-                <div className="flex justify-between items-center bg-[var(--color-bg-tertiary)] p-2.5 rounded-lg border border-[var(--color-border-primary)]">
-                    <div>
+                <h3 className="text-[10px] font-bold text-[var(--color-text-secondary)] uppercase tracking-wider mb-3 font-display">Permissions</h3>
+                <div className="flex items-center justify-between bg-[var(--color-bg-tertiary)] p-2.5 rounded-lg border border-[var(--color-border-primary)]">
+                    <div className="flex-1">
                         <div className="text-sm font-medium text-[var(--color-text-primary)]">Screen Recording</div>
-                        <div className="text-xs text-[var(--color-text-secondary)]">Required for Screenshots</div>
+                        <div className="text-xs text-[var(--color-text-secondary)]">Required for screenshots</div>
                     </div>
                     <div className="flex items-center gap-2">
                         <span className={`text-[10px] px-2 py-1 rounded-full font-semibold font-mono tracking-wide ${
@@ -847,9 +956,17 @@ export function Settings({ onOpenJiraModal, onOpenTempoModal }: SettingsProps = 
                             permissionStatus === 'denied' ? 'bg-[var(--color-error-muted)] text-[var(--color-error)]' :
                             permissionStatus === 'stale' ? 'bg-[var(--color-warning-muted)] text-[var(--color-warning)]' :
                             'bg-[var(--color-warning-muted)] text-[var(--color-warning)]'
-                            }`}>
+                        }`}>
                             {permissionStatus === 'stale' ? 'NEEDS RESET' : permissionStatus.toUpperCase()}
                         </span>
+                        {permissionStatus !== 'granted' && permissionStatus !== 'stale' && (
+                            <button
+                                onClick={openSettings}
+                                className="px-3 py-1 bg-[var(--color-accent)] hover:bg-[var(--color-accent)]/90 text-white text-xs rounded-lg transition-all"
+                            >
+                                Open Settings
+                            </button>
+                        )}
                     </div>
                 </div>
 
@@ -886,37 +1003,12 @@ export function Settings({ onOpenJiraModal, onOpenTempoModal }: SettingsProps = 
                         </button>
                     </div>
                 )}
-
-                {/* Regular permission prompts for other states */}
-                {permissionStatus !== 'granted' && permissionStatus !== 'stale' && (
-                    <button
-                        onClick={openSettings}
-                        className="mt-2 w-full text-xs bg-[var(--color-accent)] hover:bg-[var(--color-accent)]/90 text-white py-1.5 rounded-lg transition-all"
-                    >
-                        Open System Settings
-                    </button>
-                )}
-
-                <button
-                    onClick={async () => {
-                        // @ts-ignore
-                        if (window.electron?.ipcRenderer?.captureScreenshot) {
-                            // @ts-ignore
-                            console.log('[Settings] Manual capture triggered');
-                            // @ts-ignore
-                            await window.electron.ipcRenderer.captureScreenshot();
-                        }
-                    }}
-                    className="mt-2 w-full text-xs bg-[var(--color-bg-tertiary)] hover:bg-[var(--color-bg-tertiary)]/70 text-[var(--color-text-primary)] py-1.5 rounded-lg transition-all border border-[var(--color-border-primary)]"
-                >
-                    Test Screenshot Capture
-                </button>
             </div>
 
             {/* App Version & Updates */}
             <div className="bg-[var(--color-bg-secondary)] p-4 rounded-2xl mb-3 border border-[var(--color-border-primary)]">
                 <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-[10px] font-bold text-[var(--color-text-secondary)] uppercase tracking-wider font-[var(--font-display)]">App Version & Updates</h3>
+                    <h3 className="text-[10px] font-bold text-[var(--color-text-secondary)] uppercase tracking-wider font-display">App Version & Updates</h3>
                     <button
                         onClick={handleCheckForUpdates}
                         disabled={isCheckingUpdate}
@@ -989,7 +1081,7 @@ export function Settings({ onOpenJiraModal, onOpenTempoModal }: SettingsProps = 
 
             {/* Privacy Settings */}
             <div className="bg-[var(--color-bg-secondary)] p-4 rounded-2xl mb-3 border border-[var(--color-border-primary)]">
-                <h3 className="text-[10px] font-bold text-[var(--color-text-secondary)] uppercase tracking-wider mb-3 font-[var(--font-display)]">Privacy</h3>
+                <h3 className="text-[10px] font-bold text-[var(--color-text-secondary)] uppercase tracking-wider mb-3 font-display">Privacy</h3>
                 <div className="flex items-center justify-between bg-[var(--color-bg-tertiary)] p-2.5 rounded-lg border border-[var(--color-border-primary)]">
                     <div>
                         <div className="text-sm font-medium text-[var(--color-text-primary)]">Help improve Clearical</div>
@@ -1008,7 +1100,7 @@ export function Settings({ onOpenJiraModal, onOpenTempoModal }: SettingsProps = 
             </div>
 
             <div className="bg-[var(--color-bg-secondary)] p-4 rounded-2xl border border-[var(--color-border-primary)]">
-                <h3 className="text-[10px] font-bold text-[var(--color-text-secondary)] uppercase tracking-wider mb-2 font-[var(--font-display)]">About</h3>
+                <h3 className="text-[10px] font-bold text-[var(--color-text-secondary)] uppercase tracking-wider mb-2 font-display">About</h3>
                 <p className="text-xs text-[var(--color-text-secondary)]">
                     Clearical is an intelligent time tracking application that helps you log and manage your work activities.
                 </p>
