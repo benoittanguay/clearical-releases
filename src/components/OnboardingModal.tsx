@@ -593,11 +593,12 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                             <div className="p-6 sm:p-8">
                                 {/* Header */}
                                 <div className="text-center mb-8">
-                                    <div className="inline-flex items-center justify-center w-16 h-16 bg-[var(--color-info-muted)] rounded-2xl mb-4 shadow-lg">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--color-info)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                            <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
-                                        </svg>
-                                    </div>
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--color-info)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="mx-auto mb-4">
+                                        <path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/>
+                                        <path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/>
+                                        <path d="M15 13a4.5 4.5 0 0 1-3-4 4.5 4.5 0 0 1-3 4"/>
+                                        <path d="M12 5v13"/>
+                                    </svg>
                                     <h2 className="text-2xl font-bold text-[var(--color-text-primary)] mb-2 font-display tracking-tight">AI-Powered Insights</h2>
                                     <p className="text-[var(--color-text-secondary)] text-lg">Clearical works smarter, not harder</p>
                                 </div>
@@ -662,16 +663,6 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                                                 </p>
                                             </div>
                                         </div>
-                                    </div>
-                                </div>
-
-                                {/* Privacy Note */}
-                                <div className="bg-[var(--color-success-muted)] border border-[var(--color-success)]/30 rounded-lg px-4 py-3 mb-6">
-                                    <div className="flex items-center gap-2 text-sm text-[var(--color-text-primary)]">
-                                        <svg className="w-4 h-4 flex-shrink-0 text-[var(--color-success)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                                        </svg>
-                                        <span className="font-medium">All AI processing happens on-device. Your data never leaves your computer.</span>
                                     </div>
                                 </div>
 

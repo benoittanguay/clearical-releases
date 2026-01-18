@@ -5,9 +5,16 @@ import http from 'http';
 import { CalendarProvider, CalendarEvent, FocusTimeEventInput, CalendarTokens } from './types.js';
 import { getCredential, storeCredential, deleteCredential } from '../credentialStorage.js';
 
-// Read env vars lazily to ensure dotenv has loaded them
-const getClientId = () => process.env.GOOGLE_CALENDAR_CLIENT_ID || '';
-const getClientSecret = () => process.env.GOOGLE_CALENDAR_CLIENT_SECRET || '';
+// Google OAuth credentials for desktop apps
+// Note: For desktop/native OAuth apps, Google's security model accepts that these
+// credentials cannot be kept confidential. Security relies on redirect URI validation
+// to localhost, not on secret confidentiality. See: https://developers.google.com/identity/protocols/oauth2/native-app
+const GOOGLE_CLIENT_ID = '791311907098-44i72hpg64b965845pbg4hhmrtb5vp11.apps.googleusercontent.com';
+const GOOGLE_CLIENT_SECRET = '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';
+
+// Allow env override for development/testing
+const getClientId = () => process.env.GOOGLE_CALENDAR_CLIENT_ID || GOOGLE_CLIENT_ID;
+const getClientSecret = () => process.env.GOOGLE_CALENDAR_CLIENT_SECRET || GOOGLE_CLIENT_SECRET;
 const REDIRECT_URI = 'http://localhost:3847/oauth/callback';
 const SCOPES = [
   'https://www.googleapis.com/auth/calendar.readonly',
@@ -126,6 +133,11 @@ export class GoogleCalendarProvider implements CalendarProvider {
     const clientId = getClientId();
     console.log('[GoogleCalendar] Building auth URL with client_id:', clientId ? `${clientId.substring(0, 20)}...` : 'EMPTY');
     console.log('[GoogleCalendar] Env var raw:', process.env.GOOGLE_CALENDAR_CLIENT_ID ? 'SET' : 'NOT SET');
+
+    if (!clientId) {
+      throw new Error('Google Calendar client_id is not configured. Please ensure GOOGLE_CALENDAR_CLIENT_ID is set in .env.local and restart the app.');
+    }
+
     const url = new URL('https://accounts.google.com/o/oauth2/v2/auth');
     url.searchParams.set('client_id', clientId);
     url.searchParams.set('redirect_uri', REDIRECT_URI);
