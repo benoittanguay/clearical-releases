@@ -14,6 +14,7 @@ interface AuthContextType {
     isLoading: boolean;
     sendOtp: (email: string) => Promise<{ success: boolean; error?: string }>;
     verifyOtp: (email: string, token: string) => Promise<{ success: boolean; error?: string }>;
+    signInWithOAuth: (provider: 'google' | 'azure' | 'apple') => Promise<{ success: boolean; error?: string }>;
     signOut: () => Promise<void>;
     openCustomerPortal: () => Promise<{ success: boolean; error?: string }>;
 }
@@ -78,6 +79,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
     }, []);
 
+    const signInWithOAuth = useCallback(async (
+        provider: 'google' | 'azure' | 'apple'
+    ): Promise<{ success: boolean; error?: string }> => {
+        try {
+            const result = await window.electron.ipcRenderer.signInWithOAuth(provider);
+
+            if (result.success && result.user) {
+                setUser(result.user);
+            }
+
+            return result;
+        } catch (error) {
+            console.error('[AuthContext] OAuth sign-in error:', error);
+            return {
+                success: false,
+                error: error instanceof Error ? error.message : 'Failed to sign in'
+            };
+        }
+    }, []);
+
     const signOut = useCallback(async () => {
         try {
             await window.electron.ipcRenderer.invoke('auth:sign-out');
@@ -108,6 +129,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 isLoading,
                 sendOtp,
                 verifyOtp,
+                signInWithOAuth,
                 signOut,
                 openCustomerPortal,
             }}
