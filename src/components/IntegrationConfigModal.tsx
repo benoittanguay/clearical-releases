@@ -367,11 +367,11 @@ export function IntegrationConfigModal({
                                 <button
                                     onClick={handleTestJira}
                                     disabled={isTestingJira}
-                                    className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-600 disabled:cursor-not-allowed text-white text-sm rounded transition-colors flex items-center justify-center gap-2"
+                                    className="w-full px-4 py-3 bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] disabled:bg-[var(--color-bg-tertiary)] disabled:text-[var(--color-text-tertiary)] disabled:cursor-not-allowed text-white text-sm font-semibold rounded-lg transition-all flex items-center justify-center gap-2"
                                 >
                                     {isTestingJira ? (
                                         <>
-                                            <div className="w-3 h-3 border border-white border-t-transparent rounded-full animate-spin"></div>
+                                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                                             Testing Jira...
                                         </>
                                     ) : (
@@ -540,11 +540,11 @@ export function IntegrationConfigModal({
                                 <button
                                     onClick={handleTestTempo}
                                     disabled={isTestingTempo}
-                                    className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-600 disabled:cursor-not-allowed text-white text-sm rounded transition-colors flex items-center justify-center gap-2"
+                                    className="w-full px-4 py-3 bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] disabled:bg-[var(--color-bg-tertiary)] disabled:text-[var(--color-text-tertiary)] disabled:cursor-not-allowed text-white text-sm font-semibold rounded-lg transition-all flex items-center justify-center gap-2"
                                 >
                                     {isTestingTempo ? (
                                         <>
-                                            <div className="w-3 h-3 border border-white border-t-transparent rounded-full animate-spin"></div>
+                                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                                             Testing Tempo...
                                         </>
                                     ) : (
@@ -553,16 +553,16 @@ export function IntegrationConfigModal({
                                 </button>
 
                                 {/* Account Selection Note */}
-                                <div className="mt-4 bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
-                                    <div className="flex items-start gap-2">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-400 flex-shrink-0 mt-0.5">
+                                <div className="mt-4 bg-[var(--color-accent-muted)] border border-[var(--color-accent)]/30 rounded-xl p-4">
+                                    <div className="flex items-start gap-3">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[var(--color-accent)] flex-shrink-0 mt-0.5">
                                             <circle cx="12" cy="12" r="10"/>
                                             <path d="M12 16v-4"/>
                                             <path d="M12 8h.01"/>
                                         </svg>
                                         <div>
-                                            <div className="text-blue-400 text-xs font-semibold mb-1">Account Selection</div>
-                                            <div className="text-blue-300 text-xs">
+                                            <div className="text-[var(--color-text-primary)] text-sm font-semibold mb-1 font-display">Account Selection</div>
+                                            <div className="text-[var(--color-text-secondary)] text-sm">
                                                 Tempo accounts are now selected when logging time. The account dropdown will show accounts linked to the specific Jira issue you're logging time to.
                                             </div>
                                         </div>
@@ -570,7 +570,7 @@ export function IntegrationConfigModal({
                                 </div>
 
                                 {/* Account Blacklist Manager */}
-                                <div className="mt-6 pt-6 border-t border-gray-700">
+                                <div className="mt-6 pt-6 border-t border-[var(--color-border-primary)]">
                                     <TempoAccountBlacklistManager
                                         tempoApiToken={tempTempoSettings.apiToken}
                                         tempoBaseUrl={tempTempoSettings.baseUrl}
@@ -584,13 +584,14 @@ export function IntegrationConfigModal({
                 <div className="flex justify-end gap-3 mt-8">
                     <button
                         onClick={onClose}
-                        className="px-4 py-2 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] text-sm transition-colors"
+                        className="px-5 py-2.5 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] text-sm font-medium transition-colors rounded-lg hover:bg-[#FAF5EE]"
                     >
                         Cancel
                     </button>
                     <button
                         onClick={handleSave}
-                        className="px-6 py-2.5 bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white text-sm font-semibold rounded-full transition-all hover:scale-105 active:scale-95 shadow-lg"
+                        disabled={tempJiraSettings.enabled && availableProjects.length > 0 && (tempJiraSettings.selectedProjects?.length || 0) === 0}
+                        className="px-6 py-2.5 bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] disabled:bg-[var(--color-bg-tertiary)] disabled:text-[var(--color-text-tertiary)] disabled:cursor-not-allowed disabled:shadow-none text-white text-sm font-semibold rounded-full transition-all transform hover:scale-105 active:scale-95 shadow-lg disabled:transform-none"
                     >
                         Save Configuration
                     </button>

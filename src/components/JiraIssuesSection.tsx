@@ -13,9 +13,10 @@ interface TabData {
 
 interface JiraIssuesSectionProps {
     onIssueClick?: (issue: JiraIssue) => void;
+    onRefreshReady?: (refreshFn: () => void) => void;
 }
 
-export function JiraIssuesSection({ onIssueClick }: JiraIssuesSectionProps = {}) {
+export function JiraIssuesSection({ onIssueClick, onRefreshReady }: JiraIssuesSectionProps = {}) {
     const { settings } = useSettings();
     const { hasFeature } = useSubscription();
     const { projects, isActive, totalIssuesFound } = useCrawlerProgress();
@@ -23,6 +24,7 @@ export function JiraIssuesSection({ onIssueClick }: JiraIssuesSectionProps = {})
     const [activeTab, setActiveTab] = useState<string>('assigned');
     const [searchQuery, setSearchQuery] = useState('');
     const [tabData, setTabData] = useState<Record<string, TabData>>({});
+    const [showSyncStatus, setShowSyncStatus] = useState(true);
 
     // Get available tabs - simple, no complex dependencies
     const getAvailableTabs = () => {
@@ -137,6 +139,31 @@ export function JiraIssuesSection({ onIssueClick }: JiraIssuesSectionProps = {})
         loadTabData(activeTab);
     }, [activeTab]); // Only depend on activeTab
 
+    // Refresh function that can be called from parent
+    const handleRefresh = () => {
+        if (activeTab === 'assigned') {
+            jiraCache.getAssignedIssues(true).then(issues => {
+                setTabData(prev => ({
+                    ...prev,
+                    [activeTab]: { issues, loading: false, error: null }
+                }));
+            });
+        } else if (activeTab.startsWith('project-')) {
+            const projectKey = activeTab.replace('project-', '');
+            jiraCache.getProjectIssues(projectKey, true).then(issues => {
+                setTabData(prev => ({
+                    ...prev,
+                    [activeTab]: { issues, loading: false, error: null }
+                }));
+            });
+        }
+    };
+
+    // Expose refresh function to parent
+    useEffect(() => {
+        onRefreshReady?.(handleRefresh);
+    }, [activeTab, onRefreshReady]);
+
     // Initialize first tab and setup background sync
     useEffect(() => {
         const tabs = getAvailableTabs();
@@ -239,68 +266,35 @@ export function JiraIssuesSection({ onIssueClick }: JiraIssuesSectionProps = {})
     }
 
     return (
-        <div className="mt-6">
-            <div className="flex items-center justify-between mb-4">
-                <h3
-                    className="text-lg font-bold"
-                    style={{
-                        fontFamily: 'var(--font-display)',
-                        color: 'var(--color-text-primary)'
-                    }}
-                >
-                    Jira Issues
-                </h3>
-                <button
-                    onClick={() => {
-                        if (activeTab === 'assigned') {
-                            jiraCache.getAssignedIssues(true).then(issues => {
-                                setTabData(prev => ({
-                                    ...prev,
-                                    [activeTab]: { issues, loading: false, error: null }
-                                }));
-                            });
-                        } else if (activeTab.startsWith('project-')) {
-                            const projectKey = activeTab.replace('project-', '');
-                            jiraCache.getProjectIssues(projectKey, true).then(issues => {
-                                setTabData(prev => ({
-                                    ...prev,
-                                    [activeTab]: { issues, loading: false, error: null }
-                                }));
-                            });
-                        }
-                    }}
-                    className="px-3 py-1.5 text-xs font-medium rounded-lg transition-all"
-                    style={{
-                        backgroundColor: 'var(--color-bg-tertiary)',
-                        color: 'var(--color-text-primary)',
-                        fontFamily: 'var(--font-body)',
-                        border: '1px solid var(--color-border-primary)',
-                        transitionDuration: 'var(--duration-base)',
-                        transitionTimingFunction: 'var(--ease-out)'
-                    }}
-                    onMouseEnter={(e) => {
-                        e.currentTarget.style.backgroundColor = 'var(--color-bg-quaternary)';
-                        e.currentTarget.style.borderColor = 'var(--color-accent-border)';
-                    }}
-                    onMouseLeave={(e) => {
-                        e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)';
-                        e.currentTarget.style.borderColor = 'var(--color-border-primary)';
-                    }}
-                    disabled={currentTabData.loading}
-                >
-                    Refresh
-                </button>
-            </div>
-
+        <div className="mt-4">
             {/* Crawler Status Section */}
-            {Object.keys(projects).length > 0 && (
-                <div className="mb-4 rounded-xl p-4 border"
+            {showSyncStatus && Object.keys(projects).length > 0 && (
+                <div className="mb-4 rounded-xl p-4 border relative"
                      style={{
                          backgroundColor: 'var(--color-bg-secondary)',
                          borderColor: 'var(--color-border-primary)',
                          borderRadius: 'var(--radius-xl)'
                      }}>
-                    <div className="flex items-center justify-between mb-2">
+                    <button
+                        onClick={() => setShowSyncStatus(false)}
+                        className="absolute top-2 right-2 p-1 rounded-md transition-colors"
+                        style={{ color: 'var(--color-text-tertiary)' }}
+                        onMouseEnter={(e) => {
+                            e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)';
+                            e.currentTarget.style.color = 'var(--color-text-secondary)';
+                        }}
+                        onMouseLeave={(e) => {
+                            e.currentTarget.style.backgroundColor = 'transparent';
+                            e.currentTarget.style.color = 'var(--color-text-tertiary)';
+                        }}
+                        aria-label="Dismiss"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                    </button>
+                    <div className="flex items-center justify-between mb-2 pr-6">
                         <div className="flex items-center gap-2">
                             <svg
                                 className={`w-4 h-4 ${isActive ? 'animate-spin' : ''}`}
@@ -552,7 +546,7 @@ export function JiraIssuesSection({ onIssueClick }: JiraIssuesSectionProps = {})
                         </p>
                     </div>
                 ) : (
-                    <div className="space-y-2.5">
+                    <div className="space-y-2">
                         {currentTabData.issues.map((issue) => {
                             const isEpic = issue.fields.issuetype.name.toLowerCase() === 'epic';
 
@@ -560,23 +554,19 @@ export function JiraIssuesSection({ onIssueClick }: JiraIssuesSectionProps = {})
                                 <div
                                     key={issue.id}
                                     onClick={() => onIssueClick?.(issue)}
-                                    className="rounded-lg p-3 border transition-all cursor-pointer"
+                                    className="rounded-lg p-2.5 cursor-pointer"
                                     style={{
-                                        backgroundColor: isEpic ? 'rgba(168, 85, 247, 0.05)' : 'var(--color-bg-tertiary)',
-                                        borderColor: isEpic ? 'rgba(168, 85, 247, 0.3)' : 'var(--color-border-secondary)',
-                                        borderRadius: 'var(--radius-lg)',
-                                        transitionDuration: 'var(--duration-base)',
-                                        transitionTimingFunction: 'var(--ease-out)'
+                                        backgroundColor: isEpic ? 'rgba(168, 85, 247, 0.05)' : 'white',
+                                        border: isEpic ? '1px solid rgba(168, 85, 247, 0.3)' : '1px solid var(--color-border-primary)',
+                                        transition: 'all var(--duration-base) var(--ease-out)'
                                     }}
                                     onMouseEnter={(e) => {
-                                        e.currentTarget.style.backgroundColor = isEpic ? 'rgba(168, 85, 247, 0.1)' : 'var(--color-bg-quaternary)';
-                                        e.currentTarget.style.borderColor = 'var(--color-accent-border)';
-                                        e.currentTarget.style.boxShadow = 'var(--shadow-sm)';
+                                        e.currentTarget.style.backgroundColor = isEpic ? 'rgba(168, 85, 247, 0.1)' : '#FAF5EE';
+                                        e.currentTarget.style.borderColor = isEpic ? 'rgba(168, 85, 247, 0.5)' : 'var(--color-border-secondary)';
                                     }}
                                     onMouseLeave={(e) => {
-                                        e.currentTarget.style.backgroundColor = isEpic ? 'rgba(168, 85, 247, 0.05)' : 'var(--color-bg-tertiary)';
-                                        e.currentTarget.style.borderColor = isEpic ? 'rgba(168, 85, 247, 0.3)' : 'var(--color-border-secondary)';
-                                        e.currentTarget.style.boxShadow = 'none';
+                                        e.currentTarget.style.backgroundColor = isEpic ? 'rgba(168, 85, 247, 0.05)' : 'white';
+                                        e.currentTarget.style.borderColor = isEpic ? 'rgba(168, 85, 247, 0.3)' : 'var(--color-border-primary)';
                                     }}
                                 >
                                     <div className="flex items-start justify-between">

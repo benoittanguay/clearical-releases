@@ -47,6 +47,7 @@ function App() {
   const [showPermissionModal, setShowPermissionModal] = useState(false);
   const [isStopping, setIsStopping] = useState(false);
   const [bucketsTab, setBucketsTab] = useState<'buckets' | 'jira'>('buckets');
+  const [jiraRefreshFn, setJiraRefreshFn] = useState<(() => void) | null>(null);
 
   const { isRunning, isPaused, elapsed, start: startTimer, stop: stopTimer, pause: pauseTimer, resume: resumeTimer, formatTime, checkPermissions } = useTimer();
 
@@ -769,7 +770,7 @@ function App() {
               {/* Sticky Header with Tabs */}
               <div className="flex-shrink-0 z-20 drag-handle" style={{ backgroundColor: 'var(--color-bg-primary)', borderBottom: '1px solid var(--color-border-primary)' }}>
                 {/* Title Section */}
-                <div className="px-6 pt-5 pb-3">
+                <div className="px-6 pt-5 pb-3 flex items-center justify-between">
                   <h2
                     className="text-2xl font-bold tracking-tight"
                     style={{
@@ -779,6 +780,28 @@ function App() {
                   >
                     Manage Buckets
                   </h2>
+                  {bucketsTab === 'jira' && jiraRefreshFn && (
+                    <button
+                      onClick={jiraRefreshFn}
+                      className="no-drag px-3 py-1.5 text-xs font-medium rounded-lg transition-all"
+                      style={{
+                        backgroundColor: 'var(--color-bg-tertiary)',
+                        color: 'var(--color-text-primary)',
+                        fontFamily: 'var(--font-body)',
+                        border: '1px solid var(--color-border-primary)',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = 'var(--color-bg-quaternary)';
+                        e.currentTarget.style.borderColor = 'var(--color-border-secondary)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)';
+                        e.currentTarget.style.borderColor = 'var(--color-border-primary)';
+                      }}
+                    >
+                      Refresh
+                    </button>
+                  )}
                 </div>
 
                 {/* Tab Bar - Underline style */}
@@ -914,6 +937,7 @@ function App() {
                         });
                         setCurrentView('jira-detail');
                       }}
+                      onRefreshReady={(fn) => setJiraRefreshFn(() => fn)}
                     />
                   </div>
                 )}

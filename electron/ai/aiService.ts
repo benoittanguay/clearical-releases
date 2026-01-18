@@ -111,7 +111,7 @@ class AIService {
 
         if (!session) {
             console.log('[AIService] No active session, AI features unavailable');
-            return { success: false, error: 'Not authenticated' };
+            return { success: false, error: 'Not authenticated. Please sign in again.' };
         }
 
         try {
@@ -127,6 +127,17 @@ class AIService {
             if (!response.ok) {
                 const errorData = await response.json().catch(() => ({ error: 'Unknown error' })) as GeminiProxyResponse;
                 console.error('[AIService] Proxy request failed:', response.status, errorData);
+
+                // If server says token is invalid/expired, clear local session and prompt re-auth
+                if (response.status === 401 && errorData.error?.includes('Invalid or expired')) {
+                    console.log('[AIService] Server rejected token, clearing local session');
+                    await authService.signOut();
+                    return {
+                        success: false,
+                        error: 'Session expired. Please sign in again from Settings.'
+                    };
+                }
+
                 return {
                     success: false,
                     error: errorData.error || `Request failed with status ${response.status}`
