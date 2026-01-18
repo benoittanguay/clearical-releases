@@ -50,23 +50,65 @@ export function DeleteButton({
         lg: 'w-6 h-6'
     };
 
-    const variants = {
-        danger: 'text-red-400 hover:text-red-300',
-        subtle: 'text-gray-400 hover:text-red-400'
-    };
-
     const buttonSizes = {
         sm: 'p-1',
         md: 'p-1.5',
         lg: 'p-2'
     };
 
+    const getVariantStyles = () => {
+        if (variant === 'danger') {
+            return {
+                color: 'var(--color-error)',
+                hoverBg: 'rgba(220, 38, 38, 0.1)',
+                hoverColor: 'var(--color-error)'
+            };
+        }
+        // subtle variant - ghost button style with destructive hover
+        return {
+            color: 'var(--color-text-secondary)',
+            hoverBg: '#FAF5EE',
+            hoverColor: 'var(--color-error)'
+        };
+    };
+
+    const variantStyles = getVariantStyles();
+
     return (
         <>
             <button
                 onClick={handleClick}
-                className={`${variants[variant]} ${buttonSizes[size]} rounded hover:bg-red-500/10 active:bg-red-500/20 active:scale-95 transition-all ${className}`}
-                style={{ transitionDuration: 'var(--duration-base)', transitionTimingFunction: 'var(--ease-out)' }}
+                className={`${buttonSizes[size]} rounded-lg active:scale-95 transition-all ${className}`}
+                style={{
+                    color: variantStyles.color,
+                    transitionDuration: 'var(--duration-base)',
+                    transitionTimingFunction: 'var(--ease-out)'
+                }}
+                onMouseEnter={(e) => {
+                    e.stopPropagation();
+                    e.currentTarget.style.backgroundColor = variantStyles.hoverBg;
+                    e.currentTarget.style.color = variantStyles.hoverColor;
+                    // Reset parent hover styles - find closest interactive parent
+                    const parent = e.currentTarget.closest('[data-hoverable]') as HTMLElement;
+                    if (parent) {
+                        parent.style.backgroundColor = parent.dataset.defaultBg || '';
+                        parent.style.borderColor = parent.dataset.defaultBorder || '';
+                    }
+                }}
+                onMouseLeave={(e) => {
+                    e.stopPropagation();
+                    e.currentTarget.style.backgroundColor = 'transparent';
+                    e.currentTarget.style.color = variantStyles.color;
+                    // Reinstate parent hover if mouse moved somewhere within the parent
+                    const parent = e.currentTarget.closest('[data-hoverable]') as HTMLElement;
+                    const relatedTarget = e.relatedTarget as Node | null;
+                    if (parent && relatedTarget && (parent.contains(relatedTarget) || parent === relatedTarget)) {
+                        parent.style.backgroundColor = parent.dataset.hoverBg || '#FAF5EE';
+                        if (parent.dataset.hoverBorder) {
+                            parent.style.borderColor = parent.dataset.hoverBorder;
+                        }
+                    }
+                }}
                 title="Delete"
             >
                 <svg className={sizes[size]} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

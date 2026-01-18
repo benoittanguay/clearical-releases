@@ -60,10 +60,6 @@ export function LoginScreen() {
         setError(null);
     };
 
-    const handleOpenSignup = () => {
-        window.electron.ipcRenderer.invoke('open-external-url', 'https://clearical.io/signup');
-    };
-
     return (
         <div
             className="min-h-screen flex items-center justify-center p-4 animate-fade-in"
@@ -112,14 +108,20 @@ export function LoginScreen() {
                     {step === 'email' ? (
                         <form onSubmit={handleSendOtp}>
                             <h2
-                                className="text-xl font-semibold mb-6"
+                                className="text-xl font-semibold mb-2"
                                 style={{
                                     fontFamily: 'var(--font-display)',
                                     color: 'var(--color-text-primary)'
                                 }}
                             >
-                                Sign in to your account
+                                Get started
                             </h2>
+                            <p
+                                className="text-sm mb-6"
+                                style={{ color: 'var(--color-text-secondary)' }}
+                            >
+                                Enter your email to sign up or sign in
+                            </p>
 
                             <div className="mb-5">
                                 <label
@@ -365,34 +367,6 @@ export function LoginScreen() {
                             </button>
                         </form>
                     )}
-                </div>
-
-                {/* Sign up link */}
-                <div className="mt-6 text-center">
-                    <p
-                        className="text-sm"
-                        style={{ color: 'var(--color-text-secondary)' }}
-                    >
-                        Don't have an account?{' '}
-                        <button
-                            onClick={handleOpenSignup}
-                            className="font-semibold transition-colors duration-200"
-                            style={{
-                                color: 'var(--color-accent)',
-                                fontFamily: 'var(--font-display)'
-                            }}
-                            onMouseEnter={(e) => {
-                                e.currentTarget.style.color = 'var(--color-accent-hover)';
-                                e.currentTarget.style.textDecoration = 'underline';
-                            }}
-                            onMouseLeave={(e) => {
-                                e.currentTarget.style.color = 'var(--color-accent)';
-                                e.currentTarget.style.textDecoration = 'none';
-                            }}
-                        >
-                            Sign up for free
-                        </button>
-                    </p>
                 </div>
 
                 {/* Footer */}

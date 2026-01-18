@@ -54,55 +54,17 @@ else
     echo -e "${YELLOW}  ⚠ No .env.local found${NC}"
 fi
 
-# Step 2: Build FastVLM server (if not already built)
+# Step 2: Build the app with electron-builder (without publishing)
 echo ""
-echo -e "${BLUE}Step 2: Building FastVLM server...${NC}"
-FASTVLM_EXEC="python/dist/fastvlm-server/fastvlm-server"
-
-if [ -f "$FASTVLM_EXEC" ]; then
-    echo "  ✓ FastVLM server already built"
-else
-    echo "  Building FastVLM server (this may take a while)..."
-
-    # Check if model is downloaded
-    if [ ! -d "python/models/nanoLLaVA" ]; then
-        echo "  Downloading nanoLLaVA model..."
-        cd python && python3 download_model.py 2>&1 | tail -10
-        cd "$PROJECT_ROOT"
-        echo "  ✓ Model downloaded"
-    fi
-
-    # Build the server
-    echo "  Running PyInstaller build..."
-    cd python && python3 build_server.py 2>&1 | tail -20
-    cd "$PROJECT_ROOT"
-
-    if [ -f "$FASTVLM_EXEC" ]; then
-        echo "  ✓ FastVLM server built successfully"
-    else
-        echo -e "${RED}  ✗ FastVLM server build failed${NC}"
-        echo -e "${YELLOW}  Continuing without FastVLM (will use Swift fallback)${NC}"
-    fi
-fi
-
-# Show FastVLM server size
-if [ -d "python/dist/fastvlm-server" ]; then
-    FASTVLM_SIZE=$(du -sh python/dist/fastvlm-server | cut -f1)
-    echo "  FastVLM server size: $FASTVLM_SIZE"
-fi
-
-# Step 3: Build the app with electron-builder (without publishing)
-echo ""
-echo -e "${BLUE}Step 3: Building Electron app...${NC}"
+echo -e "${BLUE}Step 2: Building Electron app...${NC}"
 npm run build:electron 2>&1 | tail -20
 echo "  ✓ Electron build complete"
 
 
-# Step 4: Sign all embedded binaries (inside-out signing)
-# electron-builder doesn't sign extraResources, so we must sign fastvlm-server binaries manually.
+# Step 3: Sign all embedded binaries (inside-out signing)
 # Important: Must sign in correct order (innermost binaries first, then frameworks, then helpers, then main app)
 echo ""
-echo -e "${BLUE}Step 4: Signing embedded binaries...${NC}"
+echo -e "${BLUE}Step 3: Signing embedded binaries...${NC}"
 APP_PATH="dist/mac-arm64/Clearical.app"
 
 if [ ! -d "$APP_PATH" ]; then
@@ -112,34 +74,16 @@ fi
 
 IDENTITY="Developer ID Application: Benoit Tanguay (98UY743MSB)"
 ENTITLEMENTS="build/entitlements.mac.plist"
-FASTVLM_PATH="$APP_PATH/Contents/Resources/fastvlm-server"
 FRAMEWORKS="$APP_PATH/Contents/Frameworks"
 
-# Step 4a: Sign all individual binaries (.so, .dylib, .node files) in the entire app bundle
+# Step 3a: Sign all individual binaries (.so, .dylib, .node files) in the entire app bundle
 echo "  Signing individual binaries..."
 find "$APP_PATH" -type f -name "*.so" -exec codesign --force --options runtime --timestamp --sign "$IDENTITY" {} \; 2>/dev/null
 find "$APP_PATH" -type f -name "*.dylib" -exec codesign --force --options runtime --timestamp --sign "$IDENTITY" {} \; 2>/dev/null
 find "$APP_PATH" -type f -name "*.node" -exec codesign --force --options runtime --timestamp --sign "$IDENTITY" {} \; 2>/dev/null
 echo "  ✓ Signed .so, .dylib, and .node files"
 
-# Step 4b: Sign Python framework inside fastvlm-server (if exists)
-PYTHON_FW="$FASTVLM_PATH/_internal/Python3.framework"
-if [ -d "$PYTHON_FW" ]; then
-    echo "  Signing Python framework..."
-    codesign --force --options runtime --timestamp --sign "$IDENTITY" "$PYTHON_FW/Versions/3.9/Python3" 2>/dev/null || true
-    codesign --force --options runtime --timestamp --sign "$IDENTITY" "$PYTHON_FW" 2>/dev/null || true
-    echo "  ✓ Python framework signed"
-fi
-
-# Step 4c: Sign fastvlm-server executable
-if [ -d "$FASTVLM_PATH" ]; then
-    echo "  Signing fastvlm-server executable..."
-    codesign --force --options runtime --timestamp --entitlements "$ENTITLEMENTS" \
-        --sign "$IDENTITY" "$FASTVLM_PATH/fastvlm-server"
-    echo "  ✓ fastvlm-server signed"
-fi
-
-# Step 4d: Re-sign all Electron frameworks (their internal dylibs were modified)
+# Step 3b: Re-sign all Electron frameworks (their internal dylibs were modified)
 echo "  Re-signing Electron frameworks..."
 for fw in "$FRAMEWORKS"/*.framework; do
     if [ -d "$fw" ]; then
@@ -148,7 +92,7 @@ for fw in "$FRAMEWORKS"/*.framework; do
 done
 echo "  ✓ Frameworks signed"
 
-# Step 4e: Re-sign all Electron helper apps
+# Step 3c: Re-sign all Electron helper apps
 echo "  Re-signing helper apps..."
 for helper in "$FRAMEWORKS"/*.app; do
     if [ -d "$helper" ]; then
@@ -157,13 +101,13 @@ for helper in "$FRAMEWORKS"/*.app; do
 done
 echo "  ✓ Helper apps signed"
 
-# Step 4f: Sign the main app bundle (must be last)
+# Step 3d: Sign the main app bundle (must be last)
 echo "  Signing main app bundle..."
 codesign --force --options runtime --timestamp --entitlements "$ENTITLEMENTS" \
     --sign "$IDENTITY" "$APP_PATH"
 echo "  ✓ Main app signed"
 
-# Step 4g: Verify the signature
+# Step 3e: Verify the signature
 echo "  Verifying deep signature..."
 if codesign --verify --deep --strict "$APP_PATH" 2>&1; then
     echo "  ✓ Deep signature verification passed"
@@ -177,18 +121,18 @@ fi
 echo "  Signature details:"
 codesign -dvvv "$APP_PATH" 2>&1 | grep -E "(Identifier|Authority|TeamIdentifier|flags)" | head -5 | sed 's/^/    /'
 
-# Step 5: Rebuild DMG with signed app
+# Step 4: Rebuild DMG with signed app
 echo ""
-echo -e "${BLUE}Step 5: Creating DMG...${NC}"
+echo -e "${BLUE}Step 4: Creating DMG...${NC}"
 DMG_PATH="dist/Clearical-arm64.dmg"
 rm -f "$DMG_PATH" "dist/Clearical-arm64.dmg.blockmap"
 
 hdiutil create -volname "Clearical" -srcfolder "$APP_PATH" -ov -format UDZO "$DMG_PATH" 2>&1 | grep -E "(created|error)" || true
 echo "  ✓ DMG created: $DMG_PATH"
 
-# Step 6: Create ZIP with signed app
+# Step 5: Create ZIP with signed app
 echo ""
-echo -e "${BLUE}Step 6: Creating ZIP...${NC}"
+echo -e "${BLUE}Step 5: Creating ZIP...${NC}"
 ZIP_PATH="dist/Clearical-arm64.zip"
 rm -f "$ZIP_PATH" "dist/Clearical-arm64.zip.blockmap"
 
@@ -202,23 +146,47 @@ echo ""
 echo -e "${BLUE}Build artifacts:${NC}"
 ls -lh dist/Clearical-arm64.dmg dist/Clearical-arm64.zip | awk '{print "  " $9 ": " $5}'
 
-# Step 7: Notarize the app (if credentials available)
+# Step 6: Notarize the app (if credentials available)
 echo ""
-echo -e "${BLUE}Step 7: Notarizing with Apple...${NC}"
+echo -e "${BLUE}Step 6: Notarizing with Apple...${NC}"
 
-if [ -n "$APPLE_ID" ] && [ -n "$APPLE_APP_SPECIFIC_PASSWORD" ] && [ -n "$APPLE_TEAM_ID" ]; then
-    # Check if signed with Developer ID (not ad-hoc)
-    if codesign -dvvv "$APP_PATH" 2>&1 | grep -q "Authority=Developer ID"; then
+# Check if signed with Developer ID (not ad-hoc)
+if ! codesign -dvvv "$APP_PATH" 2>&1 | grep -q "Authority=Developer ID"; then
+    echo -e "${YELLOW}  ⚠ App not signed with Developer ID, skipping notarization${NC}"
+else
+    # Determine credential method: keychain profile (preferred) or environment variables
+    NOTARY_CREDS=""
+    if xcrun notarytool history --keychain-profile "Clearical" &>/dev/null; then
+        echo "  Using keychain profile 'Clearical'"
+        NOTARY_CREDS="--keychain-profile Clearical"
+    elif [ -n "$APPLE_ID" ] && [ -n "$APPLE_APP_SPECIFIC_PASSWORD" ] && [ -n "$APPLE_TEAM_ID" ]; then
+        echo "  Using environment variables for credentials"
+        NOTARY_CREDS="--apple-id $APPLE_ID --password $APPLE_APP_SPECIFIC_PASSWORD --team-id $APPLE_TEAM_ID"
+    else
+        echo -e "${YELLOW}  ⚠ Apple credentials not configured, skipping notarization${NC}"
+        echo ""
+        echo "  To configure credentials, either:"
+        echo "    1. Store in keychain (recommended):"
+        echo "       xcrun notarytool store-credentials \"Clearical\" \\"
+        echo "         --apple-id <APPLE_ID> \\"
+        echo "         --team-id <TEAM_ID> \\"
+        echo "         --password <APP_SPECIFIC_PASSWORD>"
+        echo ""
+        echo "    2. Set environment variables in .env.local:"
+        echo "       APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID"
+        NOTARY_CREDS=""
+    fi
+
+    if [ -n "$NOTARY_CREDS" ]; then
         echo "  Submitting ZIP for notarization..."
 
         # Submit for notarization and wait for completion
-        NOTARIZE_OUTPUT=$(xcrun notarytool submit "$ZIP_PATH" \
-            --apple-id "$APPLE_ID" \
-            --password "$APPLE_APP_SPECIFIC_PASSWORD" \
-            --team-id "$APPLE_TEAM_ID" \
-            --wait 2>&1)
+        NOTARIZE_OUTPUT=$(xcrun notarytool submit "$ZIP_PATH" $NOTARY_CREDS --wait 2>&1)
 
-        echo "$NOTARIZE_OUTPUT" | tail -5
+        # Extract submission ID for potential log retrieval
+        SUBMISSION_ID=$(echo "$NOTARIZE_OUTPUT" | grep -E "^\s*id:" | head -1 | awk '{print $2}')
+
+        echo "$NOTARIZE_OUTPUT" | tail -8
 
         if echo "$NOTARIZE_OUTPUT" | grep -q "status: Accepted"; then
             echo "  ✓ Notarization successful!"
@@ -244,23 +212,36 @@ if [ -n "$APPLE_ID" ] && [ -n "$APPLE_APP_SPECIFIC_PASSWORD" ] && [ -n "$APPLE_T
             ditto -c -k --sequesterRsrc --keepParent mac-arm64/Clearical.app Clearical-arm64.zip
             cd "$PROJECT_ROOT"
             echo "  ✓ ZIP recreated with stapled app"
+
+            # Verify notarization with Gatekeeper
+            echo "  Verifying notarization with Gatekeeper..."
+            VERIFY_OUTPUT=$(xcrun spctl --assess --type open --context context:primary-signature --verbose=2 "$DMG_PATH" 2>&1)
+            if echo "$VERIFY_OUTPUT" | grep -q "accepted"; then
+                echo "  ✓ Gatekeeper verification passed: $(echo "$VERIFY_OUTPUT" | grep -o 'source=.*')"
+            else
+                echo -e "${YELLOW}  ⚠ Gatekeeper verification inconclusive${NC}"
+                echo "$VERIFY_OUTPUT" | sed 's/^/    /'
+            fi
         else
-            echo -e "${YELLOW}  ⚠ Notarization failed or timed out${NC}"
-            echo "$NOTARIZE_OUTPUT" | grep -E "(status|message)" | head -5 | sed 's/^/    /'
+            echo -e "${RED}  ✗ Notarization failed${NC}"
+
+            # Fetch detailed log if we have a submission ID
+            if [ -n "$SUBMISSION_ID" ]; then
+                echo "  Fetching notarization log for submission: $SUBMISSION_ID"
+                echo ""
+                xcrun notarytool log "$SUBMISSION_ID" $NOTARY_CREDS 2>&1 | head -50
+                echo ""
+            fi
+
             echo -e "${YELLOW}  Continuing with non-notarized build...${NC}"
         fi
-    else
-        echo -e "${YELLOW}  ⚠ App not signed with Developer ID, skipping notarization${NC}"
     fi
-else
-    echo -e "${YELLOW}  ⚠ Apple credentials not configured, skipping notarization${NC}"
-    echo "  Set APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, and APPLE_TEAM_ID in .env.local"
 fi
 
-# Step 8: Publish to GitHub (if --publish flag)
+# Step 7: Publish to GitHub (if --publish flag)
 if [ "$PUBLISH" = true ]; then
     echo ""
-    echo -e "${BLUE}Step 8: Publishing to GitHub...${NC}"
+    echo -e "${BLUE}Step 7: Publishing to GitHub...${NC}"
 
     # Check if gh CLI is available
     if ! command -v gh &> /dev/null; then
