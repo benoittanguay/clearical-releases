@@ -74,20 +74,16 @@ export function LoginScreen() {
                     <img
                         src="./icon.png"
                         alt="Clearical"
-                        className="w-16 h-16 mx-auto mb-5 rounded-3xl"
+                        className="w-16 h-16 mx-auto mb-5"
                         style={{
                             boxShadow: 'var(--shadow-accent)'
                         }}
                     />
-                    <h1
-                        className="text-3xl font-bold mb-2 text-gradient-accent"
-                        style={{
-                            fontFamily: 'var(--font-display)',
-                            letterSpacing: 'var(--tracking-tight)'
-                        }}
-                    >
-                        Clearical
-                    </h1>
+                    <img
+                        src="./Clearical_TypeLogo.png"
+                        alt="Clearical"
+                        className="h-8 mx-auto mb-2"
+                    />
                     <p
                         className="text-sm"
                         style={{ color: 'var(--color-text-secondary)' }}
