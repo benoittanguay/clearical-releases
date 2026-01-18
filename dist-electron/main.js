@@ -27,7 +27,8 @@ import { MigrationService } from './migration.js';
 import { updater } from './autoUpdater.js';
 import { AppDiscoveryService } from './appDiscoveryService.js';
 import { BlacklistService } from './blacklistService.js';
-import { aiService } from './ai/aiService.js';
+import { aiService, createScreenshotSignal, createWindowActivitySignal, createCalendarSignal, createUserProfileSignal } from './ai/aiService.js';
+import { getCalendarService, initializeCalendarService } from './calendar/calendarService.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // In production (packaged), app.getAppPath() returns the path to the asar file
 // In development, it returns the project root directory
@@ -258,6 +259,42 @@ ipcMain.handle('capture-screenshot', async () => {
         const status = systemPreferences.getMediaAccessStatus('screen');
         console.log('[Main] Current Screen Access Status:', status);
     }
+    // Helper function for robust screen capture fallback
+    // This ensures we ALWAYS get a screenshot when called, using the full screen if window matching fails
+    const captureScreenFallback = async (currentWindow, reason) => {
+        console.log(`[Main] Using screen capture fallback (reason: ${reason})`);
+        try {
+            const screenSources = await desktopCapturer.getSources({
+                types: ['screen'],
+                thumbnailSize: { width: 1920, height: 1080 }
+            });
+            if (screenSources.length > 0) {
+                const image = screenSources[0].thumbnail.toPNG();
+                const timestamp = Date.now();
+                // Use the active window info from AppleScript for proper attribution
+                const appNameSafe = (currentWindow?.appName || 'Unknown').replace(/[\/\\:*?"<>|]/g, '_');
+                const windowTitleSafe = (currentWindow?.windowTitle || 'Unknown').replace(/[\/\\:*?"<>|]/g, '_').substring(0, 100);
+                const filename = `${timestamp}|||${appNameSafe}|||${windowTitleSafe}.png`;
+                const filePath = path.join(SCREENSHOTS_DIR, filename);
+                try {
+                    await saveEncryptedFile(filePath, image);
+                    console.log('[Main] Screen screenshot saved (encrypted, fallback):', filePath);
+                }
+                catch (encryptError) {
+                    console.error('[Main] Failed to encrypt screenshot, saving unencrypted:', encryptError);
+                    await fs.promises.writeFile(filePath, image);
+                    console.log('[Main] Screen screenshot saved (unencrypted fallback):', filePath);
+                }
+                return filePath;
+            }
+            console.error('[Main] No screen sources available for fallback');
+            return null;
+        }
+        catch (error) {
+            console.error('[Main] Screen capture fallback failed:', error);
+            return null;
+        }
+    };
     try {
         // IMPORTANT: To avoid race conditions, we capture window sources FIRST,
         // then immediately get the active window info. This minimizes the window
@@ -516,25 +553,22 @@ ipcMain.handle('capture-screenshot', async () => {
                         console.log('[Main] Using lenient app name match (unambiguous):', targetSource.name);
                     }
                     else if (possibleMatches.length > 1) {
-                        // Multiple lenient matches - too ambiguous, skip this capture
-                        console.log('[Main] Multiple lenient matches found, skipping to avoid misattribution:', possibleMatches.map(s => s.name).join(', '));
-                        console.log('[Main] SKIPPING CAPTURE - cannot confidently match window to app');
-                        return null;
+                        // Multiple lenient matches - ambiguous, use screen capture fallback
+                        console.log('[Main] Multiple lenient matches found, using screen capture fallback:', possibleMatches.map(s => s.name).join(', '));
+                        return captureScreenFallback(currentWindow, 'multiple_lenient_matches');
                     }
                     else {
-                        // No matches at all - skip capture rather than guess
-                        // REMOVED: "largest window" fallback - this caused misattributions
-                        console.log('[Main] No window matches detected app. SKIPPING CAPTURE to avoid misattribution.');
+                        // No matches at all - use screen capture fallback with active window info
+                        console.log('[Main] No window matches detected app, using screen capture fallback.');
                         console.log('[Main] Active app was:', currentWindow.appName);
                         console.log('[Main] Available windows were:', validSources.map(s => s.name).join(', '));
-                        return null;
+                        return captureScreenFallback(currentWindow, 'no_window_match');
                     }
                 }
-                // If still no target after safe fallbacks, skip the capture
+                // If still no target after safe fallbacks, use screen capture
                 if (!targetSource) {
-                    console.log('[Main] No suitable window found after conservative fallback strategies');
-                    console.log('[Main] SKIPPING CAPTURE - better to skip than misattribute');
-                    return null;
+                    console.log('[Main] No suitable window found, using screen capture fallback');
+                    return captureScreenFallback(currentWindow, 'no_suitable_window');
                 }
             }
             // Final validation: Verify the captured window reasonably belongs to the detected app
@@ -552,8 +586,8 @@ ipcMain.handle('capture-screenshot', async () => {
                 if (!hasAppRelation && matchConfidence !== 'single_window') {
                     console.log('[Main] VALIDATION FAILED: Captured window does not appear to belong to detected app');
                     console.log('[Main] App:', currentWindow.appName, '| Window:', targetSource.name, '| Match type:', matchConfidence);
-                    console.log('[Main] SKIPPING CAPTURE - possible race condition detected');
-                    return null;
+                    console.log('[Main] Using screen capture fallback due to possible race condition');
+                    return captureScreenFallback(currentWindow, 'validation_failed_race_condition');
                 }
             }
             console.log('[Main] Capturing window:', targetSource.name, `(${targetSource.thumbnail.getSize().width}x${targetSource.thumbnail.getSize().height})`, '| Match confidence:', matchConfidence);
@@ -581,33 +615,18 @@ ipcMain.handle('capture-screenshot', async () => {
         }
         else {
             console.log('[Main] No valid window sources found for screenshot');
-            // Fallback to screen capture if no windows available
-            const screenSources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 1920, height: 1080 } });
-            if (screenSources.length > 0) {
-                console.log('[Main] Falling back to screen capture');
-                const image = screenSources[0].thumbnail.toPNG();
-                // Use same naming convention for fallback
-                const timestamp = Date.now();
-                const appNameSafe = (currentWindow?.appName || 'Unknown').replace(/[\/\\:*?"<>|]/g, '_');
-                const filename = `${timestamp}|||${appNameSafe}|||SCREEN_FALLBACK.png`;
-                const filePath = path.join(SCREENSHOTS_DIR, filename);
-                // Save screenshot with encryption
-                try {
-                    await saveEncryptedFile(filePath, image);
-                    console.log('[Main] Screen screenshot saved (encrypted, fallback):', filePath);
-                }
-                catch (encryptError) {
-                    console.error('[Main] Failed to encrypt screenshot, saving unencrypted:', encryptError);
-                    // Fallback to unencrypted if encryption fails
-                    await fs.promises.writeFile(filePath, image);
-                    console.log('[Main] Screen screenshot saved (unencrypted fallback):', filePath);
-                }
-                return filePath;
-            }
+            return captureScreenFallback(currentWindow, 'no_valid_window_sources');
         }
     }
     catch (error) {
         console.error('[Main] Failed to capture screenshot:', error);
+        // Even on error, try to capture something
+        try {
+            return await captureScreenFallback(null, 'error_recovery');
+        }
+        catch {
+            return null;
+        }
     }
     return null;
 });
@@ -1727,10 +1746,46 @@ ipcMain.handle('suggest-assignment', async (event, request) => {
 ipcMain.handle('generate-activity-summary', async (event, context) => {
     console.log('[Main] generate-activity-summary requested');
     console.log('[Main] Screenshot descriptions:', context.screenshotDescriptions.length);
+    console.log('[Main] Window titles:', context.windowTitles?.length || 0);
     console.log('[Main] App names:', context.appNames);
     try {
-        // Use Gemini AI to generate narrative summary
-        const result = await aiService.summarizeActivities(context.screenshotDescriptions, context.appNames);
+        // Build context signals array
+        const signals = [];
+        // Signal 1: Screenshot Analysis (if available)
+        if (context.screenshotDescriptions && context.screenshotDescriptions.length > 0) {
+            signals.push(createScreenshotSignal(context.screenshotDescriptions));
+        }
+        // Signal 2: Window Activity
+        if ((context.appNames && context.appNames.length > 0) ||
+            (context.windowTitles && context.windowTitles.length > 0)) {
+            signals.push(createWindowActivitySignal(context.appNames || [], context.windowTitles || []));
+        }
+        // Signal 3: Calendar Events
+        const calendarService = getCalendarService();
+        const calendarContext = calendarService.getCalendarContext(context.startTime);
+        console.log('[Main] Calendar context:', {
+            currentEvent: calendarContext.currentEvent,
+            recentCount: calendarContext.recentEvents.length,
+            upcomingCount: calendarContext.upcomingEvents.length
+        });
+        if (calendarContext.currentEvent ||
+            calendarContext.recentEvents.length > 0 ||
+            calendarContext.upcomingEvents.length > 0) {
+            signals.push(createCalendarSignal(calendarContext.currentEvent || undefined, // Convert null to undefined
+            calendarContext.recentEvents, calendarContext.upcomingEvents));
+        }
+        // Signal 4: User Profile (if available)
+        if (context.userRole) {
+            signals.push(createUserProfileSignal(context.userRole));
+        }
+        console.log('[Main] Built', signals.length, 'context signals');
+        // Use signal-based summarization
+        const result = await aiService.summarizeWithSignals({
+            signals,
+            duration: context.duration,
+            startTime: context.startTime,
+            endTime: context.endTime
+        });
         if (result.success && result.summary) {
             console.log('[Main] Summary generated successfully:', result.summary.substring(0, 100));
             // Return the narrative summary
@@ -2498,6 +2553,212 @@ ipcMain.handle('is-tempo-account-blacklisted', async (event, accountKey) => {
         };
     }
 });
+// Calendar Integration
+ipcMain.handle('calendar:connect', async () => {
+    try {
+        const service = getCalendarService();
+        await service.connectGoogle();
+        return { success: true };
+    }
+    catch (error) {
+        console.error('[Main] calendar:connect failed:', error);
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+});
+ipcMain.handle('calendar:disconnect', async () => {
+    try {
+        const service = getCalendarService();
+        await service.disconnect();
+        return { success: true };
+    }
+    catch (error) {
+        console.error('[Main] calendar:disconnect failed:', error);
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+});
+ipcMain.handle('calendar:is-connected', async () => {
+    try {
+        const service = getCalendarService();
+        return { success: true, connected: await service.isConnected() };
+    }
+    catch (error) {
+        console.error('[Main] calendar:is-connected failed:', error);
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error', connected: false };
+    }
+});
+ipcMain.handle('calendar:get-account', async () => {
+    try {
+        const service = getCalendarService();
+        const email = await service.getAccountEmail();
+        const provider = await service.getProviderName();
+        return { success: true, email, provider };
+    }
+    catch (error) {
+        console.error('[Main] calendar:get-account failed:', error);
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error', email: null, provider: null };
+    }
+});
+ipcMain.handle('calendar:sync', async () => {
+    try {
+        const service = getCalendarService();
+        await service.syncEvents();
+        return { success: true };
+    }
+    catch (error) {
+        console.error('[Main] calendar:sync failed:', error);
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+});
+ipcMain.handle('calendar:get-context', async (_, timestamp) => {
+    try {
+        const service = getCalendarService();
+        const context = service.getCalendarContext(timestamp);
+        return { success: true, ...context };
+    }
+    catch (error) {
+        console.error('[Main] calendar:get-context failed:', error);
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error', currentEvent: null, recentEvents: [], upcomingEvents: [] };
+    }
+});
+ipcMain.handle('calendar:create-focus-time', async (_, input) => {
+    try {
+        const service = getCalendarService();
+        const eventId = await service.createFocusTimeEvent(input);
+        return { success: true, eventId };
+    }
+    catch (error) {
+        console.error('[Main] calendar:create-focus-time failed:', error);
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error', eventId: null };
+    }
+});
+// Helper function to build split analysis prompt
+function buildSplitAnalysisPrompt(activityData, calendarContext) {
+    const formatTime = (timestamp) => new Date(timestamp).toLocaleTimeString();
+    const formatDuration = (ms) => `${Math.round(ms / 60000)} minutes`;
+    let prompt = `Analyze the following sequence of work activities and identify points where the user clearly switched to a different project or task.
+
+**Time Range:** ${formatTime(activityData.startTime)} - ${formatTime(activityData.endTime)} (${formatDuration(activityData.duration)})
+
+**Calendar Context:**`;
+    if (calendarContext.currentEvent) {
+        prompt += `\n- Current Event: ${calendarContext.currentEvent}`;
+    }
+    if (calendarContext.recentEvents.length > 0) {
+        prompt += `\n- Recent Events: ${calendarContext.recentEvents.join(', ')}`;
+    }
+    if (calendarContext.upcomingEvents.length > 0) {
+        prompt += `\n- Upcoming Events: ${calendarContext.upcomingEvents.join(', ')}`;
+    }
+    prompt += `\n\n**Activity Screenshots (chronological order):**\n`;
+    activityData.screenshots.forEach((screenshot, i) => {
+        prompt += `${i + 1}. [${formatTime(screenshot.timestamp)}] ${screenshot.description}\n`;
+    });
+    prompt += `\n**Instructions:**
+1. Identify semantic boundaries where the user switched to a DIFFERENT project, task, or meeting
+2. DO NOT split for minor app switches within the same project (e.g., switching from IDE to browser while debugging)
+3. DO split when there's clear evidence of changing focus (e.g., switching from coding Project A to reviewing Project B)
+4. Consider calendar events as strong signals for context switches
+5. Each suggested split should have a clear description of what work was done in that segment
+6. Provide a confidence score (0.0 to 1.0) based on how clear the switch is
+
+**Output Format:**
+Return a JSON array of split suggestions. Each suggestion should have:
+{
+  "startTime": <timestamp in ms>,
+  "endTime": <timestamp in ms>,
+  "description": "<concise description of work done in this segment>",
+  "suggestedBucket": null,  // Will be filled in later by assignment AI
+  "suggestedJiraKey": null, // Will be filled in later by assignment AI
+  "confidence": <0.0 to 1.0>
+}
+
+If no meaningful splits are detected, return an empty array.
+
+Respond with ONLY valid JSON (no markdown, no explanation):`;
+    return prompt;
+}
+function parseSplitSuggestions(rawSuggestions) {
+    try {
+        if (!Array.isArray(rawSuggestions)) {
+            console.warn('[Main] parseSplitSuggestions: expected array, got:', typeof rawSuggestions);
+            return [];
+        }
+        return rawSuggestions.map((suggestion) => ({
+            startTime: suggestion.startTime || 0,
+            endTime: suggestion.endTime || 0,
+            description: suggestion.description || '',
+            suggestedBucket: suggestion.suggestedBucket || null,
+            suggestedJiraKey: suggestion.suggestedJiraKey || null,
+            confidence: typeof suggestion.confidence === 'number' ? suggestion.confidence : 0.5
+        }));
+    }
+    catch (error) {
+        console.error('[Main] parseSplitSuggestions error:', error);
+        return [];
+    }
+}
+// AI Splitting Analysis
+ipcMain.handle('ai:analyze-splits', async (_, activityData) => {
+    try {
+        console.log('[Main] ai:analyze-splits called for activity:', activityData.id);
+        // Validate input
+        if (!activityData.screenshots || activityData.screenshots.length === 0) {
+            console.warn('[Main] ai:analyze-splits: no screenshots provided');
+            return { success: true, suggestions: [] };
+        }
+        // 1. Get calendar context for the activity period
+        const calendarService = getCalendarService();
+        const calendarContext = calendarService.getCalendarContext(activityData.startTime);
+        // 2. Build analysis prompt with all signals
+        const prompt = buildSplitAnalysisPrompt(activityData, calendarContext);
+        // 3. Call AI service to analyze and suggest splits
+        // For now, we use the summarize operation as a workaround since it accepts
+        // custom text and returns text output. In the future, we should add a dedicated
+        // 'analyze-splits' operation to the edge function.
+        const result = await aiService.summarizeActivities([prompt], // Send the full prompt as a single "activity"
+        []);
+        if (!result.success || !result.summary) {
+            console.warn('[Main] ai:analyze-splits failed:', result.error);
+            return {
+                success: false,
+                error: result.error || 'Split analysis failed',
+                suggestions: []
+            };
+        }
+        // 4. Parse response - the summary should contain JSON
+        let suggestions = [];
+        try {
+            // Try to extract JSON from the response (handling potential markdown wrapping)
+            let jsonText = result.summary.trim();
+            // Remove markdown code blocks if present
+            const jsonMatch = jsonText.match(/```(?:json)?\s*([\s\S]*?)```/);
+            if (jsonMatch) {
+                jsonText = jsonMatch[1].trim();
+            }
+            const parsed = JSON.parse(jsonText);
+            suggestions = parseSplitSuggestions(Array.isArray(parsed) ? parsed : []);
+        }
+        catch (parseError) {
+            console.error('[Main] ai:analyze-splits: Failed to parse AI response:', parseError);
+            console.error('[Main] ai:analyze-splits: Response was:', result.summary);
+            return {
+                success: false,
+                error: 'Failed to parse AI response',
+                suggestions: []
+            };
+        }
+        console.log('[Main] ai:analyze-splits completed with', suggestions.length, 'suggestions');
+        return { success: true, suggestions };
+    }
+    catch (error) {
+        console.error('[Main] ai:analyze-splits error:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error',
+            suggestions: []
+        };
+    }
+});
 /**
  * Comprehensive cleanup of all app resources
  * Ensures no orphan processes remain after quit
@@ -2541,7 +2802,7 @@ function createTray() {
         : path.join(process.env.VITE_PUBLIC || '', 'tray-icon.png');
     console.log('Tray Icon Path:', iconPath);
     const icon = nativeImage.createFromPath(iconPath);
-    tray = new Tray(icon.resize({ width: 16, height: 16 }));
+    tray = new Tray(icon.resize({ width: 22, height: 22 }));
     // Set initial title and tooltip
     tray.setTitle(''); // Start with empty title (icon only)
     tray.setToolTip('Clearical');
@@ -2685,8 +2946,7 @@ app.on('window-all-closed', () => {
         }
     }
 });
-// Handle app activation (macOS)
-// Note: Since dock icon is hidden, this mainly handles edge cases
+// Handle app activation (macOS) - clicking dock icon shows the window
 app.on('activate', () => {
     if (win === null) {
         createTray();
@@ -2735,6 +2995,14 @@ app.whenReady().then(() => {
         console.error('[Main] Failed to initialize subscription system:', error);
         console.warn('[Main] App will run without subscription features');
     }
+    // Initialize calendar service (async)
+    initializeCalendarService()
+        .then(() => {
+        console.log('[Main] Calendar service initialized');
+    })
+        .catch((error) => {
+        console.error('[Main] Failed to initialize calendar service:', error);
+    });
     // AI service uses cloud-based Gemini API via Supabase Edge Function
     // No local server needed - requests are made on-demand
     console.log('[Main] AI service configured (Gemini cloud via Supabase)');
@@ -2742,12 +3010,6 @@ app.whenReady().then(() => {
     createTray();
     // Create window (it will be positioned off-screen initially)
     createWindow();
-    // Hide dock icon on macOS - app only appears in menu bar
-    // Do this before showing window to avoid visual glitches
-    if (process.platform === 'darwin' && app.dock) {
-        app.dock.hide();
-        console.log('[Main] Dock icon hidden - app runs from menu bar only');
-    }
     // Now that both tray and window are created, show the window below the tray icon
     // The showWindowBelowTray function has built-in retry logic if tray bounds aren't ready
     // We use a small delay to ensure the tray icon is fully rendered by the OS

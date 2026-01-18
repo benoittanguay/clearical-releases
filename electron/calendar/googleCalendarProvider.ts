@@ -5,8 +5,9 @@ import http from 'http';
 import { CalendarProvider, CalendarEvent, FocusTimeEventInput, CalendarTokens } from './types.js';
 import { getCredential, storeCredential, deleteCredential } from '../credentialStorage.js';
 
-const GOOGLE_CLIENT_ID = process.env.GOOGLE_CALENDAR_CLIENT_ID || '';
-const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CALENDAR_CLIENT_SECRET || '';
+// Read env vars lazily to ensure dotenv has loaded them
+const getClientId = () => process.env.GOOGLE_CALENDAR_CLIENT_ID || '';
+const getClientSecret = () => process.env.GOOGLE_CALENDAR_CLIENT_SECRET || '';
 const REDIRECT_URI = 'http://localhost:3847/oauth/callback';
 const SCOPES = [
   'https://www.googleapis.com/auth/calendar.readonly',
@@ -122,8 +123,11 @@ export class GoogleCalendarProvider implements CalendarProvider {
   // Private methods
 
   private buildAuthUrl(): string {
+    const clientId = getClientId();
+    console.log('[GoogleCalendar] Building auth URL with client_id:', clientId ? `${clientId.substring(0, 20)}...` : 'EMPTY');
+    console.log('[GoogleCalendar] Env var raw:', process.env.GOOGLE_CALENDAR_CLIENT_ID ? 'SET' : 'NOT SET');
     const url = new URL('https://accounts.google.com/o/oauth2/v2/auth');
-    url.searchParams.set('client_id', GOOGLE_CLIENT_ID);
+    url.searchParams.set('client_id', clientId);
     url.searchParams.set('redirect_uri', REDIRECT_URI);
     url.searchParams.set('response_type', 'code');
     url.searchParams.set('scope', SCOPES.join(' '));
@@ -184,8 +188,8 @@ export class GoogleCalendarProvider implements CalendarProvider {
       },
       body: new URLSearchParams({
         code,
-        client_id: GOOGLE_CLIENT_ID,
-        client_secret: GOOGLE_CLIENT_SECRET,
+        client_id: getClientId(),
+        client_secret: getClientSecret(),
         redirect_uri: REDIRECT_URI,
         grant_type: 'authorization_code',
       }),
@@ -221,8 +225,8 @@ export class GoogleCalendarProvider implements CalendarProvider {
       },
       body: new URLSearchParams({
         refresh_token: refreshToken,
-        client_id: GOOGLE_CLIENT_ID,
-        client_secret: GOOGLE_CLIENT_SECRET,
+        client_id: getClientId(),
+        client_secret: getClientSecret(),
         grant_type: 'refresh_token',
       }),
     });

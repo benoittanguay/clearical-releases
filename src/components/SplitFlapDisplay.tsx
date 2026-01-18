@@ -41,6 +41,22 @@ function usePrevious<T>(value: T): T | undefined {
 export const SplitFlapDigit: React.FC<SplitFlapDigitProps> = ({ digit, prevDigit }) => {
   const [isFlipping, setIsFlipping] = useState(false);
   const [animationKey, setAnimationKey] = useState(0);
+  // Ref to store the "from" digit - captured at transition start, stable throughout animation
+  // Initialize with prevDigit to handle mount during a transition
+  const fromDigitRef = useRef(prevDigit);
+
+  // Detect a new transition starting: digit changed AND we're not already animating
+  // This is true on the FIRST render after props change, before useEffect runs
+  const isNewTransition = digit !== prevDigit && !isFlipping;
+
+  // Capture the "from" digit whenever props indicate a transition
+  // This handles both initial transitions and rapid transitions while already flipping
+  if (digit !== prevDigit) {
+    fromDigitRef.current = prevDigit;
+  }
+
+  // Show animation elements when either actively flipping OR on first render of new transition
+  const showAnimation = isFlipping || isNewTransition;
 
   useEffect(() => {
     // Only animate if the digit actually changed
@@ -50,11 +66,12 @@ export const SplitFlapDigit: React.FC<SplitFlapDigitProps> = ({ digit, prevDigit
       // Increment key to force new DOM elements and restart animation
       setAnimationKey(prev => prev + 1);
 
-      // End animation after total duration (600ms top + 300ms delay + 500ms bottom = 1400ms max)
+      // End animation after animations complete (300ms delay + 500ms bottom = 800ms)
+      // Add small buffer for animation-fill-mode: forwards to settle
       const endTimer = setTimeout(() => {
         console.log(`✅ FLIP COMPLETE: "${digit}"`);
         setIsFlipping(false);
-      }, 1400);
+      }, 850);
 
       return () => {
         clearTimeout(endTimer);
@@ -64,41 +81,53 @@ export const SplitFlapDigit: React.FC<SplitFlapDigitProps> = ({ digit, prevDigit
 
   return (
     <div className="split-flap-digit">
-      {/* Static top half - shows CURRENT digit top (always in sync with bottom) */}
+      {/* Static top half - shows CURRENT digit top (revealed as animated top flap flips away) */}
       <div className="flap-half flap-top-static">
         <div className="flap-content flap-content-top">
           {digit}
         </div>
       </div>
 
-      {/* Static bottom half - shows OLD digit during flip, NEW digit when static */}
-      {/* IMPORTANT: Stays VISIBLE during animation showing prevDigit */}
-      {/* The animated bottom flap will rotate down and cover this */}
+      {/* Static bottom half - ALWAYS shows current digit (no content switch = no flicker) */}
       <div className="flap-half flap-bottom-static">
         <div className="flap-content flap-content-bottom">
-          {isFlipping ? prevDigit : digit}
+          {digit}
+        </div>
+      </div>
+
+      {/* Old digit overlay - shows OLD digit during flip, covered by animated bottom flap */}
+      {/* Hidden when not animating */}
+      <div
+        key={`old-overlay-${animationKey}`}
+        className={`flap-half flap-bottom-static flap-old-overlay ${showAnimation ? 'flap-active' : 'flap-hidden'}`}
+      >
+        <div className="flap-content flap-content-bottom">
+          {fromDigitRef.current}
         </div>
       </div>
 
       {/* Animated top flap - flips DOWN from 0° to -90° (hinged at bottom) */}
-      {/* Shows the OLD digit flipping away */}
-      {isFlipping && (
-        <div key={`top-${animationKey}`} className="flap-half flap-top-animated">
-          <div className="flap-content flap-content-top">
-            {prevDigit}
-          </div>
+      {/* Shows the OLD digit flipping away. Hidden when not animating. */}
+      <div
+        key={`top-${animationKey}`}
+        className={`flap-half flap-top-animated ${showAnimation ? 'flap-active' : 'flap-hidden'}`}
+      >
+        <div className="flap-content flap-content-top">
+          {fromDigitRef.current}
         </div>
-      )}
+      </div>
 
       {/* Animated bottom flap - flips UP from 90° to 0° (hinged at top) */}
-      {/* Shows the NEW digit flipping into place */}
-      {isFlipping && (
-        <div key={`bottom-${animationKey}`} className="flap-half flap-bottom-animated">
-          <div className="flap-content flap-content-bottom">
-            {digit}
-          </div>
+      {/* Shows the NEW digit. STAYS VISIBLE after animation to prevent flicker. */}
+      {/* Only resets when key changes (next animation starts) */}
+      <div
+        key={`bottom-${animationKey}`}
+        className="flap-half flap-bottom-animated flap-bottom-persistent"
+      >
+        <div className="flap-content flap-content-bottom">
+          {digit}
         </div>
-      )}
+      </div>
 
       {/* Center split line for mechanical realism */}
       <div className="flap-split-line" />

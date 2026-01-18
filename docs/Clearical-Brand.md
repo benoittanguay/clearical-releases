@@ -126,15 +126,15 @@ font-weight: 600;
 ```css
 background: transparent;
 color: var(--color-text-secondary);
+border: 1px solid var(--color-border-primary);
 border-radius: 8px;
 font-family: var(--font-mono); /* JetBrains Mono */
-font-weight: 400;
 /* On hover: */
 background: #FAF5EE; /* Warm cream hover */
 color: var(--color-text-primary);
-font-weight: 600; /* Semibold on hover */
 ```
-- Use for tertiary actions: "Back", "Cancel", "Skip for now"
+- Use for tertiary actions: "Back", "Cancel", "Skip for now", "Sign Out", "Reset"
+- No font-weight change on hover to prevent width shifts
 
 #### Destructive Button
 ```css

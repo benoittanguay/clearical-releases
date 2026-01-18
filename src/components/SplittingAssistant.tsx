@@ -583,7 +583,7 @@ export function SplittingAssistant({
 
                     <div className="ml-auto flex gap-1">
                       <button
-                        className="w-7 h-7 flex items-center justify-center rounded-lg text-[var(--color-text-tertiary)] hover:bg-[var(--color-bg-tertiary)] hover:text-[var(--color-text-primary)] transition-all"
+                        className="w-7 h-7 flex items-center justify-center rounded-lg text-[var(--color-text-tertiary)] hover:bg-[#FAF5EE] hover:text-[var(--color-text-primary)] transition-all"
                         onClick={(e) => {
                           e.stopPropagation();
                           setEditingSegmentId(isEditing ? null : segment.id);

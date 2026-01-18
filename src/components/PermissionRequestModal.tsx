@@ -349,7 +349,7 @@ export function PermissionRequestModal({ isOpen, onClose, onPermissionsGranted }
                 <div className="flex justify-between gap-3 p-6 pt-4 border-t border-[var(--color-border-primary)] flex-shrink-0 bg-[var(--color-bg-secondary)]">
                     <button
                         onClick={onClose}
-                        className="px-5 py-2.5 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] text-sm font-medium transition-colors rounded-lg hover:bg-[var(--color-bg-tertiary)]"
+                        className="px-5 py-2.5 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] text-sm font-medium transition-colors rounded-lg hover:bg-[#FAF5EE]"
                                             >
                         Cancel
                     </button>

@@ -158,7 +158,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "build:electron-main": "tsc -p electron/tsconfig.json && cp dist-electron/electron/*.js dist-electron/electron/*.cjs dist-electron/ && for dir in dist-electron/electron/*/; do cp -r \"$dir\" dist-electron/; done",
+    "build:electron-main": "tsc -p electron/tsconfig.json && cp -r dist-electron/electron/* dist-electron/",
     "dev:electron": "npm run build:electron-main && concurrently \"vite\" \"tsc -p electron/tsconfig.json -w\" \"wait-on tcp:5173 && electron .\"",
     "build:electron": "cross-env BUILD_ENV=production tsc -b && vite build && npm run build:electron-main && electron-builder",
     "build:electron:dev": "cross-env BUILD_ENV=development tsc -b && vite build && npm run build:electron-main && electron-builder",

@@ -64,7 +64,7 @@
   --font-mono: 'JetBrains Mono', 'Fira Code', 'SF Mono', monospace; /* Code, technical */
 
   /* Font Sizes - Using modular scale (1.25 ratio) */
-  --text-xs: 0.625rem;      /* 10px - micro labels */
+  --text-xs: 0.75rem;       /* 12px - micro labels, buttons */
   --text-sm: 0.75rem;       /* 12px - small labels */
   --text-base: 0.875rem;    /* 14px - body text */
   --text-md: 1rem;          /* 16px - medium text */
@@ -481,4 +481,41 @@ input[type="button"],
 input[type="submit"],
 input[type="reset"] {
   font-family: var(--font-mono);
+}
+
+/* ===========================================
+ * CUSTOM SCROLLBAR - Cream/Sand aesthetic
+ * =========================================== */
+
+/* Webkit browsers (Chrome, Safari, Edge) */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-border-secondary);
+  border-radius: var(--radius-full);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-bg-quaternary);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border-secondary) transparent;
 }

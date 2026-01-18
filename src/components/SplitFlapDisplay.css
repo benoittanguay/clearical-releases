@@ -127,6 +127,41 @@
   clip-path: inset(0);
 }
 
+/* Old digit overlay - sits above static bottom, below animated bottom */
+/* Shows old digit during flip, gets covered by animated bottom flap */
+.flap-old-overlay {
+  z-index: 2;
+}
+
+/* ============================================================================
+   Animation Visibility States
+   Using visibility/opacity instead of conditional render to avoid flicker
+   ============================================================================ */
+
+.flap-active {
+  visibility: visible;
+  opacity: 1;
+}
+
+.flap-hidden {
+  visibility: hidden;
+  opacity: 0;
+  animation: none !important;
+  pointer-events: none;
+  /* Quick fade to avoid flicker */
+  transition: opacity 50ms ease-out, visibility 0ms linear 50ms;
+}
+
+/* Persistent bottom flap - stays visible after animation ends */
+/* Prevents flicker by never hiding - just stays at final position */
+.flap-bottom-persistent {
+  /* Override any hidden state - this flap is always visible */
+  visibility: visible !important;
+  opacity: 1 !important;
+  /* Ensure it's always on top of other bottom elements */
+  z-index: 45 !important;
+}
+
 /* ============================================================================
    Animated Flaps (visible only during flip)
    ============================================================================ */

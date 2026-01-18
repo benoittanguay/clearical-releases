@@ -150,8 +150,8 @@ export function AssignmentPicker({ value, onChange, placeholder = "Select assign
                     boxShadow: 'var(--shadow-sm)'
                 }}
                 onMouseEnter={(e) => {
-                    e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)';
-                    e.currentTarget.style.borderColor = 'var(--color-accent-border)';
+                    e.currentTarget.style.backgroundColor = '#FAF5EE';
+                    e.currentTarget.style.borderColor = 'var(--color-border-secondary)';
                 }}
                 onMouseLeave={(e) => {
                     e.currentTarget.style.backgroundColor = 'var(--color-bg-secondary)';
@@ -282,7 +282,7 @@ export function AssignmentPicker({ value, onChange, placeholder = "Select assign
                                 transitionTimingFunction: 'var(--ease-out)'
                             }}
                             onMouseEnter={(e) => {
-                                e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)';
+                                e.currentTarget.style.backgroundColor = '#FAF5EE';
                                 e.currentTarget.style.color = 'var(--color-text-primary)';
                             }}
                             onMouseLeave={(e) => {
@@ -314,7 +314,7 @@ export function AssignmentPicker({ value, onChange, placeholder = "Select assign
                                             transitionDuration: 'var(--duration-fast)',
                                             transitionTimingFunction: 'var(--ease-out)'
                                         }}
-                                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)'}
+                                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#FAF5EE'}
                                         onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                                     >
                                         <div
@@ -354,7 +354,7 @@ export function AssignmentPicker({ value, onChange, placeholder = "Select assign
                                             transitionDuration: 'var(--duration-fast)',
                                             transitionTimingFunction: 'var(--ease-out)'
                                         }}
-                                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)'}
+                                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#FAF5EE'}
                                         onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                                     >
                                         <div className="flex items-center gap-3">

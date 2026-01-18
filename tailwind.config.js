@@ -12,7 +12,7 @@ export default {
                 mono: ['JetBrains Mono', 'Fira Code', 'SF Mono', 'monospace'],
             },
             fontSize: {
-                'xs': '0.625rem',      // 10px - micro labels
+                'xs': '0.75rem',       // 12px - micro labels, buttons
                 'sm': '0.75rem',       // 12px - small labels
                 'base': '0.875rem',    // 14px - body text
                 'lg': '1.125rem',      // 18px - large text

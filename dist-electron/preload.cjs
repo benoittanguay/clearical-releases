@@ -23,6 +23,7 @@ electron_1.contextBridge.exposeInMainWorld('electron', {
         captureScreenshot: () => electron_1.ipcRenderer.invoke('capture-screenshot'),
         analyzeScreenshot: (imagePath, requestId) => electron_1.ipcRenderer.invoke('analyze-screenshot', imagePath, requestId),
         generateActivitySummary: (context) => electron_1.ipcRenderer.invoke('generate-activity-summary', context),
+        analyzeSplits: (activityData) => electron_1.ipcRenderer.invoke('ai:analyze-splits', activityData),
         getActiveWindow: () => electron_1.ipcRenderer.invoke('get-active-window'),
         checkAccessibilityPermission: () => electron_1.ipcRenderer.invoke('check-accessibility-permission'),
         checkScreenPermission: () => electron_1.ipcRenderer.invoke('check-screen-permission'),
@@ -143,6 +144,16 @@ electron_1.contextBridge.exposeInMainWorld('electron', {
             addBlacklistedAccount: (accountKey, accountId, name) => electron_1.ipcRenderer.invoke('add-blacklisted-tempo-account', accountKey, accountId, name),
             removeBlacklistedAccount: (accountKey) => electron_1.ipcRenderer.invoke('remove-blacklisted-tempo-account', accountKey),
             isAccountBlacklisted: (accountKey) => electron_1.ipcRenderer.invoke('is-tempo-account-blacklisted', accountKey),
+        },
+        // Calendar operations
+        calendar: {
+            connect: () => electron_1.ipcRenderer.invoke('calendar:connect'),
+            disconnect: () => electron_1.ipcRenderer.invoke('calendar:disconnect'),
+            isConnected: () => electron_1.ipcRenderer.invoke('calendar:is-connected'),
+            getAccount: () => electron_1.ipcRenderer.invoke('calendar:get-account'),
+            sync: () => electron_1.ipcRenderer.invoke('calendar:sync'),
+            getContext: (timestamp) => electron_1.ipcRenderer.invoke('calendar:get-context', timestamp),
+            createFocusTime: (input) => electron_1.ipcRenderer.invoke('calendar:create-focus-time', input),
         },
     },
     // Analytics (top-level, not inside ipcRenderer)

@@ -207,7 +207,7 @@ export function CalendarSettings() {
                         <button
                             onClick={handleDisconnect}
                             disabled={isConnecting}
-                            className="px-3 py-2 bg-[var(--color-bg-tertiary)] hover:bg-[var(--color-bg-tertiary)]/70 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] text-sm rounded-lg transition-all border border-[var(--color-border-primary)] font-medium disabled:opacity-50"
+                            className="px-3 py-2 bg-[var(--color-bg-tertiary)] hover:bg-[#FAF5EE]/70 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] text-sm rounded-lg transition-all border border-[var(--color-border-primary)] font-medium disabled:opacity-50"
                         >
                             Disconnect
                         </button>

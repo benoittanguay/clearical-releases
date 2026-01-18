@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useStorage } from '../context/StorageContext';
 import { useSettings } from '../context/SettingsContext';
 import { analytics } from '../services/analytics';
 import type { JiraProject } from '../services/jiraService';
+import jiraLogo from '../assets/jira-logo.png';
 
 interface OnboardingModalProps {
     isOpen: boolean;
@@ -22,6 +23,7 @@ const BUCKET_COLORS = [
 ];
 
 export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
+    const scrollContainerRef = useRef<HTMLDivElement>(null);
     const [currentStep, setCurrentStep] = useState(0);
     const [bucketName, setBucketName] = useState('');
     const [selectedColor, setSelectedColor] = useState(BUCKET_COLORS[0].value);
@@ -153,6 +155,10 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
 
     const stepNames = ['permissions', 'bucket', 'ai_features', 'calendar', 'jira'];
 
+    const scrollToTop = () => {
+        scrollContainerRef.current?.scrollTo({ top: 0, behavior: 'instant' });
+    };
+
     const handleNext = () => {
         // Track step completion before transitioning
         const currentStepName = stepNames[currentStep];
@@ -161,6 +167,7 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
         setIsTransitioning(true);
         setTimeout(() => {
             setCurrentStep((prev) => prev + 1);
+            scrollToTop();
             setIsTransitioning(false);
         }, 200);
     };
@@ -169,6 +176,7 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
         setIsTransitioning(true);
         setTimeout(() => {
             setCurrentStep((prev) => prev - 1);
+            scrollToTop();
             setIsTransitioning(false);
         }, 200);
     };
@@ -321,6 +329,7 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                                     setIsTransitioning(true);
                                     setTimeout(() => {
                                         setCurrentStep(index);
+                                        scrollToTop();
                                         setIsTransitioning(false);
                                     }, 200);
                                 }
@@ -338,7 +347,7 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                 </div>
 
                 {/* Content Container with Slide Animation - Scrollable */}
-                <div className="relative overflow-y-auto flex-1">
+                <div ref={scrollContainerRef} className="relative overflow-y-auto flex-1">
                     <div
                         className={`transition-all duration-200 h-full ${
                             isTransitioning ? 'opacity-0 scale-95' : 'opacity-100 scale-100'
@@ -493,19 +502,6 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                                     </div>
                                 )}
 
-                                {/* Info box when accessibility granted but screen recording not */}
-                                {accessibilityGranted && !screenRecordingGranted && (
-                                    <div className="bg-[var(--color-accent-muted)] border border-[var(--color-accent)]/30 rounded-lg px-4 py-3 mb-6">
-                                        <div className="flex items-start gap-2 text-sm text-[var(--color-text-primary)]">
-                                            <svg className="w-4 h-4 flex-shrink-0 mt-0.5 text-[var(--color-accent)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                            </svg>
-                                            <span>
-                                                You can continue without Screen Recording, but AI-powered summaries will be less detailed. We recommend granting this permission for the best experience.
-                                            </span>
-                                        </div>
-                                    </div>
-                                )}
 
                             </div>
                         )}
@@ -821,15 +817,8 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                             <div className="p-6 sm:p-8">
                                 {/* Header */}
                                 <div className="text-center mb-6">
-                                    <div className="inline-flex items-center justify-center w-16 h-16 bg-[var(--color-info-muted)] rounded-2xl mb-4 shadow-lg">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--color-info)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
-                                            <polyline points="7.5 4.21 12 6.81 16.5 4.21"/>
-                                            <polyline points="7.5 19.79 7.5 14.6 3 12"/>
-                                            <polyline points="21 12 16.5 14.6 16.5 19.79"/>
-                                            <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
-                                            <line x1="12" y1="22.08" x2="12" y2="12"/>
-                                        </svg>
+                                    <div className="inline-flex items-center justify-center w-16 h-16 bg-white rounded-2xl mb-4 shadow-lg">
+                                        <img src={jiraLogo} alt="Jira" className="w-10 h-10 object-contain" />
                                     </div>
                                     <h2 className="text-2xl font-bold text-[var(--color-text-primary)] mb-2 font-display tracking-tight">Connect Jira</h2>
                                     <p className="text-[var(--color-text-secondary)] text-lg">Link your Jira issues for smarter time tracking</p>
@@ -1070,7 +1059,7 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                         {currentStep > 0 && (
                             <button
                                 onClick={handleBack}
-                                className="px-5 py-2.5 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] text-sm font-medium transition-colors rounded-lg hover:bg-[var(--color-bg-tertiary)]"
+                                className="px-5 py-2.5 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] text-sm font-medium transition-colors rounded-lg hover:bg-[#FAF5EE]"
                             >
                                 Back
                             </button>
@@ -1083,7 +1072,7 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                         {currentStep === 1 && (
                             <button
                                 onClick={handleSkipBucket}
-                                className="px-5 py-2.5 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] text-sm font-medium transition-colors rounded-lg hover:bg-[var(--color-bg-tertiary)]"
+                                className="px-5 py-2.5 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] text-sm font-medium transition-colors rounded-lg hover:bg-[#FAF5EE]"
                             >
                                 Skip
                             </button>
@@ -1091,7 +1080,7 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                         {currentStep === 3 && (
                             <button
                                 onClick={handleNext}
-                                className="px-5 py-2.5 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] text-sm font-medium transition-colors rounded-lg hover:bg-[var(--color-bg-tertiary)]"
+                                className="px-5 py-2.5 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] text-sm font-medium transition-colors rounded-lg hover:bg-[#FAF5EE]"
                             >
                                 Skip for now
                             </button>
@@ -1099,7 +1088,7 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                         {currentStep === 4 && (
                             <button
                                 onClick={handleFinish}
-                                className="px-5 py-2.5 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] text-sm font-medium transition-colors rounded-lg hover:bg-[var(--color-bg-tertiary)]"
+                                className="px-5 py-2.5 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] text-sm font-medium transition-colors rounded-lg hover:bg-[#FAF5EE]"
                             >
                                 Skip
                             </button>
