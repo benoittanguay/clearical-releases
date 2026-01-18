@@ -5,7 +5,7 @@
  */
 
 import { ipcMain, shell } from 'electron';
-import { getAuthService, AuthUser, AuthSession } from './supabaseAuth.js';
+import { getAuthService, AuthUser, AuthSession, OAuthProvider } from './supabaseAuth.js';
 import { getConfig } from '../config.js';
 import { getEdgeFunctionClient } from '../subscription/edgeFunctionClient.js';
 import { getSubscriptionValidator } from '../subscription/ipcHandlers.js';
@@ -53,6 +53,9 @@ function registerIpcHandlers(): void {
 
     // Sign out
     ipcMain.handle('auth:sign-out', handleSignOut);
+
+    // Sign in with OAuth
+    ipcMain.handle('auth:sign-in-oauth', handleSignInWithOAuth);
 
     // Open Stripe Customer Portal
     ipcMain.handle('auth:open-customer-portal', handleOpenCustomerPortal);
@@ -174,6 +177,53 @@ async function handleVerifyOtp(
         return result;
     } catch (error) {
         console.error('[Auth] Verify OTP error:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error'
+        };
+    }
+}
+
+/**
+ * Sign in with OAuth provider
+ * After successful sign-in, ensures a Stripe customer is created for the user.
+ */
+async function handleSignInWithOAuth(
+    _event: Electron.IpcMainInvokeEvent,
+    provider: OAuthProvider
+): Promise<{ success: boolean; user?: AuthUser; error?: string }> {
+    try {
+        const authService = getAuthService();
+        const result = await authService.signInWithOAuth(provider);
+
+        // If OAuth sign-in succeeded, ensure Stripe customer exists and refresh subscription
+        if (result.success && result.user) {
+            console.log('[Auth] OAuth verified, ensuring Stripe customer and refreshing subscription...');
+            const edgeClient = getEdgeFunctionClient();
+
+            // Call customer creation asynchronously - don't block login if it fails
+            edgeClient.ensureStripeCustomer().catch((error) => {
+                console.error('[Auth] Failed to ensure Stripe customer (non-blocking):', error);
+            });
+
+            // Force refresh subscription from Supabase
+            const subscriptionValidator = getSubscriptionValidator();
+            if (subscriptionValidator) {
+                subscriptionValidator.validate().then((validationResult) => {
+                    console.log('[Auth] Subscription refreshed on OAuth login:', {
+                        status: validationResult.subscription?.status,
+                        plan: validationResult.subscription?.plan,
+                        mode: validationResult.mode,
+                    });
+                }).catch((error) => {
+                    console.error('[Auth] Failed to refresh subscription (non-blocking):', error);
+                });
+            }
+        }
+
+        return result;
+    } catch (error) {
+        console.error('[Auth] OAuth sign-in error:', error);
         return {
             success: false,
             error: error instanceof Error ? error.message : 'Unknown error'
