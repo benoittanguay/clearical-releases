@@ -1,7 +1,8 @@
 /**
  * Gemini AI Proxy Edge Function
  *
- * Proxies AI requests to Google Gemini 1.5 Flash API.
+ * Proxies AI requests to Google Gemini 2.5 Flash Lite API.
+ * Using Flash Lite for higher free tier limits (15 RPM, 1000 RPD).
  * Handles authentication, rate limiting, and usage tracking.
  *
  * Operations:
