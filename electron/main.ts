@@ -494,6 +494,14 @@ ipcMain.handle('capture-screenshot', async () => {
                     console.log(`[Main] capture-screenshot - App is blacklisted (${appName}, ${bundleId}), skipping screenshot`);
                     return null;
                 }
+
+                // Skip screenshots when Clearical itself is the frontmost app
+                // This prevents race conditions where the app gains focus during screenshot capture
+                const appNameLower = appName.toLowerCase();
+                if (appNameLower === 'clearical' || appNameLower === 'time-portal' || appNameLower === 'timeportal' || bundleId === 'io.clearical.app') {
+                    console.log(`[Main] capture-screenshot - Clearical app is frontmost, skipping to avoid self-capture`);
+                    return null;
+                }
             }
         } catch (error) {
             console.log('[Main] Could not get active window info for screenshot:', error);
