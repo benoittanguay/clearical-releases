@@ -29,11 +29,17 @@ export function JiraCacheProvider({ children }: { children: ReactNode }) {
             }
 
             // Configure sync scheduler
-            jiraCache.configureSyncScheduler({
+            const syncConfig = {
                 enabled: jira.autoSync ?? true,
                 intervalMinutes: jira.syncInterval || 30,
                 lastSyncTimestamp: jira.lastSyncTimestamp || 0,
+            };
+            console.log('[JiraCacheContext] Configuring sync scheduler:', {
+                rawSyncInterval: jira.syncInterval,
+                configuredInterval: syncConfig.intervalMinutes,
+                enabled: syncConfig.enabled
             });
+            jiraCache.configureSyncScheduler(syncConfig);
         } else {
             // Stop sync scheduler if Jira is disabled or feature is not available
             jiraCache.configureSyncScheduler({

@@ -230,6 +230,30 @@ echo ""
 echo -e "${BLUE}Build artifacts:${NC}"
 ls -lh dist/Clearical-arm64.dmg dist/Clearical-arm64.zip 2>/dev/null | awk '{print "  " $9 ": " $5}'
 
+# Step 5b: Generate latest-mac.yml for electron-updater
+echo ""
+echo -e "${BLUE}Step 5b: Generating update manifest (latest-mac.yml)...${NC}"
+
+# Calculate SHA512 hash and file size for the ZIP (electron-updater uses ZIP on macOS)
+ZIP_SHA512=$(shasum -a 512 "$ZIP_PATH" | awk '{print $1}' | xxd -r -p | base64)
+ZIP_SIZE=$(stat -f%z "$ZIP_PATH")
+RELEASE_DATE=$(date -u +"%Y-%m-%dT%H:%M:%S.000Z")
+
+# Generate latest-mac.yml
+cat > dist/latest-mac.yml << EOF
+version: ${VERSION}
+files:
+  - url: Clearical-arm64.zip
+    sha512: ${ZIP_SHA512}
+    size: ${ZIP_SIZE}
+path: Clearical-arm64.zip
+sha512: ${ZIP_SHA512}
+releaseDate: '${RELEASE_DATE}'
+EOF
+
+echo "  ✓ Generated latest-mac.yml"
+cat dist/latest-mac.yml | sed 's/^/    /'
+
 # Step 6: Publish to GitHub (if --publish flag)
 if [ "$PUBLISH" = true ]; then
     echo ""
@@ -247,6 +271,7 @@ if [ "$PUBLISH" = true ]; then
         gh release upload "v${VERSION}" \
             dist/Clearical-arm64.dmg \
             dist/Clearical-arm64.zip \
+            dist/latest-mac.yml \
             --repo benoittanguay/clearical-releases \
             --clobber
         echo "  ✓ Artifacts uploaded to existing release"
@@ -255,6 +280,7 @@ if [ "$PUBLISH" = true ]; then
         gh release create "v${VERSION}" \
             dist/Clearical-arm64.dmg \
             dist/Clearical-arm64.zip \
+            dist/latest-mac.yml \
             --repo benoittanguay/clearical-releases \
             --title "v${VERSION}" \
             --notes "Release v${VERSION}
@@ -286,4 +312,5 @@ echo ""
 echo "Artifacts ready in dist/"
 echo "  - Clearical-arm64.dmg"
 echo "  - Clearical-arm64.zip"
+echo "  - latest-mac.yml (update manifest)"
 echo ""
