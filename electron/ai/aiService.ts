@@ -14,6 +14,7 @@
 import { getConfig } from '../config.js';
 import { getAuthService } from '../auth/supabaseAuth.js';
 import fs from 'fs';
+import { nativeImage } from 'electron';
 import {
     AnyContextSignal,
     AITaskType,
@@ -24,6 +25,14 @@ import {
     getSignalSummary,
     filterSignalsForTask
 } from './contextSignals.js';
+
+// Image processing configuration
+const IMAGE_CONFIG = {
+    maxFileSizeMB: 4,           // Max file size before compression (Gemini limit is ~4MB for inline)
+    maxDimension: 1920,         // Max width/height in pixels
+    jpegQuality: 85,            // JPEG quality for compression (0-100)
+    warningSizeMB: 2,           // Log warning if image exceeds this size
+};
 
 // Re-export signal types and utilities for convenience
 export {
@@ -57,8 +66,10 @@ export interface AnalysisResponse {
     description: string | null;
     confidence?: number;
     error?: string;
+    errorCode?: AIErrorCode;
     requestId?: string;
     isRateLimited?: boolean;
+    retryAfterSeconds?: number;
 }
 
 export interface ClassifyResponse {
@@ -75,6 +86,30 @@ export interface SummarizeResponse {
     error?: string;
 }
 
+// Error codes for client-side handling
+export const AI_ERROR_CODES = {
+    // Authentication errors
+    AUTH_REQUIRED: 'AUTH_REQUIRED',
+    AUTH_EXPIRED: 'AUTH_EXPIRED',
+    // Rate limiting
+    RATE_LIMIT_MINUTE: 'RATE_LIMIT_MINUTE',
+    RATE_LIMIT_DAILY: 'RATE_LIMIT_DAILY',
+    // Service errors
+    SERVICE_UNAVAILABLE: 'SERVICE_UNAVAILABLE',
+    CIRCUIT_OPEN: 'CIRCUIT_OPEN',
+    // Request errors
+    INVALID_IMAGE: 'INVALID_IMAGE',
+    IMAGE_TOO_LARGE: 'IMAGE_TOO_LARGE',
+    INVALID_REQUEST: 'INVALID_REQUEST',
+    // Gemini errors
+    GEMINI_ERROR: 'GEMINI_ERROR',
+    GEMINI_RATE_LIMIT: 'GEMINI_RATE_LIMIT',
+    // Generic
+    UNKNOWN_ERROR: 'UNKNOWN_ERROR',
+} as const;
+
+export type AIErrorCode = typeof AI_ERROR_CODES[keyof typeof AI_ERROR_CODES];
+
 // Edge function response types
 interface GeminiProxyResponse {
     success: boolean;
@@ -88,9 +123,15 @@ interface GeminiProxyResponse {
     summary?: string;
     // Error
     error?: string;
+    errorCode?: string;
     // Rate limit info
     isRateLimited?: boolean;
     retryAfter?: number;
+    // Rate limit details
+    limits?: {
+        daily: { used: number; limit: number };
+        minute: { used: number; limit: number };
+    };
 }
 
 // Retry configuration
@@ -102,11 +143,125 @@ const RETRY_CONFIG = {
     retryableStatusCodes: [429, 502, 503, 504],
 };
 
+// Token refresh threshold (refresh if token expires within this time)
+const TOKEN_REFRESH_THRESHOLD_MS = 60 * 1000; // 1 minute
+
+// Circuit breaker configuration
+const CIRCUIT_BREAKER_CONFIG = {
+    failureThreshold: 5,        // Open circuit after 5 consecutive failures
+    resetTimeoutMs: 60 * 1000,  // Try again after 1 minute
+    halfOpenMaxAttempts: 2,     // Allow 2 requests in half-open state
+};
+
+// Circuit breaker states
+type CircuitState = 'closed' | 'open' | 'half-open';
+
 /**
  * Sleep utility for retry delays
  */
 function sleep(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
+ * Process and optimize image for AI analysis
+ * - Validates file size
+ * - Resizes large images
+ * - Compresses if needed
+ */
+async function processImageForAnalysis(imagePath: string): Promise<{
+    success: boolean;
+    base64?: string;
+    mimeType?: string;
+    originalSize?: number;
+    processedSize?: number;
+    wasResized?: boolean;
+    wasCompressed?: boolean;
+    error?: string;
+}> {
+    try {
+        // Check file exists and get size
+        const stats = await fs.promises.stat(imagePath);
+        const originalSizeMB = stats.size / (1024 * 1024);
+
+        console.log(`[AIService] Processing image: ${imagePath} (${originalSizeMB.toFixed(2)} MB)`);
+
+        if (originalSizeMB > IMAGE_CONFIG.warningSizeMB) {
+            console.warn(`[AIService] ⚠️ Large image detected: ${originalSizeMB.toFixed(2)} MB`);
+        }
+
+        // Load image with nativeImage
+        const image = nativeImage.createFromPath(imagePath);
+        if (image.isEmpty()) {
+            return { success: false, error: 'Failed to load image - file may be corrupted' };
+        }
+
+        const originalSize = image.getSize();
+        let processedImage = image;
+        let wasResized = false;
+        let wasCompressed = false;
+
+        // Check if resize is needed
+        const maxDim = Math.max(originalSize.width, originalSize.height);
+        if (maxDim > IMAGE_CONFIG.maxDimension) {
+            const scale = IMAGE_CONFIG.maxDimension / maxDim;
+            const newWidth = Math.round(originalSize.width * scale);
+            const newHeight = Math.round(originalSize.height * scale);
+
+            console.log(`[AIService] Resizing image from ${originalSize.width}x${originalSize.height} to ${newWidth}x${newHeight}`);
+            processedImage = image.resize({ width: newWidth, height: newHeight, quality: 'better' });
+            wasResized = true;
+        }
+
+        // Get PNG buffer first to check size
+        let buffer = processedImage.toPNG();
+        let mimeType = 'image/png';
+
+        // If still too large, convert to JPEG with compression
+        const bufferSizeMB = buffer.length / (1024 * 1024);
+        if (bufferSizeMB > IMAGE_CONFIG.maxFileSizeMB) {
+            console.log(`[AIService] Image still large (${bufferSizeMB.toFixed(2)} MB), converting to JPEG`);
+            buffer = processedImage.toJPEG(IMAGE_CONFIG.jpegQuality);
+            mimeType = 'image/jpeg';
+            wasCompressed = true;
+
+            const jpegSizeMB = buffer.length / (1024 * 1024);
+            console.log(`[AIService] JPEG size: ${jpegSizeMB.toFixed(2)} MB`);
+
+            // If still too large after JPEG, try lower quality
+            if (jpegSizeMB > IMAGE_CONFIG.maxFileSizeMB) {
+                console.log('[AIService] Still too large, trying lower quality JPEG');
+                buffer = processedImage.toJPEG(60);
+                const finalSizeMB = buffer.length / (1024 * 1024);
+                console.log(`[AIService] Final JPEG size: ${finalSizeMB.toFixed(2)} MB`);
+
+                if (finalSizeMB > IMAGE_CONFIG.maxFileSizeMB) {
+                    console.warn(`[AIService] ⚠️ Image still exceeds limit after compression: ${finalSizeMB.toFixed(2)} MB`);
+                    // Continue anyway - Gemini might handle it or return an error
+                }
+            }
+        }
+
+        const base64 = buffer.toString('base64');
+
+        console.log(`[AIService] Image processed: ${wasResized ? 'resized' : 'no resize'}, ${wasCompressed ? 'compressed' : 'no compression'}, final size: ${(buffer.length / 1024).toFixed(1)} KB`);
+
+        return {
+            success: true,
+            base64,
+            mimeType,
+            originalSize: stats.size,
+            processedSize: buffer.length,
+            wasResized,
+            wasCompressed
+        };
+    } catch (error) {
+        console.error('[AIService] Image processing error:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Image processing failed'
+        };
+    }
 }
 
 /**
@@ -118,6 +273,11 @@ class AIService {
     // Track consecutive failures for queue pause logic
     private consecutiveFailures = 0;
     private rateLimitedUntil = 0;
+
+    // Circuit breaker state
+    private circuitState: CircuitState = 'closed';
+    private circuitOpenedAt = 0;
+    private halfOpenAttempts = 0;
 
     /**
      * Get the Gemini proxy endpoint URL
@@ -169,22 +329,135 @@ class AIService {
             this.rateLimitedUntil = Date.now() + cooldownMs;
             console.log(`[AIService] Rate limited. Cooldown for ${cooldownMs}ms (until ${new Date(this.rateLimitedUntil).toISOString()})`);
         }
+
+        // Update circuit breaker state
+        this.updateCircuitBreaker(false);
+    }
+
+    /**
+     * Update circuit breaker state based on success/failure
+     */
+    private updateCircuitBreaker(success: boolean): void {
+        if (success) {
+            // Reset on success
+            if (this.circuitState === 'half-open') {
+                console.log('[AIService] 🟢 Circuit breaker: half-open → closed (success)');
+                this.circuitState = 'closed';
+            }
+            this.halfOpenAttempts = 0;
+            return;
+        }
+
+        // Handle failure
+        if (this.circuitState === 'half-open') {
+            this.halfOpenAttempts++;
+            if (this.halfOpenAttempts >= CIRCUIT_BREAKER_CONFIG.halfOpenMaxAttempts) {
+                console.log('[AIService] 🔴 Circuit breaker: half-open → open (failures in half-open)');
+                this.circuitState = 'open';
+                this.circuitOpenedAt = Date.now();
+            }
+        } else if (this.circuitState === 'closed' && this.consecutiveFailures >= CIRCUIT_BREAKER_CONFIG.failureThreshold) {
+            console.log(`[AIService] 🔴 Circuit breaker: closed → open (${this.consecutiveFailures} consecutive failures)`);
+            this.circuitState = 'open';
+            this.circuitOpenedAt = Date.now();
+        }
+    }
+
+    /**
+     * Check if circuit breaker allows the request
+     */
+    private checkCircuitBreaker(): { allowed: boolean; reason?: string } {
+        if (this.circuitState === 'closed') {
+            return { allowed: true };
+        }
+
+        if (this.circuitState === 'open') {
+            const timeSinceOpen = Date.now() - this.circuitOpenedAt;
+            if (timeSinceOpen >= CIRCUIT_BREAKER_CONFIG.resetTimeoutMs) {
+                // Transition to half-open
+                console.log('[AIService] 🟡 Circuit breaker: open → half-open (timeout elapsed)');
+                this.circuitState = 'half-open';
+                this.halfOpenAttempts = 0;
+                return { allowed: true };
+            }
+            const remainingMs = CIRCUIT_BREAKER_CONFIG.resetTimeoutMs - timeSinceOpen;
+            return {
+                allowed: false,
+                reason: `Circuit breaker open. Service unavailable. Retry in ${Math.ceil(remainingMs / 1000)}s`
+            };
+        }
+
+        // half-open state - allow limited requests
+        if (this.halfOpenAttempts < CIRCUIT_BREAKER_CONFIG.halfOpenMaxAttempts) {
+            return { allowed: true };
+        }
+
+        return {
+            allowed: false,
+            reason: 'Circuit breaker half-open, max attempts reached'
+        };
+    }
+
+    /**
+     * Check if token is fresh enough for a request, refresh if needed
+     */
+    private async ensureFreshToken(): Promise<{ accessToken: string; expiresAt: number } | null> {
+        const authService = getAuthService();
+        let session = await authService.getSession();
+
+        if (!session) {
+            return null;
+        }
+
+        const now = Date.now();
+        const timeUntilExpiry = session.expiresAt - now;
+
+        // If token expires soon, proactively refresh it
+        if (timeUntilExpiry < TOKEN_REFRESH_THRESHOLD_MS) {
+            console.log(`[AIService] Token expires in ${Math.round(timeUntilExpiry / 1000)}s, refreshing proactively...`);
+            try {
+                // Force a token refresh by getting a new session
+                session = await authService.getSession();
+                if (!session) {
+                    console.error('[AIService] Token refresh failed - no session returned');
+                    return null;
+                }
+                console.log('[AIService] Token refreshed successfully, new expiry:',
+                    new Date(session.expiresAt).toISOString());
+            } catch (error) {
+                console.error('[AIService] Token refresh error:', error);
+                // If refresh fails but we still have time, use existing token
+                if (timeUntilExpiry <= 0) {
+                    return null;
+                }
+                console.log('[AIService] Using existing token despite refresh failure');
+            }
+        }
+
+        // Session is guaranteed non-null here (we return null above if it was)
+        return { accessToken: session!.accessToken, expiresAt: session!.expiresAt };
     }
 
     /**
      * Make an authenticated request to the Gemini proxy with exponential backoff
      */
     private async makeRequest(body: Record<string, unknown>): Promise<GeminiProxyResponse> {
-        const authService = getAuthService();
-        const session = await authService.getSession();
+        // Check circuit breaker first
+        const circuitCheck = this.checkCircuitBreaker();
+        if (!circuitCheck.allowed) {
+            console.warn(`[AIService] ⛔ Request blocked: ${circuitCheck.reason}`);
+            return {
+                success: false,
+                error: circuitCheck.reason || 'Service temporarily unavailable',
+                isRateLimited: true
+            };
+        }
 
-        if (!session) {
+        // Ensure we have a fresh token
+        const tokenInfo = await this.ensureFreshToken();
+        if (!tokenInfo) {
             console.error('[AIService] ❌ No active session - AI features unavailable');
             console.error('[AIService] User needs to sign in from Settings to enable AI features');
-            console.error('[AIService] This could be because:');
-            console.error('[AIService]   1. User is not signed in');
-            console.error('[AIService]   2. Session expired and refresh failed');
-            console.error('[AIService]   3. Network issue during token refresh');
             return { success: false, error: 'Not authenticated. Please sign in again.' };
         }
 
@@ -193,10 +466,16 @@ class AIService {
             const remainingMs = this.getRateLimitRemainingMs();
             console.log(`[AIService] ⏳ Rate limited, waiting ${remainingMs}ms before request`);
             await sleep(remainingMs);
+
+            // Re-check token after waiting (it might have expired during the wait)
+            const refreshedToken = await this.ensureFreshToken();
+            if (!refreshedToken) {
+                return { success: false, error: 'Session expired while waiting. Please sign in again.' };
+            }
         }
 
         console.log('[AIService] Making authenticated request with token expiring at:',
-            new Date(session.expiresAt).toISOString());
+            new Date(tokenInfo.expiresAt).toISOString());
 
         let lastError: string = 'Unknown error';
         let lastStatusCode = 0;
@@ -208,7 +487,7 @@ class AIService {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${session.accessToken}`,
+                        'Authorization': `Bearer ${tokenInfo.accessToken}`,
                     },
                     body: JSON.stringify(body),
                 });
@@ -216,8 +495,9 @@ class AIService {
                 lastStatusCode = response.status;
 
                 if (response.ok) {
-                    // Success - reset failure tracking
+                    // Success - reset failure tracking and circuit breaker
                     this.resetFailureTracking();
+                    this.updateCircuitBreaker(true);
                     return await response.json() as GeminiProxyResponse;
                 }
 
@@ -227,7 +507,7 @@ class AIService {
                 // If server says token is invalid/expired, clear local session and prompt re-auth
                 if (response.status === 401 && errorData.error?.includes('Invalid or expired')) {
                     console.log('[AIService] Server rejected token, clearing local session');
-                    await authService.signOut();
+                    await getAuthService().signOut();
                     return {
                         success: false,
                         error: 'Session expired. Please sign in again from Settings.'
@@ -318,24 +598,21 @@ class AIService {
             console.log('[AIService] With context signals:', getSignalSummary(signals));
         }
 
-        // Read and encode the image
-        let imageBase64: string;
-        try {
-            const imageBuffer = await fs.promises.readFile(imagePath);
-            imageBase64 = imageBuffer.toString('base64');
-        } catch (error) {
-            console.error('[AIService] Failed to read image:', error);
+        // Process and optimize the image
+        const imageResult = await processImageForAnalysis(imagePath);
+        if (!imageResult.success || !imageResult.base64) {
+            console.error('[AIService] Failed to process image:', imageResult.error);
             return {
                 success: false,
                 description: this.generateFallbackDescription(appName, windowTitle),
-                error: 'Failed to read image file',
+                error: imageResult.error || 'Failed to process image file',
                 requestId
             };
         }
 
         const result = await this.makeRequest({
             operation: 'analyze',
-            imageBase64,
+            imageBase64: imageResult.base64,
             appName,
             windowTitle,
             signals
@@ -351,14 +628,16 @@ class AIService {
             };
         }
 
-        // Return fallback on failure
-        console.warn('[AIService] Analysis failed:', result.error);
+        // Return fallback on failure with detailed error info
+        console.warn('[AIService] Analysis failed:', result.error, 'errorCode:', result.errorCode);
         return {
             success: false,
             description: this.generateFallbackDescription(appName, windowTitle),
             error: result.error || 'Analysis failed',
+            errorCode: (result.errorCode as AIErrorCode) || AI_ERROR_CODES.UNKNOWN_ERROR,
             requestId,
-            isRateLimited: result.isRateLimited
+            isRateLimited: result.isRateLimited,
+            retryAfterSeconds: result.retryAfter
         };
     }
 

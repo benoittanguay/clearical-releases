@@ -21,9 +21,22 @@ import { corsHeaders } from '../_shared/cors.ts';
 import { createSupabaseClient, supabaseAdmin, extractToken } from '../_shared/supabase.ts';
 import { generateText, analyzeImage, extractJsonFromResponse } from '../_shared/gemini.ts';
 
-// Rate limits (requests per day)
-const RATE_LIMIT_FREE = 50;
-const RATE_LIMIT_PREMIUM = 500;
+// Rate limits
+const RATE_LIMIT_FREE_DAILY = 50;
+const RATE_LIMIT_PREMIUM_DAILY = 500;
+const RATE_LIMIT_RPM = 10; // Per-minute limit (stay under Gemini's 15 RPM)
+
+// Error codes for better client-side handling
+const ERROR_CODES = {
+    RATE_LIMIT_DAILY: 'RATE_LIMIT_DAILY',
+    RATE_LIMIT_MINUTE: 'RATE_LIMIT_MINUTE',
+    AUTH_INVALID: 'AUTH_INVALID',
+    AUTH_EXPIRED: 'AUTH_EXPIRED',
+    GEMINI_ERROR: 'GEMINI_ERROR',
+    GEMINI_RATE_LIMIT: 'GEMINI_RATE_LIMIT',
+    INVALID_REQUEST: 'INVALID_REQUEST',
+    INTERNAL_ERROR: 'INTERNAL_ERROR',
+} as const;
 
 /**
  * Signal categories for organizing and filtering signals
@@ -211,15 +224,33 @@ serve(async (req) => {
         const isPremium = profile?.subscription_status === 'active' ||
                           profile?.subscription_status === 'trialing';
 
-        // Check rate limiting
+        // Check rate limiting (both daily and per-minute)
         const rateLimitResult = await checkRateLimit(user.id, isPremium);
         if (!rateLimitResult.allowed) {
+            const isMinuteLimit = rateLimitResult.errorCode === ERROR_CODES.RATE_LIMIT_MINUTE;
+            const errorMessage = isMinuteLimit
+                ? `Rate limit exceeded. Maximum ${rateLimitResult.minuteLimit} requests per minute. Please wait and retry.`
+                : `Daily rate limit exceeded. ${isPremium ? 'Premium' : 'Free'} limit: ${rateLimitResult.dailyLimit} requests/day. Resets at midnight UTC.`;
+
             return new Response(
                 JSON.stringify({
                     success: false,
-                    error: `Rate limit exceeded. ${isPremium ? 'Premium' : 'Free'} limit: ${rateLimitResult.limit} requests/day. Resets at midnight UTC.`
+                    error: errorMessage,
+                    errorCode: rateLimitResult.errorCode,
+                    retryAfter: rateLimitResult.retryAfterSeconds,
+                    limits: {
+                        daily: { used: rateLimitResult.dailyLimit - rateLimitResult.dailyRemaining, limit: rateLimitResult.dailyLimit },
+                        minute: { used: rateLimitResult.minuteLimit - rateLimitResult.minuteRemaining, limit: rateLimitResult.minuteLimit }
+                    }
                 }),
-                { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+                {
+                    status: 429,
+                    headers: {
+                        ...corsHeaders,
+                        'Content-Type': 'application/json',
+                        'Retry-After': String(rateLimitResult.retryAfterSeconds || 60)
+                    }
+                }
             );
         }
 
@@ -893,39 +924,123 @@ function generateFallbackDescription(appName?: string, windowTitle?: string): st
 }
 
 /**
- * Check if user is within rate limits
+ * Rate limit check result with detailed information
  */
-async function checkRateLimit(userId: string, isPremium: boolean): Promise<{
+interface RateLimitResult {
     allowed: boolean;
-    remaining: number;
-    limit: number;
-}> {
-    const limit = isPremium ? RATE_LIMIT_PREMIUM : RATE_LIMIT_FREE;
+    errorCode?: string;
+    // Daily limits
+    dailyRemaining: number;
+    dailyLimit: number;
+    // Per-minute limits
+    minuteRemaining: number;
+    minuteLimit: number;
+    // Retry information
+    retryAfterSeconds?: number;
+}
 
-    // Count today's usage
-    const today = new Date();
-    today.setUTCHours(0, 0, 0, 0);
+/**
+ * Check if user is within rate limits (both daily and per-minute)
+ */
+async function checkRateLimit(userId: string, isPremium: boolean): Promise<RateLimitResult> {
+    const dailyLimit = isPremium ? RATE_LIMIT_PREMIUM_DAILY : RATE_LIMIT_FREE_DAILY;
+    const minuteLimit = RATE_LIMIT_RPM;
 
-    const { count, error } = await supabaseAdmin
-        .from('ai_usage')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', userId)
-        .gte('created_at', today.toISOString());
+    const now = new Date();
 
-    if (error) {
-        console.error('[GeminiProxy] Rate limit check error:', error);
-        // Allow on error to avoid blocking users
-        return { allowed: true, remaining: limit, limit };
+    // Calculate time boundaries
+    const todayStart = new Date(now);
+    todayStart.setUTCHours(0, 0, 0, 0);
+
+    const oneMinuteAgo = new Date(now.getTime() - 60 * 1000);
+
+    try {
+        // Run both queries in parallel for efficiency
+        const [dailyResult, minuteResult] = await Promise.all([
+            // Daily usage count
+            supabaseAdmin
+                .from('ai_usage')
+                .select('*', { count: 'exact', head: true })
+                .eq('user_id', userId)
+                .gte('created_at', todayStart.toISOString()),
+            // Per-minute usage count
+            supabaseAdmin
+                .from('ai_usage')
+                .select('*', { count: 'exact', head: true })
+                .eq('user_id', userId)
+                .gte('created_at', oneMinuteAgo.toISOString())
+        ]);
+
+        if (dailyResult.error || minuteResult.error) {
+            console.error('[GeminiProxy] Rate limit check error:', dailyResult.error || minuteResult.error);
+            // On DB error, allow but log - don't block users due to DB issues
+            return {
+                allowed: true,
+                dailyRemaining: dailyLimit,
+                dailyLimit,
+                minuteRemaining: minuteLimit,
+                minuteLimit
+            };
+        }
+
+        const dailyUsed = dailyResult.count || 0;
+        const minuteUsed = minuteResult.count || 0;
+
+        const dailyRemaining = Math.max(0, dailyLimit - dailyUsed);
+        const minuteRemaining = Math.max(0, minuteLimit - minuteUsed);
+
+        // Check per-minute limit first (more likely to be hit during bursts)
+        if (minuteUsed >= minuteLimit) {
+            console.log(`[GeminiProxy] Per-minute rate limit hit for user ${userId}: ${minuteUsed}/${minuteLimit}`);
+            return {
+                allowed: false,
+                errorCode: ERROR_CODES.RATE_LIMIT_MINUTE,
+                dailyRemaining,
+                dailyLimit,
+                minuteRemaining: 0,
+                minuteLimit,
+                retryAfterSeconds: 60 // Retry after 1 minute
+            };
+        }
+
+        // Check daily limit
+        if (dailyUsed >= dailyLimit) {
+            console.log(`[GeminiProxy] Daily rate limit hit for user ${userId}: ${dailyUsed}/${dailyLimit}`);
+            // Calculate seconds until midnight UTC
+            const tomorrow = new Date(todayStart);
+            tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+            const secondsUntilReset = Math.ceil((tomorrow.getTime() - now.getTime()) / 1000);
+
+            return {
+                allowed: false,
+                errorCode: ERROR_CODES.RATE_LIMIT_DAILY,
+                dailyRemaining: 0,
+                dailyLimit,
+                minuteRemaining,
+                minuteLimit,
+                retryAfterSeconds: secondsUntilReset
+            };
+        }
+
+        return {
+            allowed: true,
+            dailyRemaining,
+            dailyLimit,
+            minuteRemaining,
+            minuteLimit
+        };
+
+    } catch (error) {
+        console.error('[GeminiProxy] Rate limit check exception:', error);
+        // On exception, allow but log
+        return {
+            allowed: true,
+            dailyRemaining: dailyLimit,
+            dailyLimit,
+            minuteRemaining: minuteLimit,
+            minuteLimit
+        };
     }
-
-    const used = count || 0;
-    const remaining = Math.max(0, limit - used);
-
-    return {
-        allowed: used < limit,
-        remaining,
-        limit
-    };
 }
 
 /**
