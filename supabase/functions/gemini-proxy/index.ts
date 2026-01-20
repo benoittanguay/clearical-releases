@@ -17,7 +17,7 @@
 
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { corsHeaders } from '../_shared/cors.ts';
-import { createSupabaseClient, supabaseAdmin } from '../_shared/supabase.ts';
+import { createSupabaseClient, supabaseAdmin, extractToken } from '../_shared/supabase.ts';
 import { generateText, analyzeImage, extractJsonFromResponse } from '../_shared/gemini.ts';
 
 // Rate limits (requests per day)
@@ -179,12 +179,21 @@ serve(async (req) => {
             );
         }
 
-        // Create Supabase client with user's token
+        // Create Supabase client and extract token for validation
         const supabase = createSupabaseClient(authHeader);
+        const token = extractToken(authHeader);
 
-        // Get the authenticated user
-        const { data: { user }, error: userError } = await supabase.auth.getUser();
+        // Get the authenticated user by passing the token directly
+        // This is the correct way to validate JWT tokens in edge functions
+        const { data: { user }, error: userError } = await supabase.auth.getUser(token);
         if (userError || !user) {
+            console.error('[gemini-proxy] Auth validation failed:', {
+                hasUserError: !!userError,
+                errorMessage: userError?.message,
+                errorCode: userError?.code,
+                hasUser: !!user,
+                tokenPrefix: authHeader?.substring(0, 30) + '...',
+            });
             return new Response(
                 JSON.stringify({ success: false, error: 'Invalid or expired token' }),
                 { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

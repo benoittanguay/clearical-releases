@@ -27,6 +27,15 @@ export interface AuthSession {
     expiresAt: number;
 }
 
+/**
+ * Internal session storage format that includes environment info
+ * This ensures sessions from different Supabase projects are not mixed
+ */
+interface StoredSession {
+    session: AuthSession;
+    supabaseUrl: string; // The Supabase URL this session was created with
+}
+
 export interface AuthResult {
     success: boolean;
     error?: string;
@@ -45,6 +54,7 @@ export class SupabaseAuthService {
     private currentSession: AuthSession | null = null;
     private sessionFilePath: string;
     private encryptionKey: Buffer;
+    private currentSupabaseUrl: string = '';
 
     constructor() {
         // Session file stored in app data directory
@@ -63,6 +73,8 @@ export class SupabaseAuthService {
             console.error('[SupabaseAuth] Missing Supabase credentials');
             return;
         }
+
+        this.currentSupabaseUrl = supabaseUrl;
 
         this.supabase = createClient(supabaseUrl, supabaseAnonKey, {
             auth: {
@@ -104,7 +116,32 @@ export class SupabaseAuthService {
                 if (fs.existsSync(this.sessionFilePath)) {
                     const encryptedData = fs.readFileSync(this.sessionFilePath);
                     const decrypted = this.decrypt(encryptedData);
-                    this.currentSession = JSON.parse(decrypted);
+                    const parsed = JSON.parse(decrypted);
+
+                    // Handle both old format (AuthSession directly) and new format (StoredSession)
+                    if (parsed.supabaseUrl !== undefined) {
+                        // New format with environment info
+                        const storedSession = parsed as StoredSession;
+
+                        // Validate session is from the same Supabase project
+                        if (storedSession.supabaseUrl !== this.currentSupabaseUrl) {
+                            console.warn('[SupabaseAuth] Session was created for a different Supabase project');
+                            console.warn('[SupabaseAuth]   Stored URL:', storedSession.supabaseUrl);
+                            console.warn('[SupabaseAuth]   Current URL:', this.currentSupabaseUrl);
+                            console.warn('[SupabaseAuth] Clearing session - user must re-authenticate');
+                            this.clearSession();
+                            return null;
+                        }
+
+                        this.currentSession = storedSession.session;
+                    } else {
+                        // Old format without environment info - clear it to force re-login
+                        // This ensures any sessions from before this fix are invalidated
+                        console.warn('[SupabaseAuth] Session was stored without environment info');
+                        console.warn('[SupabaseAuth] Clearing session - user must re-authenticate');
+                        this.clearSession();
+                        return null;
+                    }
                 }
             } catch (error) {
                 console.error('[SupabaseAuth] Failed to load session:', error);
@@ -429,14 +466,21 @@ export class SupabaseAuthService {
     }
 
     /**
-     * Save session to encrypted file
+     * Save session to encrypted file with environment info
      */
     private async saveSession(session: AuthSession): Promise<void> {
         try {
             this.currentSession = session;
-            const encrypted = this.encrypt(JSON.stringify(session));
+
+            // Store session with Supabase URL to prevent cross-environment issues
+            const storedSession: StoredSession = {
+                session,
+                supabaseUrl: this.currentSupabaseUrl,
+            };
+
+            const encrypted = this.encrypt(JSON.stringify(storedSession));
             fs.writeFileSync(this.sessionFilePath, encrypted);
-            console.log('[SupabaseAuth] Session saved');
+            console.log('[SupabaseAuth] Session saved for environment:', this.currentSupabaseUrl);
         } catch (error) {
             console.error('[SupabaseAuth] Failed to save session:', error);
         }

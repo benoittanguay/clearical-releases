@@ -18,7 +18,7 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { corsHeaders } from '../_shared/cors.ts';
 import { stripe } from '../_shared/stripe.ts';
-import { createSupabaseClient, supabaseAdmin } from '../_shared/supabase.ts';
+import { createSupabaseClient, supabaseAdmin, extractToken } from '../_shared/supabase.ts';
 
 serve(async (req) => {
     // Handle CORS preflight
@@ -36,11 +36,12 @@ serve(async (req) => {
             );
         }
 
-        // Create Supabase client with user's token
+        // Create Supabase client and extract token for validation
         const supabase = createSupabaseClient(authHeader);
+        const token = extractToken(authHeader);
 
-        // Get the authenticated user
-        const { data: { user }, error: userError } = await supabase.auth.getUser();
+        // Get the authenticated user by passing the token directly
+        const { data: { user }, error: userError } = await supabase.auth.getUser(token);
         if (userError || !user) {
             return new Response(
                 JSON.stringify({ error: 'Invalid or expired token' }),
