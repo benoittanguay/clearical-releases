@@ -309,3 +309,26 @@ button:not(:disabled):active {
 .list-item-enter:nth-child(6) { animation-delay: 250ms; }
 .list-item-enter:nth-child(7) { animation-delay: 300ms; }
 .list-item-enter:nth-child(8) { animation-delay: 350ms; }
+
+/* Split Fly-Out Animation for Apply Splits */
+@keyframes splitFlyOut {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+  }
+  30% {
+    transform: scale(1.08);
+    opacity: 1;
+    box-shadow: 0 0 30px var(--color-accent), 0 8px 20px -4px rgb(0 0 0 / 0.2);
+  }
+  100% {
+    transform: scale(0.3) translateY(-50vh);
+    opacity: 0;
+    box-shadow: 0 0 0 transparent;
+  }
+}
+
+.animate-split-fly {
+  animation: splitFlyOut 600ms var(--ease-out) forwards;
+}

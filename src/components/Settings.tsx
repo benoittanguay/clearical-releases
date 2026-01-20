@@ -496,23 +496,18 @@ export function Settings({ onOpenJiraModal, onOpenTempoModal }: SettingsProps = 
                                 }));
                             }}
                             placeholder="e.g. Software Developer, Product Manager, Designer"
-                            className="w-full border text-sm rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:border-[var(--color-accent)] transition-all"
+                            className="w-full border text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:border-[var(--color-accent)] transition-all"
                             style={{
-                                backgroundColor: 'var(--color-bg-tertiary)',
+                                backgroundColor: 'var(--color-bg-primary)',
                                 borderColor: 'var(--color-border-primary)',
                                 color: 'var(--color-text-primary)',
+                                fontFamily: 'var(--font-body)'
                             }}
                             onMouseEnter={(e) => {
-                                if (document.activeElement !== e.currentTarget) {
-                                    e.currentTarget.style.backgroundColor = '#FAF5EE';
-                                    e.currentTarget.style.borderColor = 'var(--color-border-secondary)';
-                                }
+                                e.currentTarget.style.borderColor = '#8c877d';
                             }}
                             onMouseLeave={(e) => {
-                                if (document.activeElement !== e.currentTarget) {
-                                    e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)';
-                                    e.currentTarget.style.borderColor = 'var(--color-border-primary)';
-                                }
+                                e.currentTarget.style.borderColor = 'var(--color-border-primary)';
                             }}
                         />
                         <p className="text-[10px] text-[var(--color-text-tertiary)] mt-1">

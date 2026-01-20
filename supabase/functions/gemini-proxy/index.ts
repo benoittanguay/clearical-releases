@@ -659,68 +659,177 @@ function extractLegacyContext(
 
 /**
  * Build the AI prompt from aggregated context
+ *
+ * Uses app durations to identify the PRIMARY task and filter out peripheral activities.
+ * Activities like checking emails, notifications, or quick app switches are deprioritized
+ * in favor of where the user spent the most focused time.
  */
 function buildSummarizationPrompt(context: AggregatedContext, duration?: number): string {
     const sections: string[] = [];
 
-    // Introduction based on available context - format as timesheet entry
-    if (context.screenshotDescriptions.length > 0) {
-        sections.push(`Write a timesheet entry (1-2 sentences). Start with an action verb. Be specific and professional. Example: "Reviewed and updated API documentation for authentication endpoints."`);
-    } else {
-        sections.push(`Write a timesheet entry (1-2 sentences) based on available context. Start with an action verb. Example: "Attended project sync meeting with design team."`);
+    // Analyze app durations to identify primary focus
+    let primaryApp: string | undefined;
+    let primaryAppDuration = 0;
+    let totalTrackedDuration = 0;
+
+    if (context.appDurations) {
+        const sortedApps = Object.entries(context.appDurations)
+            .sort((a, b) => b[1] - a[1]); // Sort by duration descending
+
+        if (sortedApps.length > 0) {
+            primaryApp = sortedApps[0][0];
+            primaryAppDuration = sortedApps[0][1];
+            totalTrackedDuration = sortedApps.reduce((sum, [_, dur]) => sum + dur, 0);
+        }
     }
 
-    // User role context (helps AI use appropriate terminology)
+    // Calculate focus percentage for primary app
+    const focusPercentage = totalTrackedDuration > 0
+        ? Math.round((primaryAppDuration / totalTrackedDuration) * 100)
+        : 0;
+
+    // Introduction - emphasize PRIMARY task focus
+    sections.push(`Write a timesheet entry (1-2 sentences) describing the PRIMARY work task.
+
+CRITICAL RULES:
+- Focus ONLY on the main productive task where most time was spent
+- IGNORE peripheral activities: checking emails, notifications, security alerts, app switching
+- IGNORE brief interruptions or context switches
+- Start with an action verb (Developed, Fixed, Reviewed, Implemented, Debugged, etc.)
+- Be specific about WHAT was accomplished, not what apps were open
+
+Example good: "Debugged Apple Developer notarization issue for Clearical application."
+Example bad: "Managed notifications while reviewing code changes and checking emails."`);
+
+    // Primary app focus signal (this is the key context)
+    if (primaryApp && focusPercentage > 0) {
+        const durationMins = Math.round(primaryAppDuration / 60000);
+        sections.push(`\n**PRIMARY FOCUS**: ${primaryApp} (${focusPercentage}% of session, ${durationMins}+ min)`);
+        sections.push(`→ The timesheet entry should describe what was done in ${primaryApp}.`);
+    }
+
+    // User role context
     if (context.userRole) {
         sections.push(`\nUser's role: ${context.userRole}${context.userDomain ? ` (${context.userDomain})` : ''}`);
     }
 
-    // Calendar context (highest priority for task inference)
+    // Calendar context (helps identify meetings vs focused work)
     if (context.currentCalendarEvent) {
-        sections.push(`\nScheduled activity during this time: "${context.currentCalendarEvent}"`);
-    } else if (context.recentCalendarEvents.length > 0) {
-        sections.push(`\nRecent calendar context: ${context.recentCalendarEvents.slice(0, 3).join(', ')}`);
+        sections.push(`\nScheduled meeting during this time: "${context.currentCalendarEvent}"`);
     }
 
-    // Screenshot descriptions (most detailed context)
+    // Screenshot descriptions - filtered and weighted by relevance to primary app
     if (context.screenshotDescriptions.length > 0) {
-        sections.push(`\nObserved activities (in chronological order):`);
-        context.screenshotDescriptions.forEach((desc, i) => {
-            sections.push(`${i + 1}. ${desc}`);
+        // Filter to prioritize descriptions mentioning the primary app
+        const relevantDescriptions = primaryApp
+            ? context.screenshotDescriptions.filter(desc =>
+                desc.toLowerCase().includes(primaryApp!.toLowerCase()) ||
+                !isPeripheralActivity(desc)
+              )
+            : context.screenshotDescriptions.filter(desc => !isPeripheralActivity(desc));
+
+        if (relevantDescriptions.length > 0) {
+            sections.push(`\nKey activities observed:`);
+            relevantDescriptions.slice(0, 5).forEach((desc, i) => {
+                sections.push(`${i + 1}. ${desc}`);
+            });
+        }
+    }
+
+    // App breakdown with time weighting (shows where time was actually spent)
+    if (context.appDurations && Object.keys(context.appDurations).length > 0) {
+        const sortedApps = Object.entries(context.appDurations)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 5); // Top 5 apps by time
+
+        sections.push(`\nTime breakdown by application:`);
+        sortedApps.forEach(([app, dur]) => {
+            const mins = Math.round(dur / 60000);
+            const pct = totalTrackedDuration > 0 ? Math.round((dur / totalTrackedDuration) * 100) : 0;
+            if (mins > 0) {
+                sections.push(`- ${app}: ${mins} min (${pct}%)`);
+            }
         });
+    } else if (context.appNames.length > 0) {
+        // Fallback if no durations available
+        sections.push(`\nApplications used: ${context.appNames.slice(0, 5).join(', ')}`);
     }
 
-    // Window activity context
-    if (context.appNames.length > 0) {
-        const appList = context.appNames.slice(0, 8).join(', ');
-        const more = context.appNames.length > 8 ? ` and ${context.appNames.length - 8} more` : '';
-        sections.push(`\nApplications used: ${appList}${more}`);
-    }
-
+    // Window titles - only if relevant to primary task
     if (context.windowTitles.length > 0) {
-        const titleList = context.windowTitles.slice(0, 10).join(', ');
-        const more = context.windowTitles.length > 10 ? ` (and ${context.windowTitles.length - 10} more)` : '';
-        sections.push(`\nWindow titles observed: ${titleList}${more}`);
+        const relevantTitles = context.windowTitles
+            .filter(title => !isPeripheralWindowTitle(title))
+            .slice(0, 5);
+
+        if (relevantTitles.length > 0) {
+            sections.push(`\nRelevant window titles: ${relevantTitles.join(', ')}`);
+        }
     }
 
     // Technologies detected
     if (context.technologies.length > 0) {
-        sections.push(`\nTechnologies/tools detected: ${context.technologies.join(', ')}`);
+        sections.push(`\nTechnologies detected: ${context.technologies.join(', ')}`);
     }
 
-    // Duration context
+    // Session duration
     if (duration && duration > 0) {
         const minutes = Math.round(duration / 60000);
         if (minutes >= 1) {
-            sections.push(`\nSession duration: ${minutes} minute${minutes > 1 ? 's' : ''}`);
+            sections.push(`\nTotal session: ${minutes} minute${minutes > 1 ? 's' : ''}`);
         }
     }
 
     // Final instruction
-    sections.push(`\nFormat as a timesheet entry: concise, action-oriented, professional. NO phrases like "the user was", "working on", "performing", "utilizing". Start with verbs like: Developed, Fixed, Reviewed, Updated, Designed, Implemented, Debugged, Configured, Drafted, Analyzed.`);
-    sections.push(`\nOutput ONLY the timesheet entry text, nothing else.`);
+    sections.push(`\nOutput ONLY the timesheet entry (1-2 sentences). Describe the PRIMARY task, not a list of everything that happened.`);
 
     return sections.join('\n');
+}
+
+/**
+ * Check if an activity description is peripheral (should be deprioritized)
+ *
+ * NOTE: We're careful not to filter out legitimate work like email composition.
+ * Only filter activities that are clearly interruptions or administrative overhead.
+ */
+function isPeripheralActivity(description: string): boolean {
+    const peripheralPatterns = [
+        // System notifications and alerts
+        /\bnotification\b/i,
+        /security.*alert/i,
+        /system.*alert/i,
+
+        // Authentication interruptions (not the main task)
+        /one-time.*password/i,
+        /\bOTP\b/,
+        /verification.*code/i,
+        /two-factor/i,
+        /2FA/i,
+
+        // Quick app switches / file management
+        /managing.*finder/i,
+        /system.*preference/i,
+
+        // Social media browsing (unless it's the primary app)
+        /browsing.*youtube/i,
+        /scrolling.*feed/i,
+    ];
+
+    return peripheralPatterns.some(pattern => pattern.test(description));
+}
+
+/**
+ * Check if a window title is peripheral (notifications, alerts, etc.)
+ *
+ * NOTE: Don't filter email apps - they can be legitimate primary work
+ */
+function isPeripheralWindowTitle(title: string): boolean {
+    const peripheralPatterns = [
+        /notification/i,
+        /\balert\b/i,
+        /system.*preferences/i,
+    ];
+
+    return peripheralPatterns.some(pattern => pattern.test(title));
 }
 
 /**

@@ -47,7 +47,7 @@ interface SettingsContextType {
 }
 
 const defaultSettings: AppSettings = {
-    minActivityDuration: 1000, // 1 second
+    minActivityDuration: 5000, // 5 seconds
     activityGapThreshold: 5 * 60 * 1000, // 5 minutes
     timeRoundingIncrement: 15, // 15 minutes default
     tempo: {

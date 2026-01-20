@@ -141,6 +141,7 @@ export interface ElectronAPI {
             screenshotDescriptions: string[];
             windowTitles: string[];
             appNames: string[];
+            appDurations?: Record<string, number>;
             duration: number;
             startTime: number;
             endTime: number;

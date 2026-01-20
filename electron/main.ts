@@ -2019,6 +2019,7 @@ ipcMain.handle('generate-activity-summary', async (event, context: {
     screenshotDescriptions: string[];
     windowTitles: string[];
     appNames: string[];
+    appDurations?: Record<string, number>;  // Time spent per app (ms) for weighting
     duration: number;
     startTime: number;
     endTime: number;
@@ -2028,6 +2029,7 @@ ipcMain.handle('generate-activity-summary', async (event, context: {
     console.log('[Main] Screenshot descriptions:', context.screenshotDescriptions.length);
     console.log('[Main] Window titles:', context.windowTitles?.length || 0);
     console.log('[Main] App names:', context.appNames);
+    console.log('[Main] App durations:', context.appDurations);
 
     try {
         // Use signal aggregator to collect and store signals for this entry
@@ -2038,13 +2040,14 @@ ipcMain.handle('generate-activity-summary', async (event, context: {
             signalAggregator.setScreenshotAnalysis(context.entryId, context.screenshotDescriptions);
         }
 
-        // ACTIVITY signals: Window activity
+        // ACTIVITY signals: Window activity (with app durations for weighting)
         if ((context.appNames && context.appNames.length > 0) ||
             (context.windowTitles && context.windowTitles.length > 0)) {
             signalAggregator.setWindowActivity(
                 context.entryId,
                 context.appNames || [],
-                context.windowTitles || []
+                context.windowTitles || [],
+                context.appDurations  // Pass app durations for primary task identification
             );
         }
 

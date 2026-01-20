@@ -302,6 +302,9 @@
   --focus-ring-color: var(--color-accent);
   --focus-ring: 0 0 0 var(--focus-ring-offset) var(--color-bg-primary),
                 0 0 0 calc(var(--focus-ring-offset) + var(--focus-ring-width)) var(--focus-ring-color);
+
+  /* Input focus shadow - solid 2px spread in accent color */
+  --input-focus-shadow: 0 0 0 2px var(--color-accent);
 }
 
 /* ===========================================
@@ -539,4 +542,40 @@ input[type="reset"] {
 * {
   scrollbar-width: thin;
   scrollbar-color: var(--color-border-secondary) transparent;
+}
+
+/* ===========================================
+ * GLOBAL INPUT FOCUS STATES
+ * Solid orange drop shadow (2px spread) on focus
+ * =========================================== */
+
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="search"],
+input[type="tel"],
+input[type="url"],
+input[type="number"],
+input[type="date"],
+input[type="time"],
+input[type="datetime-local"],
+textarea {
+  transition: box-shadow var(--duration-fast) var(--ease-out),
+              border-color var(--duration-fast) var(--ease-out);
+}
+
+input[type="text"]:focus,
+input[type="email"]:focus,
+input[type="password"]:focus,
+input[type="search"]:focus,
+input[type="tel"]:focus,
+input[type="url"]:focus,
+input[type="number"]:focus,
+input[type="date"]:focus,
+input[type="time"]:focus,
+input[type="datetime-local"]:focus,
+textarea:focus {
+  outline: none;
+  box-shadow: var(--input-focus-shadow);
+  border-color: var(--color-accent);
 }

@@ -112,10 +112,6 @@ export function ScreenshotGallery({ screenshotPaths, metadata, onClose, onScreen
         }
     };
 
-    const formatTimestamp = (timestamp: number) => {
-        return new Date(timestamp).toLocaleString();
-    };
-
     const handleDeleteScreenshot = async () => {
         const screenshotToDelete = currentScreenshot;
         
@@ -147,19 +143,17 @@ export function ScreenshotGallery({ screenshotPaths, metadata, onClose, onScreen
         }
     };
 
-    const handleOpenInFinder = async () => {
-        try {
-            // @ts-ignore
-            if (window.electron?.ipcRenderer?.showItemInFolder) {
-                // @ts-ignore
-                const result = await window.electron.ipcRenderer.showItemInFolder(currentScreenshot);
-                
-                if (!result.success) {
-                    console.error('Failed to open in finder:', result.error);
-                }
-            }
-        } catch (error) {
-            console.error('Failed to open in finder:', error);
+    const handleDownload = () => {
+        const dataUrl = loadedImages.get(currentScreenshot);
+        if (dataUrl) {
+            const timestamp = currentMetadata?.timestamp || Date.now();
+            const filename = `screenshot-${new Date(timestamp).toISOString().replace(/[:.]/g, '-')}.png`;
+            const link = document.createElement('a');
+            link.href = dataUrl;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
         }
     };
 
@@ -179,12 +173,22 @@ export function ScreenshotGallery({ screenshotPaths, metadata, onClose, onScreen
                             e.stopPropagation();
                             setShowMetadata(!showMetadata);
                         }}
-                        className={`transition-all bg-black/50 hover:bg-black/70 rounded-lg p-2 active:scale-95 ${
+                        className={`transition-all bg-black/50 rounded-lg p-2 active:scale-95 ${
                             showMetadata
                                 ? 'text-green-400 hover:text-green-300'
-                                : 'text-white hover:text-blue-400'
+                                : 'text-white'
                         }`}
                         style={{ transitionDuration: 'var(--duration-fast)', transitionTimingFunction: 'var(--ease-out)' }}
+                        onMouseEnter={(e) => {
+                            if (!showMetadata) {
+                                e.currentTarget.style.color = 'var(--color-accent)';
+                            }
+                        }}
+                        onMouseLeave={(e) => {
+                            if (!showMetadata) {
+                                e.currentTarget.style.color = 'white';
+                            }
+                        }}
                         title={showMetadata ? "Hide screenshot info" : "Show screenshot info"}
                     >
                         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -195,18 +199,26 @@ export function ScreenshotGallery({ screenshotPaths, metadata, onClose, onScreen
                     </button>
                 )}
 
-                {/* Open in Finder Button */}
+                {/* Download Button */}
                 <button
                     onClick={(e) => {
                         e.stopPropagation();
-                        handleOpenInFinder();
+                        handleDownload();
                     }}
-                    className="text-white hover:text-blue-400 transition-all bg-black/50 hover:bg-black/70 rounded-lg p-2 active:scale-95"
+                    className="text-white transition-all bg-black/50 rounded-lg p-2 active:scale-95"
                     style={{ transitionDuration: 'var(--duration-fast)', transitionTimingFunction: 'var(--ease-out)' }}
-                    title="Open in Finder"
+                    onMouseEnter={(e) => {
+                        e.currentTarget.style.color = 'var(--color-accent)';
+                    }}
+                    onMouseLeave={(e) => {
+                        e.currentTarget.style.color = 'white';
+                    }}
+                    title="Download"
                 >
                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M3 7v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-6l-2-2H5a2 2 0 0 0-2 2Z"/>
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                        <polyline points="7 10 12 15 17 10"/>
+                        <line x1="12" y1="15" x2="12" y2="3"/>
                     </svg>
                 </button>
 
@@ -217,7 +229,7 @@ export function ScreenshotGallery({ screenshotPaths, metadata, onClose, onScreen
                         confirmMessage="Delete this screenshot?"
                         size="md"
                         variant="subtle"
-                        className="text-white hover:text-red-400"
+                        className="text-white"
                     />
                 </div>
             </div>
@@ -226,8 +238,14 @@ export function ScreenshotGallery({ screenshotPaths, metadata, onClose, onScreen
             <div className="absolute top-4 right-4 z-20 no-drag">
                 <button
                     onClick={onClose}
-                    className="text-white hover:text-gray-300 transition-all bg-black/50 hover:bg-black/70 rounded-lg p-2 active:scale-95"
+                    className="text-white transition-all bg-black/50 rounded-lg p-2 active:scale-95"
                     style={{ transitionDuration: 'var(--duration-fast)', transitionTimingFunction: 'var(--ease-out)' }}
+                    onMouseEnter={(e) => {
+                        e.currentTarget.style.color = 'var(--color-accent)';
+                    }}
+                    onMouseLeave={(e) => {
+                        e.currentTarget.style.color = 'white';
+                    }}
                     title="Close (Esc)"
                 >
                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -299,217 +317,357 @@ export function ScreenshotGallery({ screenshotPaths, metadata, onClose, onScreen
                 )}
             </div>
 
-            {/* Metadata Panel */}
+            {/* Metadata Panel - Redesigned */}
             {showMetadata && currentMetadata && (
-                <div className="absolute top-20 left-4 bg-black/70 backdrop-blur-sm text-white rounded-lg p-4 max-w-lg z-20 animate-slide-in-right no-drag" style={{ boxShadow: 'var(--shadow-lg)' }}>
-                    <div className="flex items-center justify-between mb-3">
-                        <h3 className="text-lg font-semibold">Screenshot Info</h3>
-                        <button
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                setShowMetadata(false);
-                            }}
-                            className="text-gray-400 hover:text-white transition-all active:scale-95"
-                            style={{ transitionDuration: 'var(--duration-fast)', transitionTimingFunction: 'var(--ease-out)' }}
-                            title="Hide info panel"
-                        >
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <line x1="18" y1="6" x2="6" y2="18" />
-                                <line x1="6" y1="6" x2="18" y2="18" />
-                            </svg>
-                        </button>
-                    </div>
-                    <div className="space-y-3 text-sm">
-                        <div>
-                            <span className="text-gray-300">Time:</span>{' '}
-                            <span className="text-white">{formatTimestamp(currentMetadata.timestamp)}</span>
-                        </div>
-                        {currentMetadata.appName && (
-                            <div>
-                                <span className="text-gray-300">App:</span>{' '}
-                                <span className="text-white">{currentMetadata.appName}</span>
+                <div
+                    className="absolute top-20 left-4 max-w-md z-20 animate-slide-in-right no-drag overflow-hidden"
+                    style={{
+                        background: 'linear-gradient(135deg, rgba(250, 245, 238, 0.97) 0%, rgba(255, 252, 249, 0.95) 100%)',
+                        backdropFilter: 'blur(20px)',
+                        borderRadius: '16px',
+                        border: '1px solid rgba(255, 72, 0, 0.15)',
+                        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.1) inset'
+                    }}
+                >
+                    {/* Header with accent stripe */}
+                    <div
+                        className="px-5 py-4 border-b"
+                        style={{
+                            background: 'linear-gradient(90deg, var(--color-accent) 0%, #FF6B35 100%)',
+                            borderColor: 'rgba(255, 72, 0, 0.2)'
+                        }}
+                    >
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <div
+                                    className="w-9 h-9 rounded-xl flex items-center justify-center"
+                                    style={{ background: 'rgba(255, 255, 255, 0.25)' }}
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                                        <circle cx="8.5" cy="8.5" r="1.5"/>
+                                        <polyline points="21 15 16 10 5 21"/>
+                                    </svg>
+                                </div>
+                                <div>
+                                    <h3 className="text-base font-bold text-white tracking-tight" style={{ fontFamily: 'var(--font-display)' }}>
+                                        Screenshot Details
+                                    </h3>
+                                    <p className="text-[11px] text-white/70 font-medium">
+                                        {selectedIndex + 1} of {screenshotPaths.length}
+                                    </p>
+                                </div>
                             </div>
-                        )}
-                        <div>
-                            <span className="text-gray-300">Window:</span>{' '}
-                            {currentMetadata.windowTitle && currentMetadata.windowTitle !== 'Unknown' ? (
-                                <span className="text-white break-words">{currentMetadata.windowTitle}</span>
-                            ) : (
-                                <span className="text-gray-500 italic">(No window title available)</span>
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    setShowMetadata(false);
+                                }}
+                                className="w-8 h-8 rounded-lg flex items-center justify-center transition-all hover:scale-105 active:scale-95"
+                                style={{
+                                    background: 'rgba(255, 255, 255, 0.2)',
+                                    transitionDuration: 'var(--duration-fast)'
+                                }}
+                                title="Close panel"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                    <line x1="18" y1="6" x2="6" y2="18"/>
+                                    <line x1="6" y1="6" x2="18" y2="18"/>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Content */}
+                    <div className="p-5 space-y-4 max-h-[60vh] overflow-y-auto">
+                        {/* Metadata Grid */}
+                        <div
+                            className="grid grid-cols-2 gap-3 p-4 rounded-xl"
+                            style={{ background: 'rgba(0, 0, 0, 0.03)' }}
+                        >
+                            <div>
+                                <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--color-text-tertiary)' }}>Time</span>
+                                <p className="text-sm font-medium mt-0.5" style={{ color: 'var(--color-text-primary)' }}>
+                                    {new Date(currentMetadata.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                </p>
+                            </div>
+                            <div>
+                                <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--color-text-tertiary)' }}>Date</span>
+                                <p className="text-sm font-medium mt-0.5" style={{ color: 'var(--color-text-primary)' }}>
+                                    {new Date(currentMetadata.timestamp).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                                </p>
+                            </div>
+                            {currentMetadata.appName && (
+                                <div className="col-span-2">
+                                    <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--color-text-tertiary)' }}>Application</span>
+                                    <p className="text-sm font-medium mt-0.5 flex items-center gap-2" style={{ color: 'var(--color-text-primary)' }}>
+                                        <span
+                                            className="w-2 h-2 rounded-full"
+                                            style={{ background: 'var(--color-accent)' }}
+                                        />
+                                        {currentMetadata.appName}
+                                    </p>
+                                </div>
                             )}
+                            <div className="col-span-2">
+                                <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--color-text-tertiary)' }}>Window</span>
+                                {currentMetadata.windowTitle && currentMetadata.windowTitle !== 'Unknown' ? (
+                                    <p className="text-sm font-medium mt-0.5 break-words" style={{ color: 'var(--color-text-primary)' }}>
+                                        {currentMetadata.windowTitle}
+                                    </p>
+                                ) : (
+                                    <p className="text-sm mt-0.5 italic" style={{ color: 'var(--color-text-tertiary)' }}>
+                                        No window title available
+                                    </p>
+                                )}
+                            </div>
                         </div>
 
-                        {/* Permission issue warning - shown when window title is missing */}
+                        {/* Permission Warning */}
                         {(!currentMetadata.windowTitle || currentMetadata.windowTitle === 'Unknown') && (
-                            <div className="bg-amber-900/20 border border-amber-700/50 rounded-lg p-3 mt-2">
-                                <div className="flex items-start gap-2">
-                                    <svg className="w-4 h-4 text-amber-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                                    </svg>
+                            <div
+                                className="rounded-xl p-4"
+                                style={{
+                                    background: 'var(--color-warning-muted)',
+                                    border: '1px solid rgba(245, 158, 11, 0.3)'
+                                }}
+                            >
+                                <div className="flex items-start gap-3">
+                                    <div
+                                        className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                                        style={{ background: 'var(--color-warning)' }}
+                                    >
+                                        <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                        </svg>
+                                    </div>
                                     <div className="flex-1">
-                                        <p className="text-xs text-amber-300">
-                                            Window title not captured. This may be due to accessibility permission issues.
+                                        <p className="text-xs font-medium" style={{ color: 'var(--color-text-primary)' }}>
+                                            Window title not captured
+                                        </p>
+                                        <p className="text-[11px] mt-1" style={{ color: 'var(--color-text-secondary)' }}>
+                                            This may be due to accessibility permission issues.
                                         </p>
                                         <button
                                             onClick={() => window.electron.ipcRenderer.openAccessibilitySettings()}
-                                            className="mt-2 text-xs px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-md font-medium transition-colors"
+                                            className="mt-3 text-xs px-3 py-1.5 font-semibold rounded-lg transition-all hover:scale-105 active:scale-95"
+                                            style={{
+                                                background: 'var(--color-warning)',
+                                                color: 'white'
+                                            }}
                                         >
-                                            Reset Permissions
+                                            Fix Permissions
                                         </button>
                                     </div>
                                 </div>
                             </div>
                         )}
-                        
-                        {/* AI Description Section - On-Device AI Narrative (Stage 2) */}
-                        <div className="border-t border-gray-600 pt-3">
-                            <div className="flex items-center gap-2 mb-2">
-                                <span className="text-purple-400 font-medium">AI Narrative:</span>
-                                <span className="text-xs bg-purple-900/30 text-purple-300 px-2 py-1 rounded-full">
-                                    FastVLM
+
+                        {/* AI Narrative Section */}
+                        <div>
+                            <div className="flex items-center gap-2 mb-3">
+                                <div
+                                    className="w-6 h-6 rounded-lg flex items-center justify-center"
+                                    style={{ background: 'var(--color-accent-muted)' }}
+                                >
+                                    <svg className="w-3.5 h-3.5" style={{ color: 'var(--color-accent)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                                    </svg>
+                                </div>
+                                <span className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>
+                                    AI Analysis
                                 </span>
                                 {isAnalyzing(currentScreenshot) && (
-                                    <span className="text-xs bg-blue-900/30 text-blue-300 px-2 py-1 rounded-full flex items-center gap-1 animate-pulse">
+                                    <span
+                                        className="text-[10px] px-2 py-0.5 rounded-full font-semibold flex items-center gap-1.5 animate-pulse"
+                                        style={{
+                                            background: 'var(--color-info-muted)',
+                                            color: 'var(--color-info)'
+                                        }}
+                                    >
                                         <svg className="animate-spin h-3 w-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                                             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                                             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                                         </svg>
-                                        Analyzing...
+                                        Processing
                                     </span>
                                 )}
                             </div>
+
                             {currentMetadata.aiDescription ? (
-                                <div className="text-white text-sm leading-relaxed bg-gray-900/50 rounded p-3 border-l-2 border-purple-500 animate-fade-in">
-                                    <p className="whitespace-pre-wrap break-words">
+                                <div
+                                    className="rounded-xl p-4 animate-fade-in"
+                                    style={{
+                                        background: 'linear-gradient(135deg, rgba(255, 72, 0, 0.08) 0%, rgba(255, 107, 53, 0.04) 100%)',
+                                        borderLeft: '3px solid var(--color-accent)'
+                                    }}
+                                >
+                                    <p className="text-sm leading-relaxed whitespace-pre-wrap break-words" style={{ color: 'var(--color-text-primary)' }}>
                                         {currentMetadata.aiDescription}
                                     </p>
                                 </div>
                             ) : currentMetadata.llmError ? (
-                                <div className="text-yellow-400 text-sm bg-gray-900/50 rounded p-3 border-l-2 border-yellow-500 animate-fade-in">
-                                    <div className="flex items-center gap-2 mb-1">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <div
+                                    className="rounded-xl p-4 animate-fade-in"
+                                    style={{
+                                        background: 'var(--color-warning-muted)',
+                                        borderLeft: '3px solid var(--color-warning)'
+                                    }}
+                                >
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <svg className="w-4 h-4" style={{ color: 'var(--color-warning)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <circle cx="12" cy="12" r="10"/>
                                             <line x1="12" y1="8" x2="12" y2="12"/>
                                             <line x1="12" y1="16" x2="12.01" y2="16"/>
                                         </svg>
-                                        <span className="font-semibold">AI Description Unavailable</span>
+                                        <span className="text-xs font-semibold" style={{ color: 'var(--color-text-primary)' }}>Analysis Unavailable</span>
                                     </div>
-                                    <p className="text-xs text-gray-300 mt-1">{currentMetadata.llmError}</p>
+                                    <p className="text-[11px]" style={{ color: 'var(--color-text-secondary)' }}>{currentMetadata.llmError}</p>
                                 </div>
                             ) : isAnalyzing(currentScreenshot) ? (
-                                <div className="bg-gradient-to-r from-blue-900/20 to-purple-900/20 rounded-lg p-4 border border-blue-500/30 animate-fade-in">
+                                <div
+                                    className="rounded-xl p-4 animate-fade-in"
+                                    style={{
+                                        background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(139, 92, 246, 0.05) 100%)',
+                                        border: '1px solid rgba(59, 130, 246, 0.2)'
+                                    }}
+                                >
                                     <div className="flex items-center gap-3 mb-3">
                                         <div className="relative">
-                                            <svg className="animate-spin h-6 w-6 text-blue-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                            <svg className="animate-spin h-5 w-5" style={{ color: 'var(--color-info)' }} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                                                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                                                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                                             </svg>
-                                            <div className="absolute inset-0 bg-blue-400/20 rounded-full blur-md animate-pulse"></div>
                                         </div>
-                                        <div className="flex-1">
-                                            <div className="text-blue-300 font-medium text-sm">Analyzing screenshot with FastVLM...</div>
-                                            <div className="text-blue-400/60 text-xs mt-0.5">Extracting visual information and generating description</div>
+                                        <div>
+                                            <p className="text-sm font-medium" style={{ color: 'var(--color-text-primary)' }}>Analyzing screenshot...</p>
+                                            <p className="text-[11px]" style={{ color: 'var(--color-text-tertiary)' }}>Extracting visual context</p>
                                         </div>
                                     </div>
-                                    <div className="space-y-2">
-                                        <div className="h-2 bg-gray-800/50 rounded-full overflow-hidden">
-                                            <div className="h-full bg-gradient-to-r from-blue-500 to-purple-500 rounded-full animate-shimmer" style={{ width: '100%' }}></div>
-                                        </div>
+                                    <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(0,0,0,0.1)' }}>
+                                        <div
+                                            className="h-full rounded-full animate-shimmer"
+                                            style={{
+                                                width: '100%',
+                                                background: 'linear-gradient(90deg, var(--color-info) 0%, var(--color-accent) 50%, var(--color-info) 100%)',
+                                                backgroundSize: '200% 100%'
+                                            }}
+                                        />
                                     </div>
                                 </div>
                             ) : (
-                                <div className="flex items-center gap-2 text-gray-400 text-sm bg-gray-900/50 rounded p-3 border-l-2 border-gray-500 animate-fade-in">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <div
+                                    className="rounded-xl p-4 flex items-center gap-3 animate-fade-in"
+                                    style={{
+                                        background: 'rgba(0, 0, 0, 0.03)',
+                                        borderLeft: '3px solid var(--color-border-secondary)'
+                                    }}
+                                >
+                                    <svg className="w-4 h-4" style={{ color: 'var(--color-text-tertiary)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <circle cx="12" cy="12" r="10"/>
-                                        <line x1="12" y1="12" x2="12" y2="16"/>
-                                        <line x1="12" y1="8" x2="12.01" y2="8"/>
+                                        <polyline points="12 6 12 12 16 14"/>
                                     </svg>
-                                    <span>Waiting for AI analysis...</span>
+                                    <span className="text-sm" style={{ color: 'var(--color-text-tertiary)' }}>Waiting for analysis...</span>
                                 </div>
                             )}
                         </div>
 
-                        {/* Raw Vision Framework Data Section (Stage 1) */}
+                        {/* Vision Data Section - Collapsible */}
                         {(currentMetadata.rawVisionData || currentMetadata.visionData) && (
-                            <div className="border-t border-gray-600 pt-3">
-                                <div className="flex items-center gap-2 mb-2">
-                                    <span className="text-green-400 font-medium text-sm">Raw Vision Framework Data</span>
-                                    <span className="text-xs bg-green-900/30 text-green-300 px-2 py-1 rounded-full">
-                                        Stage 1: Extraction
+                            <details className="group">
+                                <summary
+                                    className="flex items-center gap-2 cursor-pointer list-none py-2 select-none"
+                                    style={{ color: 'var(--color-text-secondary)' }}
+                                >
+                                    <svg
+                                        className="w-4 h-4 transition-transform group-open:rotate-90"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        viewBox="0 0 24 24"
+                                    >
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7"/>
+                                    </svg>
+                                    <span className="text-xs font-bold uppercase tracking-wider">Vision Data</span>
+                                    <span
+                                        className="text-[10px] px-2 py-0.5 rounded-full font-medium"
+                                        style={{
+                                            background: 'var(--color-success-muted)',
+                                            color: 'var(--color-success)'
+                                        }}
+                                    >
+                                        Raw
                                     </span>
+                                </summary>
+                                <div className="mt-3 space-y-3">
+                                    {(() => {
+                                        const visionData = currentMetadata.rawVisionData || currentMetadata.visionData;
+                                        if (!visionData) return null;
+                                        return (
+                                            <>
+                                                {visionData.confidence !== undefined && (
+                                                    <div
+                                                        className="rounded-lg p-3"
+                                                        style={{ background: 'rgba(0, 0, 0, 0.03)' }}
+                                                    >
+                                                        <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--color-text-tertiary)' }}>
+                                                            Confidence
+                                                        </span>
+                                                        <div className="flex items-center gap-2 mt-1">
+                                                            <div className="flex-1 h-2 rounded-full overflow-hidden" style={{ background: 'rgba(0,0,0,0.1)' }}>
+                                                                <div
+                                                                    className="h-full rounded-full transition-all"
+                                                                    style={{
+                                                                        width: `${visionData.confidence * 100}%`,
+                                                                        background: 'var(--color-success)'
+                                                                    }}
+                                                                />
+                                                            </div>
+                                                            <span className="text-sm font-semibold tabular-nums" style={{ color: 'var(--color-success)' }}>
+                                                                {(visionData.confidence * 100).toFixed(0)}%
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                                {visionData.detectedText && visionData.detectedText.length > 0 && (
+                                                    <div
+                                                        className="rounded-lg p-3"
+                                                        style={{ background: 'rgba(0, 0, 0, 0.03)' }}
+                                                    >
+                                                        <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--color-text-tertiary)' }}>
+                                                            Detected Text ({visionData.detectedText.length})
+                                                        </span>
+                                                        <div className="mt-2 max-h-32 overflow-y-auto space-y-1">
+                                                            {visionData.detectedText.slice(0, 10).map((text, idx) => (
+                                                                <p key={idx} className="text-xs break-words" style={{ color: 'var(--color-text-secondary)' }}>
+                                                                    {text}
+                                                                </p>
+                                                            ))}
+                                                            {visionData.detectedText.length > 10 && (
+                                                                <p className="text-[10px] italic" style={{ color: 'var(--color-text-tertiary)' }}>
+                                                                    +{visionData.detectedText.length - 10} more items
+                                                                </p>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </>
+                                        );
+                                    })()}
                                 </div>
-
-                                <div className="space-y-3 text-xs font-mono">
-                                        {/* Use rawVisionData if available, fall back to legacy visionData */}
-                                        {(() => {
-                                            const visionData = currentMetadata.rawVisionData || currentMetadata.visionData;
-                                            if (!visionData) return null;
-
-                                            return (
-                                                <>
-                                                    {/* Confidence Score */}
-                                                    {visionData.confidence !== undefined && (
-                                                        <div>
-                                                            <div className="text-gray-400 mb-1">Vision Framework Confidence:</div>
-                                                            <div className="bg-gray-900/50 rounded p-2 border-l-2 border-green-500 text-green-300">
-                                                                {(visionData.confidence * 100).toFixed(1)}%
-                                                            </div>
-                                                        </div>
-                                                    )}
-
-                                                    {/* Detected Text (OCR Results) */}
-                                                    {visionData.detectedText && visionData.detectedText.length > 0 && (
-                                                        <div>
-                                                            <div className="text-gray-400 mb-1">OCR Text ({visionData.detectedText.length} items):</div>
-                                                            <div className="bg-gray-900/50 rounded p-2 border-l-2 border-green-500 max-h-40 overflow-y-auto">
-                                                                <ul className="space-y-1">
-                                                                    {visionData.detectedText.map((text, idx) => (
-                                                                        <li key={idx} className="text-white break-words">
-                                                                            <span className="text-gray-500">{idx + 1}.</span> {text}
-                                                                        </li>
-                                                                    ))}
-                                                                </ul>
-                                                            </div>
-                                                        </div>
-                                                    )}
-
-                                                    {/* Detected Objects */}
-                                                    {visionData.objects && visionData.objects.length > 0 && (
-                                                        <div>
-                                                            <div className="text-gray-400 mb-1">Visual Objects ({visionData.objects.length} items):</div>
-                                                            <div className="bg-gray-900/50 rounded p-2 border-l-2 border-green-500">
-                                                                <div className="flex flex-wrap gap-1">
-                                                                    {visionData.objects.map((obj, idx) => (
-                                                                        <span key={idx} className="bg-green-900/30 text-green-300 px-2 py-1 rounded">
-                                                                            {obj}
-                                                                        </span>
-                                                                    ))}
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    )}
-
-                                                    {/* Structured Extraction (Detailed Analysis) */}
-                                                    {visionData.extraction && (
-                                                        <div>
-                                                            <div className="text-gray-400 mb-1">Structured Analysis (JSON):</div>
-                                                            <div className="bg-gray-900/50 rounded p-2 border-l-2 border-green-500 max-h-60 overflow-y-auto">
-                                                                <pre className="text-white whitespace-pre-wrap break-words text-xs">
-                                                                    {JSON.stringify(visionData.extraction, null, 2)}
-                                                                </pre>
-                                                            </div>
-                                                        </div>
-                                                    )}
-                                                </>
-                                            );
-                                        })()}
-                                </div>
-                            </div>
+                            </details>
                         )}
-                        
-                        <div className="border-t border-gray-600 pt-3">
-                            <span className="text-gray-300">File:</span>{' '}
-                            <span className="text-white text-xs break-all">{currentScreenshot.split('/').pop()}</span>
+
+                        {/* File Info */}
+                        <div
+                            className="pt-3 border-t"
+                            style={{ borderColor: 'var(--color-border-primary)' }}
+                        >
+                            <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--color-text-tertiary)' }}>
+                                File
+                            </span>
+                            <p className="text-[11px] mt-1 break-all font-mono" style={{ color: 'var(--color-text-secondary)' }}>
+                                {currentScreenshot.split('/').pop()}
+                            </p>
                         </div>
                     </div>
                 </div>

@@ -64,15 +64,19 @@ export function DeleteButton({
                 hoverColor: 'var(--color-error)'
             };
         }
-        // subtle variant - ghost button style with destructive hover
+        // subtle variant - ghost button style with destructive hover (no background change)
         return {
             color: 'var(--color-text-secondary)',
-            hoverBg: '#FAF5EE',
+            hoverBg: 'transparent',
             hoverColor: 'var(--color-error)'
         };
     };
 
     const variantStyles = getVariantStyles();
+
+    // Check if a text color class is passed - if so, use that instead of variant color
+    const hasCustomColor = className.includes('text-white') || className.includes('text-');
+    const defaultColor = hasCustomColor ? (className.includes('text-white') ? 'white' : variantStyles.color) : variantStyles.color;
 
     return (
         <>
@@ -80,7 +84,7 @@ export function DeleteButton({
                 onClick={handleClick}
                 className={`${buttonSizes[size]} rounded-lg active:scale-95 transition-all ${className}`}
                 style={{
-                    color: variantStyles.color,
+                    color: defaultColor,
                     transitionDuration: 'var(--duration-base)',
                     transitionTimingFunction: 'var(--ease-out)'
                 }}
@@ -98,7 +102,7 @@ export function DeleteButton({
                 onMouseLeave={(e) => {
                     e.stopPropagation();
                     e.currentTarget.style.backgroundColor = 'transparent';
-                    e.currentTarget.style.color = variantStyles.color;
+                    e.currentTarget.style.color = defaultColor;
                     // Reinstate parent hover if mouse moved somewhere within the parent
                     const parent = e.currentTarget.closest('[data-hoverable]') as HTMLElement;
                     const relatedTarget = e.relatedTarget as Node | null;

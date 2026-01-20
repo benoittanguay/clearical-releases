@@ -37,9 +37,10 @@ export function PermissionRequestModal({ isOpen, onClose, onPermissionsGranted }
         return () => clearInterval(interval);
     }, [isOpen]);
 
-    // Auto-close when required permissions (accessibility) are granted
+    // Auto-close only when ALL permissions are granted
+    // If only accessibility is granted, user must click Continue to acknowledge missing screen recording
     useEffect(() => {
-        if (permissions.accessibility === true) {
+        if (permissions.accessibility === true && permissions.screenRecording === true) {
             setTimeout(() => {
                 onPermissionsGranted();
                 onClose();
@@ -326,17 +327,19 @@ export function PermissionRequestModal({ isOpen, onClose, onPermissionsGranted }
 
                     {/* Success message */}
                     {permissions.accessibility && (
-                        <div className="bg-[var(--color-success-muted)] border border-[var(--color-success)]/30 rounded-2xl p-4 mb-6 animate-pulse">
+                        <div className={`border rounded-2xl p-4 mb-6 ${allGranted ? 'bg-[var(--color-success-muted)] border-[var(--color-success)]/30 animate-pulse' : 'bg-[var(--color-info-muted)] border-[var(--color-info)]/30'}`}>
                             <div className="flex items-center gap-3">
-                                <svg className="w-6 h-6 text-[var(--color-success)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <svg className={`w-6 h-6 ${allGranted ? 'text-[var(--color-success)]' : 'text-[var(--color-info)]'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                                 </svg>
                                 <div>
                                     <h4 className="text-sm font-semibold text-[var(--color-text-primary)] font-display">
-                                        {allGranted ? 'All permissions granted!' : 'Required permissions granted!'}
+                                        {allGranted ? 'All permissions granted!' : 'Ready to start'}
                                     </h4>
                                     <p className="text-sm text-[var(--color-text-secondary)]">
-                                        {allGranted ? 'Starting timer with full features...' : 'Starting timer (AI summaries limited without screen recording)...'}
+                                        {allGranted
+                                            ? 'Starting timer with full features...'
+                                            : 'Click Continue to start recording. AI summaries will be limited without screen recording.'}
                                     </p>
                                 </div>
                             </div>

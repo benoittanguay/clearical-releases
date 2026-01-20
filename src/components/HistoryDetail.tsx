@@ -15,6 +15,7 @@ import { useSubscription } from '../context/SubscriptionContext';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { useJiraCache } from '../context/JiraCacheContext';
+import { useAnimation } from '../context/AnimationContext';
 import { useTimeRounding } from '../hooks/useTimeRounding';
 import { useScreenshotAnalysis } from '../context/ScreenshotAnalysisContext';
 import { analytics } from '../services/analytics';
@@ -89,6 +90,8 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
     const jiraCache = useJiraCache();
     const { roundTime, isRoundingEnabled } = useTimeRounding();
     const { totalAnalyzing } = useScreenshotAnalysis();
+    const { startSplitAnimation } = useAnimation();
+    const activityRowRefs = useRef<Map<string, HTMLDivElement>>(new Map());
     const [description, setDescription] = useState(entry.description || '');
     const [selectedAssignment, setSelectedAssignment] = useState<WorkAssignment | null>(() => {
         // Get assignment from unified model or fallback to legacy fields
@@ -594,11 +597,15 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
         // If activities remain but no screenshots, keep the existing description
     };
 
-    const handleCreateEntryFromActivity = async (activityIndex: number) => {
+    const handleCreateEntryFromActivity = async (activityIndex: number, activityKey: string) => {
         const activity = entry.windowActivity?.[activityIndex];
         if (!activity) return;
 
         const activityTitle = activity.appName === 'Manual Entry' ? activity.windowTitle : getWindowTitle(activity);
+
+        // Capture the activity row position for animation
+        const activityRow = activityRowRefs.current.get(activityKey);
+        const sourceRect = activityRow?.getBoundingClientRect();
 
         try {
             const newEntryId = await createEntryFromActivity(entry.id, activityIndex);
@@ -611,8 +618,26 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                     duration: 3000
                 });
 
-                // Navigate back to reload the entries list with the new entry
-                onBack();
+                // If we have a source rect, trigger the fly-out animation
+                if (sourceRect) {
+                    const flyingEntry = {
+                        id: activityKey,
+                        sourceRect,
+                        entry: {
+                            description: activityTitle || 'Activity',
+                            duration: activity.duration,
+                            bucketColor: entry.assignment?.type === 'bucket' ? entry.assignment.bucket?.color : undefined,
+                        },
+                    };
+
+                    // Start animation, then navigate back when complete
+                    startSplitAnimation([flyingEntry], () => {
+                        onBack();
+                    });
+                } else {
+                    // No animation, navigate immediately
+                    onBack();
+                }
             } else {
                 throw new Error('Failed to create entry');
             }
@@ -891,6 +916,7 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
             const screenshotDescriptions: string[] = [];
             const windowTitles: string[] = [];
             const appNames: string[] = [];
+            const appDurations: Record<string, number> = {};
 
             entry.windowActivity.forEach(activity => {
                 // Collect app names and window titles
@@ -900,6 +926,11 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                 const resolvedTitle = getWindowTitle(activity);
                 if (resolvedTitle && resolvedTitle !== '(No window title available)' && !windowTitles.includes(resolvedTitle)) {
                     windowTitles.push(resolvedTitle);
+                }
+
+                // Calculate time spent per app (key signal for identifying primary task)
+                if (activity.appName && activity.duration) {
+                    appDurations[activity.appName] = (appDurations[activity.appName] || 0) + activity.duration;
                 }
 
                 // Collect screenshot descriptions
@@ -920,6 +951,7 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                 screenshotDescriptions,
                 windowTitles,
                 appNames,
+                appDurations,  // Time spent per app for weighting primary task
                 duration: entry.duration,
                 startTime: entry.startTime,
                 endTime: entry.endTime
@@ -1317,7 +1349,7 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
 
             <div className="flex-1 overflow-y-auto px-4 pb-4">
                 {/* Entry Summary - Reorganized */}
-                <div className="border rounded-lg mt-4" style={{ backgroundColor: 'var(--color-bg-secondary)', borderColor: 'var(--color-border-primary)', borderRadius: 'var(--radius-2xl)', boxShadow: 'var(--shadow-md)' }}>
+                <div className="border rounded-lg mt-4" style={{ backgroundColor: 'var(--color-bg-secondary)', borderColor: 'var(--color-border-primary)', borderRadius: 'var(--radius-xl)', boxShadow: 'var(--shadow-md)' }}>
                     {/* Time Summary Section - Start/End times and Duration counter */}
                     <div className="flex items-center justify-between p-4 border-b" style={{ borderColor: 'var(--color-border-secondary)' }}>
                         <div className="flex flex-col gap-1">
@@ -1653,7 +1685,7 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                                 e.currentTarget.style.borderColor = 'var(--color-border-primary)';
                                 e.currentTarget.style.boxShadow = 'none';
                             }}
-                            rows={3}
+                            rows={5}
                         />
                     </div>
                 </div>
@@ -1941,9 +1973,18 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                                     {/* Activities List */}
                                     {isExpanded && (
                                         <div className="border-t" style={{ borderColor: 'var(--color-border-primary)' }}>
-                                            {group.activities.map((activity, index) => (
+                                            {group.activities.map((activity, index) => {
+                                                const activityKey = `${activity.timestamp}-${activity.appName}-${index}`;
+                                                return (
                                                 <div
                                                     key={`${activity.timestamp}-${index}`}
+                                                    ref={(el) => {
+                                                        if (el) {
+                                                            activityRowRefs.current.set(activityKey, el);
+                                                        } else {
+                                                            activityRowRefs.current.delete(activityKey);
+                                                        }
+                                                    }}
                                                     className="p-3 border-b last:border-b-0 transition-colors"
                                                     data-hoverable
                                                     data-default-bg="transparent"
@@ -2026,11 +2067,14 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                                                                 {formatTime(activity.duration)}
                                                             </div>
                                                             <button
-                                                                onClick={() => handleCreateEntryFromActivity(entry.windowActivity?.findIndex(act =>
-                                                                    act.timestamp === activity.timestamp &&
-                                                                    act.appName === activity.appName &&
-                                                                    act.windowTitle === activity.windowTitle
-                                                                ) ?? -1)}
+                                                                onClick={() => handleCreateEntryFromActivity(
+                                                                    entry.windowActivity?.findIndex(act =>
+                                                                        act.timestamp === activity.timestamp &&
+                                                                        act.appName === activity.appName &&
+                                                                        act.windowTitle === activity.windowTitle
+                                                                    ) ?? -1,
+                                                                    activityKey
+                                                                )}
                                                                 className="p-1.5 rounded-lg transition-all active:scale-95"
                                                                 style={{
                                                                     color: 'var(--color-text-secondary)',
@@ -2078,7 +2122,8 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                                                         </div>
                                                     </div>
                                                 </div>
-                                            ))}
+                                            );
+                                            })}
                                         </div>
                                     )}
                                 </div>
