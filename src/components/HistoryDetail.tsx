@@ -15,7 +15,6 @@ import { useSubscription } from '../context/SubscriptionContext';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { useJiraCache } from '../context/JiraCacheContext';
-import { useAnimation } from '../context/AnimationContext';
 import { useTimeRounding } from '../hooks/useTimeRounding';
 import { useScreenshotAnalysis } from '../context/ScreenshotAnalysisContext';
 import { analytics } from '../services/analytics';
@@ -90,7 +89,6 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
     const jiraCache = useJiraCache();
     const { roundTime, isRoundingEnabled } = useTimeRounding();
     const { totalAnalyzing } = useScreenshotAnalysis();
-    const { startSplitAnimation } = useAnimation();
     const activityRowRefs = useRef<Map<string, HTMLDivElement>>(new Map());
     const [description, setDescription] = useState(entry.description || '');
     const [selectedAssignment, setSelectedAssignment] = useState<WorkAssignment | null>(() => {
@@ -597,15 +595,11 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
         // If activities remain but no screenshots, keep the existing description
     };
 
-    const handleCreateEntryFromActivity = async (activityIndex: number, activityKey: string) => {
+    const handleCreateEntryFromActivity = async (activityIndex: number, _activityKey: string) => {
         const activity = entry.windowActivity?.[activityIndex];
         if (!activity) return;
 
         const activityTitle = activity.appName === 'Manual Entry' ? activity.windowTitle : getWindowTitle(activity);
-
-        // Capture the activity row position for animation
-        const activityRow = activityRowRefs.current.get(activityKey);
-        const sourceRect = activityRow?.getBoundingClientRect();
 
         try {
             const newEntryId = await createEntryFromActivity(entry.id, activityIndex);
@@ -618,26 +612,8 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                     duration: 3000
                 });
 
-                // If we have a source rect, trigger the fly-out animation
-                if (sourceRect) {
-                    const flyingEntry = {
-                        id: activityKey,
-                        sourceRect,
-                        entry: {
-                            description: activityTitle || 'Activity',
-                            duration: activity.duration,
-                            bucketColor: entry.assignment?.type === 'bucket' ? entry.assignment.bucket?.color : undefined,
-                        },
-                    };
-
-                    // Start animation, then navigate back when complete
-                    startSplitAnimation([flyingEntry], () => {
-                        onBack();
-                    });
-                } else {
-                    // No animation, navigate immediately
-                    onBack();
-                }
+                // Navigate back after successful creation
+                onBack();
             } else {
                 throw new Error('Failed to create entry');
             }
