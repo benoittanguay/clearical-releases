@@ -61,6 +61,7 @@ export interface ScreenshotAnalysisResult {
     objects?: string[];
     extraction?: StructuredExtraction;
     requestId?: string;
+    isRateLimited?: boolean;
 }
 
 export interface SplitSuggestion {

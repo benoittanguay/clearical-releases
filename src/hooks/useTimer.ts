@@ -58,6 +58,13 @@ export function useTimer() {
     const activeAnalysisCount = useRef<number>(0);
     const MAX_CONCURRENT_ANALYSES = 3;
 
+    // Rate limit and backoff tracking
+    const consecutiveFailures = useRef<number>(0);
+    const queuePausedUntil = useRef<number>(0);
+    const MAX_CONSECUTIVE_FAILURES_BEFORE_PAUSE = 3;
+    const QUEUE_PAUSE_DURATION_MS = 60000; // 1 minute pause after multiple failures
+    const FAILURE_BACKOFF_BASE_MS = 2000; // 2 second base delay after failure
+
     // Load state from local storage on mount
     useEffect(() => {
         const stored = localStorage.getItem('timeportal-timer-state');
@@ -163,6 +170,16 @@ export function useTimer() {
         };
 
         const processNextAnalysis = () => {
+            // Check if queue is paused due to rate limiting
+            const now = Date.now();
+            if (queuePausedUntil.current > now) {
+                const remainingPause = Math.ceil((queuePausedUntil.current - now) / 1000);
+                console.log(`[Renderer] ⏸️ Queue paused for ${remainingPause}s due to rate limiting`);
+                // Schedule retry after pause expires
+                setTimeout(() => processNextAnalysis(), queuePausedUntil.current - now + 100);
+                return;
+            }
+
             // Check if we can start another analysis
             if (activeAnalysisCount.current >= MAX_CONCURRENT_ANALYSES) {
                 console.log(`[Renderer] 🚦 Max concurrent analyses (${MAX_CONCURRENT_ANALYSES}) reached, waiting...`);
@@ -192,6 +209,9 @@ export function useTimer() {
                     const analysisResult = await window.electron.ipcRenderer.analyzeScreenshot(path, `${timestamp}`);
 
                     if (analysisResult?.success && analysisResult.description) {
+                        // Success - reset failure tracking
+                        consecutiveFailures.current = 0;
+
                         // Store in refs (always - this ensures data is captured even if activity not in state yet)
                         currentActivityScreenshotDescriptions.current[path] = analysisResult.description;
                         currentActivityScreenshotVisionData.current[path] = {
@@ -246,7 +266,9 @@ export function useTimer() {
                             });
                         });
                     } else {
-                        console.log('[Renderer] ⚠️ AI analysis failed, using fallback', analysisResult);
+                        // Track consecutive failures
+                        consecutiveFailures.current++;
+                        console.log(`[Renderer] ⚠️ AI analysis failed (consecutive failures: ${consecutiveFailures.current})`, analysisResult);
 
                         // Check if this is an auth error
                         const errorMsg = analysisResult?.error || 'Analysis failed';
@@ -255,6 +277,23 @@ export function useTimer() {
                             errorMsg.toLowerCase().includes('sign in')) {
                             console.error('[Renderer] ❌ AI analysis failed due to authentication issue');
                             console.error('[Renderer] User needs to sign in from Settings to enable AI features');
+                        }
+
+                        // Check if this looks like a rate limit error
+                        const isRateLimited = analysisResult?.isRateLimited ||
+                            errorMsg.toLowerCase().includes('rate limit') ||
+                            errorMsg.toLowerCase().includes('429') ||
+                            errorMsg.toLowerCase().includes('too many requests');
+
+                        // Pause queue if too many consecutive failures
+                        if (consecutiveFailures.current >= MAX_CONSECUTIVE_FAILURES_BEFORE_PAUSE) {
+                            queuePausedUntil.current = Date.now() + QUEUE_PAUSE_DURATION_MS;
+                            console.log(`[Renderer] ⏸️ Pausing queue for ${QUEUE_PAUSE_DURATION_MS / 1000}s after ${consecutiveFailures.current} consecutive failures`);
+                        } else if (isRateLimited) {
+                            // Add a shorter delay for rate limit errors even before max failures
+                            const delayMs = FAILURE_BACKOFF_BASE_MS * Math.pow(2, consecutiveFailures.current - 1);
+                            queuePausedUntil.current = Date.now() + delayMs;
+                            console.log(`[Renderer] ⏳ Rate limited, adding ${delayMs}ms delay before next request`);
                         }
 
                         // Notify context that analysis failed
@@ -283,7 +322,15 @@ export function useTimer() {
                         });
                     }
                 } catch (error) {
-                    console.error('[Renderer] ❌ AI analysis error:', error);
+                    // Track consecutive failures for network errors too
+                    consecutiveFailures.current++;
+                    console.error(`[Renderer] ❌ AI analysis error (consecutive failures: ${consecutiveFailures.current}):`, error);
+
+                    // Pause queue if too many consecutive failures
+                    if (consecutiveFailures.current >= MAX_CONSECUTIVE_FAILURES_BEFORE_PAUSE) {
+                        queuePausedUntil.current = Date.now() + QUEUE_PAUSE_DURATION_MS;
+                        console.log(`[Renderer] ⏸️ Pausing queue for ${QUEUE_PAUSE_DURATION_MS / 1000}s after ${consecutiveFailures.current} consecutive failures`);
+                    }
 
                     // Notify context that analysis encountered an error
                     failAnalysis(path, error instanceof Error ? error.message : 'Unknown error');
@@ -551,6 +598,8 @@ export function useTimer() {
         pendingAnalyses.current.clear(); // Clear any pending analyses from previous session
         analysisQueue.current = []; // Clear analysis queue
         activeAnalysisCount.current = 0; // Reset active count
+        consecutiveFailures.current = 0; // Reset failure tracking
+        queuePausedUntil.current = 0; // Clear any queue pause
     };
 
     const pause = () => {
@@ -813,6 +862,8 @@ export function useTimer() {
         pendingAnalyses.current.clear(); // Clear pending analyses
         analysisQueue.current = []; // Clear analysis queue
         activeAnalysisCount.current = 0; // Reset active count
+        consecutiveFailures.current = 0; // Reset failure tracking
+        queuePausedUntil.current = 0; // Clear any queue pause
     };
 
     const formatTime = (ms: number) => {

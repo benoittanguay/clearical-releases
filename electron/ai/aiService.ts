@@ -58,6 +58,7 @@ export interface AnalysisResponse {
     confidence?: number;
     error?: string;
     requestId?: string;
+    isRateLimited?: boolean;
 }
 
 export interface ClassifyResponse {
@@ -87,6 +88,25 @@ interface GeminiProxyResponse {
     summary?: string;
     // Error
     error?: string;
+    // Rate limit info
+    isRateLimited?: boolean;
+    retryAfter?: number;
+}
+
+// Retry configuration
+const RETRY_CONFIG = {
+    maxRetries: 3,
+    initialDelayMs: 1000,
+    maxDelayMs: 30000,
+    backoffMultiplier: 2,
+    retryableStatusCodes: [429, 502, 503, 504],
+};
+
+/**
+ * Sleep utility for retry delays
+ */
+function sleep(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 /**
@@ -94,6 +114,10 @@ interface GeminiProxyResponse {
  */
 class AIService {
     private config = getConfig();
+
+    // Track consecutive failures for queue pause logic
+    private consecutiveFailures = 0;
+    private rateLimitedUntil = 0;
 
     /**
      * Get the Gemini proxy endpoint URL
@@ -103,7 +127,52 @@ class AIService {
     }
 
     /**
-     * Make an authenticated request to the Gemini proxy
+     * Check if we should wait before making a request (rate limit cooldown)
+     */
+    isRateLimited(): boolean {
+        return Date.now() < this.rateLimitedUntil;
+    }
+
+    /**
+     * Get the time remaining until rate limit expires (in ms)
+     */
+    getRateLimitRemainingMs(): number {
+        return Math.max(0, this.rateLimitedUntil - Date.now());
+    }
+
+    /**
+     * Get consecutive failure count for queue pause decisions
+     */
+    getConsecutiveFailures(): number {
+        return this.consecutiveFailures;
+    }
+
+    /**
+     * Reset failure tracking (call after successful request)
+     */
+    private resetFailureTracking(): void {
+        this.consecutiveFailures = 0;
+    }
+
+    /**
+     * Record a failure and optionally set rate limit cooldown
+     */
+    private recordFailure(isRateLimited: boolean, retryAfterMs?: number): void {
+        this.consecutiveFailures++;
+
+        if (isRateLimited) {
+            // Set cooldown period - use retry-after if provided, otherwise use exponential backoff
+            const cooldownMs = retryAfterMs || Math.min(
+                RETRY_CONFIG.initialDelayMs * Math.pow(RETRY_CONFIG.backoffMultiplier, this.consecutiveFailures),
+                RETRY_CONFIG.maxDelayMs
+            );
+            this.rateLimitedUntil = Date.now() + cooldownMs;
+            console.log(`[AIService] Rate limited. Cooldown for ${cooldownMs}ms (until ${new Date(this.rateLimitedUntil).toISOString()})`);
+        }
+    }
+
+    /**
+     * Make an authenticated request to the Gemini proxy with exponential backoff
      */
     private async makeRequest(body: Record<string, unknown>): Promise<GeminiProxyResponse> {
         const authService = getAuthService();
@@ -119,22 +188,41 @@ class AIService {
             return { success: false, error: 'Not authenticated. Please sign in again.' };
         }
 
+        // Check if we're in a rate limit cooldown period
+        if (this.isRateLimited()) {
+            const remainingMs = this.getRateLimitRemainingMs();
+            console.log(`[AIService] ⏳ Rate limited, waiting ${remainingMs}ms before request`);
+            await sleep(remainingMs);
+        }
+
         console.log('[AIService] Making authenticated request with token expiring at:',
             new Date(session.expiresAt).toISOString());
 
-        try {
-            const response = await fetch(this.getProxyUrl(), {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${session.accessToken}`,
-                },
-                body: JSON.stringify(body),
-            });
+        let lastError: string = 'Unknown error';
+        let lastStatusCode = 0;
 
-            if (!response.ok) {
+        // Retry loop with exponential backoff
+        for (let attempt = 0; attempt <= RETRY_CONFIG.maxRetries; attempt++) {
+            try {
+                const response = await fetch(this.getProxyUrl(), {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${session.accessToken}`,
+                    },
+                    body: JSON.stringify(body),
+                });
+
+                lastStatusCode = response.status;
+
+                if (response.ok) {
+                    // Success - reset failure tracking
+                    this.resetFailureTracking();
+                    return await response.json() as GeminiProxyResponse;
+                }
+
                 const errorData = await response.json().catch(() => ({ error: 'Unknown error' })) as GeminiProxyResponse;
-                console.error('[AIService] Proxy request failed:', response.status, errorData);
+                lastError = errorData.error || `Request failed with status ${response.status}`;
 
                 // If server says token is invalid/expired, clear local session and prompt re-auth
                 if (response.status === 401 && errorData.error?.includes('Invalid or expired')) {
@@ -146,20 +234,67 @@ class AIService {
                     };
                 }
 
-                return {
-                    success: false,
-                    error: errorData.error || `Request failed with status ${response.status}`
-                };
-            }
+                // Check if this is a retryable error
+                const isRetryable = RETRY_CONFIG.retryableStatusCodes.includes(response.status);
 
-            return await response.json() as GeminiProxyResponse;
-        } catch (error) {
-            console.error('[AIService] Request error:', error);
-            return {
-                success: false,
-                error: error instanceof Error ? error.message : 'Network error'
-            };
+                if (!isRetryable || attempt >= RETRY_CONFIG.maxRetries) {
+                    // Non-retryable error or max retries reached
+                    console.error(`[AIService] Request failed (status ${response.status}), not retrying:`, errorData);
+
+                    // Record failure for rate limiting tracking
+                    if (response.status === 429) {
+                        const retryAfter = response.headers.get('Retry-After');
+                        const retryAfterMs = retryAfter ? parseInt(retryAfter, 10) * 1000 : undefined;
+                        this.recordFailure(true, retryAfterMs);
+                    } else {
+                        this.recordFailure(false);
+                    }
+
+                    return {
+                        success: false,
+                        error: lastError,
+                        isRateLimited: response.status === 429
+                    };
+                }
+
+                // Calculate delay for retry with exponential backoff
+                const delayMs = Math.min(
+                    RETRY_CONFIG.initialDelayMs * Math.pow(RETRY_CONFIG.backoffMultiplier, attempt),
+                    RETRY_CONFIG.maxDelayMs
+                );
+
+                console.log(`[AIService] ⚠️ Request failed with ${response.status} (attempt ${attempt + 1}/${RETRY_CONFIG.maxRetries + 1}), retrying in ${delayMs}ms...`);
+                await sleep(delayMs);
+
+            } catch (error) {
+                lastError = error instanceof Error ? error.message : 'Network error';
+                console.error(`[AIService] Request error (attempt ${attempt + 1}/${RETRY_CONFIG.maxRetries + 1}):`, error);
+
+                // Network errors are retryable
+                if (attempt >= RETRY_CONFIG.maxRetries) {
+                    this.recordFailure(false);
+                    return {
+                        success: false,
+                        error: lastError
+                    };
+                }
+
+                const delayMs = Math.min(
+                    RETRY_CONFIG.initialDelayMs * Math.pow(RETRY_CONFIG.backoffMultiplier, attempt),
+                    RETRY_CONFIG.maxDelayMs
+                );
+                console.log(`[AIService] Retrying in ${delayMs}ms...`);
+                await sleep(delayMs);
+            }
         }
+
+        // Should not reach here, but just in case
+        this.recordFailure(lastStatusCode === 429);
+        return {
+            success: false,
+            error: lastError,
+            isRateLimited: lastStatusCode === 429
+        };
     }
 
     /**
@@ -222,7 +357,8 @@ class AIService {
             success: false,
             description: this.generateFallbackDescription(appName, windowTitle),
             error: result.error || 'Analysis failed',
-            requestId
+            requestId,
+            isRateLimited: result.isRateLimited
         };
     }
 
@@ -516,6 +652,21 @@ class AIService {
         return {
             isRunning: true,
             url: this.getProxyUrl()
+        };
+    }
+
+    /**
+     * Get rate limit status for queue management
+     */
+    getRateLimitStatus(): {
+        isRateLimited: boolean;
+        remainingMs: number;
+        consecutiveFailures: number;
+    } {
+        return {
+            isRateLimited: this.isRateLimited(),
+            remainingMs: this.getRateLimitRemainingMs(),
+            consecutiveFailures: this.consecutiveFailures
         };
     }
 }

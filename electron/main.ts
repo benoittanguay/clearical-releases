@@ -947,7 +947,8 @@ ipcMain.handle('analyze-screenshot', async (event, imagePath: string, requestId?
                 description: fallbackDescription,
                 rawVisionData: null,
                 aiDescription: null,
-                analyzer: 'fallback'
+                analyzer: 'fallback',
+                isRateLimited: (aiResult as any).isRateLimited || false
             };
         }
     } catch (aiError) {
