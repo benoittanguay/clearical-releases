@@ -18,7 +18,7 @@ import { saveEncryptedFile, decryptFile, getEncryptionKey, isFileEncrypted } fro
 import { storeCredential, getCredential, deleteCredential, hasCredential, listCredentialKeys, isSecureStorageAvailable } from './credentialStorage.js';
 import { initializeSubscription, cleanupSubscription } from './subscription/ipcHandlers.js';
 import { requirePremium } from './subscription/premiumGuard.js';
-import { initializeAuth } from './auth/ipcHandlers.js';
+import { initializeAuth, syncAppVersionOnStartup } from './auth/ipcHandlers.js';
 import { initializeAnalytics } from './analytics/ipcHandlers.js';
 import { AIAssignmentService } from './aiAssignmentService.js';
 import { AIAccountService } from './aiAccountService.js';
@@ -443,6 +443,13 @@ ipcMain.handle('capture-screenshot', async () => {
                     console.log(`[Main] capture-screenshot - App is blacklisted (${appName}, ${bundleId}), skipping screenshot`);
                     return null;
                 }
+                // Skip screenshots when Clearical itself is the frontmost app
+                // This prevents race conditions where the app gains focus during screenshot capture
+                const appNameLower = appName.toLowerCase();
+                if (appNameLower === 'clearical' || appNameLower === 'time-portal' || appNameLower === 'timeportal' || bundleId === 'io.clearical.app') {
+                    console.log(`[Main] capture-screenshot - Clearical app is frontmost, skipping to avoid self-capture`);
+                    return null;
+                }
             }
         }
         catch (error) {
@@ -839,7 +846,8 @@ ipcMain.handle('analyze-screenshot', async (event, imagePath, requestId) => {
                 description: fallbackDescription,
                 rawVisionData: null,
                 aiDescription: null,
-                analyzer: 'fallback'
+                analyzer: 'fallback',
+                isRateLimited: aiResult.isRateLimited || false
             };
         }
     }
@@ -1216,9 +1224,17 @@ ipcMain.handle('get-active-window', async () => {
             '`);
             const parts = result.stdout.trim().split('|||');
             const appName = parts[0] || 'Unknown';
-            const windowTitle = parts[1] || 'Unknown';
+            const rawWindowTitle = parts[1];
             const bundleId = parts[2] || '';
-            console.log('[Main] get-active-window result:', { appName, windowTitle, bundleId });
+            // Check if we got an actual window title
+            const windowTitle = (rawWindowTitle && rawWindowTitle.trim() !== '') ? rawWindowTitle : 'Unknown';
+            // Log warning if window title is consistently empty (might indicate Accessibility permission issue)
+            if (!rawWindowTitle || rawWindowTitle.trim() === '') {
+                console.warn('[Main] get-active-window: No window title returned for', appName);
+                console.warn('[Main] This may indicate Accessibility permission is not granted.');
+                console.warn('[Main] Grant Accessibility permission in System Settings > Privacy & Security > Accessibility');
+            }
+            console.log('[Main] get-active-window result:', { appName, windowTitle, bundleId, rawWindowTitle });
             return { appName, windowTitle, bundleId };
         }
         catch (error) {
@@ -1803,6 +1819,7 @@ ipcMain.handle('generate-activity-summary', async (event, context) => {
     console.log('[Main] Screenshot descriptions:', context.screenshotDescriptions.length);
     console.log('[Main] Window titles:', context.windowTitles?.length || 0);
     console.log('[Main] App names:', context.appNames);
+    console.log('[Main] App durations:', context.appDurations);
     try {
         // Use signal aggregator to collect and store signals for this entry
         // This centralizes signal management and enables reuse across AI tasks
@@ -1810,10 +1827,11 @@ ipcMain.handle('generate-activity-summary', async (event, context) => {
         if (context.screenshotDescriptions && context.screenshotDescriptions.length > 0) {
             signalAggregator.setScreenshotAnalysis(context.entryId, context.screenshotDescriptions);
         }
-        // ACTIVITY signals: Window activity
+        // ACTIVITY signals: Window activity (with app durations for weighting)
         if ((context.appNames && context.appNames.length > 0) ||
             (context.windowTitles && context.windowTitles.length > 0)) {
-            signalAggregator.setWindowActivity(context.entryId, context.appNames || [], context.windowTitles || []);
+            signalAggregator.setWindowActivity(context.entryId, context.appNames || [], context.windowTitles || [], context.appDurations // Pass app durations for primary task identification
+            );
         }
         // TEMPORAL signals: Calendar events
         const calendarService = getCalendarService();
@@ -3043,6 +3061,10 @@ app.whenReady().then(() => {
     try {
         initializeAuth();
         console.log('[Main] Auth system initialized (Supabase)');
+        // Sync app version to user profile (async, non-blocking)
+        syncAppVersionOnStartup().catch((error) => {
+            console.error('[Main] Failed to sync app version on startup:', error);
+        });
     }
     catch (error) {
         console.error('[Main] Failed to initialize auth:', error);
