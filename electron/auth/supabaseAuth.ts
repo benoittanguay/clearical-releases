@@ -117,14 +117,31 @@ export class SupabaseAuthService {
             return null;
         }
 
-        // Check if session is expired or about to expire (within 5 minutes)
+        const now = Date.now();
         const expiryBuffer = 5 * 60 * 1000; // 5 minutes
-        if (Date.now() >= this.currentSession.expiresAt - expiryBuffer) {
-            console.log('[SupabaseAuth] Token expired or expiring soon, refreshing...');
+        const isExpiringSoon = now >= this.currentSession.expiresAt - expiryBuffer;
+        const isActuallyExpired = now >= this.currentSession.expiresAt;
+
+        // Only attempt refresh if token is expiring soon or expired
+        if (isExpiringSoon) {
+            console.log('[SupabaseAuth] Token expired or expiring soon, attempting refresh...');
+            console.log('[SupabaseAuth] Token expires at:', new Date(this.currentSession.expiresAt).toISOString());
+            console.log('[SupabaseAuth] Current time:', new Date(now).toISOString());
+            console.log('[SupabaseAuth] Is actually expired:', isActuallyExpired);
+
             const refreshed = await this.refreshSession();
+
             if (!refreshed) {
-                console.error('[SupabaseAuth] Failed to refresh expired token');
-                return null;
+                console.error('[SupabaseAuth] Failed to refresh token');
+
+                // If token is actually expired (not just about to expire), we must return null
+                if (isActuallyExpired) {
+                    console.error('[SupabaseAuth] Token is expired and refresh failed - session invalid');
+                    return null;
+                }
+
+                // Token is not yet expired, use it but warn
+                console.warn('[SupabaseAuth] Refresh failed but token not yet expired - using current session');
             }
         }
 

@@ -248,8 +248,17 @@ export function useTimer() {
                     } else {
                         console.log('[Renderer] ⚠️ AI analysis failed, using fallback', analysisResult);
 
+                        // Check if this is an auth error
+                        const errorMsg = analysisResult?.error || 'Analysis failed';
+                        if (errorMsg.toLowerCase().includes('not authenticated') ||
+                            errorMsg.toLowerCase().includes('session expired') ||
+                            errorMsg.toLowerCase().includes('sign in')) {
+                            console.error('[Renderer] ❌ AI analysis failed due to authentication issue');
+                            console.error('[Renderer] User needs to sign in from Settings to enable AI features');
+                        }
+
                         // Notify context that analysis failed
-                        failAnalysis(path, analysisResult?.error || 'Analysis failed');
+                        failAnalysis(path, errorMsg);
 
                         const fallbackDescription = 'Screenshot captured during work session';
                         currentActivityScreenshotDescriptions.current[path] = fallbackDescription;
@@ -567,12 +576,27 @@ export function useTimer() {
         setIsPaused(false);
         const now = Date.now();
 
-        // Wait for all pending AI analyses to complete before finalizing
+        // Wait for all pending AI analyses to complete before finalizing (with timeout)
         const pendingCount = pendingAnalyses.current.size;
         if (pendingCount > 0) {
             console.log(`[Renderer] ⏳ Waiting for ${pendingCount} pending AI analyses to complete before stopping...`);
-            await Promise.all(Array.from(pendingAnalyses.current.values()));
-            console.log('[Renderer] ✅ All AI analyses completed');
+
+            // Create a timeout promise to prevent indefinite blocking
+            const ANALYSIS_TIMEOUT_MS = 10000; // 10 seconds max wait
+            const timeoutPromise = new Promise<void>((resolve) => {
+                setTimeout(() => {
+                    console.log('[Renderer] ⚠️ Analysis timeout reached, proceeding without waiting for all analyses');
+                    resolve();
+                }, ANALYSIS_TIMEOUT_MS);
+            });
+
+            // Race between analyses completing and timeout
+            await Promise.race([
+                Promise.all(Array.from(pendingAnalyses.current.values())),
+                timeoutPromise
+            ]);
+
+            console.log('[Renderer] ✅ Analysis wait completed');
         }
 
         const finalActivity = calculateFinalActivities(now);

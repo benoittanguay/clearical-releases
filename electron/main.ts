@@ -18,7 +18,7 @@ import { saveEncryptedFile, decryptFile, getEncryptionKey, isFileEncrypted } fro
 import { storeCredential, getCredential, deleteCredential, hasCredential, listCredentialKeys, isSecureStorageAvailable } from './credentialStorage.js';
 import { initializeSubscription, cleanupSubscription } from './subscription/ipcHandlers.js';
 import { requirePremium } from './subscription/premiumGuard.js';
-import { initializeAuth } from './auth/ipcHandlers.js';
+import { initializeAuth, syncAppVersionOnStartup } from './auth/ipcHandlers.js';
 import { initializeAnalytics } from './analytics/ipcHandlers.js';
 import { AIAssignmentService, ActivityContext, AssignmentSuggestion } from './aiAssignmentService.js';
 import { AIAccountService, TempoAccount, AccountSelection, HistoricalAccountUsage } from './aiAccountService.js';
@@ -1349,10 +1349,20 @@ ipcMain.handle('get-active-window', async () => {
 
             const parts = result.stdout.trim().split('|||');
             const appName = parts[0] || 'Unknown';
-            const windowTitle = parts[1] || 'Unknown';
+            const rawWindowTitle = parts[1];
             const bundleId = parts[2] || '';
 
-            console.log('[Main] get-active-window result:', { appName, windowTitle, bundleId });
+            // Check if we got an actual window title
+            const windowTitle = (rawWindowTitle && rawWindowTitle.trim() !== '') ? rawWindowTitle : 'Unknown';
+
+            // Log warning if window title is consistently empty (might indicate Accessibility permission issue)
+            if (!rawWindowTitle || rawWindowTitle.trim() === '') {
+                console.warn('[Main] get-active-window: No window title returned for', appName);
+                console.warn('[Main] This may indicate Accessibility permission is not granted.');
+                console.warn('[Main] Grant Accessibility permission in System Settings > Privacy & Security > Accessibility');
+            }
+
+            console.log('[Main] get-active-window result:', { appName, windowTitle, bundleId, rawWindowTitle });
             return { appName, windowTitle, bundleId };
         } catch (error) {
             console.error('[Main] Failed to get active window:', error);
@@ -3407,6 +3417,11 @@ app.whenReady().then(() => {
     try {
         initializeAuth();
         console.log('[Main] Auth system initialized (Supabase)');
+
+        // Sync app version to user profile (async, non-blocking)
+        syncAppVersionOnStartup().catch((error) => {
+            console.error('[Main] Failed to sync app version on startup:', error);
+        });
     } catch (error) {
         console.error('[Main] Failed to initialize auth:', error);
     }

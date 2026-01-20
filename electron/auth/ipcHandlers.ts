@@ -4,11 +4,18 @@
  * Electron IPC handlers for authentication operations.
  */
 
-import { ipcMain, shell } from 'electron';
-import { getAuthService, AuthUser, AuthSession, OAuthProvider } from './supabaseAuth.js';
+import { ipcMain, shell, app } from 'electron';
+import { getAuthService, SupabaseAuthService, AuthUser, AuthSession, OAuthProvider } from './supabaseAuth.js';
 import { getConfig } from '../config.js';
 import { getEdgeFunctionClient } from '../subscription/edgeFunctionClient.js';
 import { getSubscriptionValidator } from '../subscription/ipcHandlers.js';
+
+/**
+ * Get the current app version
+ */
+function getAppVersion(): string {
+    return app.getVersion();
+}
 
 /**
  * Initialize auth system
@@ -29,7 +36,44 @@ export function initializeAuth(): void {
     // Register IPC handlers
     registerIpcHandlers();
 
+    // Validate existing session on startup (async, don't block)
+    validateSessionOnStartup(authService);
+
     console.log('[Auth] Auth system initialized');
+}
+
+/**
+ * Validate session on startup and log diagnostic info
+ */
+async function validateSessionOnStartup(authService: SupabaseAuthService): Promise<void> {
+    try {
+        console.log('[Auth] Validating existing session on startup...');
+        const session = await authService.getSession();
+
+        if (session) {
+            const now = Date.now();
+            const expiresIn = session.expiresAt - now;
+            const expiresInMinutes = Math.round(expiresIn / 60000);
+
+            console.log('[Auth] ✓ Valid session found');
+            console.log('[Auth]   User:', session.user.email);
+            console.log('[Auth]   Token expires:', new Date(session.expiresAt).toISOString());
+            console.log('[Auth]   Expires in:', expiresInMinutes, 'minutes');
+            console.log('[Auth]   Has refresh token:', !!session.refreshToken);
+
+            if (!session.refreshToken) {
+                console.warn('[Auth] ⚠️ WARNING: No refresh token - user will need to re-authenticate when token expires');
+            }
+
+            if (expiresInMinutes < 30) {
+                console.warn('[Auth] ⚠️ Token expires soon - refresh will be attempted');
+            }
+        } else {
+            console.log('[Auth] No active session - user needs to sign in for AI features');
+        }
+    } catch (error) {
+        console.error('[Auth] Error validating session on startup:', error);
+    }
 }
 
 /**
@@ -158,6 +202,12 @@ async function handleVerifyOtp(
                 console.error('[Auth] Failed to ensure Stripe customer (non-blocking):', error);
             });
 
+            // Update app version in user's profile
+            const version = getAppVersion();
+            edgeClient.updateAppVersion(version).catch((error) => {
+                console.error('[Auth] Failed to update app version (non-blocking):', error);
+            });
+
             // Force refresh subscription from Supabase to ensure local cache is up-to-date
             // This overwrites any stale local subscription.dat with fresh Supabase data
             const subscriptionValidator = getSubscriptionValidator();
@@ -204,6 +254,12 @@ async function handleSignInWithOAuth(
             // Call customer creation asynchronously - don't block login if it fails
             edgeClient.ensureStripeCustomer().catch((error) => {
                 console.error('[Auth] Failed to ensure Stripe customer (non-blocking):', error);
+            });
+
+            // Update app version in user's profile
+            const version = getAppVersion();
+            edgeClient.updateAppVersion(version).catch((error) => {
+                console.error('[Auth] Failed to update app version (non-blocking):', error);
             });
 
             // Force refresh subscription from Supabase
@@ -279,3 +335,28 @@ async function handleOpenCustomerPortal(): Promise<{ success: boolean; error?: s
 // Note: Stripe operations are now handled via Edge Functions (edgeFunctionClient.ts)
 // Stripe customers are created on-demand when users initiate checkout
 // Subscription status is updated via webhooks to the Supabase profiles table
+
+/**
+ * Sync app version to user profile on startup.
+ * Called after auth initialization to update version for users with existing sessions.
+ * This ensures version is tracked even if user doesn't log in/out.
+ */
+export async function syncAppVersionOnStartup(): Promise<void> {
+    try {
+        const authService = getAuthService();
+        const isAuthenticated = await authService.isAuthenticated();
+
+        if (!isAuthenticated) {
+            console.log('[Auth] User not authenticated, skipping version sync on startup');
+            return;
+        }
+
+        const edgeClient = getEdgeFunctionClient();
+        const version = getAppVersion();
+
+        console.log('[Auth] Syncing app version on startup:', version);
+        await edgeClient.updateAppVersion(version);
+    } catch (error) {
+        console.error('[Auth] Failed to sync app version on startup (non-blocking):', error);
+    }
+}

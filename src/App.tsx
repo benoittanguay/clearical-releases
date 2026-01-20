@@ -605,7 +605,7 @@ function App() {
                       fontSize: 'var(--text-sm)',
                       fontFamily: 'var(--font-mono)'
                     }}>
-                      Processing screenshots and analysis
+                      Processing activities and analyzing for splits.
                     </div>
                   </div>
                 </div>

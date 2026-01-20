@@ -110,9 +110,17 @@ class AIService {
         const session = await authService.getSession();
 
         if (!session) {
-            console.log('[AIService] No active session, AI features unavailable');
+            console.error('[AIService] ❌ No active session - AI features unavailable');
+            console.error('[AIService] User needs to sign in from Settings to enable AI features');
+            console.error('[AIService] This could be because:');
+            console.error('[AIService]   1. User is not signed in');
+            console.error('[AIService]   2. Session expired and refresh failed');
+            console.error('[AIService]   3. Network issue during token refresh');
             return { success: false, error: 'Not authenticated. Please sign in again.' };
         }
+
+        console.log('[AIService] Making authenticated request with token expiring at:',
+            new Date(session.expiresAt).toISOString());
 
         try {
             const response = await fetch(this.getProxyUrl(), {
