@@ -1,11 +1,19 @@
 {
   "name": "clearical",
   "private": true,
-  "version": "1.6.0",
+  "version": "1.6.1",
   "type": "module",
   "build": {
     "appId": "io.clearical.app",
     "productName": "Clearical",
+    "protocols": [
+      {
+        "name": "Clearical",
+        "schemes": [
+          "clearical"
+        ]
+      }
+    ],
     "directories": {
       "buildResources": "build"
     },

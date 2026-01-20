@@ -288,6 +288,18 @@ export class SupabaseAuthService {
                 return { success: false, error: 'Email required for sign-in' };
             }
 
+            // Validate refresh token exists (required for session refresh)
+            if (!sessionData.session.refresh_token) {
+                console.error('[SupabaseAuth] OAuth sign-in: no refresh token from Supabase');
+                console.error('[SupabaseAuth] Session data:', {
+                    hasAccessToken: !!sessionData.session.access_token,
+                    hasRefreshToken: !!sessionData.session.refresh_token,
+                    expiresAt: sessionData.session.expires_at,
+                    provider
+                });
+                // Continue anyway but warn - user will need to re-auth when token expires
+            }
+
             // Create our auth session
             const authUser: AuthUser = {
                 id: sessionData.user.id,
@@ -304,6 +316,13 @@ export class SupabaseAuthService {
                     ? sessionData.session.expires_at * 1000
                     : Date.now() + 3600000,
             };
+
+            // Log session creation for debugging
+            console.log('[SupabaseAuth] OAuth session created:', {
+                user: authUser.email,
+                hasRefreshToken: !!authSession.refreshToken,
+                expiresAt: new Date(authSession.expiresAt).toISOString()
+            });
 
             // Save session
             await this.saveSession(authSession);
@@ -329,7 +348,19 @@ export class SupabaseAuthService {
      * Refresh session using refresh token
      */
     async refreshSession(): Promise<boolean> {
-        if (!this.supabase || !this.currentSession?.refreshToken) {
+        if (!this.supabase) {
+            console.error('[SupabaseAuth] Cannot refresh: Supabase client not initialized');
+            return false;
+        }
+
+        if (!this.currentSession?.refreshToken) {
+            console.error('[SupabaseAuth] Cannot refresh: No refresh token in session');
+            console.error('[SupabaseAuth] Session state:', {
+                hasSession: !!this.currentSession,
+                hasRefreshToken: !!this.currentSession?.refreshToken,
+                expiresAt: this.currentSession?.expiresAt,
+                user: this.currentSession?.user?.email
+            });
             return false;
         }
 
@@ -341,7 +372,13 @@ export class SupabaseAuthService {
             });
 
             if (error || !data.session) {
-                console.error('[SupabaseAuth] Session refresh failed:', error);
+                console.error('[SupabaseAuth] Session refresh failed:', {
+                    errorMessage: error?.message,
+                    errorCode: error?.code,
+                    errorStatus: error?.status,
+                    hasData: !!data,
+                    hasSession: !!data?.session
+                });
                 this.clearSession();
                 return false;
             }

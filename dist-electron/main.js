@@ -27,7 +27,7 @@ import { MigrationService } from './migration.js';
 import { updater } from './autoUpdater.js';
 import { AppDiscoveryService } from './appDiscoveryService.js';
 import { BlacklistService } from './blacklistService.js';
-import { aiService, createScreenshotSignal, createWindowActivitySignal, createCalendarSignal, createUserProfileSignal } from './ai/aiService.js';
+import { aiService, signalAggregator, createCalendarSignal, createUserProfileSignal, createTimeContextSignal } from './ai/aiService.js';
 import { getCalendarService, initializeCalendarService } from './calendar/calendarService.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // In production (packaged), app.getAppPath() returns the path to the asar file
@@ -86,6 +86,43 @@ const safeConsoleWrapper = (originalMethod) => {
 console.log = safeConsoleWrapper(originalConsoleLog);
 console.error = safeConsoleWrapper(originalConsoleError);
 console.warn = safeConsoleWrapper(originalConsoleWarn);
+// Register custom URL protocol for deep linking (clearical://)
+// This must be called before app.whenReady()
+const PROTOCOL_NAME = 'clearical';
+if (process.defaultApp) {
+    // Development: need to register with path to electron executable
+    if (process.argv.length >= 2) {
+        app.setAsDefaultProtocolClient(PROTOCOL_NAME, process.execPath, [path.resolve(process.argv[1])]);
+    }
+}
+else {
+    // Production: register normally
+    app.setAsDefaultProtocolClient(PROTOCOL_NAME);
+}
+// Handle protocol URL on macOS (app already running)
+app.on('open-url', (event, url) => {
+    event.preventDefault();
+    console.log('[Main] Received deep link:', url);
+    handleDeepLink(url);
+});
+// Handle deep link URL
+function handleDeepLink(url) {
+    // Parse the URL (e.g., clearical://open or clearical://auth/success)
+    try {
+        const parsed = new URL(url);
+        console.log('[Main] Deep link path:', parsed.pathname);
+        // Bring window to front
+        if (win) {
+            if (win.isMinimized())
+                win.restore();
+            win.show();
+            win.focus();
+        }
+    }
+    catch (error) {
+        console.error('[Main] Failed to parse deep link URL:', error);
+    }
+}
 let win;
 let tray;
 let currentTimerText = '';
@@ -717,6 +754,8 @@ ipcMain.handle('analyze-screenshot', async (event, imagePath, requestId) => {
     catch (parseError) {
         console.log('[Main] Could not parse app info from filename:', parseError);
     }
+    // Build context signals for richer screenshot analysis
+    const contextSignals = [];
     // Get user role from settings for AI context optimization
     let userRole;
     let roleContext;
@@ -743,13 +782,29 @@ ipcMain.handle('analyze-screenshot', async (event, imagePath, requestId) => {
             roleContext = userRole ? roleMetadata[userRole]?.context : undefined;
             roleContext = roleContext || 'general knowledge work';
             console.log('[Main] Using role context for analysis - role:', userRole);
+            // Add user profile signal
+            contextSignals.push(createUserProfileSignal(userRole, roleContext));
         }
     }
     catch (settingsError) {
         console.log('[Main] Could not get user role from settings:', settingsError);
     }
+    // Get calendar context for the current time
     try {
-        const aiResult = await aiService.analyzeScreenshot(analyzeImagePath, appName, windowTitle, requestId);
+        const calendarService = getCalendarService();
+        const calendarContext = calendarService.getCalendarContext(Date.now());
+        if (calendarContext.currentEvent || calendarContext.recentEvents.length > 0) {
+            contextSignals.push(createCalendarSignal(calendarContext.currentEvent ?? undefined, calendarContext.recentEvents, calendarContext.upcomingEvents));
+            console.log('[Main] Added calendar context for analysis');
+        }
+    }
+    catch (calendarError) {
+        console.log('[Main] Could not get calendar context:', calendarError);
+    }
+    // Add time context
+    contextSignals.push(createTimeContextSignal(Date.now()));
+    try {
+        const aiResult = await aiService.analyzeScreenshot(analyzeImagePath, appName, windowTitle, requestId, contextSignals.length > 0 ? contextSignals : undefined);
         // Clean up temp decrypted file if we created one
         if (tempDecryptedPath) {
             try {
@@ -1744,23 +1799,23 @@ ipcMain.handle('suggest-assignment', async (event, request) => {
 });
 // AI Activity Summary Generation Handler
 ipcMain.handle('generate-activity-summary', async (event, context) => {
-    console.log('[Main] generate-activity-summary requested');
+    console.log('[Main] generate-activity-summary requested for entry:', context.entryId);
     console.log('[Main] Screenshot descriptions:', context.screenshotDescriptions.length);
     console.log('[Main] Window titles:', context.windowTitles?.length || 0);
     console.log('[Main] App names:', context.appNames);
     try {
-        // Build context signals array
-        const signals = [];
-        // Signal 1: Screenshot Analysis (if available)
+        // Use signal aggregator to collect and store signals for this entry
+        // This centralizes signal management and enables reuse across AI tasks
+        // ACTIVITY signals: Screenshot analysis
         if (context.screenshotDescriptions && context.screenshotDescriptions.length > 0) {
-            signals.push(createScreenshotSignal(context.screenshotDescriptions));
+            signalAggregator.setScreenshotAnalysis(context.entryId, context.screenshotDescriptions);
         }
-        // Signal 2: Window Activity
+        // ACTIVITY signals: Window activity
         if ((context.appNames && context.appNames.length > 0) ||
             (context.windowTitles && context.windowTitles.length > 0)) {
-            signals.push(createWindowActivitySignal(context.appNames || [], context.windowTitles || []));
+            signalAggregator.setWindowActivity(context.entryId, context.appNames || [], context.windowTitles || []);
         }
-        // Signal 3: Calendar Events
+        // TEMPORAL signals: Calendar events
         const calendarService = getCalendarService();
         const calendarContext = calendarService.getCalendarContext(context.startTime);
         console.log('[Main] Calendar context:', {
@@ -1768,27 +1823,28 @@ ipcMain.handle('generate-activity-summary', async (event, context) => {
             recentCount: calendarContext.recentEvents.length,
             upcomingCount: calendarContext.upcomingEvents.length
         });
-        if (calendarContext.currentEvent ||
-            calendarContext.recentEvents.length > 0 ||
-            calendarContext.upcomingEvents.length > 0) {
-            signals.push(createCalendarSignal(calendarContext.currentEvent || undefined, // Convert null to undefined
-            calendarContext.recentEvents, calendarContext.upcomingEvents));
-        }
-        // Signal 4: User Profile (if available)
+        signalAggregator.setCalendarEvents(context.entryId, calendarContext.currentEvent || undefined, calendarContext.recentEvents, calendarContext.upcomingEvents);
+        // TEMPORAL signals: Time context
+        signalAggregator.setTimeContext(context.entryId, context.startTime);
+        // USER signals: User profile (stored globally, not per-entry)
         if (context.userRole) {
-            signals.push(createUserProfileSignal(context.userRole));
+            signalAggregator.setUserProfile(context.userRole);
         }
-        console.log('[Main] Built', signals.length, 'context signals');
-        // Use signal-based summarization
-        const result = await aiService.summarizeWithSignals({
-            signals,
+        // Build task request using aggregator
+        // The aggregator will filter signals based on task requirements:
+        // - summarization task gets: activity + temporal signals
+        // - user context is NOT included by default (prevents cross-contamination)
+        const taskRequest = signalAggregator.buildTaskRequest(context.entryId, 'summarization', {
+            includeUserContext: false, // Don't mix user context into summaries
             duration: context.duration,
             startTime: context.startTime,
             endTime: context.endTime
         });
+        console.log('[Main] Signal summary:', signalAggregator.getSignalSummaryForEntry(context.entryId));
+        // Execute the AI task with filtered signals
+        const result = await aiService.executeTask(taskRequest);
         if (result.success && result.summary) {
             console.log('[Main] Summary generated successfully:', result.summary.substring(0, 100));
-            // Return the narrative summary
             return {
                 success: true,
                 summary: result.summary,
@@ -2709,12 +2765,25 @@ ipcMain.handle('ai:analyze-splits', async (_, activityData) => {
         // 1. Get calendar context for the activity period
         const calendarService = getCalendarService();
         const calendarContext = calendarService.getCalendarContext(activityData.startTime);
-        // 2. Build analysis prompt with all signals
+        // 2. Collect signals using signal aggregator for consistency
+        const screenshotDescriptions = activityData.screenshots.map(s => s.description);
+        signalAggregator.setScreenshotAnalysis(activityData.id, screenshotDescriptions);
+        signalAggregator.setCalendarEvents(activityData.id, calendarContext.currentEvent ?? undefined, calendarContext.recentEvents, calendarContext.upcomingEvents);
+        signalAggregator.setTimeContext(activityData.id, activityData.startTime);
+        // 3. Build analysis prompt with all signals
+        // Note: Split analysis requires a specific prompt format for JSON output,
+        // so we use a custom prompt builder rather than the generic signal-based approach
         const prompt = buildSplitAnalysisPrompt(activityData, calendarContext);
-        // 3. Call AI service to analyze and suggest splits
-        // For now, we use the summarize operation as a workaround since it accepts
-        // custom text and returns text output. In the future, we should add a dedicated
-        // 'analyze-splits' operation to the edge function.
+        // 4. Call AI service to analyze and suggest splits
+        // Build task request for 'split_suggestion' task type
+        const taskRequest = signalAggregator.buildTaskRequest(activityData.id, 'split_suggestion', {
+            duration: activityData.duration,
+            startTime: activityData.startTime,
+            endTime: activityData.endTime
+        });
+        // For split analysis, we still use the custom prompt approach since it
+        // requires specific JSON output format. The signals are collected for
+        // consistency and can be used by the proxy for additional context.
         const result = await aiService.summarizeActivities([prompt], // Send the full prompt as a single "activity"
         []);
         if (!result.success || !result.summary) {

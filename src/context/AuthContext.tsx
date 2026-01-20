@@ -17,6 +17,7 @@ interface AuthContextType {
     signInWithOAuth: (provider: 'google' | 'azure' | 'apple') => Promise<{ success: boolean; error?: string }>;
     signOut: () => Promise<void>;
     openCustomerPortal: () => Promise<{ success: boolean; error?: string }>;
+    refreshAuthStatus: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -25,12 +26,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const [user, setUser] = useState<AuthUser | null>(null);
     const [isLoading, setIsLoading] = useState(true);
 
-    // Check authentication status on mount
-    useEffect(() => {
-        checkAuthStatus();
-    }, []);
-
-    const checkAuthStatus = async () => {
+    // Re-check authentication status (e.g., after session expiry)
+    const refreshAuthStatus = useCallback(async () => {
         try {
             setIsLoading(true);
             const isAuth = await window.electron.ipcRenderer.invoke('auth:is-authenticated');
@@ -39,14 +36,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 const result = await window.electron.ipcRenderer.invoke('auth:get-user');
                 if (result.success && result.user) {
                     setUser(result.user);
+                } else {
+                    // User fetch failed, clear cached user
+                    setUser(null);
                 }
+            } else {
+                // Not authenticated anymore, clear cached user
+                setUser(null);
             }
         } catch (error) {
             console.error('[AuthContext] Failed to check auth status:', error);
         } finally {
             setIsLoading(false);
         }
-    };
+    }, []);
+
+    // Check authentication status on mount
+    useEffect(() => {
+        refreshAuthStatus();
+    }, [refreshAuthStatus]);
 
     const sendOtp = useCallback(async (email: string): Promise<{ success: boolean; error?: string }> => {
         try {
@@ -132,6 +140,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 signInWithOAuth,
                 signOut,
                 openCustomerPortal,
+                refreshAuthStatus,
             }}
         >
             {children}

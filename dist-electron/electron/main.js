@@ -86,6 +86,43 @@ const safeConsoleWrapper = (originalMethod) => {
 console.log = safeConsoleWrapper(originalConsoleLog);
 console.error = safeConsoleWrapper(originalConsoleError);
 console.warn = safeConsoleWrapper(originalConsoleWarn);
+// Register custom URL protocol for deep linking (clearical://)
+// This must be called before app.whenReady()
+const PROTOCOL_NAME = 'clearical';
+if (process.defaultApp) {
+    // Development: need to register with path to electron executable
+    if (process.argv.length >= 2) {
+        app.setAsDefaultProtocolClient(PROTOCOL_NAME, process.execPath, [path.resolve(process.argv[1])]);
+    }
+}
+else {
+    // Production: register normally
+    app.setAsDefaultProtocolClient(PROTOCOL_NAME);
+}
+// Handle protocol URL on macOS (app already running)
+app.on('open-url', (event, url) => {
+    event.preventDefault();
+    console.log('[Main] Received deep link:', url);
+    handleDeepLink(url);
+});
+// Handle deep link URL
+function handleDeepLink(url) {
+    // Parse the URL (e.g., clearical://open or clearical://auth/success)
+    try {
+        const parsed = new URL(url);
+        console.log('[Main] Deep link path:', parsed.pathname);
+        // Bring window to front
+        if (win) {
+            if (win.isMinimized())
+                win.restore();
+            win.show();
+            win.focus();
+        }
+    }
+    catch (error) {
+        console.error('[Main] Failed to parse deep link URL:', error);
+    }
+}
 let win;
 let tray;
 let currentTimerText = '';

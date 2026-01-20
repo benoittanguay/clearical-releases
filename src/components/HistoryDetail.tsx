@@ -84,7 +84,7 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
     const { removeActivityFromEntry, removeAllActivitiesForApp, removeScreenshotFromEntry, addManualActivityToEntry, setEntryAssignment, createEntryFromActivity, entries } = useStorage();
     const { settings, updateSettings } = useSettings();
     const { hasFeature, upgrade } = useSubscription();
-    const { user } = useAuth();
+    const { user, refreshAuthStatus } = useAuth();
     const { showToast } = useToast();
     const jiraCache = useJiraCache();
     const { roundTime, isRoundingEnabled } = useTimeRounding();
@@ -965,10 +965,19 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
 
         } catch (error) {
             console.error('Failed to generate summary:', error);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+
+            // If auth error, refresh auth status to update UI state
+            if (errorMessage.toLowerCase().includes('not authenticated') ||
+                errorMessage.toLowerCase().includes('session expired')) {
+                console.log('[HistoryDetail] Auth error detected, refreshing auth status');
+                await refreshAuthStatus();
+            }
+
             showToast({
                 type: 'error',
                 title: 'Generation Failed',
-                message: `Failed to generate description: ${error instanceof Error ? error.message : 'Unknown error'}`,
+                message: `Failed to generate description: ${errorMessage}`,
                 duration: 7000
             });
         } finally {
