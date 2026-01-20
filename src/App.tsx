@@ -256,15 +256,10 @@ function App() {
       // Check permissions before starting
       const permissions = await checkPermissions();
 
-      if (!permissions.requiredGranted) {
-        // Show permission modal if required permissions (accessibility) are not granted
+      // Show permission modal if ANY permission is missing (prompt once per recording)
+      if (!permissions.requiredGranted || !permissions.hasScreenRecording) {
         setShowPermissionModal(true);
         return;
-      }
-
-      // Log if starting without screen recording
-      if (!permissions.hasScreenRecording) {
-        console.log('[App] Starting timer without screen recording permission - AI summaries will be limited');
       }
 
       // Start timer fresh (elapsed should be 0)
@@ -1126,9 +1121,13 @@ function App() {
                       };
 
                       return Array.from(groupedByWeek.entries()).map(([weekKey, weekDays]) => {
-                        // Calculate total duration for the week
+                        // Helper to calculate rounded duration (15-minute increments)
+                        const getRoundedDuration = (duration: number) =>
+                          Math.ceil(duration / (15 * 60 * 1000)) * (15 * 60 * 1000);
+
+                        // Calculate total duration for the week using rounded values
                         const weekTotalDuration = weekDays.reduce((weekSum, [, dateEntries]) =>
-                          weekSum + dateEntries.reduce((daySum, entry) => daySum + entry.duration, 0), 0
+                          weekSum + dateEntries.reduce((daySum, entry) => daySum + getRoundedDuration(entry.duration), 0), 0
                         );
 
                         // Check if this week has any Jira activities
@@ -1212,7 +1211,8 @@ function App() {
                             {/* Days within the week */}
                             <div>
                               {weekDays.map(([dateKey, dateEntries], dayIndex) => {
-                                const totalDuration = dateEntries.reduce((sum, entry) => sum + entry.duration, 0);
+                                // Calculate total using rounded durations
+                                const totalDuration = dateEntries.reduce((sum, entry) => sum + getRoundedDuration(entry.duration), 0);
 
                                 // Check if this day has any Jira activities with all required info
                                 const hasLoggableJiraActivities = dateEntries.some(entry => {
