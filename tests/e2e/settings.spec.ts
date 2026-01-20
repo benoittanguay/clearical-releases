@@ -337,11 +337,11 @@ test.describe('Settings - Integration Toggles', () => {
     await expect(tempoStatus).toBeVisible();
   });
 
-  test('should display workplace plan badge for free users', async ({ window }) => {
+  test('should display premium badge for free users', async ({ window }) => {
     await navigateToSettings(window);
 
-    // Look for "WORKPLACE ONLY" badge (appears when user doesn't have access)
-    const workplaceBadge = window.locator('text=WORKPLACE ONLY');
+    // Look for "PREMIUM" badge (appears when user doesn't have access)
+    const premiumBadge = window.locator('text=PREMIUM');
 
     // The badge may or may not be visible depending on subscription state
     // We just verify the section renders properly
@@ -648,8 +648,8 @@ test.describe('Settings - Account & Subscription', () => {
   test('should display subscription status', async ({ window }) => {
     await navigateToSettings(window);
 
-    // Check for plan status (Free Plan or Workplace Plan)
-    const planStatus = window.locator('text=/Free Plan|Workplace Plan/').first();
+    // Check for plan status (Free Plan or Premium)
+    const planStatus = window.locator('text=/Free Plan|Premium/').first();
     await expect(planStatus).toBeVisible();
   });
 
@@ -666,7 +666,7 @@ test.describe('Settings - Account & Subscription', () => {
 
     // Look for upgrade-related content
     // This may or may not be visible depending on subscription state
-    const upgradeContent = window.locator('text=Upgrade to Workplace Plan, text=Upgrade Now');
+    const upgradeContent = window.locator('text=Upgrade to Premium, text=Upgrade Now');
 
     // Just verify the settings page renders properly
     const accountSection = window.locator('text=Account').first();

@@ -326,6 +326,9 @@ async function handleHasFeature(
 
 /**
  * Get trial info handler
+ *
+ * IMPORTANT: Always validates from Supabase to ensure local cache is fresh.
+ * This prevents stale subscription data from being displayed to users.
  */
 async function handleGetTrialInfo(): Promise<{
     success: boolean;
@@ -335,34 +338,42 @@ async function handleGetTrialInfo(): Promise<{
     error?: string;
 }> {
     try {
-        let subscription = await SubscriptionStorage.getSubscription();
+        let subscription: Subscription | undefined;
 
-        // If no subscription exists, trigger validation to create trial
-        if (!subscription) {
-            console.log('[Subscription] No subscription found in trial info, triggering validation to create trial');
+        // Always trigger validation to ensure we have fresh data from Supabase
+        // This overwrites stale local cache with the authoritative Supabase data
+        if (subscriptionValidator) {
+            console.log('[Subscription] Validating trial info from Supabase...');
+            const validationResult = await subscriptionValidator.validate();
+            subscription = validationResult.subscription;
 
-            if (subscriptionValidator) {
-                const validationResult = await subscriptionValidator.validate();
-                subscription = validationResult.subscription;
+            console.log('[Subscription] Validation result for trial info:', {
+                valid: validationResult.valid,
+                mode: validationResult.mode,
+                status: subscription.status,
+                trialEndsAt: subscription.trialEndsAt,
+            });
+        } else {
+            // Fallback to cached subscription if validator not initialized
+            console.warn('[Subscription] Validator not initialized, falling back to cached data');
+            const cachedSubscription = await SubscriptionStorage.getSubscription();
 
-                console.log('[Subscription] Validation result for trial info:', {
-                    valid: validationResult.valid,
-                    mode: validationResult.mode,
-                    status: subscription.status,
-                });
-            } else {
-                // Fallback if validator not initialized
-                console.warn('[Subscription] Validator not initialized, returning no trial');
+            if (!cachedSubscription) {
+                console.warn('[Subscription] No cached subscription, returning no trial');
                 return {
                     success: true,
                     isTrial: false,
                     daysRemaining: 0,
                 };
             }
+
+            subscription = cachedSubscription;
         }
 
         const isTrial = subscription.status === 'trial';
         const daysRemaining = SubscriptionValidator.getTrialDaysRemaining(subscription);
+
+        console.log('[Subscription] Trial info result:', { isTrial, daysRemaining });
 
         return {
             success: true,

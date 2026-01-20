@@ -68,10 +68,10 @@ function sendTrialExpirationNotification(daysRemaining: number, subscription: Su
             : `Trial Ending in ${daysRemaining} Days`;
 
         const body = daysRemaining === 0
-            ? 'Your Clearical trial expires today. Upgrade to Workplace Plan to keep access to Jira, Tempo, and AI features.'
+            ? 'Your Clearical trial expires today. Upgrade to Premium to keep access to Jira, Tempo, and AI features.'
             : daysRemaining === 1
             ? 'Your Clearical trial expires tomorrow. Upgrade now to continue using premium features.'
-            : `Your Clearical trial will expire in ${daysRemaining} days. Upgrade to Workplace Plan to keep all features.`;
+            : `Your Clearical trial will expire in ${daysRemaining} days. Upgrade to Premium to keep all features.`;
 
         const notification = new Notification({
             title,

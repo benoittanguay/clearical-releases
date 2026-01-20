@@ -32,6 +32,7 @@ interface ProfileRow {
     subscription_status?: string;
     subscription_tier?: string;
     subscription_period_end?: string;
+    app_version?: string;
 }
 
 /**
@@ -249,6 +250,51 @@ export class EdgeFunctionClient {
         } catch (error) {
             console.error('[EdgeFunctionClient] Error getting subscription status:', error);
             return null;
+        }
+    }
+
+    /**
+     * Update the user's app version in their Supabase profile.
+     * Called on login/app start to track which version each user is running.
+     *
+     * @param version - The app version string (e.g., "1.6.2")
+     * @returns true if update succeeded, false otherwise
+     */
+    async updateAppVersion(version: string): Promise<boolean> {
+        console.log('[EdgeFunctionClient] Updating app version in profile:', version);
+
+        try {
+            const authService = getAuthService();
+            const session = await authService.getSession();
+
+            if (!session) {
+                console.log('[EdgeFunctionClient] No active session, skipping app version update');
+                return false;
+            }
+
+            const response = await fetch(`${this.config.supabase.url}/rest/v1/profiles?id=eq.${session.user.id}`, {
+                method: 'PATCH',
+                headers: {
+                    'apikey': this.config.supabase.anonKey,
+                    'Authorization': `Bearer ${session.accessToken}`,
+                    'Content-Type': 'application/json',
+                    'Prefer': 'return=minimal',
+                },
+                body: JSON.stringify({
+                    app_version: version,
+                }),
+            });
+
+            if (!response.ok) {
+                console.error('[EdgeFunctionClient] Failed to update app version:', response.status);
+                return false;
+            }
+
+            console.log('[EdgeFunctionClient] App version updated successfully');
+            return true;
+        } catch (error) {
+            console.error('[EdgeFunctionClient] Error updating app version:', error);
+            return false;
         }
     }
 }

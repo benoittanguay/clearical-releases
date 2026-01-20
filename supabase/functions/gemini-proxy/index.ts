@@ -663,11 +663,11 @@ function extractLegacyContext(
 function buildSummarizationPrompt(context: AggregatedContext, duration?: number): string {
     const sections: string[] = [];
 
-    // Introduction based on available context
+    // Introduction based on available context - format as timesheet entry
     if (context.screenshotDescriptions.length > 0) {
-        sections.push(`Summarize the following work session into a cohesive, narrative paragraph (2-4 sentences). Focus on what was accomplished and the flow of work.`);
+        sections.push(`Write a timesheet entry (1-2 sentences). Start with an action verb. Be specific and professional. Example: "Reviewed and updated API documentation for authentication endpoints."`);
     } else {
-        sections.push(`Based on the following context from a work session, write a concise description (2-3 sentences) of what the user was working on. Infer the task or activity from the available signals.`);
+        sections.push(`Write a timesheet entry (1-2 sentences) based on available context. Start with an action verb. Example: "Attended project sync meeting with design team."`);
     }
 
     // User role context (helps AI use appropriate terminology)
@@ -717,8 +717,8 @@ function buildSummarizationPrompt(context: AggregatedContext, duration?: number)
     }
 
     // Final instruction
-    sections.push(`\nWrite a natural description of the work activity. Be specific based on the context provided. Avoid generic phrases like "the user was working" or "various tasks". Focus on the actual work being done.`);
-    sections.push(`\nProvide just the summary paragraph, nothing else.`);
+    sections.push(`\nFormat as a timesheet entry: concise, action-oriented, professional. NO phrases like "the user was", "working on", "performing", "utilizing". Start with verbs like: Developed, Fixed, Reviewed, Updated, Designed, Implemented, Debugged, Configured, Drafted, Analyzed.`);
+    sections.push(`\nOutput ONLY the timesheet entry text, nothing else.`);
 
     return sections.join('\n');
 }

@@ -214,7 +214,7 @@ export function JiraIssuesSection({ onIssueClick, onRefreshReady }: JiraIssuesSe
                               borderColor: 'rgba(250, 204, 21, 0.3)',
                               fontFamily: 'var(--font-body)'
                           }}>
-                        WORKPLACE ONLY
+                        PREMIUM
                     </span>
                 </div>
                 <div className="rounded-xl p-6 border"
@@ -242,7 +242,7 @@ export function JiraIssuesSection({ onIssueClick, onRefreshReady }: JiraIssuesSe
                                color: 'var(--color-text-secondary)',
                                fontFamily: 'var(--font-body)'
                            }}>
-                            Upgrade to Workplace Plan to connect your Jira account and track time to issues
+                            Upgrade to Premium to connect your Jira account and track time to issues
                         </p>
                         <button
                             className="px-6 py-2 text-sm rounded transition-all"

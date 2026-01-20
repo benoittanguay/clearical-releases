@@ -28,8 +28,8 @@ export class PremiumRequiredError extends Error {
     constructor(feature?: string) {
         super(
             feature
-                ? `Premium subscription required to access ${feature}. Upgrade to Workplace Plan to unlock this feature.`
-                : 'Premium subscription required. Upgrade to Workplace Plan to unlock this feature.'
+                ? `Premium subscription required to access ${feature}. Upgrade to Premium to unlock this feature.`
+                : 'Premium subscription required. Upgrade to Premium to unlock this feature.'
         );
         this.name = 'PremiumRequiredError';
     }
@@ -121,7 +121,7 @@ export function requirePremium<T extends (...args: any[]) => Promise<any>>(
                 console.warn(`[PremiumGuard] Blocked access to ${featureName} - no premium subscription`);
                 return {
                     success: false,
-                    error: `${featureName} requires a Workplace Plan subscription. Please upgrade to access this feature.`,
+                    error: `${featureName} requires a Premium subscription. Please upgrade to access this feature.`,
                     code: 'PREMIUM_REQUIRED',
                 } as any;
             }

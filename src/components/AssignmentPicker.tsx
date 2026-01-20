@@ -217,11 +217,25 @@ export function AssignmentPicker({ value, onChange, placeholder = "Select assign
                                 transitionDuration: 'var(--duration-base)',
                                 transitionTimingFunction: 'var(--ease-out)'
                             }}
+                            onMouseEnter={(e) => {
+                                if (document.activeElement !== e.currentTarget) {
+                                    e.currentTarget.style.backgroundColor = '#FAF5EE';
+                                    e.currentTarget.style.borderColor = 'var(--color-border-secondary)';
+                                }
+                            }}
+                            onMouseLeave={(e) => {
+                                if (document.activeElement !== e.currentTarget) {
+                                    e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)';
+                                    e.currentTarget.style.borderColor = 'var(--color-border-primary)';
+                                }
+                            }}
                             onFocus={(e) => {
+                                e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)';
                                 e.currentTarget.style.borderColor = 'var(--color-accent)';
                                 e.currentTarget.style.boxShadow = 'var(--focus-ring)';
                             }}
                             onBlur={(e) => {
+                                e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)';
                                 e.currentTarget.style.borderColor = 'var(--color-border-primary)';
                                 e.currentTarget.style.boxShadow = 'none';
                             }}
@@ -232,7 +246,7 @@ export function AssignmentPicker({ value, onChange, placeholder = "Select assign
                                 <select
                                     value={selectedProject}
                                     onChange={(e) => setSelectedProject(e.target.value)}
-                                    className="appearance-none text-sm rounded pl-2 pr-7 py-1 focus:outline-none cursor-pointer transition-all"
+                                    className="appearance-none text-sm rounded-lg pl-3 pr-7 py-2 focus:outline-none cursor-pointer transition-all"
                                     style={{
                                         backgroundColor: 'var(--color-bg-tertiary)',
                                         border: '1px solid var(--color-border-primary)',
@@ -296,7 +310,7 @@ export function AssignmentPicker({ value, onChange, placeholder = "Select assign
                         {/* Manual buckets section */}
                         {filteredBuckets.length > 0 && (
                             <div>
-                                <div className="px-4 py-2 text-xs font-semibold uppercase tracking-wider"
+                                <div className="px-4 py-1.5 text-[10px] font-medium uppercase tracking-wider"
                                      style={{
                                          color: 'var(--color-text-tertiary)',
                                          backgroundColor: 'var(--color-bg-tertiary)',
@@ -335,7 +349,7 @@ export function AssignmentPicker({ value, onChange, placeholder = "Select assign
                         {/* Jira issues section */}
                         {hasJiraAccess && settings.jira?.enabled && filteredJiraIssues.length > 0 && (
                             <div>
-                                <div className="px-4 py-2 text-xs font-semibold uppercase tracking-wider border-t"
+                                <div className="px-4 py-1.5 text-[10px] font-medium uppercase tracking-wider border-t"
                                      style={{
                                          color: 'var(--color-text-tertiary)',
                                          backgroundColor: 'var(--color-bg-tertiary)',

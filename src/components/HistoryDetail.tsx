@@ -394,24 +394,6 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                 // Track AI assignment usage
                 analytics.track('assignment.ai_used');
 
-                // Show success toast with undo action
-                const assignmentName = result.suggestion.assignment.type === 'bucket'
-                    ? result.suggestion.assignment.bucket?.name
-                    : result.suggestion.assignment.jiraIssue?.key;
-
-                showToast({
-                    type: 'success',
-                    title: 'Auto-assigned',
-                    message: `Auto-assigned to ${assignmentName}`,
-                    duration: 7000,
-                    action: {
-                        label: 'Undo',
-                        onClick: () => {
-                            handleAssignmentChange(previousAssignmentRef.current, false);
-                        }
-                    }
-                });
-
                 // Log the reason
                 console.log('[HistoryDetail] Assignment reason:', result.suggestion.reason);
             } else {
@@ -1392,8 +1374,8 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                                     disabled={isAssigningBucket || !entry.description}
                                     className="px-2.5 py-1 text-white text-xs rounded-md transition-all hover:scale-105 active:scale-95 flex items-center gap-1 disabled:cursor-not-allowed"
                                     style={{
-                                        backgroundColor: isAssigningBucket || !entry.description ? 'var(--color-bg-tertiary)' : 'var(--color-surface-dark)',
-                                        opacity: isAssigningBucket || !entry.description ? 0.6 : 1,
+                                        backgroundColor: isAssigningBucket || !entry.description ? '#9CA3AF' : 'var(--color-surface-dark)',
+                                        opacity: 1,
                                         transitionDuration: 'var(--duration-fast)',
                                         transitionTimingFunction: 'var(--ease-out)'
                                     }}
@@ -1466,8 +1448,8 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                                         }}
                                         className="px-2.5 py-1 text-white text-xs rounded-md transition-all hover:scale-105 active:scale-95 flex items-center gap-1 disabled:cursor-not-allowed"
                                         style={{
-                                            backgroundColor: isAssigningTempoAccount || !currentAssignment?.jiraIssue || availableAccounts.length === 0 ? 'var(--color-bg-tertiary)' : 'var(--color-surface-dark)',
-                                            opacity: isAssigningTempoAccount || !currentAssignment?.jiraIssue || availableAccounts.length === 0 ? 0.6 : 1,
+                                            backgroundColor: isAssigningTempoAccount || !currentAssignment?.jiraIssue || availableAccounts.length === 0 ? '#9CA3AF' : 'var(--color-surface-dark)',
+                                            opacity: 1,
                                             transitionDuration: 'var(--duration-fast)',
                                             transitionTimingFunction: 'var(--ease-out)'
                                         }}
@@ -1601,14 +1583,14 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                             {/* Show Generate button when there's window activity (screenshots optional) */}
                             {(entry.windowActivity && entry.windowActivity.length > 0) && (
                                 <button
-                                    onClick={() => handleGenerateSummary(false)}
+                                    onClick={() => handleGenerateSummary(true)}
                                     disabled={isGeneratingSummary}
                                     className="px-2.5 py-1 text-white text-xs rounded-md transition-all hover:scale-105 active:scale-95 flex items-center gap-1 disabled:cursor-not-allowed"
                                     style={{
-                                        backgroundColor: isGeneratingSummary ? 'var(--color-bg-tertiary)' : 'var(--color-surface-dark)',
+                                        backgroundColor: isGeneratingSummary ? '#9CA3AF' : 'var(--color-surface-dark)',
                                         transitionDuration: 'var(--duration-fast)',
                                         transitionTimingFunction: 'var(--ease-out)',
-                                        opacity: isGeneratingSummary ? 0.6 : 1
+                                        opacity: 1
                                     }}
                                     onMouseEnter={(e) => {
                                         if (!isGeneratingSummary) {
@@ -1794,8 +1776,8 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                                     disabled={!manualDescription.trim() || !manualDuration.trim()}
                                     className="px-3 py-1.5 text-white text-sm rounded transition-all active:scale-95 disabled:cursor-not-allowed"
                                     style={{
-                                        backgroundColor: (!manualDescription.trim() || !manualDuration.trim()) ? 'var(--color-bg-tertiary)' : 'var(--color-accent)',
-                                        opacity: (!manualDescription.trim() || !manualDuration.trim()) ? 0.5 : 1,
+                                        backgroundColor: (!manualDescription.trim() || !manualDuration.trim()) ? '#9CA3AF' : 'var(--color-accent)',
+                                        opacity: 1,
                                         transitionDuration: 'var(--duration-fast)',
                                         transitionTimingFunction: 'var(--ease-out)'
                                     }}

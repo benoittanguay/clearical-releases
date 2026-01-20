@@ -102,8 +102,8 @@ export function TrialBanner() {
                         {isCritical
                             ? 'Your trial is about to expire. Upgrade now to keep access to Jira, Tempo, and AI features.'
                             : isUrgent
-                            ? 'Your trial is ending soon. Upgrade to Workplace Plan to continue using premium features.'
-                            : 'You are currently enjoying full access to all Workplace Plan features. Upgrade before your trial ends to keep them.'}
+                            ? 'Your trial is ending soon. Upgrade to Premium to continue using premium features.'
+                            : 'You are currently enjoying full access to all Premium features. Upgrade before your trial ends to keep them.'}
                     </p>
                     <div className="flex items-center gap-3">
                         <button
