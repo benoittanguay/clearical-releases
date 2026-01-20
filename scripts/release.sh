@@ -69,6 +69,12 @@ else
     echo -e "${YELLOW}  ⚠ No notarization credentials - will create non-notarized build${NC}"
 fi
 
+# Allow skipping notarization via environment variable
+if [ "$SKIP_NOTARIZATION" = "true" ] || [ "$SKIP_NOTARIZATION" = "1" ]; then
+    CAN_NOTARIZE=false
+    echo -e "${YELLOW}  ⚠ Notarization skipped via SKIP_NOTARIZATION env var${NC}"
+fi
+
 # Step 2: Build the app with electron-builder (without publishing)
 echo ""
 echo -e "${BLUE}Step 2: Building Electron app...${NC}"
