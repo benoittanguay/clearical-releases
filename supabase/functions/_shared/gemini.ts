@@ -1,11 +1,11 @@
 /**
  * Gemini API Client for Edge Functions
  *
- * Shared module for calling Google Gemini 1.5 Flash API.
+ * Shared module for calling Google Gemini 2.5 Flash API.
  * API key is stored in Supabase secrets.
  */
 
-const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
+const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
 
 export interface GeminiResponse {
     success: boolean;
