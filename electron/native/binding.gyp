@@ -6,7 +6,7 @@
       "cflags_cc!": [ "-fno-exceptions" ],
       "sources": [
         "src/media_monitor.mm",
-        "src/index.cpp"
+        "src/index.mm"
       ],
       "include_dirs": [
         "<!@(node -p \"require('node-addon-api').include\")"
@@ -24,6 +24,8 @@
             "libraries": [
               "-framework CoreAudio",
               "-framework AVFoundation",
+              "-framework CoreMediaIO",
+              "-framework IOKit",
               "-framework Foundation"
             ]
           }

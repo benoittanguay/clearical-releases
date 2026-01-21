@@ -1,13 +1,14 @@
 // electron/native/src/media_monitor.mm
 #import "media_monitor.h"
-
-static const void *kCameraInUseContext = &kCameraInUseContext;
+#import <CoreMediaIO/CMIOHardware.h>
+#import <IOKit/IOKitLib.h>
 
 @implementation MediaMonitor {
     AudioObjectPropertyAddress _micPropertyAddress;
     AudioDeviceID _currentInputDevice;
     BOOL _isMonitoring;
     dispatch_queue_t _monitoringQueue;
+    NSTimer *_cameraPollingTimer;
 }
 
 + (instancetype)sharedInstance {
@@ -28,6 +29,7 @@ static const void *kCameraInUseContext = &kCameraInUseContext;
         _callback = NULL;
         _currentInputDevice = kAudioDeviceUnknown;
         _monitoringQueue = dispatch_queue_create("com.mediamonitor.queue", DISPATCH_QUEUE_SERIAL);
+        _cameraPollingTimer = nil;
 
         // Set up property address for microphone "in use" detection
         _micPropertyAddress.mSelector = kAudioDevicePropertyDeviceIsRunningSomewhere;
@@ -49,7 +51,7 @@ static OSStatus microphoneCallback(
 ) {
     MediaMonitor *monitor = (__bridge MediaMonitor *)inClientData;
     dispatch_async(monitor->_monitoringQueue, ^{
-        [monitor checkMicrophoneState];
+        [monitor checkMicrophoneStateInternal];
     });
     return noErr;
 }
@@ -91,7 +93,7 @@ static OSStatus microphoneCallback(
             NSLog(@"[MediaMonitor] Failed to get default input device: %d", (int)status);
         }
 
-        // Start camera monitoring
+        // Start camera monitoring using polling
         [self startCameraMonitoringInternal];
     });
 }
@@ -133,48 +135,27 @@ static OSStatus microphoneCallback(
 
 - (void)startCameraMonitoringInternal {
     // Must be called on _monitoringQueue
-    // Observe all video devices
-    NSArray *devices = [AVCaptureDevice devicesWithMediaType:AVMediaTypeVideo];
-    for (AVCaptureDevice *device in devices) {
-        [device addObserver:self
-                 forKeyPath:@"inUseByAnotherClient"
-                    options:NSKeyValueObservingOptionNew
-                    context:(void *)kCameraInUseContext];
-    }
-
-    // Also monitor device connections for new cameras
-    [[NSNotificationCenter defaultCenter] addObserver:self
-                                             selector:@selector(deviceConnected:)
-                                                 name:AVCaptureDeviceWasConnectedNotification
-                                               object:nil];
-
     // Check initial state
     [self checkCameraStateInternal];
+
+    // Start polling timer on main thread (timers need a run loop)
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (self->_cameraPollingTimer) {
+            [self->_cameraPollingTimer invalidate];
+        }
+        // Poll every 1 second for camera state changes
+        self->_cameraPollingTimer = [NSTimer scheduledTimerWithTimeInterval:1.0
+                                                                     target:self
+                                                                   selector:@selector(cameraPollTick)
+                                                                   userInfo:nil
+                                                                    repeats:YES];
+    });
 }
 
-- (void)observeValueForKeyPath:(NSString *)keyPath
-                      ofObject:(id)object
-                        change:(NSDictionary *)change
-                       context:(void *)context {
-    if (context == kCameraInUseContext) {
-        dispatch_async(_monitoringQueue, ^{
-            [self checkCameraStateInternal];
-        });
-    } else {
-        [super observeValueForKeyPath:keyPath ofObject:object change:change context:context];
-    }
-}
-
-- (void)deviceConnected:(NSNotification *)notification {
-    AVCaptureDevice *device = notification.object;
-    if ([device hasMediaType:AVMediaTypeVideo]) {
-        dispatch_async(_monitoringQueue, ^{
-            [device addObserver:self
-                     forKeyPath:@"inUseByAnotherClient"
-                        options:NSKeyValueObservingOptionNew
-                        context:(void *)kCameraInUseContext];
-        });
-    }
+- (void)cameraPollTick {
+    dispatch_async(_monitoringQueue, ^{
+        [self checkCameraStateInternal];
+    });
 }
 
 - (void)checkCameraState {
@@ -183,16 +164,107 @@ static OSStatus microphoneCallback(
     });
 }
 
-- (void)checkCameraStateInternal {
-    // Must be called on _monitoringQueue
+- (BOOL)isCameraInUseViaCMIO {
+    // Use CoreMediaIO to check if any video device is being used
+    // This approach queries the DAL (Device Abstraction Layer) for device status
+
+    CMIOObjectPropertyAddress propertyAddress = {
+        kCMIOHardwarePropertyDevices,
+        kCMIOObjectPropertyScopeGlobal,
+        kCMIOObjectPropertyElementMain
+    };
+
+    UInt32 dataSize = 0;
+    OSStatus status = CMIOObjectGetPropertyDataSize(
+        kCMIOObjectSystemObject,
+        &propertyAddress,
+        0,
+        NULL,
+        &dataSize
+    );
+
+    if (status != noErr) {
+        return NO;
+    }
+
+    UInt32 deviceCount = dataSize / sizeof(CMIODeviceID);
+    if (deviceCount == 0) {
+        return NO;
+    }
+
+    CMIODeviceID *devices = (CMIODeviceID *)malloc(dataSize);
+    status = CMIOObjectGetPropertyData(
+        kCMIOObjectSystemObject,
+        &propertyAddress,
+        0,
+        NULL,
+        dataSize,
+        &dataSize,
+        devices
+    );
+
+    if (status != noErr) {
+        free(devices);
+        return NO;
+    }
+
     BOOL anyInUse = NO;
-    NSArray *devices = [AVCaptureDevice devicesWithMediaType:AVMediaTypeVideo];
-    for (AVCaptureDevice *device in devices) {
-        if (device.isInUseByAnotherClient) {
+
+    for (UInt32 i = 0; i < deviceCount; i++) {
+        CMIODeviceID deviceId = devices[i];
+
+        // Check if this is a video device by checking if it has video streams
+        CMIOObjectPropertyAddress streamAddress = {
+            kCMIODevicePropertyStreams,
+            kCMIOObjectPropertyScopeGlobal,
+            kCMIOObjectPropertyElementMain
+        };
+
+        UInt32 streamDataSize = 0;
+        status = CMIOObjectGetPropertyDataSize(
+            deviceId,
+            &streamAddress,
+            0,
+            NULL,
+            &streamDataSize
+        );
+
+        if (status != noErr || streamDataSize == 0) {
+            continue;
+        }
+
+        // Check if device is running (being used)
+        CMIOObjectPropertyAddress runningAddress = {
+            kCMIODevicePropertyDeviceIsRunningSomewhere,
+            kCMIOObjectPropertyScopeGlobal,
+            kCMIOObjectPropertyElementMain
+        };
+
+        UInt32 isRunning = 0;
+        UInt32 runningSize = sizeof(isRunning);
+        status = CMIOObjectGetPropertyData(
+            deviceId,
+            &runningAddress,
+            0,
+            NULL,
+            runningSize,
+            &runningSize,
+            &isRunning
+        );
+
+        if (status == noErr && isRunning != 0) {
             anyInUse = YES;
             break;
         }
     }
+
+    free(devices);
+    return anyInUse;
+}
+
+- (void)checkCameraStateInternal {
+    // Must be called on _monitoringQueue
+    BOOL anyInUse = [self isCameraInUseViaCMIO];
 
     BOOL wasInUse = _cameraInUse;
     _cameraInUse = anyInUse;
@@ -217,18 +289,14 @@ static OSStatus microphoneCallback(
             );
             _currentInputDevice = kAudioDeviceUnknown;
         }
+    });
 
-        // Remove camera observers
-        NSArray *devices = [AVCaptureDevice devicesWithMediaType:AVMediaTypeVideo];
-        for (AVCaptureDevice *device in devices) {
-            @try {
-                [device removeObserver:self forKeyPath:@"inUseByAnotherClient" context:(void *)kCameraInUseContext];
-            } @catch (NSException *exception) {
-                // Observer wasn't registered
-            }
+    // Stop camera polling timer on main thread
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (self->_cameraPollingTimer) {
+            [self->_cameraPollingTimer invalidate];
+            self->_cameraPollingTimer = nil;
         }
-
-        [[NSNotificationCenter defaultCenter] removeObserver:self];
     });
 }
 
