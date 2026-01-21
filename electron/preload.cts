@@ -236,6 +236,17 @@ contextBridge.exposeInMainWorld('electron', {
                 endTime: number;
             }) => ipcRenderer.invoke('calendar:create-focus-time', input),
         },
+        // Meeting/Recording operations (mic/camera detection)
+        meeting: {
+            setActiveEntry: (entryId: string | null) =>
+                ipcRenderer.invoke('meeting:set-active-entry', entryId),
+            getMediaStatus: () =>
+                ipcRenderer.invoke('meeting:get-media-status'),
+            getRecordingStatus: () =>
+                ipcRenderer.invoke('meeting:get-recording-status'),
+            setAutoRecordEnabled: (enabled: boolean) =>
+                ipcRenderer.invoke('meeting:set-auto-record-enabled', enabled),
+        },
     },
     // Analytics (top-level, not inside ipcRenderer)
     analytics: {
