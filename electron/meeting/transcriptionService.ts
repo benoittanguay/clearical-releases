@@ -189,7 +189,7 @@ export class TranscriptionService extends EventEmitter {
                 }),
             });
 
-            const result: TranscriptionApiResult = await response.json();
+            const result = await response.json() as TranscriptionApiResult;
 
             if (!result.success || !result.transcription) {
                 console.error('[TranscriptionService] Transcription failed:', result.error);

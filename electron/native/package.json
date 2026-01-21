@@ -1,6 +1,7 @@
 {
   "name": "media-monitor",
   "version": "1.0.0",
+  "type": "module",
   "description": "Native addon for mic/camera detection",
   "main": "build/Release/media_monitor.node",
   "scripts": {

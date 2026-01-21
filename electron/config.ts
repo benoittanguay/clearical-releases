@@ -11,8 +11,8 @@
  * Secret keys (Stripe secret, etc.) should be in backend only.
  *
  * ENVIRONMENT SWITCHING:
- * - Development: Uses Clearical Dev environment (wyikhlelmuvcxozwktzr.supabase.co)
- * - Production: Uses Clearical App environment (jiuxhwrgmexhhpoaazbj.supabase.co)
+ * - Development: Uses Clearical App (jiuxhwrgmexhhpoaazbj.supabase.co) with test Stripe keys
+ * - Production: Uses Clearical App (jiuxhwrgmexhhpoaazbj.supabase.co) with live Stripe keys
  * - Environment is determined by app.isPackaged or BUILD_ENV environment variable
  */
 
@@ -49,13 +49,15 @@ export interface AppConfig {
 }
 
 /**
- * Development Configuration (Clearical Dev)
- * Used when running in development mode or when BUILD_ENV=development
+ * Development Configuration (Clearical App)
+ * Uses the same Supabase project as production for consistent auth/data
+ * but with test Stripe keys for safe payment testing
  */
 const developmentConfig: AppConfig = {
     supabase: {
-        url: 'https://wyikhlelmuvcxozwktzr.supabase.co',
-        anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind5aWtobGVsbXV2Y3hvendrdHpyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgwNTY0NDksImV4cCI6MjA4MzYzMjQ0OX0.f_E7FudrxoXsq40QGqnujt3IZHai116TrzHlcFh-rQI',
+        // Use production Supabase project for consistent auth and data
+        url: 'https://jiuxhwrgmexhhpoaazbj.supabase.co',
+        anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImppdXhod3JnbWV4aGhwb2FhemJqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk1MTE0MzAsImV4cCI6MjA2NTA4NzQzMH0.SI3jPMLxjHsNFAGQ8gHiGY2fgcRu9cgXZgl527IMfEU',
     },
 
     stripe: {
@@ -64,11 +66,11 @@ const developmentConfig: AppConfig = {
     },
 
     api: {
-        // Development Supabase Edge Functions
-        stripeCheckout: 'https://wyikhlelmuvcxozwktzr.supabase.co/functions/v1/stripe-checkout',
-        stripePortal: 'https://wyikhlelmuvcxozwktzr.supabase.co/functions/v1/stripe-portal',
-        stripeWebhook: 'https://wyikhlelmuvcxozwktzr.supabase.co/functions/v1/stripe-webhook',
-        stripeCreateCustomer: 'https://wyikhlelmuvcxozwktzr.supabase.co/functions/v1/stripe-create-customer',
+        // Use production Supabase Edge Functions
+        stripeCheckout: 'https://jiuxhwrgmexhhpoaazbj.supabase.co/functions/v1/stripe-checkout',
+        stripePortal: 'https://jiuxhwrgmexhhpoaazbj.supabase.co/functions/v1/stripe-portal',
+        stripeWebhook: 'https://jiuxhwrgmexhhpoaazbj.supabase.co/functions/v1/stripe-webhook',
+        stripeCreateCustomer: 'https://jiuxhwrgmexhhpoaazbj.supabase.co/functions/v1/stripe-create-customer',
     },
 
     app: {
@@ -154,7 +156,7 @@ export function getConfig(): AppConfig {
 
     // Log the active environment for debugging (only in development)
     if (!isProduction()) {
-        console.log('[Config] Using DEVELOPMENT configuration (Clearical Dev)');
+        console.log('[Config] Using DEVELOPMENT configuration (Clearical App with test Stripe)');
     }
 
     return config;

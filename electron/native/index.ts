@@ -1,6 +1,11 @@
 // electron/native/index.ts
 import { EventEmitter } from 'events';
 import * as path from 'path';
+import { createRequire } from 'module';
+import { fileURLToPath } from 'url';
+
+const require = createRequire(import.meta.url);
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export type MediaEvent = 'mic-started' | 'mic-stopped' | 'camera-started' | 'camera-stopped';
 
