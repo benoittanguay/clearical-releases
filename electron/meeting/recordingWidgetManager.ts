@@ -49,8 +49,16 @@ export class RecordingWidgetManager {
         // Handle stop recording request from widget
         ipcMain.on('widget:stop-recording', () => {
             console.log('[RecordingWidgetManager] Stop recording requested from widget');
+            console.log('[RecordingWidgetManager] onStopCallback is set:', !!this.onStopCallback);
             if (this.onStopCallback) {
-                this.onStopCallback();
+                try {
+                    this.onStopCallback();
+                    console.log('[RecordingWidgetManager] Stop callback executed successfully');
+                } catch (error) {
+                    console.error('[RecordingWidgetManager] Error in stop callback:', error);
+                }
+            } else {
+                console.warn('[RecordingWidgetManager] No stop callback registered!');
             }
         });
 
@@ -59,6 +67,14 @@ export class RecordingWidgetManager {
             console.log('[RecordingWidgetManager] Minimize requested from widget');
             this.hide();
         });
+
+        // Handle ping from widget to verify IPC is working
+        ipcMain.on('widget:ping', (_event, data) => {
+            console.log('[RecordingWidgetManager] *** WIDGET PING RECEIVED ***', data);
+            console.log('[RecordingWidgetManager] This confirms preload is loaded and IPC is working!');
+        });
+
+        console.log('[RecordingWidgetManager] IPC handlers registered');
     }
 
     /**
@@ -95,9 +111,17 @@ export class RecordingWidgetManager {
      * Close and destroy the recording widget
      */
     public close(): void {
+        console.log('[RecordingWidgetManager] close() called');
+        console.log('[RecordingWidgetManager] widgetWindow exists:', !!this.widgetWindow);
+        console.log('[RecordingWidgetManager] widgetWindow destroyed:', this.widgetWindow?.isDestroyed());
+
         if (this.widgetWindow && !this.widgetWindow.isDestroyed()) {
+            console.log('[RecordingWidgetManager] Closing widget window...');
             this.widgetWindow.close();
             this.widgetWindow = null;
+            console.log('[RecordingWidgetManager] Widget window closed and nulled');
+        } else {
+            console.log('[RecordingWidgetManager] Widget window already closed or null');
         }
         this.isShowing = false;
     }
@@ -105,12 +129,22 @@ export class RecordingWidgetManager {
     /**
      * Send audio level data to the widget for visualization
      */
+    private audioLevelsSentCount = 0;
     public sendAudioLevels(levels: number[]): void {
         if (this.widgetWindow && !this.widgetWindow.isDestroyed()) {
+            this.audioLevelsSentCount++;
+            if (this.audioLevelsSentCount <= 3 || this.audioLevelsSentCount % 100 === 0) {
+                console.log('[RecordingWidgetManager] Sending audio levels to widget, count:', this.audioLevelsSentCount);
+            }
             this.widgetWindow.webContents.send('widget:audio-levels', {
                 levels,
                 timestamp: Date.now(),
             });
+        } else {
+            if (this.audioLevelsSentCount === 0) {
+                console.warn('[RecordingWidgetManager] Cannot send audio levels - widget window not available');
+                this.audioLevelsSentCount = -1; // Only log once
+            }
         }
     }
 
@@ -128,6 +162,17 @@ export class RecordingWidgetManager {
 
         // Determine the preload script path
         const preloadPath = path.join(__dirname, '..', 'preload.cjs');
+        console.log('[RecordingWidgetManager] __dirname:', __dirname);
+        console.log('[RecordingWidgetManager] Resolved preload path:', preloadPath);
+
+        // Verify preload exists (for debugging)
+        try {
+            const fs = require('fs');
+            const exists = fs.existsSync(preloadPath);
+            console.log('[RecordingWidgetManager] Preload file exists:', exists);
+        } catch (e) {
+            console.log('[RecordingWidgetManager] Could not check preload existence:', e);
+        }
 
         this.widgetWindow = new BrowserWindow({
             width: WIDGET_WIDTH,
@@ -172,7 +217,21 @@ export class RecordingWidgetManager {
         this.widgetWindow.once('ready-to-show', () => {
             if (this.widgetWindow && !this.widgetWindow.isDestroyed()) {
                 this.widgetWindow.show();
+                // Open devtools in dev mode to see widget console logs
+                if (process.env.VITE_DEV_SERVER_URL) {
+                    this.widgetWindow.webContents.openDevTools({ mode: 'detach' });
+                }
             }
+        });
+
+        // Log when widget loads and preload status
+        this.widgetWindow.webContents.on('did-finish-load', () => {
+            console.log('[RecordingWidgetManager] Widget finished loading');
+            console.log('[RecordingWidgetManager] Preload path was:', preloadPath);
+        });
+
+        this.widgetWindow.webContents.on('preload-error', (event, preloadPath, error) => {
+            console.error('[RecordingWidgetManager] Preload error:', preloadPath, error);
         });
 
         // Handle window closed

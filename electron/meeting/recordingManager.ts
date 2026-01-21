@@ -88,23 +88,48 @@ export class RecordingManager extends EventEmitter {
      * Recording will only happen when an entry is active
      */
     public setActiveEntry(entryId: string | null): void {
+        console.log('[RecordingManager] *** setActiveEntry CALLED ***');
         const wasActive = this.activeEntryId !== null;
+        const previousEntryId = this.activeEntryId;
         this.activeEntryId = entryId;
 
         console.log('[RecordingManager] Active entry changed:', {
-            from: wasActive ? 'active' : 'none',
-            to: entryId ? entryId : 'none'
+            from: wasActive ? previousEntryId : 'none',
+            to: entryId ? entryId : 'none',
+            isRendererRecording: this.isRendererRecording,
         });
 
         if (entryId) {
             // Entry became active - check if media is already in use
-            if (mediaMonitor.isMediaInUse() && !this.audioRecorder.isRecording()) {
+            const micInUse = mediaMonitor.isMicrophoneInUse();
+            const cameraInUse = mediaMonitor.isCameraInUse();
+            const mediaInUse = mediaMonitor.isMediaInUse();
+            console.log('[RecordingManager] Entry active, checking media:', {
+                micInUse,
+                cameraInUse,
+                mediaInUse,
+                isRendererRecording: this.isRendererRecording
+            });
+
+            if (mediaInUse && !this.isRendererRecording) {
+                console.log('[RecordingManager] Media already in use, starting recording');
                 this.startRecording();
             }
         } else {
-            // Entry stopped - stop any recording
+            console.log('[RecordingManager] Entry stopped - checking if need to stop recording');
+            // Entry stopped - stop any active recordings
             if (this.audioRecorder.isRecording()) {
+                console.log('[RecordingManager] Stopping audio recorder');
                 this.audioRecorder.stopRecording();
+            }
+
+            // Also stop renderer recording if active
+            // Pass the previous entry ID since we already cleared this.activeEntryId
+            if (this.isRendererRecording) {
+                console.log('[RecordingManager] *** ENTRY STOPPED WHILE RECORDING - STOPPING RENDERER AND WIDGET ***');
+                this.notifyRendererToStopRecording(previousEntryId);
+            } else {
+                console.log('[RecordingManager] Entry stopped but not recording, nothing to stop');
             }
         }
     }
@@ -162,16 +187,22 @@ export class RecordingManager extends EventEmitter {
      * Notify renderer that recording should start
      */
     private notifyRendererToStartRecording(): void {
-        if (!this.activeEntryId) return;
+        if (!this.activeEntryId) {
+            console.log('[RecordingManager] Cannot start recording - no active entry ID');
+            return;
+        }
 
         this.isRendererRecording = true;
         this.recordingStartTime = Date.now();
 
-        console.log('[RecordingManager] Notifying renderer to start recording');
+        console.log('[RecordingManager] *** NOTIFYING RENDERER TO START RECORDING ***');
+        console.log('[RecordingManager] Entry ID:', this.activeEntryId);
+        console.log('[RecordingManager] Channel:', MEETING_IPC_CHANNELS.EVENT_RECORDING_SHOULD_START);
         this.sendToRenderer(MEETING_IPC_CHANNELS.EVENT_RECORDING_SHOULD_START, {
             entryId: this.activeEntryId,
             timestamp: this.recordingStartTime,
         });
+        console.log('[RecordingManager] Start event sent to all renderer windows');
 
         // Show the recording widget
         const widgetManager = getRecordingWidgetManager();
@@ -185,22 +216,36 @@ export class RecordingManager extends EventEmitter {
 
     /**
      * Notify renderer that recording should stop
+     * @param overrideEntryId Optional entry ID to use instead of activeEntryId (useful when entry is being cleared)
      */
-    private notifyRendererToStopRecording(): void {
-        if (!this.isRendererRecording) return;
+    private notifyRendererToStopRecording(overrideEntryId?: string | null): void {
+        console.log('[RecordingManager] *** notifyRendererToStopRecording CALLED ***');
+        console.log('[RecordingManager] Current state:', {
+            isRendererRecording: this.isRendererRecording,
+            overrideEntryId,
+            activeEntryId: this.activeEntryId
+        });
+
+        if (!this.isRendererRecording) {
+            console.log('[RecordingManager] Not recording, nothing to stop');
+            return;
+        }
 
         const duration = this.recordingStartTime ? Date.now() - this.recordingStartTime : 0;
-        const entryId = this.activeEntryId;
+        // Use override if provided, otherwise use current activeEntryId
+        const entryId = overrideEntryId !== undefined ? overrideEntryId : this.activeEntryId;
 
-        console.log('[RecordingManager] Notifying renderer to stop recording, duration:', duration);
+        console.log('[RecordingManager] Sending stop event to renderer:', { entryId, duration });
         this.sendToRenderer(MEETING_IPC_CHANNELS.EVENT_RECORDING_SHOULD_STOP, {
             entryId,
             duration,
         });
 
         // Close the recording widget
+        console.log('[RecordingManager] Closing recording widget...');
         const widgetManager = getRecordingWidgetManager();
         widgetManager.close();
+        console.log('[RecordingManager] Widget close() called');
 
         this.isRendererRecording = false;
         this.recordingStartTime = null;
@@ -209,10 +254,18 @@ export class RecordingManager extends EventEmitter {
             entryId,
             duration,
         });
+        console.log('[RecordingManager] Recording stopped, state reset');
     }
 
     private onMediaStarted(device: 'microphone' | 'camera'): void {
         console.log(`[RecordingManager] ${device} started`);
+        console.log(`[RecordingManager] Current state:`, {
+            isEnabled: this.isEnabled,
+            activeEntryId: this.activeEntryId,
+            isRendererRecording: this.isRendererRecording,
+            micInUse: mediaMonitor.isMicrophoneInUse(),
+            cameraInUse: mediaMonitor.isCameraInUse(),
+        });
 
         this.emit(MEETING_EVENTS.MEDIA_STARTED, { device });
 
@@ -235,19 +288,32 @@ export class RecordingManager extends EventEmitter {
             return;
         }
 
+        console.log('[RecordingManager] All conditions met, starting recording');
         this.notifyRendererToStartRecording();
     }
 
     private onMediaStopped(device: 'microphone' | 'camera'): void {
-        console.log(`[RecordingManager] ${device} stopped`);
+        console.log(`[RecordingManager] *** ${device.toUpperCase()} STOPPED ***`);
 
         this.emit(MEETING_EVENTS.MEDIA_STOPPED, { device });
 
+        const micInUse = mediaMonitor.isMicrophoneInUse();
+        const cameraInUse = mediaMonitor.isCameraInUse();
+
+        console.log('[RecordingManager] Media state after stop:', {
+            device,
+            micInUse,
+            cameraInUse,
+            isRendererRecording: this.isRendererRecording
+        });
+
         // Only stop recording if BOTH mic and camera are inactive
-        if (!mediaMonitor.isMicrophoneInUse() && !mediaMonitor.isCameraInUse()) {
+        if (!micInUse && !cameraInUse) {
             if (this.isRendererRecording) {
-                console.log('[RecordingManager] All media stopped, stopping recording');
+                console.log('[RecordingManager] *** ALL MEDIA STOPPED - STOPPING RECORDING AND CLOSING WIDGET ***');
                 this.notifyRendererToStopRecording();
+            } else {
+                console.log('[RecordingManager] All media stopped but not recording, nothing to stop');
             }
         } else {
             console.log('[RecordingManager] Other media still active, continuing recording');

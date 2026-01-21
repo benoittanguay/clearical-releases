@@ -9,6 +9,7 @@
     BOOL _isMonitoring;
     dispatch_queue_t _monitoringQueue;
     NSTimer *_cameraPollingTimer;
+    NSTimer *_micPollingTimer;  // Fallback polling for mic
 }
 
 + (instancetype)sharedInstance {
@@ -95,6 +96,9 @@ static OSStatus microphoneCallback(
 
         // Start camera monitoring using polling
         [self startCameraMonitoringInternal];
+
+        // Start microphone polling as a fallback (some devices don't fire callbacks reliably)
+        [self startMicPollingInternal];
     });
 }
 
@@ -106,31 +110,150 @@ static OSStatus microphoneCallback(
 
 - (void)checkMicrophoneStateInternal {
     // Must be called on _monitoringQueue
-    if (_currentInputDevice == kAudioDeviceUnknown) {
+    // Check ALL input devices, not just the default one
+    // This is more reliable as some apps use non-default devices
+
+    AudioObjectPropertyAddress deviceListAddress = {
+        kAudioHardwarePropertyDevices,
+        kAudioObjectPropertyScopeGlobal,
+        kAudioObjectPropertyElementMain
+    };
+
+    UInt32 dataSize = 0;
+    OSStatus status = AudioObjectGetPropertyDataSize(
+        kAudioObjectSystemObject,
+        &deviceListAddress,
+        0,
+        NULL,
+        &dataSize
+    );
+
+    if (status != noErr || dataSize == 0) {
+        NSLog(@"[MediaMonitor] Failed to get device list size: %d", (int)status);
         return;
     }
 
-    UInt32 isRunning = 0;
-    UInt32 size = sizeof(isRunning);
-    OSStatus status = AudioObjectGetPropertyData(
-        _currentInputDevice,
-        &_micPropertyAddress,
+    UInt32 deviceCount = dataSize / sizeof(AudioDeviceID);
+    AudioDeviceID *devices = (AudioDeviceID *)malloc(dataSize);
+
+    status = AudioObjectGetPropertyData(
+        kAudioObjectSystemObject,
+        &deviceListAddress,
         0,
         NULL,
-        &size,
-        &isRunning
+        &dataSize,
+        devices
     );
 
-    if (status == noErr) {
-        BOOL wasInUse = _microphoneInUse;
-        _microphoneInUse = (isRunning != 0);
-
-        if (wasInUse != _microphoneInUse && _callback) {
-            _callback(_microphoneInUse, "microphone");
-        }
-    } else {
-        NSLog(@"[MediaMonitor] Failed to check microphone state: %d", (int)status);
+    if (status != noErr) {
+        NSLog(@"[MediaMonitor] Failed to get device list: %d", (int)status);
+        free(devices);
+        return;
     }
+
+    BOOL anyInputRunning = NO;
+    NSMutableArray *runningDeviceNames = [NSMutableArray array];
+
+    for (UInt32 i = 0; i < deviceCount; i++) {
+        AudioDeviceID device = devices[i];
+
+        // Check if this device has input channels (is an input device)
+        AudioObjectPropertyAddress inputChannelsAddress = {
+            kAudioDevicePropertyStreamConfiguration,
+            kAudioDevicePropertyScopeInput,
+            kAudioObjectPropertyElementMain
+        };
+
+        UInt32 channelDataSize = 0;
+        status = AudioObjectGetPropertyDataSize(device, &inputChannelsAddress, 0, NULL, &channelDataSize);
+
+        if (status == noErr && channelDataSize > 0) {
+            AudioBufferList *bufferList = (AudioBufferList *)malloc(channelDataSize);
+            status = AudioObjectGetPropertyData(device, &inputChannelsAddress, 0, NULL, &channelDataSize, bufferList);
+
+            UInt32 inputChannelCount = 0;
+            if (status == noErr) {
+                for (UInt32 j = 0; j < bufferList->mNumberBuffers; j++) {
+                    inputChannelCount += bufferList->mBuffers[j].mNumberChannels;
+                }
+            }
+            free(bufferList);
+
+            // If this device has input channels, check if it's running
+            if (inputChannelCount > 0) {
+                UInt32 isRunning = 0;
+                UInt32 runningSize = sizeof(isRunning);
+                status = AudioObjectGetPropertyData(
+                    device,
+                    &_micPropertyAddress,
+                    0,
+                    NULL,
+                    &runningSize,
+                    &isRunning
+                );
+
+                if (status == noErr && isRunning != 0) {
+                    anyInputRunning = YES;
+
+                    // Get device name for logging
+                    AudioObjectPropertyAddress nameAddress = {
+                        kAudioDevicePropertyDeviceNameCFString,
+                        kAudioObjectPropertyScopeGlobal,
+                        kAudioObjectPropertyElementMain
+                    };
+                    CFStringRef deviceName = NULL;
+                    UInt32 nameSize = sizeof(deviceName);
+                    if (AudioObjectGetPropertyData(device, &nameAddress, 0, NULL, &nameSize, &deviceName) == noErr && deviceName) {
+                        [runningDeviceNames addObject:(__bridge NSString *)deviceName];
+                        CFRelease(deviceName);
+                    }
+                }
+            }
+        }
+    }
+
+    free(devices);
+
+    BOOL wasInUse = _microphoneInUse;
+    _microphoneInUse = anyInputRunning;
+
+    if (anyInputRunning) {
+        NSLog(@"[MediaMonitor] Microphone IN USE - running devices: %@", [runningDeviceNames componentsJoinedByString:@", "]);
+    }
+
+    // Only log state changes or periodically to reduce spam
+    static int pollCount = 0;
+    pollCount++;
+    if (wasInUse != _microphoneInUse || pollCount % 30 == 0) {
+        NSLog(@"[MediaMonitor] Mic state: wasInUse=%d, anyInputRunning=%d, stateChanged=%d",
+              wasInUse, anyInputRunning, wasInUse != _microphoneInUse);
+    }
+
+    if (wasInUse != _microphoneInUse && _callback) {
+        NSLog(@"[MediaMonitor] *** FIRING MICROPHONE CALLBACK: isActive=%d ***", _microphoneInUse);
+        _callback(_microphoneInUse, "microphone");
+    }
+}
+
+- (void)startMicPollingInternal {
+    // Fallback polling for microphone - some devices don't fire callbacks reliably
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (self->_micPollingTimer) {
+            [self->_micPollingTimer invalidate];
+        }
+        // Poll every 1 second for mic state changes as fallback
+        self->_micPollingTimer = [NSTimer scheduledTimerWithTimeInterval:1.0
+                                                                  target:self
+                                                                selector:@selector(micPollTick)
+                                                                userInfo:nil
+                                                                 repeats:YES];
+    });
+}
+
+- (void)micPollTick {
+    dispatch_async(_monitoringQueue, ^{
+        [self checkMicrophoneStateInternal];
+    });
 }
 
 - (void)startCameraMonitoringInternal {
@@ -291,11 +414,15 @@ static OSStatus microphoneCallback(
         }
     });
 
-    // Stop camera polling timer on main thread
+    // Stop polling timers on main thread
     dispatch_async(dispatch_get_main_queue(), ^{
         if (self->_cameraPollingTimer) {
             [self->_cameraPollingTimer invalidate];
             self->_cameraPollingTimer = nil;
+        }
+        if (self->_micPollingTimer) {
+            [self->_micPollingTimer invalidate];
+            self->_micPollingTimer = nil;
         }
     });
 }
