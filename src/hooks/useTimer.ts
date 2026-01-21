@@ -823,5 +823,19 @@ export function useTimer() {
         return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
     };
 
-    return { isRunning, isPaused, elapsed, windowActivity, start, stop, pause, resume, reset, formatTime, checkPermissions };
+    /**
+     * Notify main process of active time entry for recording purposes.
+     * Call this when a time entry is created/becomes active.
+     * Recording will only happen when there's an active entry AND mic/camera is in use.
+     */
+    const setActiveRecordingEntry = (entryId: string | null) => {
+        // @ts-ignore
+        if (window.electron?.ipcRenderer?.meeting?.setActiveEntry) {
+            // @ts-ignore
+            window.electron.ipcRenderer.meeting.setActiveEntry(entryId);
+            console.log('[Timer] Active recording entry set:', entryId);
+        }
+    };
+
+    return { isRunning, isPaused, elapsed, windowActivity, start, stop, pause, resume, reset, formatTime, checkPermissions, setActiveRecordingEntry };
 }
