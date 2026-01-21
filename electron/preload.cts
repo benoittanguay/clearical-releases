@@ -262,6 +262,9 @@ contextBridge.exposeInMainWorld('electron', {
                 ipcRenderer.on('meeting:event-recording-should-stop', subscription);
                 return () => ipcRenderer.removeListener('meeting:event-recording-should-stop', subscription);
             },
+            // Send audio levels to widget for visualization
+            sendAudioLevels: (levels: number[]) =>
+                ipcRenderer.send('meeting:send-audio-levels', levels),
         },
     },
     // Analytics (top-level, not inside ipcRenderer)

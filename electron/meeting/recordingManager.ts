@@ -16,6 +16,7 @@ import { BrowserWindow } from 'electron';
 import { mediaMonitor } from '../native/index.js';
 import { AudioRecorder, getAudioRecorder } from './audioRecorder.js';
 import { MEETING_EVENTS, MEETING_IPC_CHANNELS, MeetingPlatform } from './types.js';
+import { getRecordingWidgetManager } from './recordingWidgetManager.js';
 
 export class RecordingManager extends EventEmitter {
     private static instance: RecordingManager | null = null;
@@ -30,6 +31,20 @@ export class RecordingManager extends EventEmitter {
         super();
         this.audioRecorder = getAudioRecorder();
         this.setupMediaMonitorListeners();
+        this.setupWidgetCallback();
+    }
+
+    /**
+     * Setup widget stop callback
+     */
+    private setupWidgetCallback(): void {
+        const widgetManager = getRecordingWidgetManager();
+        widgetManager.setOnStopCallback(() => {
+            console.log('[RecordingManager] Stop requested from widget');
+            // Stop recording when user clicks stop in widget
+            this.notifyRendererToStopRecording();
+            widgetManager.close();
+        });
     }
 
     public static getInstance(): RecordingManager {
@@ -158,6 +173,10 @@ export class RecordingManager extends EventEmitter {
             timestamp: this.recordingStartTime,
         });
 
+        // Show the recording widget
+        const widgetManager = getRecordingWidgetManager();
+        widgetManager.show();
+
         this.emit(MEETING_EVENTS.RECORDING_STARTED, {
             entryId: this.activeEntryId,
             timestamp: this.recordingStartTime,
@@ -178,6 +197,10 @@ export class RecordingManager extends EventEmitter {
             entryId,
             duration,
         });
+
+        // Close the recording widget
+        const widgetManager = getRecordingWidgetManager();
+        widgetManager.close();
 
         this.isRendererRecording = false;
         this.recordingStartTime = null;

@@ -1997,6 +1997,13 @@ ipcMain.handle(MEETING_IPC_CHANNELS.SET_AUTO_RECORD_ENABLED, (_event, enabled: b
     return { success: true };
 });
 
+// Audio levels forwarding to widget
+ipcMain.on(MEETING_IPC_CHANNELS.SEND_AUDIO_LEVELS, (_event, levels: number[]) => {
+    const { getRecordingWidgetManager } = require('./meeting/recordingWidgetManager.js');
+    const widgetManager = getRecordingWidgetManager();
+    widgetManager.sendAudioLevels(levels);
+});
+
 // Audio transcription IPC handlers
 ipcMain.handle(MEETING_IPC_CHANNELS.SAVE_AUDIO_AND_TRANSCRIBE, async (_event, entryId: string, audioBase64: string, mimeType?: string) => {
     console.log('[Main] SAVE_AUDIO_AND_TRANSCRIBE called for entry:', entryId);

@@ -193,6 +193,8 @@ export const MEETING_IPC_CHANNELS = {
     // Events from main to renderer (push notifications)
     EVENT_RECORDING_SHOULD_START: 'meeting:event-recording-should-start',
     EVENT_RECORDING_SHOULD_STOP: 'meeting:event-recording-should-stop',
+    // Audio levels from renderer to widget
+    SEND_AUDIO_LEVELS: 'meeting:send-audio-levels',
 } as const;
 
 /**

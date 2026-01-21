@@ -70,6 +70,11 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
     const audioChunksRef = useRef<Blob[]>([]);
     const streamRef = useRef<MediaStream | null>(null);
 
+    // Audio analysis refs for waveform visualization
+    const audioContextRef = useRef<AudioContext | null>(null);
+    const analyserRef = useRef<AnalyserNode | null>(null);
+    const audioLevelIntervalRef = useRef<number | null>(null);
+
     /**
      * Start audio recording
      */
@@ -88,6 +93,38 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
 
             streamRef.current = stream;
             audioChunksRef.current = [];
+
+            // Set up Web Audio API for audio level analysis
+            const audioContext = new AudioContext();
+            const analyser = audioContext.createAnalyser();
+            analyser.fftSize = 64; // Small FFT for 32 frequency bins (we'll use 24)
+            analyser.smoothingTimeConstant = 0.4;
+
+            const source = audioContext.createMediaStreamSource(stream);
+            source.connect(analyser);
+
+            audioContextRef.current = audioContext;
+            analyserRef.current = analyser;
+
+            // Start sending audio levels to the widget
+            const NUM_BARS = 24;
+            const dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+            audioLevelIntervalRef.current = window.setInterval(() => {
+                if (analyserRef.current) {
+                    analyserRef.current.getByteFrequencyData(dataArray);
+                    // Convert to normalized levels (0-1)
+                    const levels: number[] = [];
+                    for (let i = 0; i < NUM_BARS; i++) {
+                        // Map frequency bins to bars
+                        const binIndex = Math.floor(i * dataArray.length / NUM_BARS);
+                        const level = dataArray[binIndex] / 255;
+                        levels.push(Math.max(0.05, level)); // Minimum level for visibility
+                    }
+                    // Send to main process to forward to widget
+                    window.electron?.ipcRenderer?.meeting?.sendAudioLevels?.(levels);
+                }
+            }, 50); // Update at ~20fps
 
             // Create MediaRecorder with appropriate MIME type
             const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
@@ -153,6 +190,17 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
 
         return new Promise<void>((resolve) => {
             mediaRecorderRef.current!.onstop = async () => {
+                // Stop audio level analysis
+                if (audioLevelIntervalRef.current) {
+                    clearInterval(audioLevelIntervalRef.current);
+                    audioLevelIntervalRef.current = null;
+                }
+                if (audioContextRef.current) {
+                    audioContextRef.current.close();
+                    audioContextRef.current = null;
+                }
+                analyserRef.current = null;
+
                 // Stop all tracks
                 if (streamRef.current) {
                     streamRef.current.getTracks().forEach(track => track.stop());
@@ -285,6 +333,14 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
             console.log('[AudioRecordingContext] Cleaning up event listeners');
             unsubscribeStart?.();
             unsubscribeStop?.();
+
+            // Stop audio level analysis
+            if (audioLevelIntervalRef.current) {
+                clearInterval(audioLevelIntervalRef.current);
+            }
+            if (audioContextRef.current) {
+                audioContextRef.current.close();
+            }
 
             // Stop any active recording
             if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
