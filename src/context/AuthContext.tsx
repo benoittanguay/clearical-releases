@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 
+export type SSOProvider = 'google' | 'azure' | 'apple' | 'email' | null;
+
 export interface AuthUser {
     id: string;
     email: string;
@@ -10,6 +12,7 @@ export interface AuthUser {
 
 interface AuthContextType {
     user: AuthUser | null;
+    authProvider: SSOProvider;
     isAuthenticated: boolean;
     isLoading: boolean;
     sendOtp: (email: string) => Promise<{ success: boolean; error?: string }>;
@@ -24,6 +27,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [user, setUser] = useState<AuthUser | null>(null);
+    const [authProvider, setAuthProvider] = useState<SSOProvider>(null);
     const [isLoading, setIsLoading] = useState(true);
 
     // Re-check authentication status (e.g., after session expiry)
@@ -75,6 +79,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
             if (result.success && result.user) {
                 setUser(result.user);
+                setAuthProvider('email');
             }
 
             return result;
@@ -95,6 +100,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
             if (result.success && result.user) {
                 setUser(result.user);
+                setAuthProvider(provider);
             }
 
             return result;
@@ -111,6 +117,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         try {
             await window.electron.ipcRenderer.invoke('auth:sign-out');
             setUser(null);
+            setAuthProvider(null);
         } catch (error) {
             console.error('[AuthContext] Sign out error:', error);
         }
@@ -133,6 +140,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         <AuthContext.Provider
             value={{
                 user,
+                authProvider,
                 isAuthenticated: !!user,
                 isLoading,
                 sendOtp,

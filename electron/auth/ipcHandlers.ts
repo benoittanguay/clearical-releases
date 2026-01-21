@@ -9,6 +9,7 @@ import { getAuthService, SupabaseAuthService, AuthUser, AuthSession, OAuthProvid
 import { getConfig } from '../config.js';
 import { getEdgeFunctionClient } from '../subscription/edgeFunctionClient.js';
 import { getSubscriptionValidator } from '../subscription/ipcHandlers.js';
+import { getCalendarService } from '../calendar/calendarService.js';
 
 /**
  * Get the current app version
@@ -273,6 +274,16 @@ async function handleSignInWithOAuth(
                     });
                 }).catch((error) => {
                     console.error('[Auth] Failed to refresh subscription (non-blocking):', error);
+                });
+            }
+
+            // Auto-connect calendar for Google SSO (tokens were stored during OAuth)
+            if (provider === 'google') {
+                const calendarService = getCalendarService();
+                calendarService.connectGoogle().then(() => {
+                    console.log('[Auth] Calendar auto-connected after Google SSO');
+                }).catch((error) => {
+                    console.error('[Auth] Failed to auto-connect calendar (non-blocking):', error);
                 });
             }
         }

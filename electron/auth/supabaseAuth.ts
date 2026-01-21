@@ -11,6 +11,7 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import { createOAuthCallbackServer, OAuthProvider } from './oauthServer.js';
+import { storeCredential } from '../credentialStorage.js';
 
 export interface AuthUser {
     id: string;
@@ -296,10 +297,11 @@ export class SupabaseAuthService {
             // Map our provider names to Supabase provider names
             const supabaseProvider = provider === 'azure' ? 'azure' : provider;
 
-            // Provider-specific scopes to ensure email is returned
+            // Provider-specific scopes - include calendar access for supported providers
+            // This allows us to get calendar consent during SSO instead of a separate prompt
             const scopesByProvider: Record<string, string> = {
-                azure: 'openid profile email',
-                google: 'openid profile email',
+                azure: 'openid profile email offline_access https://graph.microsoft.com/Calendars.Read https://graph.microsoft.com/Calendars.ReadWrite',
+                google: 'openid profile email https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/calendar.events',
                 apple: 'name email',
             };
 
@@ -377,6 +379,10 @@ export class SupabaseAuthService {
                 hasRefreshToken: !!authSession.refreshToken,
                 expiresAt: new Date(authSession.expiresAt).toISOString()
             });
+
+            // Store provider tokens for calendar integration (if available)
+            // Supabase returns the raw provider tokens which we can use for calendar APIs
+            await this.storeProviderTokens(provider, sessionData.session);
 
             // Save session
             await this.saveSession(authSession);
@@ -563,6 +569,51 @@ export class SupabaseAuthService {
         if (this.currentSession) {
             this.currentSession.user.stripeCustomerId = stripeCustomerId;
             await this.saveSession(this.currentSession);
+        }
+    }
+
+    /**
+     * Store provider tokens for calendar integration
+     * These are the raw OAuth tokens from the provider (Google, Microsoft, etc.)
+     * that can be used directly with their calendar APIs
+     */
+    private async storeProviderTokens(provider: OAuthProvider, session: Session): Promise<void> {
+        const providerToken = session.provider_token;
+        const providerRefreshToken = session.provider_refresh_token;
+
+        if (!providerToken) {
+            console.log(`[SupabaseAuth] No provider token returned for ${provider}`);
+            return;
+        }
+
+        console.log(`[SupabaseAuth] Storing ${provider} provider tokens for calendar integration`);
+
+        try {
+            if (provider === 'google') {
+                // Store Google tokens for calendar integration
+                await storeCredential('calendar-google-access-token', providerToken);
+                if (providerRefreshToken) {
+                    await storeCredential('calendar-google-refresh-token', providerRefreshToken);
+                }
+                // Set expiry - provider tokens from Supabase typically last 1 hour
+                // The calendar provider will refresh as needed
+                const expiresAt = Date.now() + 3600 * 1000;
+                await storeCredential('calendar-google-expires-at', String(expiresAt));
+                console.log('[SupabaseAuth] Google calendar tokens stored successfully');
+            } else if (provider === 'azure') {
+                // Store Microsoft tokens for future Outlook calendar integration
+                await storeCredential('calendar-microsoft-access-token', providerToken);
+                if (providerRefreshToken) {
+                    await storeCredential('calendar-microsoft-refresh-token', providerRefreshToken);
+                }
+                const expiresAt = Date.now() + 3600 * 1000;
+                await storeCredential('calendar-microsoft-expires-at', String(expiresAt));
+                console.log('[SupabaseAuth] Microsoft calendar tokens stored successfully');
+            }
+            // Apple doesn't have a calendar API accessible this way
+        } catch (error) {
+            console.error(`[SupabaseAuth] Failed to store ${provider} tokens:`, error);
+            // Non-blocking - calendar can still be connected manually
         }
     }
 

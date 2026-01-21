@@ -30,6 +30,30 @@ export class GoogleCalendarProvider implements CalendarProvider {
   private email: string | null = null;
 
   async connect(): Promise<void> {
+    // Check if we already have tokens (e.g., from Google SSO sign-in)
+    const existingToken = await getCredential('calendar-google-access-token');
+    const existingRefresh = await getCredential('calendar-google-refresh-token');
+
+    if (existingToken && existingRefresh) {
+      console.log('[GoogleCalendar] Found existing tokens (likely from SSO), verifying...');
+      await this.loadTokens();
+
+      try {
+        // Verify tokens work by fetching user email
+        this.email = await this.fetchUserEmail();
+        console.log('[GoogleCalendar] Existing tokens valid, connected as:', this.email);
+        return;
+      } catch (error) {
+        console.log('[GoogleCalendar] Existing tokens invalid, will request new authorization');
+        // Clear invalid tokens and fall through to OAuth flow
+        await deleteCredential('calendar-google-access-token');
+        await deleteCredential('calendar-google-refresh-token');
+        await deleteCredential('calendar-google-expires-at');
+        this.tokens = null;
+      }
+    }
+
+    // No valid existing tokens, start OAuth flow
     const authUrl = this.buildAuthUrl();
     const code = await this.openAuthWindow(authUrl);
     const tokens = await this.exchangeCodeForTokens(code);
