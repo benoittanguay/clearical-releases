@@ -119,7 +119,7 @@ enabled = true
 # in emails.
 site_url = "https://www.clearical.io"
 # A list of *exact* URLs that auth providers are permitted to redirect to post authentication.
-additional_redirect_urls = ["https://www.clearical.io/welcome", "https://clearical.io/download", "https://www.clearical.io/download"]
+additional_redirect_urls = ["https://www.clearical.io/welcome", "https://clearical.io/download", "https://www.clearical.io/download", "http://localhost:3848/auth/callback"]
 # How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), maximum 604,800 (1 week).
 jwt_expiry = 3600
 # Path to JWT signing key. DO NOT commit your signing keys file to git.
@@ -194,6 +194,10 @@ otp_expiry = 86400
 [auth.email.template.confirmation]
 subject = "Confirm your Clearical signup"
 content_path = "./supabase/templates/confirmation.html"
+
+[auth.email.template.magic_link]
+subject = "Your Clearical Login Code"
+content_path = "./supabase/templates/otp.html"
 
 # [auth.email.template.invite]
 # subject = "You have been invited"
