@@ -236,6 +236,36 @@ contextBridge.exposeInMainWorld('electron', {
                 endTime: number;
             }) => ipcRenderer.invoke('calendar:create-focus-time', input),
         },
+        // Meeting/Recording operations (mic/camera detection)
+        meeting: {
+            setActiveEntry: (entryId: string | null) =>
+                ipcRenderer.invoke('meeting:set-active-entry', entryId),
+            getMediaStatus: () =>
+                ipcRenderer.invoke('meeting:get-media-status'),
+            getRecordingStatus: () =>
+                ipcRenderer.invoke('meeting:get-recording-status'),
+            setAutoRecordEnabled: (enabled: boolean) =>
+                ipcRenderer.invoke('meeting:set-auto-record-enabled', enabled),
+            // Audio capture and transcription
+            saveAudioAndTranscribe: (entryId: string, audioBase64: string, mimeType?: string) =>
+                ipcRenderer.invoke('meeting:save-audio-and-transcribe', entryId, audioBase64, mimeType),
+            getTranscriptionUsage: () =>
+                ipcRenderer.invoke('meeting:get-transcription-usage'),
+            // Event subscriptions for automatic recording
+            onRecordingShouldStart: (callback: (data: { entryId: string; timestamp: number }) => void) => {
+                const subscription = (_event: any, data: { entryId: string; timestamp: number }) => callback(data);
+                ipcRenderer.on('meeting:event-recording-should-start', subscription);
+                return () => ipcRenderer.removeListener('meeting:event-recording-should-start', subscription);
+            },
+            onRecordingShouldStop: (callback: (data: { entryId: string; duration: number }) => void) => {
+                const subscription = (_event: any, data: { entryId: string; duration: number }) => callback(data);
+                ipcRenderer.on('meeting:event-recording-should-stop', subscription);
+                return () => ipcRenderer.removeListener('meeting:event-recording-should-stop', subscription);
+            },
+            // Send audio levels to widget for visualization
+            sendAudioLevels: (levels: number[]) =>
+                ipcRenderer.send('meeting:send-audio-levels', levels),
+        },
     },
     // Analytics (top-level, not inside ipcRenderer)
     analytics: {

@@ -10,7 +10,10 @@ import { JiraCacheProvider } from './context/JiraCacheContext.tsx'
 import { CrawlerProgressProvider } from './context/CrawlerProgressContext.tsx'
 import { ScreenshotAnalysisProvider } from './context/ScreenshotAnalysisContext.tsx'
 import { AuthProvider } from './context/AuthContext.tsx'
+import { AnimationProvider } from './context/AnimationContext.tsx'
+import { AudioRecordingProvider } from './context/AudioRecordingContext.tsx'
 import { ErrorBoundary } from './components/ErrorBoundary.tsx'
+import { SplitAnimationOverlay } from './components/SplitAnimationOverlay.tsx'
 import { AuthGate } from './components/AuthGate.tsx'
 
 // Import seed script to expose console commands in development
@@ -30,7 +33,12 @@ createRoot(document.getElementById('root')!).render(
                   <JiraCacheProvider>
                     <CrawlerProgressProvider>
                       <ScreenshotAnalysisProvider>
-                        <App />
+                        <AudioRecordingProvider>
+                          <AnimationProvider>
+                            <App />
+                            <SplitAnimationOverlay />
+                          </AnimationProvider>
+                        </AudioRecordingProvider>
                       </ScreenshotAnalysisProvider>
                     </CrawlerProgressProvider>
                   </JiraCacheProvider>

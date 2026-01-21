@@ -9,6 +9,7 @@ import { TempoConfigModal } from './TempoConfigModal';
 import { InlineTimeEditor } from './InlineTimeEditor';
 import { AddToCalendarButton } from './AddToCalendarButton';
 import { SplittingAssistant } from './SplittingAssistant';
+import { TranscriptionDisplay } from './TranscriptionDisplay';
 import { useStorage } from '../context/StorageContext';
 import { useSettings } from '../context/SettingsContext';
 import { useSubscription } from '../context/SubscriptionContext';
@@ -2105,6 +2106,13 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                                 </div>
                             );
                         })}
+                    </div>
+                )}
+
+                {/* Transcription Section */}
+                {entry.transcription && (
+                    <div className="mt-4">
+                        <TranscriptionDisplay transcription={entry.transcription} />
                     </div>
                 )}
                 </div>
