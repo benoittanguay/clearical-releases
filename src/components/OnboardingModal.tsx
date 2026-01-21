@@ -392,14 +392,14 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                         {currentStep === 4 && (
                             <div className="p-6 sm:p-8">
                                 {/* Header */}
-                                <div className="text-center mb-8">
+                                <div className="text-center mb-5">
                                     <div className="inline-flex items-center justify-center w-16 h-16 bg-[var(--color-warning-muted)] rounded-2xl mb-4 shadow-lg">
                                         <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--color-warning)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                             <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
                                             <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
                                         </svg>
                                     </div>
-                                    <h2 className="text-2xl font-bold text-[var(--color-text-primary)] mb-2 font-display tracking-tight">System Permissions</h2>
+                                    <h2 className="text-2xl font-bold text-[var(--color-text-primary)] mb-1 font-display tracking-tight">System Permissions</h2>
                                     <p className="text-[var(--color-text-secondary)] text-lg">Clearical needs Accessibility access to track your activity</p>
                                 </div>
 
@@ -545,7 +545,7 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                         {currentStep === 0 && (
                             <div className="p-6 sm:p-8">
                                 {/* Header */}
-                                <div className="text-center mb-8">
+                                <div className="text-center mb-5">
                                     <div className="inline-flex items-center justify-center w-16 h-16 bg-[var(--color-info-muted)] rounded-2xl mb-4 shadow-lg">
                                         <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--color-info)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                             <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
@@ -554,30 +554,12 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                                             <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
                                         </svg>
                                     </div>
-                                    <h2 className="text-2xl font-bold text-[var(--color-text-primary)] mb-2 font-display tracking-tight">What's your role?</h2>
+                                    <h2 className="text-2xl font-bold text-[var(--color-text-primary)] mb-1 font-display tracking-tight">What's your role?</h2>
                                     <p className="text-[var(--color-text-secondary)] text-lg">Help our AI understand your work context</p>
                                 </div>
 
-                                {/* Info Box */}
-                                <div className="bg-[var(--color-accent-muted)] border border-[var(--color-accent)]/30 rounded-xl p-4 mb-6">
-                                    <div className="flex gap-3">
-                                        <div className="flex-shrink-0 mt-0.5">
-                                            <svg className="w-5 h-5 text-[var(--color-accent)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                            </svg>
-                                        </div>
-                                        <div>
-                                            <h4 className="text-sm font-semibold text-[var(--color-text-primary)] mb-1 font-display">Why we ask</h4>
-                                            <p className="text-sm text-[var(--color-text-secondary)]">
-                                                Your role helps Clearical generate more accurate activity descriptions
-                                                using terminology and context relevant to your field.
-                                            </p>
-                                        </div>
-                                    </div>
-                                </div>
-
                                 {/* Role Selection */}
-                                <div className="space-y-3">
+                                <div className="space-y-2">
                                     {[
                                         { id: 'developer', label: 'Software Developer', icon: '💻', desc: 'Engineering, coding, debugging' },
                                         { id: 'designer', label: 'Designer', icon: '🎨', desc: 'UI/UX, visual design, prototyping' },
@@ -590,23 +572,41 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                                         <button
                                             key={role.id}
                                             onClick={() => setSelectedRole(role.id)}
-                                            className={`w-full flex items-center gap-4 p-4 rounded-xl border transition-all text-left ${
-                                                selectedRole === role.id
-                                                    ? 'bg-[var(--color-accent-muted)] border-[var(--color-accent)] shadow-md'
-                                                    : 'bg-[var(--color-bg-tertiary)] border-[var(--color-border-primary)] hover:bg-[var(--color-bg-quaternary)] hover:border-[var(--color-border-secondary)]'
-                                            }`}
+                                            className="w-full flex items-center gap-3 p-2.5 rounded-lg text-left cursor-pointer"
+                                            style={{
+                                                backgroundColor: selectedRole === role.id ? 'var(--color-accent-muted)' : 'white',
+                                                border: `1px solid ${selectedRole === role.id ? 'var(--color-accent)' : 'var(--color-border-primary)'}`,
+                                                transition: 'all var(--duration-base) var(--ease-out)'
+                                            }}
+                                            onMouseEnter={(e) => {
+                                                if (selectedRole !== role.id) {
+                                                    e.currentTarget.style.backgroundColor = '#FAF5EE';
+                                                    e.currentTarget.style.borderColor = 'var(--color-border-secondary)';
+                                                }
+                                            }}
+                                            onMouseLeave={(e) => {
+                                                if (selectedRole !== role.id) {
+                                                    e.currentTarget.style.backgroundColor = 'white';
+                                                    e.currentTarget.style.borderColor = 'var(--color-border-primary)';
+                                                }
+                                            }}
                                         >
-                                            <span className="text-2xl">{role.icon}</span>
-                                            <div className="flex-1">
-                                                <div className={`font-semibold font-display ${
-                                                    selectedRole === role.id ? 'text-[var(--color-accent)]' : 'text-[var(--color-text-primary)]'
-                                                }`}>
+                                            <div
+                                                className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                                                style={{
+                                                    backgroundColor: selectedRole === role.id ? 'var(--color-accent)' : 'var(--color-bg-tertiary)'
+                                                }}
+                                            >
+                                                <span className="text-base">{role.icon}</span>
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <div className="text-sm font-medium" style={{ color: 'var(--color-text-primary)' }}>
                                                     {role.label}
                                                 </div>
-                                                <div className="text-sm text-[var(--color-text-secondary)]">{role.desc}</div>
+                                                <div className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>{role.desc}</div>
                                             </div>
                                             {selectedRole === role.id && (
-                                                <svg className="w-5 h-5 text-[var(--color-accent)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <svg className="w-4 h-4 flex-shrink-0" style={{ color: 'var(--color-accent)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
                                                 </svg>
                                             )}
@@ -617,7 +617,7 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                                 {/* Custom role input (shown when "Other" is selected) */}
                                 {selectedRole === 'other' && (
                                     <div className="mt-4 animate-fade-in">
-                                        <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-2 uppercase tracking-wide">
+                                        <label className="block text-sm text-[var(--color-text-secondary)] mb-2 font-display">
                                             Describe your role
                                         </label>
                                         <input
@@ -625,7 +625,18 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                                             value={customRoleDescription}
                                             onChange={(e) => setCustomRoleDescription(e.target.value)}
                                             autoFocus
-                                            className="w-full bg-[var(--color-bg-tertiary)] border border-[var(--color-border-primary)] text-[var(--color-text-primary)] text-base rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:border-transparent transition-all"
+                                            className="w-full bg-[var(--color-bg-primary)] border text-[var(--color-text-primary)] text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:border-[var(--color-accent)] transition-all"
+                                            style={{ fontFamily: 'var(--font-body)', borderColor: 'var(--color-border-primary)' }}
+                                            onMouseEnter={(e) => {
+                                                if (document.activeElement !== e.currentTarget) {
+                                                    e.currentTarget.style.borderColor = '#8c877d';
+                                                }
+                                            }}
+                                            onMouseLeave={(e) => {
+                                                if (document.activeElement !== e.currentTarget) {
+                                                    e.currentTarget.style.borderColor = 'var(--color-border-primary)';
+                                                }
+                                            }}
                                             placeholder="e.g., Data Scientist, HR Manager, Content Writer"
                                         />
                                     </div>
@@ -637,7 +648,7 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                         {currentStep === 1 && (
                             <div className="p-6 sm:p-8">
                                 {/* Header */}
-                                <div className="text-center mb-8">
+                                <div className="text-center mb-5">
                                     <div className="inline-flex items-center justify-center w-16 h-16 bg-[var(--color-accent-muted)] rounded-2xl mb-4 shadow-lg">
                                         <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--color-accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                             <rect x="2" y="3" width="20" height="18" rx="2"/>
@@ -646,32 +657,14 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                                             <path d="M10 16h4"/>
                                         </svg>
                                     </div>
-                                    <h2 className="text-2xl font-bold text-[var(--color-text-primary)] mb-2 font-display tracking-tight">Welcome to Clearical</h2>
-                                    <p className="text-[var(--color-text-secondary)] text-lg">Let's get you started with your first bucket</p>
-                                </div>
-
-                                {/* Info Box */}
-                                <div className="bg-[var(--color-accent-muted)] border border-[var(--color-accent)]/30 rounded-xl p-4 mb-6">
-                                    <div className="flex gap-3">
-                                        <div className="flex-shrink-0 mt-0.5">
-                                            <svg className="w-5 h-5 text-[var(--color-accent)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                            </svg>
-                                        </div>
-                                        <div>
-                                            <h4 className="text-sm font-semibold text-[var(--color-text-primary)] mb-1 font-display">What are buckets?</h4>
-                                            <p className="text-sm text-[var(--color-text-secondary)]">
-                                                Buckets are categories that help you organize your time entries.
-                                                Think of them as projects, clients, or types of work you want to track separately.
-                                            </p>
-                                        </div>
-                                    </div>
+                                    <h2 className="text-2xl font-bold text-[var(--color-text-primary)] mb-1 font-display tracking-tight">Categorize your work</h2>
+                                    <p className="text-[var(--color-text-secondary)] text-lg">Create your first bucket to organize time entries</p>
                                 </div>
 
                                 {/* Form */}
                                 <div className="space-y-5">
                                     <div>
-                                        <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-2 uppercase tracking-wide">
+                                        <label className="block text-sm text-[var(--color-text-secondary)] mb-2 font-display">
                                             Bucket Name
                                         </label>
                                         <input
@@ -684,13 +677,24 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                                                 }
                                             }}
                                             autoFocus
-                                            className="w-full bg-[var(--color-bg-tertiary)] border border-[var(--color-border-primary)] text-[var(--color-text-primary)] text-base rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:border-transparent transition-all"
+                                            className="w-full bg-[var(--color-bg-primary)] border text-[var(--color-text-primary)] text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:border-[var(--color-accent)] transition-all"
+                                            style={{ fontFamily: 'var(--font-body)', borderColor: 'var(--color-border-primary)' }}
+                                            onMouseEnter={(e) => {
+                                                if (document.activeElement !== e.currentTarget) {
+                                                    e.currentTarget.style.borderColor = '#8c877d';
+                                                }
+                                            }}
+                                            onMouseLeave={(e) => {
+                                                if (document.activeElement !== e.currentTarget) {
+                                                    e.currentTarget.style.borderColor = 'var(--color-border-primary)';
+                                                }
+                                            }}
                                             placeholder="e.g., Client Work, Deep Focus, Meetings"
                                         />
                                     </div>
 
                                     <div>
-                                        <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-2 uppercase tracking-wide">
+                                        <label className="block text-sm text-[var(--color-text-secondary)] mb-2 font-display">
                                             Choose a Color
                                         </label>
                                         <div className="grid grid-cols-8 gap-2.5">
@@ -719,7 +723,7 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                         {currentStep === 2 && (
                             <div className="p-6 sm:p-8">
                                 {/* Header */}
-                                <div className="text-center mb-8">
+                                <div className="text-center mb-5">
                                     <div className="inline-flex items-center justify-center w-16 h-16 bg-[var(--color-success-muted)] rounded-2xl mb-4 shadow-lg">
                                         <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--color-success)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                             <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
@@ -728,7 +732,7 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                                             <line x1="3" y1="10" x2="21" y2="10"/>
                                         </svg>
                                     </div>
-                                    <h2 className="text-2xl font-bold text-[var(--color-text-primary)] mb-2 font-display tracking-tight">Connect Your Calendar</h2>
+                                    <h2 className="text-2xl font-bold text-[var(--color-text-primary)] mb-1 font-display tracking-tight">Connect Your Calendar</h2>
                                     <p className="text-[var(--color-text-secondary)] text-lg">Help AI understand your schedule and context</p>
                                 </div>
 
@@ -756,52 +760,28 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                                     </div>
                                 )}
 
-                                {/* Info Box */}
-                                <div className="bg-[var(--color-accent-muted)] border border-[var(--color-accent)]/30 rounded-xl p-4 mb-6">
-                                    <div className="flex gap-3">
-                                        <div className="flex-shrink-0 mt-0.5">
-                                            <svg className="w-5 h-5 text-[var(--color-accent)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                            </svg>
-                                        </div>
-                                        <div>
-                                            <h4 className="text-sm font-semibold text-[var(--color-text-primary)] mb-1 font-display">Why connect your calendar?</h4>
-                                            <p className="text-sm text-[var(--color-text-secondary)]">
-                                                Calendar integration helps the AI understand your meeting context and daily schedule,
-                                                providing more accurate activity summaries and time tracking suggestions.
-                                            </p>
-                                        </div>
-                                    </div>
-                                </div>
-
                                 {/* Benefits List */}
-                                <div className="space-y-3 mb-6">
-                                    <div className="flex items-start gap-3">
-                                        <div className="flex-shrink-0 mt-0.5">
-                                            <svg className="w-5 h-5 text-[var(--color-success)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                            </svg>
-                                        </div>
+                                <div className="space-y-1.5 mb-6">
+                                    <div className="flex items-center gap-2">
+                                        <svg className="w-4 h-4 text-[var(--color-success)] flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
                                         <p className="text-sm text-[var(--color-text-secondary)]">
                                             Automatically include meeting context in time entries
                                         </p>
                                     </div>
-                                    <div className="flex items-start gap-3">
-                                        <div className="flex-shrink-0 mt-0.5">
-                                            <svg className="w-5 h-5 text-[var(--color-success)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                            </svg>
-                                        </div>
+                                    <div className="flex items-center gap-2">
+                                        <svg className="w-4 h-4 text-[var(--color-success)] flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
                                         <p className="text-sm text-[var(--color-text-secondary)]">
                                             Better understand your work patterns and schedule
                                         </p>
                                     </div>
-                                    <div className="flex items-start gap-3">
-                                        <div className="flex-shrink-0 mt-0.5">
-                                            <svg className="w-5 h-5 text-[var(--color-success)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                            </svg>
-                                        </div>
+                                    <div className="flex items-center gap-2">
+                                        <svg className="w-4 h-4 text-[var(--color-success)] flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
                                         <p className="text-sm text-[var(--color-text-secondary)]">
                                             Get more accurate AI-powered activity summaries
                                         </p>
@@ -983,7 +963,7 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                                     <div className="inline-flex items-center justify-center w-16 h-16 bg-white rounded-2xl mb-4 shadow-lg">
                                         <img src={jiraLogo} alt="Jira" className="w-10 h-10 object-contain" />
                                     </div>
-                                    <h2 className="text-2xl font-bold text-[var(--color-text-primary)] mb-2 font-display tracking-tight">Connect Jira</h2>
+                                    <h2 className="text-2xl font-bold text-[var(--color-text-primary)] mb-1 font-display tracking-tight">Connect Jira</h2>
                                     <p className="text-[var(--color-text-secondary)] text-lg">Link your Jira issues for smarter time tracking</p>
                                 </div>
 
@@ -1034,33 +1014,55 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                                 ) : (
                                     <div className="space-y-4 mb-6">
                                         <div>
-                                            <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-2 uppercase tracking-wide">
+                                            <label className="block text-sm text-[var(--color-text-secondary)] mb-2 font-display">
                                                 Jira Base URL
                                             </label>
                                             <input
                                                 type="text"
                                                 value={jiraBaseUrl}
                                                 onChange={(e) => setJiraBaseUrl(e.target.value)}
-                                                className="w-full bg-[var(--color-bg-tertiary)] border border-[var(--color-border-primary)] text-[var(--color-text-primary)] text-sm rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:border-transparent transition-all"
+                                                className="w-full bg-[var(--color-bg-primary)] border text-[var(--color-text-primary)] text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:border-[var(--color-accent)] transition-all"
+                                                style={{ fontFamily: 'var(--font-body)', borderColor: 'var(--color-border-primary)' }}
+                                                onMouseEnter={(e) => {
+                                                    if (document.activeElement !== e.currentTarget) {
+                                                        e.currentTarget.style.borderColor = '#8c877d';
+                                                    }
+                                                }}
+                                                onMouseLeave={(e) => {
+                                                    if (document.activeElement !== e.currentTarget) {
+                                                        e.currentTarget.style.borderColor = 'var(--color-border-primary)';
+                                                    }
+                                                }}
                                                 placeholder="https://your-domain.atlassian.net"
                                             />
                                         </div>
 
                                         <div>
-                                            <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-2 uppercase tracking-wide">
+                                            <label className="block text-sm text-[var(--color-text-secondary)] mb-2 font-display">
                                                 Email
                                             </label>
                                             <input
                                                 type="email"
                                                 value={jiraEmail}
                                                 onChange={(e) => setJiraEmail(e.target.value)}
-                                                className="w-full bg-[var(--color-bg-tertiary)] border border-[var(--color-border-primary)] text-[var(--color-text-primary)] text-sm rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:border-transparent transition-all"
+                                                className="w-full bg-[var(--color-bg-primary)] border text-[var(--color-text-primary)] text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:border-[var(--color-accent)] transition-all"
+                                                style={{ fontFamily: 'var(--font-body)', borderColor: 'var(--color-border-primary)' }}
+                                                onMouseEnter={(e) => {
+                                                    if (document.activeElement !== e.currentTarget) {
+                                                        e.currentTarget.style.borderColor = '#8c877d';
+                                                    }
+                                                }}
+                                                onMouseLeave={(e) => {
+                                                    if (document.activeElement !== e.currentTarget) {
+                                                        e.currentTarget.style.borderColor = 'var(--color-border-primary)';
+                                                    }
+                                                }}
                                                 placeholder="your.email@company.com"
                                             />
                                         </div>
 
                                         <div>
-                                            <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-2 uppercase tracking-wide">
+                                            <label className="block text-sm text-[var(--color-text-secondary)] mb-2 font-display">
                                                 API Token
                                             </label>
                                             <div className="relative">
@@ -1073,7 +1075,18 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                                                             handleTestJiraConnection();
                                                         }
                                                     }}
-                                                    className="w-full bg-[var(--color-bg-tertiary)] border border-[var(--color-border-primary)] text-[var(--color-text-primary)] text-sm rounded-lg px-4 py-3 pr-10 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:border-transparent transition-all"
+                                                    className="w-full bg-[var(--color-bg-primary)] border text-[var(--color-text-primary)] text-sm rounded-lg px-3 py-2 pr-10 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:border-[var(--color-accent)] transition-all"
+                                                    style={{ fontFamily: 'var(--font-body)', borderColor: 'var(--color-border-primary)' }}
+                                                    onMouseEnter={(e) => {
+                                                        if (document.activeElement !== e.currentTarget) {
+                                                            e.currentTarget.style.borderColor = '#8c877d';
+                                                        }
+                                                    }}
+                                                    onMouseLeave={(e) => {
+                                                        if (document.activeElement !== e.currentTarget) {
+                                                            e.currentTarget.style.borderColor = 'var(--color-border-primary)';
+                                                        }
+                                                    }}
                                                     placeholder="Enter your Jira API token"
                                                 />
                                                 <button
