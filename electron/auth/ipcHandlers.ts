@@ -9,12 +9,46 @@ import { getAuthService, SupabaseAuthService, AuthUser, AuthSession, OAuthProvid
 import { getConfig } from '../config.js';
 import { getEdgeFunctionClient } from '../subscription/edgeFunctionClient.js';
 import { getSubscriptionValidator } from '../subscription/ipcHandlers.js';
+import { getTranscriptionService } from '../meeting/transcriptionService.js';
 
 /**
  * Get the current app version
  */
 function getAppVersion(): string {
     return app.getVersion();
+}
+
+/**
+ * Update TranscriptionService with current auth session
+ * Converts AuthSession format to Supabase Session format
+ */
+function updateTranscriptionSession(authSession: AuthSession | null): void {
+    const transcriptionService = getTranscriptionService();
+
+    if (!authSession) {
+        transcriptionService.setSession(null);
+        console.log('[Auth] Cleared transcription service session');
+        return;
+    }
+
+    // Convert AuthSession (camelCase) to Supabase Session format (snake_case)
+    const supabaseSession = {
+        access_token: authSession.accessToken,
+        refresh_token: authSession.refreshToken,
+        expires_at: Math.floor(authSession.expiresAt / 1000), // Convert ms to seconds
+        expires_in: Math.floor((authSession.expiresAt - Date.now()) / 1000),
+        token_type: 'bearer',
+        user: {
+            id: authSession.user.id,
+            email: authSession.user.email,
+            aud: 'authenticated',
+            role: 'authenticated',
+            created_at: authSession.user.createdAt,
+        },
+    };
+
+    transcriptionService.setSession(supabaseSession as any);
+    console.log('[Auth] Updated transcription service session for user:', authSession.user.email);
 }
 
 /**
@@ -68,6 +102,9 @@ async function validateSessionOnStartup(authService: SupabaseAuthService): Promi
             if (expiresInMinutes < 30) {
                 console.warn('[Auth] ⚠️ Token expires soon - refresh will be attempted');
             }
+
+            // Wire up transcription service with the session
+            updateTranscriptionSession(session);
         } else {
             console.log('[Auth] No active session - user needs to sign in for AI features');
         }
@@ -193,8 +230,12 @@ async function handleVerifyOtp(
         const result = await authService.verifyOtp(email, token);
 
         // If OTP verification succeeded, ensure Stripe customer exists and refresh subscription
-        if (result.success && result.user) {
+        if (result.success && result.user && result.session) {
             console.log('[Auth] OTP verified, ensuring Stripe customer and refreshing subscription...');
+
+            // Wire up transcription service with the new session
+            updateTranscriptionSession(result.session);
+
             const edgeClient = getEdgeFunctionClient();
 
             // Call customer creation asynchronously - don't block login if it fails
@@ -247,8 +288,12 @@ async function handleSignInWithOAuth(
         const result = await authService.signInWithOAuth(provider);
 
         // If OAuth sign-in succeeded, ensure Stripe customer exists and refresh subscription
-        if (result.success && result.user) {
+        if (result.success && result.user && result.session) {
             console.log('[Auth] OAuth verified, ensuring Stripe customer and refreshing subscription...');
+
+            // Wire up transcription service with the new session
+            updateTranscriptionSession(result.session);
+
             const edgeClient = getEdgeFunctionClient();
 
             // Call customer creation asynchronously - don't block login if it fails
@@ -294,6 +339,10 @@ async function handleSignOut(): Promise<{ success: boolean }> {
     try {
         const authService = getAuthService();
         await authService.signOut();
+
+        // Clear transcription service session
+        updateTranscriptionSession(null);
+
         return { success: true };
     } catch (error) {
         console.error('[Auth] Sign out error:', error);

@@ -21,7 +21,7 @@ import {
     RecordingResult,
     DEFAULT_AUDIO_CONFIG,
     MEETING_EVENTS,
-} from './types';
+} from './types.js';
 
 /**
  * Directory for temporary meeting recordings

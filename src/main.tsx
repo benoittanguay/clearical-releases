@@ -11,6 +11,7 @@ import { CrawlerProgressProvider } from './context/CrawlerProgressContext.tsx'
 import { ScreenshotAnalysisProvider } from './context/ScreenshotAnalysisContext.tsx'
 import { AuthProvider } from './context/AuthContext.tsx'
 import { AnimationProvider } from './context/AnimationContext.tsx'
+import { AudioRecordingProvider } from './context/AudioRecordingContext.tsx'
 import { ErrorBoundary } from './components/ErrorBoundary.tsx'
 import { AuthGate } from './components/AuthGate.tsx'
 import { SplitAnimationOverlay } from './components/SplitAnimationOverlay.tsx'
@@ -32,10 +33,12 @@ createRoot(document.getElementById('root')!).render(
                   <JiraCacheProvider>
                     <CrawlerProgressProvider>
                       <ScreenshotAnalysisProvider>
-                        <AnimationProvider>
-                          <App />
-                          <SplitAnimationOverlay />
-                        </AnimationProvider>
+                        <AudioRecordingProvider>
+                          <AnimationProvider>
+                            <App />
+                            <SplitAnimationOverlay />
+                          </AnimationProvider>
+                        </AudioRecordingProvider>
                       </ScreenshotAnalysisProvider>
                     </CrawlerProgressProvider>
                   </JiraCacheProvider>

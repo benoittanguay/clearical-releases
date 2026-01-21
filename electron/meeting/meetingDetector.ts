@@ -11,7 +11,7 @@ import {
     MeetingStatus,
     MeetingEvent,
     MEETING_EVENTS,
-} from './types';
+} from './types.js';
 
 /**
  * Bundle IDs for native video meeting applications

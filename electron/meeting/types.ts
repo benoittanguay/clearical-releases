@@ -187,6 +187,12 @@ export const MEETING_IPC_CHANNELS = {
     SET_ACTIVE_ENTRY: 'meeting:set-active-entry',
     GET_MEDIA_STATUS: 'meeting:get-media-status',
     SET_AUTO_RECORD_ENABLED: 'meeting:set-auto-record-enabled',
+    // Audio capture and transcription
+    SAVE_AUDIO_AND_TRANSCRIBE: 'meeting:save-audio-and-transcribe',
+    GET_TRANSCRIPTION_USAGE: 'meeting:get-transcription-usage',
+    // Events from main to renderer (push notifications)
+    EVENT_RECORDING_SHOULD_START: 'meeting:event-recording-should-start',
+    EVENT_RECORDING_SHOULD_STOP: 'meeting:event-recording-should-stop',
 } as const;
 
 /**

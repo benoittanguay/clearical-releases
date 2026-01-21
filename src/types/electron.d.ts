@@ -395,6 +395,50 @@ export interface ElectronAPI {
                 endTime: number;
             }) => Promise<{ success: boolean; eventId: string | null; error?: string }>;
         };
+        // Meeting/Recording operations (mic/camera detection)
+        meeting: {
+            setActiveEntry: (entryId: string | null) => Promise<{ success: boolean; error?: string }>;
+            getMediaStatus: () => Promise<{ success: boolean; micInUse: boolean; cameraInUse: boolean; error?: string }>;
+            getRecordingStatus: () => Promise<{ success: boolean; isRecording: boolean; entryId: string | null; platform: string | null; error?: string }>;
+            setAutoRecordEnabled: (enabled: boolean) => Promise<{ success: boolean; error?: string }>;
+            // Audio capture and transcription
+            saveAudioAndTranscribe: (entryId: string, audioBase64: string, mimeType?: string) => Promise<{
+                success: boolean;
+                transcription?: {
+                    transcriptionId: string;
+                    fullText: string;
+                    segments: Array<{
+                        id: number;
+                        start: number;
+                        end: number;
+                        text: string;
+                    }>;
+                    language: string;
+                    duration: number;
+                    wordCount: number;
+                };
+                usage?: {
+                    durationSeconds: number;
+                    monthlyUsedSeconds: number;
+                    monthlyLimitSeconds: number;
+                    remainingSeconds: number;
+                };
+                error?: string;
+            }>;
+            getTranscriptionUsage: () => Promise<{
+                success: boolean;
+                usage?: {
+                    monthlyUsedSeconds: number;
+                    monthlyLimitSeconds: number;
+                    remainingSeconds: number;
+                    isPremium: boolean;
+                };
+                error?: string;
+            }>;
+            // Event subscriptions for automatic recording
+            onRecordingShouldStart: (callback: (data: { entryId: string; timestamp: number }) => void) => (() => void) | undefined;
+            onRecordingShouldStop: (callback: (data: { entryId: string; duration: number }) => void) => (() => void) | undefined;
+        };
     };
     // Analytics (top-level, not inside ipcRenderer)
     analytics: {

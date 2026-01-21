@@ -246,6 +246,22 @@ contextBridge.exposeInMainWorld('electron', {
                 ipcRenderer.invoke('meeting:get-recording-status'),
             setAutoRecordEnabled: (enabled: boolean) =>
                 ipcRenderer.invoke('meeting:set-auto-record-enabled', enabled),
+            // Audio capture and transcription
+            saveAudioAndTranscribe: (entryId: string, audioBase64: string, mimeType?: string) =>
+                ipcRenderer.invoke('meeting:save-audio-and-transcribe', entryId, audioBase64, mimeType),
+            getTranscriptionUsage: () =>
+                ipcRenderer.invoke('meeting:get-transcription-usage'),
+            // Event subscriptions for automatic recording
+            onRecordingShouldStart: (callback: (data: { entryId: string; timestamp: number }) => void) => {
+                const subscription = (_event: any, data: { entryId: string; timestamp: number }) => callback(data);
+                ipcRenderer.on('meeting:event-recording-should-start', subscription);
+                return () => ipcRenderer.removeListener('meeting:event-recording-should-start', subscription);
+            },
+            onRecordingShouldStop: (callback: (data: { entryId: string; duration: number }) => void) => {
+                const subscription = (_event: any, data: { entryId: string; duration: number }) => callback(data);
+                ipcRenderer.on('meeting:event-recording-should-stop', subscription);
+                return () => ipcRenderer.removeListener('meeting:event-recording-should-stop', subscription);
+            },
         },
     },
     // Analytics (top-level, not inside ipcRenderer)

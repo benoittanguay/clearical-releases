@@ -6,12 +6,16 @@
  * 1. Auto-recording is enabled
  * 2. There's an active time entry
  * 3. Mic or camera is in use
+ *
+ * The actual audio capture happens in the renderer process using MediaRecorder.
+ * This manager coordinates by sending events to the renderer.
  */
 
 import { EventEmitter } from 'events';
-import { mediaMonitor } from '../native';
-import { AudioRecorder, getAudioRecorder } from './audioRecorder';
-import { MEETING_EVENTS, MeetingPlatform } from './types';
+import { BrowserWindow } from 'electron';
+import { mediaMonitor } from '../native/index.js';
+import { AudioRecorder, getAudioRecorder } from './audioRecorder.js';
+import { MEETING_EVENTS, MEETING_IPC_CHANNELS, MeetingPlatform } from './types.js';
 
 export class RecordingManager extends EventEmitter {
     private static instance: RecordingManager | null = null;
@@ -19,6 +23,8 @@ export class RecordingManager extends EventEmitter {
     private audioRecorder: AudioRecorder;
     private activeEntryId: string | null = null;
     private isEnabled: boolean = true;
+    private isRendererRecording: boolean = false;
+    private recordingStartTime: number | null = null;
 
     private constructor() {
         super();
@@ -121,8 +127,65 @@ export class RecordingManager extends EventEmitter {
         return {
             micInUse: mediaMonitor.isMicrophoneInUse(),
             cameraInUse: mediaMonitor.isCameraInUse(),
-            isRecording: this.audioRecorder.isRecording()
+            isRecording: this.isRendererRecording
         };
+    }
+
+    /**
+     * Send event to all renderer windows
+     */
+    private sendToRenderer(channel: string, ...args: any[]): void {
+        const windows = BrowserWindow.getAllWindows();
+        for (const win of windows) {
+            if (!win.isDestroyed()) {
+                win.webContents.send(channel, ...args);
+            }
+        }
+    }
+
+    /**
+     * Notify renderer that recording should start
+     */
+    private notifyRendererToStartRecording(): void {
+        if (!this.activeEntryId) return;
+
+        this.isRendererRecording = true;
+        this.recordingStartTime = Date.now();
+
+        console.log('[RecordingManager] Notifying renderer to start recording');
+        this.sendToRenderer(MEETING_IPC_CHANNELS.EVENT_RECORDING_SHOULD_START, {
+            entryId: this.activeEntryId,
+            timestamp: this.recordingStartTime,
+        });
+
+        this.emit(MEETING_EVENTS.RECORDING_STARTED, {
+            entryId: this.activeEntryId,
+            timestamp: this.recordingStartTime,
+        });
+    }
+
+    /**
+     * Notify renderer that recording should stop
+     */
+    private notifyRendererToStopRecording(): void {
+        if (!this.isRendererRecording) return;
+
+        const duration = this.recordingStartTime ? Date.now() - this.recordingStartTime : 0;
+        const entryId = this.activeEntryId;
+
+        console.log('[RecordingManager] Notifying renderer to stop recording, duration:', duration);
+        this.sendToRenderer(MEETING_IPC_CHANNELS.EVENT_RECORDING_SHOULD_STOP, {
+            entryId,
+            duration,
+        });
+
+        this.isRendererRecording = false;
+        this.recordingStartTime = null;
+
+        this.emit(MEETING_EVENTS.RECORDING_STOPPED, {
+            entryId,
+            duration,
+        });
     }
 
     private onMediaStarted(device: 'microphone' | 'camera'): void {
@@ -144,12 +207,12 @@ export class RecordingManager extends EventEmitter {
             return;
         }
 
-        if (this.audioRecorder.isRecording()) {
+        if (this.isRendererRecording) {
             console.log('[RecordingManager] Already recording, continuing');
             return;
         }
 
-        this.startRecording();
+        this.notifyRendererToStartRecording();
     }
 
     private onMediaStopped(device: 'microphone' | 'camera'): void {
@@ -159,9 +222,9 @@ export class RecordingManager extends EventEmitter {
 
         // Only stop recording if BOTH mic and camera are inactive
         if (!mediaMonitor.isMicrophoneInUse() && !mediaMonitor.isCameraInUse()) {
-            if (this.audioRecorder.isRecording()) {
+            if (this.isRendererRecording) {
                 console.log('[RecordingManager] All media stopped, stopping recording');
-                this.audioRecorder.stopRecording();
+                this.notifyRendererToStopRecording();
             }
         } else {
             console.log('[RecordingManager] Other media still active, continuing recording');
@@ -174,14 +237,8 @@ export class RecordingManager extends EventEmitter {
             return;
         }
 
-        const platform: MeetingPlatform = 'System Audio';
-        const result = await this.audioRecorder.startRecording(this.activeEntryId, platform);
-
-        if (result.success) {
-            console.log('[RecordingManager] Recording started:', result.recordingId);
-        } else {
-            console.error('[RecordingManager] Failed to start recording:', result.error);
-        }
+        // Now we just notify the renderer to start capturing
+        this.notifyRendererToStartRecording();
     }
 }
 

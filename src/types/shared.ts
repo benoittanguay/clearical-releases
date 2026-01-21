@@ -81,6 +81,36 @@ export interface WindowActivity {
     screenshotAnalysis?: { [path: string]: ScreenshotAnalysisResult };
 }
 
+/**
+ * Transcription segment from Whisper API
+ */
+export interface TranscriptionSegment {
+    id: number;
+    start: number;
+    end: number;
+    text: string;
+}
+
+/**
+ * Meeting/audio transcription data stored with a time entry
+ */
+export interface EntryTranscription {
+    /** Unique identifier for this transcription */
+    transcriptionId: string;
+    /** Full transcription text */
+    fullText: string;
+    /** Timestamped segments */
+    segments: TranscriptionSegment[];
+    /** Detected language (ISO 639-1 code) */
+    language: string;
+    /** Audio duration in seconds */
+    audioDuration: number;
+    /** Word count */
+    wordCount: number;
+    /** When the transcription was created */
+    createdAt: number;
+}
+
 export interface TimeEntry {
     id: string;
     startTime: number;
@@ -102,4 +132,6 @@ export interface TimeEntry {
         id: string;
     };
     tempoAccountAutoSelected?: boolean;
+    /** Audio transcription from meeting/call recording */
+    transcription?: EntryTranscription;
 }

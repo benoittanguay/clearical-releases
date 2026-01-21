@@ -1997,6 +1997,70 @@ ipcMain.handle(MEETING_IPC_CHANNELS.SET_AUTO_RECORD_ENABLED, (_event, enabled: b
     return { success: true };
 });
 
+// Audio transcription IPC handlers
+ipcMain.handle(MEETING_IPC_CHANNELS.SAVE_AUDIO_AND_TRANSCRIBE, async (_event, entryId: string, audioBase64: string, mimeType?: string) => {
+    console.log('[Main] SAVE_AUDIO_AND_TRANSCRIBE called for entry:', entryId);
+    try {
+        const { getTranscriptionService } = await import('./meeting/transcriptionService.js');
+        const transcriptionService = getTranscriptionService();
+
+        const result = await transcriptionService.transcribe(audioBase64, entryId, mimeType || 'audio/webm');
+
+        if (result.success) {
+            return {
+                success: true,
+                transcription: {
+                    transcriptionId: result.transcriptionId,
+                    fullText: result.fullText,
+                    segments: result.segments,
+                    language: result.language,
+                    duration: result.duration,
+                    wordCount: result.wordCount,
+                },
+            };
+        } else {
+            return {
+                success: false,
+                error: result.error || 'Transcription failed',
+            };
+        }
+    } catch (error) {
+        console.error('[Main] SAVE_AUDIO_AND_TRANSCRIBE error:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error',
+        };
+    }
+});
+
+ipcMain.handle(MEETING_IPC_CHANNELS.GET_TRANSCRIPTION_USAGE, async () => {
+    console.log('[Main] GET_TRANSCRIPTION_USAGE called');
+    try {
+        const { getTranscriptionService } = await import('./meeting/transcriptionService.js');
+        const transcriptionService = getTranscriptionService();
+
+        const usage = await transcriptionService.getUsage();
+
+        if (usage) {
+            return {
+                success: true,
+                usage,
+            };
+        } else {
+            return {
+                success: false,
+                error: 'Failed to get usage information',
+            };
+        }
+    } catch (error) {
+        console.error('[Main] GET_TRANSCRIPTION_USAGE error:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error',
+        };
+    }
+});
+
 // AI Assignment Suggestion Handler
 ipcMain.handle('suggest-assignment', async (event, request: {
     context: ActivityContext;
