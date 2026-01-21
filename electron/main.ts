@@ -37,6 +37,9 @@ import {
     createTimeContextSignal
 } from './ai/aiService.js';
 import { getCalendarService, initializeCalendarService } from './calendar/calendarService.js';
+import { getRecordingManager } from './meeting/recordingManager.js';
+import { MEETING_IPC_CHANNELS } from './meeting/types.js';
+import { getAudioRecorder } from './meeting/audioRecorder.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -1968,6 +1971,32 @@ ipcMain.handle('secure-is-available', async () => {
     }
 });
 
+// Recording Manager IPC handlers
+ipcMain.handle(MEETING_IPC_CHANNELS.SET_ACTIVE_ENTRY, (_event, entryId: string | null) => {
+    console.log('[Main] SET_ACTIVE_ENTRY called:', entryId);
+    const recordingManager = getRecordingManager();
+    recordingManager.setActiveEntry(entryId);
+    return { success: true };
+});
+
+ipcMain.handle(MEETING_IPC_CHANNELS.GET_MEDIA_STATUS, () => {
+    console.log('[Main] GET_MEDIA_STATUS called');
+    const recordingManager = getRecordingManager();
+    return recordingManager.getMediaStatus();
+});
+
+ipcMain.handle(MEETING_IPC_CHANNELS.GET_RECORDING_STATUS, () => {
+    console.log('[Main] GET_RECORDING_STATUS called');
+    return getAudioRecorder().getStatus();
+});
+
+ipcMain.handle(MEETING_IPC_CHANNELS.SET_AUTO_RECORD_ENABLED, (_event, enabled: boolean) => {
+    console.log('[Main] SET_AUTO_RECORD_ENABLED called:', enabled);
+    const recordingManager = getRecordingManager();
+    recordingManager.setEnabled(enabled);
+    return { success: true };
+});
+
 // AI Assignment Suggestion Handler
 ipcMain.handle('suggest-assignment', async (event, request: {
     context: ActivityContext;
@@ -3458,6 +3487,15 @@ app.whenReady().then(() => {
     // AI service uses cloud-based Gemini API via Supabase Edge Function
     // No local server needed - requests are made on-demand
     console.log('[Main] AI service configured (Gemini cloud via Supabase)');
+
+    // Initialize recording manager for mic/camera detection
+    try {
+        const recordingManager = getRecordingManager();
+        recordingManager.start();
+        console.log('[Main] Recording manager initialized (mic/camera detection)');
+    } catch (error) {
+        console.error('[Main] Failed to initialize recording manager:', error);
+    }
 
     // Create tray first to ensure it's fully initialized before window positioning
     createTray();
