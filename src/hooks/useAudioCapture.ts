@@ -57,7 +57,7 @@ export function useAudioCapture(): UseAudioCaptureResult {
     const streamRef = useRef<MediaStream | null>(null);
     const startTimeRef = useRef<number | null>(null);
     const pausedDurationRef = useRef<number>(0);
-    const durationIntervalRef = useRef<NodeJS.Timeout | null>(null);
+    const durationIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
     // Cleanup on unmount
     useEffect(() => {

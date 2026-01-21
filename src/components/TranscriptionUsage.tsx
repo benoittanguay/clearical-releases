@@ -5,7 +5,7 @@
  * Shows a progress bar and remaining time for free tier users.
  */
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useSubscription } from '../context/SubscriptionContext';
 
 interface UsageData {
@@ -33,8 +33,8 @@ interface TranscriptionUsageProps {
     onUpgrade?: () => void;
 }
 
-export function TranscriptionUsage({ compact = false, onUpgrade }: TranscriptionUsageProps): JSX.Element {
-    const { hasFeature, upgrade } = useSubscription();
+export function TranscriptionUsage({ compact = false, onUpgrade }: TranscriptionUsageProps): React.ReactElement | null {
+    useSubscription(); // Context hook for subscription state
     const [usage, setUsage] = useState<UsageData | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -211,9 +211,9 @@ export function TranscriptionUsage({ compact = false, onUpgrade }: Transcription
                     <span className="text-sm" style={{ color: 'rgb(239, 68, 68)' }}>
                         Monthly limit reached
                     </span>
-                    {(onUpgrade || upgrade) && (
+                    {onUpgrade && (
                         <button
-                            onClick={onUpgrade || upgrade}
+                            onClick={onUpgrade}
                             className="text-sm font-medium px-3 py-1 rounded-lg transition-colors"
                             style={{
                                 backgroundColor: 'var(--color-accent)',
@@ -234,9 +234,9 @@ export function TranscriptionUsage({ compact = false, onUpgrade }: Transcription
                     <span className="text-sm" style={{ color: 'rgb(161, 128, 22)' }}>
                         {formatTime(usage.remainingSeconds)} remaining
                     </span>
-                    {(onUpgrade || upgrade) && (
+                    {onUpgrade && (
                         <button
-                            onClick={onUpgrade || upgrade}
+                            onClick={onUpgrade}
                             className="text-xs font-medium"
                             style={{ color: 'var(--color-accent)' }}
                         >

@@ -5,18 +5,18 @@
  * Shows waveform visualization, duration, and stop button.
  */
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 
 interface AudioLevelData {
     levels: number[];
     timestamp: number;
 }
 
-export function RecordingWidget(): JSX.Element {
+export function RecordingWidget(): React.ReactElement {
     const [duration, setDuration] = useState(0);
     const [audioLevels, setAudioLevels] = useState<number[]>(Array(24).fill(0.1));
     const startTimeRef = useRef<number>(Date.now());
-    const animationFrameRef = useRef<number>();
+    const animationFrameRef = useRef<number | undefined>(undefined);
     const lastRealDataRef = useRef<number>(0);
     const hasRealDataRef = useRef<boolean>(false);
 
@@ -67,7 +67,7 @@ export function RecordingWidget(): JSX.Element {
                     lastUpdate = timestamp;
                     setAudioLevels(prev => {
                         // Add slight random variation to make it look alive
-                        return prev.map((level, i) => {
+                        return prev.map((_level, i) => {
                             const baseLevel = 0.15 + Math.sin(timestamp / 300 + i * 0.5) * 0.1;
                             const randomVariation = Math.random() * 0.15;
                             return Math.max(0.1, Math.min(1, baseLevel + randomVariation));
@@ -90,11 +90,6 @@ export function RecordingWidget(): JSX.Element {
     // Handle stop button click
     const handleStop = useCallback(() => {
         window.electron?.ipcRenderer?.send?.('widget:stop-recording', null);
-    }, []);
-
-    // Handle minimize button click
-    const handleMinimize = useCallback(() => {
-        window.electron?.ipcRenderer?.send?.('widget:minimize', null);
     }, []);
 
     return (

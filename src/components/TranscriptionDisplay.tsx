@@ -4,7 +4,7 @@
  * Displays meeting/call transcription text with expandable segments.
  */
 
-import { useState } from 'react';
+import React, { useState } from 'react';
 import type { EntryTranscription } from '../types/shared';
 
 interface TranscriptionDisplayProps {
@@ -37,7 +37,7 @@ function formatDuration(seconds: number): string {
     return `${hours}h ${remainingMins}m`;
 }
 
-export function TranscriptionDisplay({ transcription }: TranscriptionDisplayProps): JSX.Element {
+export function TranscriptionDisplay({ transcription }: TranscriptionDisplayProps): React.ReactElement {
     const [isExpanded, setIsExpanded] = useState(false);
     const [showSegments, setShowSegments] = useState(false);
 

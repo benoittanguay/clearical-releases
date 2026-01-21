@@ -16,7 +16,7 @@
 
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
 import { useStorage } from './StorageContext';
-import { EntryTranscription } from '../types/shared';
+import type { EntryTranscription } from '../types/shared';
 
 interface AudioRecordingState {
     isRecording: boolean;
@@ -52,7 +52,7 @@ interface AudioRecordingProviderProps {
     children: React.ReactNode;
 }
 
-export function AudioRecordingProvider({ children }: AudioRecordingProviderProps): JSX.Element {
+export function AudioRecordingProvider({ children }: AudioRecordingProviderProps): React.ReactElement {
     const { updateEntry } = useStorage();
 
     const [state, setState] = useState<AudioRecordingState>({
