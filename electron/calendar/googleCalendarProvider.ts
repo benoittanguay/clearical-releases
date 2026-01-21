@@ -144,7 +144,7 @@ export class GoogleCalendarProvider implements CalendarProvider {
     url.searchParams.set('response_type', 'code');
     url.searchParams.set('scope', SCOPES.join(' '));
     url.searchParams.set('access_type', 'offline');
-    url.searchParams.set('prompt', 'consent');
+    url.searchParams.set('prompt', 'select_account consent');
     return url.toString();
   }
 
