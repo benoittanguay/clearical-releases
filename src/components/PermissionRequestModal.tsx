@@ -143,7 +143,7 @@ export function PermissionRequestModal({ isOpen, onClose, onPermissionsGranted }
                 {/* Content - Scrollable */}
                 <div className="p-6 overflow-y-auto flex-1">
                     {/* Why Box */}
-                    <div className="bg-[var(--color-bg-tertiary)] border border-[var(--color-border-primary)] rounded-2xl p-4 mb-6">
+                    <div className="mb-6">
                         <div className="flex gap-3">
                             <div className="flex-shrink-0 mt-0.5">
                                 <svg className="w-5 h-5 text-[var(--color-accent)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -172,11 +172,11 @@ export function PermissionRequestModal({ isOpen, onClose, onPermissionsGranted }
                         }`}>
                             <div className="flex items-start gap-4">
                                 <div className="flex-shrink-0">
-                                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center shadow-md transition-all ${
+                                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all ${
                                         permissions.accessibility === true
-                                            ? 'bg-[var(--color-success-muted)] shadow-[var(--color-success)]/20'
+                                            ? 'bg-[var(--color-success-muted)]'
                                             : permissions.accessibility === false
-                                                ? 'bg-[var(--color-error-muted)] shadow-[var(--color-error)]/20'
+                                                ? 'bg-[var(--color-error-muted)]'
                                                 : 'bg-[var(--color-bg-tertiary)]'
                                     }`}>
                                         {permissions.accessibility === true ? (
@@ -239,11 +239,11 @@ export function PermissionRequestModal({ isOpen, onClose, onPermissionsGranted }
                         }`}>
                             <div className="flex items-start gap-4">
                                 <div className="flex-shrink-0">
-                                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center shadow-md transition-all ${
+                                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all ${
                                         permissions.screenRecording === true
-                                            ? 'bg-[var(--color-success-muted)] shadow-[var(--color-success)]/20'
+                                            ? 'bg-[var(--color-success-muted)]'
                                             : permissions.screenRecording === false
-                                                ? 'bg-[var(--color-error-muted)] shadow-[var(--color-error)]/20'
+                                                ? 'bg-[var(--color-error-muted)]'
                                                 : 'bg-[var(--color-bg-tertiary)]'
                                     }`}>
                                         {permissions.screenRecording === true ? (
@@ -325,21 +325,19 @@ export function PermissionRequestModal({ isOpen, onClose, onPermissionsGranted }
                         </div>
                     )}
 
-                    {/* Success message */}
-                    {permissions.accessibility && (
-                        <div className={`border rounded-2xl p-4 mb-6 ${allGranted ? 'bg-[var(--color-success-muted)] border-[var(--color-success)]/30 animate-pulse' : 'bg-[var(--color-info-muted)] border-[var(--color-info)]/30'}`}>
+                    {/* Success message - only show when all permissions granted */}
+                    {allGranted && (
+                        <div className="border rounded-2xl p-4 mb-6 bg-[var(--color-success-muted)] border-[var(--color-success)]/30 animate-pulse">
                             <div className="flex items-center gap-3">
-                                <svg className={`w-6 h-6 ${allGranted ? 'text-[var(--color-success)]' : 'text-[var(--color-info)]'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <svg className="w-6 h-6 text-[var(--color-success)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                                 </svg>
                                 <div>
                                     <h4 className="text-sm font-semibold text-[var(--color-text-primary)] font-display">
-                                        {allGranted ? 'All permissions granted!' : 'Ready to start'}
+                                        All permissions granted!
                                     </h4>
                                     <p className="text-sm text-[var(--color-text-secondary)]">
-                                        {allGranted
-                                            ? 'Starting timer with full features...'
-                                            : 'Click Continue to start recording. AI summaries will be limited without screen recording.'}
+                                        Starting timer with full features...
                                     </p>
                                 </div>
                             </div>
