@@ -10,7 +10,7 @@ import { app, shell } from 'electron';
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
-import { createOAuthCallbackServer, OAuthProvider } from './oauthServer.js';
+import { startOAuthCallbackServer, OAuthProvider } from './oauthServer.js';
 import { storeCredential } from '../credentialStorage.js';
 
 export interface AuthUser {
@@ -297,11 +297,11 @@ export class SupabaseAuthService {
             // Map our provider names to Supabase provider names
             const supabaseProvider = provider === 'azure' ? 'azure' : provider;
 
-            // Provider-specific scopes - include calendar access for supported providers
-            // This allows us to get calendar consent during SSO instead of a separate prompt
+            // Provider-specific scopes
+            // Note: Calendar scopes removed for now - will be added back when calendar integration is ready
             const scopesByProvider: Record<string, string> = {
-                azure: 'openid profile email offline_access https://graph.microsoft.com/Calendars.Read https://graph.microsoft.com/Calendars.ReadWrite',
-                google: 'openid profile email https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/calendar.events',
+                azure: 'openid profile email offline_access',
+                google: 'openid profile email',
                 apple: 'name email',
             };
 
@@ -320,14 +320,14 @@ export class SupabaseAuthService {
                 return { success: false, error: error?.message || 'Failed to start sign in' };
             }
 
-            // Start callback server before opening browser
-            const callbackPromise = createOAuthCallbackServer(60000);
+            // Start callback server and wait for it to be ready
+            const oauthServer = await startOAuthCallbackServer(60000);
 
-            // Open system browser for authentication
+            // Open system browser for authentication (server is now guaranteed to be listening)
             await shell.openExternal(data.url);
 
             // Wait for callback
-            const { code } = await callbackPromise;
+            const { code } = await oauthServer.waitForCallback();
 
             // Exchange code for session
             const { data: sessionData, error: sessionError } =
