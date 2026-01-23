@@ -5,16 +5,10 @@ import http from 'http';
 import { CalendarProvider, CalendarEvent, FocusTimeEventInput, CalendarTokens } from './types.js';
 import { getCredential, storeCredential, deleteCredential } from '../credentialStorage.js';
 
-// Google OAuth credentials for desktop apps
-// Note: For desktop/native OAuth apps, Google's security model accepts that these
-// credentials cannot be kept confidential. Security relies on redirect URI validation
-// to localhost, not on secret confidentiality. See: https://developers.google.com/identity/protocols/oauth2/native-app
-const GOOGLE_CLIENT_ID = '791311907098-44i72hpg64b965845pbg4hhmrtb5vp11.apps.googleusercontent.com';
-const GOOGLE_CLIENT_SECRET = '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';
-
-// Allow env override for development/testing
-const getClientId = () => process.env.GOOGLE_CALENDAR_CLIENT_ID || GOOGLE_CLIENT_ID;
-const getClientSecret = () => process.env.GOOGLE_CALENDAR_CLIENT_SECRET || GOOGLE_CLIENT_SECRET;
+// Google OAuth credentials - must be set via environment variables
+// These will be configured when the calendar feature is fully implemented
+const getClientId = () => process.env.GOOGLE_CALENDAR_CLIENT_ID || '';
+const getClientSecret = () => process.env.GOOGLE_CALENDAR_CLIENT_SECRET || '';
 const REDIRECT_URI = 'http://localhost:3847/oauth/callback';
 const SCOPES = [
   'https://www.googleapis.com/auth/calendar.readonly',
