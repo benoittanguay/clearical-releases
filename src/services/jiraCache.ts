@@ -516,8 +516,9 @@ export class JiraCache {
             selectedProjects: this.selectedProjects,
         });
 
-        // Restore last sync timestamp if provided
-        if (config.lastSyncTimestamp) {
+        // Restore last sync timestamp only if explicitly provided (not undefined)
+        // This prevents overwriting the timestamp on subsequent configurations
+        if (config.lastSyncTimestamp !== undefined) {
             this.syncScheduler.setLastSyncTimestamp(config.lastSyncTimestamp);
         }
 

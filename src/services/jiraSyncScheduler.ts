@@ -56,7 +56,7 @@ export class JiraSyncScheduler {
 
     /**
      * Start the sync scheduler
-     * - Schedules initial sync after startup delay
+     * - Schedules initial sync after startup delay (only if no recent sync)
      * - Sets up periodic sync interval
      */
     public start(): void {
@@ -70,17 +70,26 @@ export class JiraSyncScheduler {
         // Clear any existing intervals/timeouts
         this.stop();
 
-        // Schedule startup sync after delay
-        const startupDelay = this.config.startupDelayMs ?? 10000; // Default 10 seconds
-        this.startupSyncTimeout = window.setTimeout(() => {
-            console.log('[JiraSyncScheduler] Triggering startup sync');
-            this.syncNow().catch(error => {
-                console.error('[JiraSyncScheduler] Startup sync failed:', error);
-            });
-        }, startupDelay);
+        // Check if we need a startup sync based on last sync time
+        const intervalMs = this.config.intervalMinutes * 60 * 1000;
+        const timeSinceLastSync = Date.now() - this.lastSyncTimestamp;
+        const needsStartupSync = this.lastSyncTimestamp === 0 || timeSinceLastSync >= intervalMs;
+
+        if (needsStartupSync) {
+            // Schedule startup sync after delay
+            const startupDelay = this.config.startupDelayMs ?? 10000; // Default 10 seconds
+            console.log(`[JiraSyncScheduler] Scheduling startup sync in ${startupDelay}ms (last sync was ${Math.round(timeSinceLastSync / 1000)}s ago)`);
+            this.startupSyncTimeout = window.setTimeout(() => {
+                console.log('[JiraSyncScheduler] Triggering startup sync');
+                this.syncNow().catch(error => {
+                    console.error('[JiraSyncScheduler] Startup sync failed:', error);
+                });
+            }, startupDelay);
+        } else {
+            console.log(`[JiraSyncScheduler] Skipping startup sync - last sync was ${Math.round(timeSinceLastSync / 1000)}s ago (interval is ${this.config.intervalMinutes}min)`);
+        }
 
         // Set up periodic sync
-        const intervalMs = this.config.intervalMinutes * 60 * 1000;
         this.syncInterval = window.setInterval(() => {
             if (!this.isSyncing) {
                 console.log('[JiraSyncScheduler] Triggering periodic sync');

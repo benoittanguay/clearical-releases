@@ -164,17 +164,13 @@ export function JiraIssuesSection({ onIssueClick, onRefreshReady }: JiraIssuesSe
         onRefreshReady?.(handleRefresh);
     }, [activeTab, onRefreshReady]);
 
-    // Initialize first tab and setup background sync
+    // Initialize first tab
+    // Note: Background sync is handled by JiraSyncScheduler via JiraCacheContext
+    // Do NOT call syncAllData here as it bypasses the scheduler's interval settings
     useEffect(() => {
         const tabs = getAvailableTabs();
         if (tabs.length > 0) {
             setActiveTab(tabs[0].key);
-        }
-
-        // Setup background sync for selected projects
-        const { jira } = settings;
-        if (jira?.enabled && jira?.selectedProjects?.length) {
-            jiraCache.syncAllData(jira.selectedProjects);
         }
     }, []); // Run only once on mount
 

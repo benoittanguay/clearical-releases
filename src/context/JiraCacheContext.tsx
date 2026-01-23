@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { JiraCache } from '../services/jiraCache';
 import { useSettings } from './SettingsContext';
@@ -15,31 +15,53 @@ export function JiraCacheProvider({ children }: { children: ReactNode }) {
     const { hasFeature } = useSubscription();
     const [jiraCache] = useState(() => new JiraCache());
 
-    // Initialize JiraCache service when settings change
-    useEffect(() => {
-        const { jira } = settings;
+    // Track whether initial configuration has been done
+    const initialConfigDoneRef = useRef(false);
 
+    // Extract specific jira settings to avoid triggering on lastSyncTimestamp changes
+    const jira = settings.jira;
+    const jiraEnabled = jira?.enabled;
+    const jiraApiToken = jira?.apiToken;
+    const jiraBaseUrl = jira?.baseUrl;
+    const jiraEmail = jira?.email;
+    const jiraSelectedProjects = jira?.selectedProjects;
+    // Serialize selectedProjects for stable dependency comparison
+    const jiraSelectedProjectsKey = JSON.stringify(jiraSelectedProjects || []);
+    const jiraAutoSync = jira?.autoSync;
+    const jiraSyncInterval = jira?.syncInterval;
+    // Only use lastSyncTimestamp for initial configuration
+    const jiraLastSyncTimestamp = jira?.lastSyncTimestamp;
+
+    // Initialize JiraCache service when meaningful settings change
+    // Note: lastSyncTimestamp is NOT in the dependency array to avoid
+    // restarting the scheduler after every sync completes
+    useEffect(() => {
         // Check if user has access to Jira feature
         const hasJiraAccess = hasFeature('jira');
 
-        if (hasJiraAccess && jira?.enabled && jira?.apiToken && jira?.baseUrl && jira?.email) {
-            jiraCache.initializeService(jira.baseUrl, jira.email, jira.apiToken);
-            if (jira.selectedProjects?.length) {
-                jiraCache.setSelectedProjects(jira.selectedProjects);
+        if (hasJiraAccess && jiraEnabled && jiraApiToken && jiraBaseUrl && jiraEmail) {
+            jiraCache.initializeService(jiraBaseUrl, jiraEmail, jiraApiToken);
+            if (jiraSelectedProjects?.length) {
+                jiraCache.setSelectedProjects(jiraSelectedProjects);
             }
 
             // Configure sync scheduler
             const syncConfig = {
-                enabled: jira.autoSync ?? true,
-                intervalMinutes: jira.syncInterval || 30,
-                lastSyncTimestamp: jira.lastSyncTimestamp || 0,
+                enabled: jiraAutoSync ?? true,
+                intervalMinutes: jiraSyncInterval || 30,
+                // Only pass lastSyncTimestamp on initial configuration
+                // to prevent scheduler from thinking it needs to sync immediately
+                // after settings are restored on app startup
+                lastSyncTimestamp: initialConfigDoneRef.current ? undefined : (jiraLastSyncTimestamp || 0),
             };
             console.log('[JiraCacheContext] Configuring sync scheduler:', {
-                rawSyncInterval: jira.syncInterval,
+                rawSyncInterval: jiraSyncInterval,
                 configuredInterval: syncConfig.intervalMinutes,
-                enabled: syncConfig.enabled
+                enabled: syncConfig.enabled,
+                isInitialConfig: !initialConfigDoneRef.current
             });
             jiraCache.configureSyncScheduler(syncConfig);
+            initialConfigDoneRef.current = true;
         } else {
             // Stop sync scheduler if Jira is disabled or feature is not available
             jiraCache.configureSyncScheduler({
@@ -47,7 +69,8 @@ export function JiraCacheProvider({ children }: { children: ReactNode }) {
                 intervalMinutes: 30,
             });
         }
-    }, [settings.jira, jiraCache, hasFeature]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [jiraEnabled, jiraApiToken, jiraBaseUrl, jiraEmail, jiraSelectedProjectsKey, jiraAutoSync, jiraSyncInterval, jiraCache, hasFeature]);
 
     // Cleanup on unmount
     useEffect(() => {
