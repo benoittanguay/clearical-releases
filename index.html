@@ -1,17 +1,2064 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Clearical</title>
-    <!-- Google Fonts: Inter (body), DM Sans (display), JetBrains Mono (code) -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Clearical - AI-Powered Time Tracking</title>
+  <meta name="description" content="AI-powered automatic time tracking for knowledge workers. Captures your work, generates descriptions, logs to Jira & Tempo.">
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <style>
+    /* Reset & Base */
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    :root {
+      --bg-dark: #0D0C0C;
+      --bg-dark-secondary: #1A1A1C;
+      --bg-dark-tertiary: #242629;
+      --bg-light: #F2F0ED;
+      --bg-light-secondary: #EFEFF2;
+      --accent: #FF4800;
+      --accent-hover: #FF5A1A;
+      --accent-gradient-end: #FF6B35;
+      --text-primary: #F2F0ED;
+      --text-secondary: #8C877D;
+      --text-dark: #0D0C0C;
+      --border-dark: #363636;
+      --border-light: #E4E0DC;
+      --success: #4ADE80;
+      --warning: #FEBC2E;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      font-family: 'JetBrains Mono', monospace;
+      background-color: var(--bg-dark);
+      color: var(--text-primary);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    .font-syne {
+      font-family: 'Syne', sans-serif;
+    }
+
+    /* Animations */
+    @keyframes float {
+      0%, 100% { transform: translateY(0px); }
+      50% { transform: translateY(-10px); }
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    @keyframes gradient-shift {
+      0% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+
+    @keyframes fade-up {
+      from { opacity: 0; transform: translateY(30px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes bounce {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-5px); }
+    }
+
+    .animate-fade-up {
+      opacity: 0;
+      animation: fade-up 0.8s ease-out forwards;
+    }
+
+    .delay-100 { animation-delay: 0.1s; }
+    .delay-200 { animation-delay: 0.2s; }
+    .delay-300 { animation-delay: 0.3s; }
+    .delay-400 { animation-delay: 0.4s; }
+    .delay-500 { animation-delay: 0.5s; }
+    .delay-600 { animation-delay: 0.6s; }
+
+    .animate-float {
+      animation: float 4s ease-in-out infinite;
+    }
+
+    .animate-float-delayed {
+      animation: float 4s ease-in-out infinite 1s;
+    }
+
+    .animate-pulse {
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    .animate-bounce {
+      animation: bounce 1.5s ease-in-out infinite;
+    }
+
+    /* Text Gradient */
+    .text-gradient {
+      background: linear-gradient(135deg, var(--accent) 0%, var(--accent-gradient-end) 50%, var(--accent) 100%);
+      background-size: 200% 200%;
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      animation: gradient-shift 3s ease infinite;
+    }
+
+    /* Noise Background */
+    .noise-bg::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+      opacity: 0.03;
+      pointer-events: none;
+    }
+
+    .grid-bg {
+      background-image:
+        linear-gradient(rgba(255,72,0,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,72,0,0.03) 1px, transparent 1px);
+      background-size: 60px 60px;
+    }
+
+    /* Navigation */
+    .nav {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 50;
+      transition: all 0.3s ease;
+    }
+
+    .nav.scrolled {
+      background-color: rgba(13, 12, 12, 0.9);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--bg-dark-tertiary);
+    }
+
+    .nav-container {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 1.25rem 1.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .nav-brand {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      text-decoration: none;
+      color: var(--text-primary);
+    }
+
+    .nav-logo {
+      width: 40px;
+      height: 40px;
+      border-radius: 12px;
+      background-color: var(--accent);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .nav-logo svg {
+      width: 24px;
+      height: 24px;
+      color: white;
+    }
+
+    .nav-brand-text {
+      font-family: 'Syne', sans-serif;
+      font-weight: 700;
+      font-size: 1.25rem;
+      letter-spacing: -0.02em;
+    }
+
+    .nav-links {
+      display: none;
+      align-items: center;
+      gap: 2rem;
+    }
+
+    @media (min-width: 768px) {
+      .nav-links {
+        display: flex;
+      }
+    }
+
+    .nav-link {
+      font-size: 0.875rem;
+      color: var(--text-secondary);
+      text-decoration: none;
+      transition: color 0.2s ease;
+    }
+
+    .nav-link:hover {
+      color: var(--text-primary);
+    }
+
+    .nav-actions {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .nav-signin {
+      display: none;
+      font-size: 0.875rem;
+      color: var(--text-secondary);
+      text-decoration: none;
+      transition: color 0.2s ease;
+    }
+
+    .nav-signin:hover {
+      color: var(--text-primary);
+    }
+
+    @media (min-width: 640px) {
+      .nav-signin {
+        display: block;
+      }
+    }
+
+    /* Buttons */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.75rem;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.875rem;
+      padding: 0.625rem 1.25rem;
+      border-radius: 9999px;
+      text-decoration: none;
+      transition: all 0.2s ease;
+      border: none;
+      cursor: pointer;
+    }
+
+    .btn-primary {
+      background-color: var(--accent);
+      color: white;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .btn-primary::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+      transition: left 0.5s ease;
+    }
+
+    .btn-primary:hover {
+      background-color: var(--accent-hover);
+    }
+
+    .btn-primary:hover::before {
+      left: 100%;
+    }
+
+    .btn-large {
+      font-family: 'Syne', sans-serif;
+      font-weight: 600;
+      padding: 1rem 2rem;
+    }
+
+    .btn-secondary {
+      background-color: var(--bg-dark-tertiary);
+      color: var(--text-primary);
+    }
+
+    .btn-secondary:hover {
+      background-color: var(--border-dark);
+    }
+
+    .btn-white {
+      background-color: white;
+      color: var(--accent);
+    }
+
+    .btn-white:hover {
+      background-color: var(--bg-light);
+    }
+
+    .btn-ghost {
+      background-color: rgba(255,255,255,0.2);
+      color: white;
+      backdrop-filter: blur(8px);
+    }
+
+    .btn-ghost:hover {
+      background-color: rgba(255,255,255,0.3);
+    }
+
+    .btn svg {
+      width: 20px;
+      height: 20px;
+      transition: transform 0.2s ease;
+    }
+
+    .btn:hover svg {
+      transform: translateX(4px);
+    }
+
+    /* Hero Section */
+    .hero {
+      position: relative;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      overflow: hidden;
+    }
+
+    .hero-glow-1 {
+      position: absolute;
+      top: 25%;
+      right: 25%;
+      width: 24rem;
+      height: 24rem;
+      background-color: rgba(255, 72, 0, 0.1);
+      border-radius: 50%;
+      filter: blur(120px);
+      pointer-events: none;
+    }
+
+    .hero-glow-2 {
+      position: absolute;
+      bottom: 25%;
+      left: 25%;
+      width: 16rem;
+      height: 16rem;
+      background-color: rgba(255, 72, 0, 0.05);
+      border-radius: 50%;
+      filter: blur(100px);
+      pointer-events: none;
+    }
+
+    .hero-container {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 8rem 1.5rem 5rem;
+      width: 100%;
+    }
+
+    .hero-grid {
+      display: grid;
+      gap: 4rem;
+      align-items: center;
+    }
+
+    @media (min-width: 1024px) {
+      .hero-grid {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+
+    .hero-content {
+      display: flex;
+      flex-direction: column;
+      gap: 2rem;
+    }
+
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      background-color: var(--bg-dark-tertiary);
+      border: 1px solid var(--border-dark);
+      border-radius: 9999px;
+      padding: 0.5rem 1rem;
+      font-size: 0.75rem;
+      width: fit-content;
+    }
+
+    .hero-badge-dot {
+      width: 8px;
+      height: 8px;
+      background-color: var(--success);
+      border-radius: 50%;
+    }
+
+    .hero-headline {
+      font-family: 'Syne', sans-serif;
+      font-weight: 800;
+      font-size: 3rem;
+      line-height: 1.05;
+      letter-spacing: -0.02em;
+    }
+
+    @media (min-width: 768px) {
+      .hero-headline {
+        font-size: 3.75rem;
+      }
+    }
+
+    @media (min-width: 1024px) {
+      .hero-headline {
+        font-size: 4.5rem;
+      }
+    }
+
+    .hero-subheadline {
+      font-size: 1.125rem;
+      color: var(--text-secondary);
+      max-width: 32rem;
+      line-height: 1.7;
+    }
+
+    .hero-ctas {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .hero-play-btn {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      color: var(--text-primary);
+      text-decoration: none;
+      font-size: 0.875rem;
+      transition: color 0.2s ease;
+    }
+
+    .hero-play-btn:hover {
+      color: var(--accent);
+    }
+
+    .hero-play-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      border: 1px solid var(--border-dark);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: border-color 0.2s ease;
+    }
+
+    .hero-play-btn:hover .hero-play-icon {
+      border-color: var(--accent);
+    }
+
+    .hero-play-icon svg {
+      width: 16px;
+      height: 16px;
+    }
+
+    .hero-trust {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 1.5rem;
+      padding-top: 1rem;
+    }
+
+    .hero-trust-item {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+    }
+
+    .hero-trust-item svg {
+      width: 16px;
+      height: 16px;
+      color: var(--success);
+    }
+
+    /* Hero Visual */
+    .hero-visual {
+      position: relative;
+    }
+
+    .app-mockup {
+      position: relative;
+      background-color: var(--bg-dark-secondary);
+      border-radius: 32px;
+      padding: 4px;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+    }
+
+    .app-mockup-inner {
+      background-color: var(--bg-dark);
+      border-radius: 28px;
+      overflow: hidden;
+    }
+
+    .app-titlebar {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.75rem 1rem;
+      background-color: var(--bg-dark-secondary);
+    }
+
+    .app-titlebar-dots {
+      display: flex;
+      gap: 6px;
+    }
+
+    .app-titlebar-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+    }
+
+    .app-titlebar-dot.red { background-color: #FF5F57; }
+    .app-titlebar-dot.yellow { background-color: #FEBC2E; }
+    .app-titlebar-dot.green { background-color: #28C840; }
+
+    .app-titlebar-text {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      margin-left: 1rem;
+    }
+
+    .app-content {
+      padding: 1.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .app-timer {
+      text-align: center;
+      padding: 2rem 0;
+    }
+
+    .app-timer-display {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 3.75rem;
+      font-weight: 700;
+      color: var(--accent);
+    }
+
+    .app-timer-label {
+      font-size: 0.875rem;
+      color: var(--text-secondary);
+      margin-top: 0.5rem;
+    }
+
+    .app-activity {
+      background-color: var(--bg-dark-secondary);
+      border-radius: 16px;
+      padding: 1rem;
+      border: 1px solid var(--bg-dark-tertiary);
+    }
+
+    .app-activity-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .app-activity-left {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .app-activity-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.875rem;
+      font-weight: 600;
+    }
+
+    .app-activity-icon.orange {
+      background-color: rgba(255, 72, 0, 0.2);
+      color: var(--accent);
+    }
+
+    .app-activity-icon.blue {
+      background-color: rgba(0, 82, 204, 0.2);
+      color: #0052CC;
+    }
+
+    .app-activity-title {
+      font-size: 0.875rem;
+      color: var(--text-primary);
+    }
+
+    .app-activity-subtitle {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+    }
+
+    .app-activity-time {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+    }
+
+    .app-ai-badge {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      background-color: rgba(255, 72, 0, 0.1);
+      border: 1px solid rgba(255, 72, 0, 0.2);
+      border-radius: 12px;
+      padding: 0.75rem 1rem;
+    }
+
+    .app-ai-badge svg {
+      width: 16px;
+      height: 16px;
+      color: var(--accent);
+    }
+
+    .app-ai-badge span {
+      font-size: 0.75rem;
+      color: var(--accent);
+    }
+
+    /* Floating Cards */
+    .floating-card {
+      position: absolute;
+      background-color: var(--bg-dark-secondary);
+      border-radius: 16px;
+      padding: 1rem;
+      border: 1px solid var(--bg-dark-tertiary);
+      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3);
+    }
+
+    .floating-card-top {
+      top: -1rem;
+      right: -1rem;
+    }
+
+    .floating-card-bottom {
+      bottom: -1rem;
+      left: -1rem;
+    }
+
+    .floating-card-content {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .floating-card-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .floating-card-icon.green {
+      background-color: rgba(74, 222, 128, 0.2);
+    }
+
+    .floating-card-icon.orange {
+      background-color: rgba(255, 72, 0, 0.2);
+    }
+
+    .floating-card-icon svg {
+      width: 16px;
+      height: 16px;
+    }
+
+    .floating-card-icon.green svg { color: var(--success); }
+    .floating-card-icon.orange svg { color: var(--accent); }
+
+    .floating-card-text {
+      font-size: 0.75rem;
+      color: var(--text-primary);
+    }
+
+    .floating-card-subtext {
+      font-size: 0.625rem;
+      color: var(--text-secondary);
+    }
+
+    /* Scroll Indicator */
+    .scroll-indicator {
+      position: absolute;
+      bottom: 2.5rem;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .scroll-indicator-text {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+    }
+
+    .scroll-indicator-mouse {
+      width: 24px;
+      height: 40px;
+      border-radius: 9999px;
+      border: 2px solid var(--border-dark);
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      padding-top: 8px;
+    }
+
+    .scroll-indicator-dot {
+      width: 6px;
+      height: 6px;
+      background-color: var(--accent);
+      border-radius: 50%;
+    }
+
+    /* Sections */
+    .section {
+      padding: 8rem 0;
+    }
+
+    .section-dark {
+      background-color: var(--bg-dark);
+      position: relative;
+    }
+
+    .section-light {
+      background-color: var(--bg-light);
+      color: var(--text-dark);
+    }
+
+    .section-container {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 0 1.5rem;
+    }
+
+    .section-header {
+      text-align: center;
+      margin-bottom: 5rem;
+    }
+
+    .section-label {
+      font-size: 0.875rem;
+      color: var(--accent);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+    }
+
+    .section-title {
+      font-family: 'Syne', sans-serif;
+      font-weight: 700;
+      font-size: 2.5rem;
+      margin-top: 1rem;
+      letter-spacing: -0.02em;
+    }
+
+    @media (min-width: 768px) {
+      .section-title {
+        font-size: 3rem;
+      }
+    }
+
+    .section-title-muted {
+      color: var(--text-secondary);
+    }
+
+    /* Features Grid */
+    .features-grid {
+      display: grid;
+      gap: 2rem;
+    }
+
+    @media (min-width: 768px) {
+      .features-grid {
+        grid-template-columns: repeat(3, 1fr);
+      }
+    }
+
+    .feature-card {
+      background-color: white;
+      border-radius: 32px;
+      padding: 2rem;
+      border: 1px solid var(--border-light);
+      transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .feature-card:hover {
+      transform: translateY(-8px);
+      box-shadow: 0 24px 64px -15px rgba(255, 72, 0, 0.2);
+    }
+
+    .feature-icon {
+      width: 56px;
+      height: 56px;
+      border-radius: 16px;
+      background-color: var(--accent);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 1.5rem;
+    }
+
+    .feature-icon svg {
+      width: 28px;
+      height: 28px;
+      color: white;
+    }
+
+    .feature-title {
+      font-family: 'Syne', sans-serif;
+      font-weight: 700;
+      font-size: 1.25rem;
+      margin-bottom: 0.75rem;
+      color: var(--text-dark);
+    }
+
+    .feature-description {
+      font-size: 0.875rem;
+      color: var(--text-secondary);
+      line-height: 1.7;
+    }
+
+    /* How It Works */
+    .steps-grid {
+      display: grid;
+      gap: 2rem;
+      position: relative;
+    }
+
+    @media (min-width: 768px) {
+      .steps-grid {
+        grid-template-columns: repeat(3, 1fr);
+      }
+    }
+
+    .steps-line {
+      display: none;
+      position: absolute;
+      top: 32px;
+      left: 25%;
+      right: 25%;
+      height: 2px;
+      background: linear-gradient(90deg, var(--accent), rgba(255, 72, 0, 0.5), var(--accent));
+    }
+
+    @media (min-width: 768px) {
+      .steps-line {
+        display: block;
+      }
+    }
+
+    .step {
+      text-align: center;
+      position: relative;
+    }
+
+    .step-number {
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      background-color: var(--accent);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 2rem;
+      position: relative;
+      z-index: 10;
+    }
+
+    .step-number span {
+      font-family: 'Syne', sans-serif;
+      font-weight: 700;
+      font-size: 1.5rem;
+      color: white;
+    }
+
+    .step-title {
+      font-family: 'Syne', sans-serif;
+      font-weight: 700;
+      font-size: 1.25rem;
+      margin-bottom: 0.75rem;
+      color: var(--text-primary);
+    }
+
+    .step-description {
+      font-size: 0.875rem;
+      color: var(--text-secondary);
+      line-height: 1.7;
+    }
+
+    /* Benefits Section */
+    .benefits-grid {
+      display: grid;
+      gap: 4rem;
+      align-items: center;
+    }
+
+    @media (min-width: 1024px) {
+      .benefits-grid {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+
+    .benefits-content {
+      display: flex;
+      flex-direction: column;
+      gap: 2rem;
+    }
+
+    .benefits-title {
+      font-family: 'Syne', sans-serif;
+      font-weight: 700;
+      font-size: 2.5rem;
+      letter-spacing: -0.02em;
+      color: var(--text-dark);
+    }
+
+    @media (min-width: 768px) {
+      .benefits-title {
+        font-size: 3rem;
+      }
+    }
+
+    .benefits-description {
+      font-size: 1rem;
+      color: var(--text-secondary);
+      line-height: 1.7;
+    }
+
+    .benefits-list {
+      display: grid;
+      gap: 1.5rem;
+    }
+
+    @media (min-width: 640px) {
+      .benefits-list {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    .benefit-item {
+      display: flex;
+      gap: 1rem;
+    }
+
+    .benefit-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 12px;
+      background-color: rgba(255, 72, 0, 0.1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .benefit-icon svg {
+      width: 20px;
+      height: 20px;
+      color: var(--accent);
+    }
+
+    .benefit-title {
+      font-family: 'Syne', sans-serif;
+      font-weight: 600;
+      margin-bottom: 0.25rem;
+      color: var(--text-dark);
+    }
+
+    .benefit-description {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+    }
+
+    /* Terminal Visual */
+    .terminal {
+      background-color: var(--bg-dark);
+      border-radius: 32px;
+      padding: 2rem;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+      position: relative;
+    }
+
+    .terminal-line {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+    }
+
+    .terminal-prompt {
+      color: var(--success);
+    }
+
+    .terminal-command {
+      color: var(--text-primary);
+    }
+
+    .terminal-output {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      color: var(--text-secondary);
+      font-size: 0.875rem;
+    }
+
+    .terminal-output-line {
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    .terminal-output-arrow {
+      color: var(--accent);
+    }
+
+    .terminal-output-value {
+      color: var(--text-primary);
+    }
+
+    .terminal-output-value.success {
+      color: var(--success);
+    }
+
+    .terminal-output-value.warning {
+      color: var(--warning);
+    }
+
+    .terminal-badge {
+      position: absolute;
+      bottom: -1rem;
+      right: -1rem;
+      background-color: white;
+      border-radius: 16px;
+      padding: 0.75rem 1.25rem;
+      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+      border: 1px solid var(--border-light);
+    }
+
+    .terminal-badge-content {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .terminal-badge-dot {
+      width: 12px;
+      height: 12px;
+      background-color: var(--success);
+      border-radius: 50%;
+    }
+
+    .terminal-badge-text {
+      font-size: 0.75rem;
+      color: var(--text-dark);
+    }
+
+    /* Pricing Section */
+    .pricing-grid {
+      display: grid;
+      gap: 2rem;
+      max-width: 56rem;
+      margin: 0 auto;
+    }
+
+    @media (min-width: 768px) {
+      .pricing-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    .pricing-card {
+      border-radius: 32px;
+      padding: 2rem;
+      transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .pricing-card:hover {
+      transform: translateY(-8px);
+    }
+
+    .pricing-card-free {
+      background-color: var(--bg-dark-secondary);
+      border: 1px solid var(--bg-dark-tertiary);
+    }
+
+    .pricing-card-free:hover {
+      box-shadow: 0 24px 64px -15px rgba(255, 72, 0, 0.1);
+    }
+
+    .pricing-card-pro {
+      background: linear-gradient(to bottom, var(--accent), #CC3A00);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .pricing-card-pro:hover {
+      box-shadow: 0 24px 64px -15px rgba(255, 72, 0, 0.4);
+    }
+
+    .pricing-badge {
+      position: absolute;
+      top: 1rem;
+      right: 1rem;
+      background-color: rgba(255, 255, 255, 0.2);
+      backdrop-filter: blur(8px);
+      border-radius: 9999px;
+      padding: 0.25rem 0.75rem;
+      font-size: 0.75rem;
+      color: white;
+    }
+
+    .pricing-header {
+      margin-bottom: 1.5rem;
+    }
+
+    .pricing-name {
+      font-family: 'Syne', sans-serif;
+      font-weight: 700;
+      font-size: 1.25rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .pricing-card-free .pricing-name {
+      color: var(--text-primary);
+    }
+
+    .pricing-card-pro .pricing-name {
+      color: white;
+    }
+
+    .pricing-tagline {
+      font-size: 0.875rem;
+    }
+
+    .pricing-card-free .pricing-tagline {
+      color: var(--text-secondary);
+    }
+
+    .pricing-card-pro .pricing-tagline {
+      color: rgba(255, 255, 255, 0.7);
+    }
+
+    .pricing-price {
+      margin-bottom: 2rem;
+    }
+
+    .pricing-amount {
+      font-family: 'Syne', sans-serif;
+      font-weight: 700;
+      font-size: 2.5rem;
+    }
+
+    .pricing-card-free .pricing-amount {
+      color: var(--text-primary);
+    }
+
+    .pricing-card-pro .pricing-amount {
+      color: white;
+    }
+
+    .pricing-period {
+      font-size: 0.875rem;
+    }
+
+    .pricing-card-free .pricing-period {
+      color: var(--text-secondary);
+    }
+
+    .pricing-card-pro .pricing-period {
+      color: rgba(255, 255, 255, 0.7);
+    }
+
+    .pricing-features {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+
+    .pricing-feature {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      font-size: 0.875rem;
+    }
+
+    .pricing-card-free .pricing-feature {
+      color: var(--text-secondary);
+    }
+
+    .pricing-card-pro .pricing-feature {
+      color: rgba(255, 255, 255, 0.9);
+    }
+
+    .pricing-feature svg {
+      width: 20px;
+      height: 20px;
+      flex-shrink: 0;
+    }
+
+    .pricing-card-free .pricing-feature svg {
+      color: var(--success);
+    }
+
+    .pricing-card-pro .pricing-feature svg {
+      color: white;
+    }
+
+    .pricing-cta {
+      width: 100%;
+      text-align: center;
+    }
+
+    .pricing-note {
+      text-align: center;
+      margin-top: 0.75rem;
+      font-size: 0.75rem;
+      color: rgba(255, 255, 255, 0.6);
+    }
+
+    /* CTA Section */
+    .cta-section {
+      position: relative;
+      padding: 8rem 0;
+      overflow: hidden;
+    }
+
+    .cta-bg {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(to right, var(--accent), var(--accent-gradient-end));
+    }
+
+    .cta-container {
+      position: relative;
+      max-width: 56rem;
+      margin: 0 auto;
+      padding: 0 1.5rem;
+      text-align: center;
+    }
+
+    .cta-title {
+      font-family: 'Syne', sans-serif;
+      font-weight: 700;
+      font-size: 2.5rem;
+      color: white;
+      margin-bottom: 1.5rem;
+      letter-spacing: -0.02em;
+    }
+
+    @media (min-width: 768px) {
+      .cta-title {
+        font-size: 3rem;
+      }
+    }
+
+    .cta-description {
+      font-size: 1.125rem;
+      color: rgba(255, 255, 255, 0.8);
+      margin-bottom: 2.5rem;
+      max-width: 36rem;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    .cta-buttons {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 1rem;
+    }
+
+    /* Footer */
+    .footer {
+      background-color: var(--bg-dark);
+      border-top: 1px solid var(--bg-dark-tertiary);
+      padding: 4rem 0;
+    }
+
+    .footer-container {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 0 1.5rem;
+    }
+
+    .footer-grid {
+      display: grid;
+      gap: 3rem;
+      margin-bottom: 3rem;
+    }
+
+    @media (min-width: 768px) {
+      .footer-grid {
+        grid-template-columns: 2fr 1fr 1fr;
+      }
+    }
+
+    .footer-brand {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 1rem;
+    }
+
+    .footer-brand-text {
+      font-family: 'Syne', sans-serif;
+      font-weight: 700;
+      font-size: 1.25rem;
+      color: var(--text-primary);
+    }
+
+    .footer-description {
+      font-size: 0.875rem;
+      color: var(--text-secondary);
+      max-width: 24rem;
+      line-height: 1.7;
+    }
+
+    .footer-column-title {
+      font-family: 'Syne', sans-serif;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 1rem;
+    }
+
+    .footer-links {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .footer-link {
+      font-size: 0.875rem;
+      color: var(--text-secondary);
+      text-decoration: none;
+      transition: color 0.2s ease;
+    }
+
+    .footer-link:hover {
+      color: var(--accent);
+    }
+
+    .footer-bottom {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      padding-top: 2rem;
+      border-top: 1px solid var(--bg-dark-tertiary);
+    }
+
+    @media (min-width: 768px) {
+      .footer-bottom {
+        flex-direction: row;
+      }
+    }
+
+    .footer-copyright {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+    }
+
+    .footer-social {
+      display: flex;
+      align-items: center;
+      gap: 1.5rem;
+    }
+
+    .footer-social-link {
+      color: var(--text-secondary);
+      transition: color 0.2s ease;
+    }
+
+    .footer-social-link:hover {
+      color: var(--accent);
+    }
+
+    .footer-social-link svg {
+      width: 20px;
+      height: 20px;
+    }
+  </style>
+</head>
+<body>
+  <!-- Navigation -->
+  <nav class="nav" id="nav">
+    <div class="nav-container">
+      <a href="#" class="nav-brand">
+        <div class="nav-logo">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        </div>
+        <span class="nav-brand-text">clearical</span>
+      </a>
+
+      <div class="nav-links">
+        <a href="#features" class="nav-link">Features</a>
+        <a href="#how-it-works" class="nav-link">How it works</a>
+        <a href="#pricing" class="nav-link">Pricing</a>
+      </div>
+
+      <div class="nav-actions">
+        <a href="#" class="nav-signin">Sign in</a>
+        <a href="#pricing" class="btn btn-primary">Start Free Trial</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Hero Section -->
+  <section class="hero noise-bg grid-bg">
+    <div class="hero-glow-1"></div>
+    <div class="hero-glow-2"></div>
+
+    <div class="hero-container">
+      <div class="hero-grid">
+        <div class="hero-content">
+          <!-- Badge -->
+          <div class="animate-fade-up">
+            <div class="hero-badge">
+              <span class="hero-badge-dot animate-pulse"></span>
+              AI-powered time tracking
+            </div>
+          </div>
+
+          <!-- Headline -->
+          <h1 class="hero-headline animate-fade-up delay-100">
+            TIME TRACKING<br>
+            <span class="text-gradient">THAT THINKS</span>
+          </h1>
+
+          <!-- Subheadline -->
+          <p class="hero-subheadline animate-fade-up delay-200">
+            AI-powered automatic time tracking for knowledge workers. Captures your work, generates descriptions, logs to Jira &amp; Tempo.
+          </p>
+
+          <!-- CTAs -->
+          <div class="hero-ctas animate-fade-up delay-300">
+            <a href="#pricing" class="btn btn-primary btn-large">
+              Start Free Trial
+              <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3" />
+              </svg>
+            </a>
+            <a href="#how-it-works" class="hero-play-btn">
+              <span class="hero-play-icon">
+                <svg fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M8 5v14l11-7z"/>
+                </svg>
+              </span>
+              See how it works
+            </a>
+          </div>
+
+          <!-- Trust badges -->
+          <div class="hero-trust animate-fade-up delay-400">
+            <div class="hero-trust-item">
+              <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+              </svg>
+              14 days free
+            </div>
+            <div class="hero-trust-item">
+              <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+              </svg>
+              No credit card
+            </div>
+            <div class="hero-trust-item">
+              <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+              </svg>
+              On-device AI
+            </div>
+          </div>
+        </div>
+
+        <!-- Hero Visual -->
+        <div class="hero-visual animate-fade-up delay-500">
+          <div class="app-mockup">
+            <div class="app-mockup-inner">
+              <!-- Title bar -->
+              <div class="app-titlebar">
+                <div class="app-titlebar-dots">
+                  <div class="app-titlebar-dot red"></div>
+                  <div class="app-titlebar-dot yellow"></div>
+                  <div class="app-titlebar-dot green"></div>
+                </div>
+                <span class="app-titlebar-text">Clearical</span>
+              </div>
+
+              <!-- App content -->
+              <div class="app-content">
+                <!-- Timer -->
+                <div class="app-timer">
+                  <div class="app-timer-display">02:34:17</div>
+                  <p class="app-timer-label">Recording session</p>
+                </div>
+
+                <!-- Activities -->
+                <div class="app-activity">
+                  <div class="app-activity-row">
+                    <div class="app-activity-left">
+                      <div class="app-activity-icon orange">VS</div>
+                      <div>
+                        <p class="app-activity-title">Debugging API routes</p>
+                        <p class="app-activity-subtitle">Visual Studio Code</p>
+                      </div>
+                    </div>
+                    <span class="app-activity-time">45m</span>
+                  </div>
+                </div>
+
+                <div class="app-activity">
+                  <div class="app-activity-row">
+                    <div class="app-activity-left">
+                      <div class="app-activity-icon blue">J</div>
+                      <div>
+                        <p class="app-activity-title">PROJ-1234: Fix auth flow</p>
+                        <p class="app-activity-subtitle">Jira</p>
+                      </div>
+                    </div>
+                    <span class="app-activity-time">1h 20m</span>
+                  </div>
+                </div>
+
+                <!-- AI Badge -->
+                <div class="app-ai-badge">
+                  <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  </svg>
+                  <span>AI generated summary ready</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Floating cards -->
+          <div class="floating-card floating-card-top animate-float">
+            <div class="floating-card-content">
+              <div class="floating-card-icon green">
+                <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                </svg>
+              </div>
+              <div>
+                <p class="floating-card-text">On-device AI</p>
+                <p class="floating-card-subtext">Privacy first</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="floating-card floating-card-bottom animate-float-delayed">
+            <div class="floating-card-content">
+              <div class="floating-card-icon orange">
+                <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+              </div>
+              <div>
+                <p class="floating-card-text">Smart summaries</p>
+                <p class="floating-card-subtext">Auto-generated</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Scroll indicator -->
+    <div class="scroll-indicator animate-fade-up delay-600">
+      <span class="scroll-indicator-text">Scroll to explore</span>
+      <div class="scroll-indicator-mouse">
+        <div class="scroll-indicator-dot animate-bounce"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Features Section -->
+  <section id="features" class="section section-light">
+    <div class="section-container">
+      <div class="section-header">
+        <span class="section-label">Features</span>
+        <h2 class="section-title">
+          Built for developers,<br>
+          <span class="section-title-muted">loved by teams</span>
+        </h2>
+      </div>
+
+      <div class="features-grid">
+        <!-- Feature 1 -->
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
+            </svg>
+          </div>
+          <h3 class="feature-title">On-Device AI</h3>
+          <p class="feature-description">
+            Screenshots analyzed locally with FastVLM. Your data never leaves your computer. Complete privacy, zero compromise.
+          </p>
+        </div>
+
+        <!-- Feature 2 -->
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+          </div>
+          <h3 class="feature-title">Smart Summaries</h3>
+          <p class="feature-description">
+            AI generates accurate activity descriptions from your screen captures automatically. No more manual entry.
+          </p>
+        </div>
+
+        <!-- Feature 3 -->
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+            </svg>
+          </div>
+          <h3 class="feature-title">Jira & Tempo Sync</h3>
+          <p class="feature-description">
+            One-click logging to Tempo timesheets. Link activities to Jira issues seamlessly. Your workflow, automated.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- How It Works Section -->
+  <section id="how-it-works" class="section section-dark noise-bg">
+    <div class="section-container">
+      <div class="section-header">
+        <span class="section-label">How it works</span>
+        <h2 class="section-title" style="color: var(--text-primary);">
+          Three steps to<br>
+          <span class="section-title-muted">effortless time tracking</span>
+        </h2>
+      </div>
+
+      <div class="steps-grid">
+        <div class="steps-line"></div>
+
+        <!-- Step 1 -->
+        <div class="step">
+          <div class="step-number"><span>1</span></div>
+          <h3 class="step-title">Start Recording</h3>
+          <p class="step-description">
+            Click record and Clearical automatically captures screenshots of your work at regular intervals.
+          </p>
+        </div>
+
+        <!-- Step 2 -->
+        <div class="step">
+          <div class="step-number"><span>2</span></div>
+          <h3 class="step-title">AI Analyzes</h3>
+          <p class="step-description">
+            On-device AI processes your screenshots and generates accurate activity descriptions automatically.
+          </p>
+        </div>
+
+        <!-- Step 3 -->
+        <div class="step">
+          <div class="step-number"><span>3</span></div>
+          <h3 class="step-title">Log Instantly</h3>
+          <p class="step-description">
+            Push your tracked time to Jira and Tempo with one click. Complete timesheets in seconds.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Benefits Section -->
+  <section class="section section-light">
+    <div class="section-container">
+      <div class="benefits-grid">
+        <div class="benefits-content">
+          <span class="section-label">Why Clearical</span>
+          <h2 class="benefits-title">
+            Time tracking that<br>
+            <span class="section-title-muted">respects your privacy</span>
+          </h2>
+          <p class="benefits-description">
+            Unlike cloud-based alternatives, Clearical processes everything on your device. Your screenshots, your data, your control.
+          </p>
+
+          <div class="benefits-list">
+            <div class="benefit-item">
+              <div class="benefit-icon">
+                <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+              </div>
+              <div>
+                <h4 class="benefit-title">Privacy First</h4>
+                <p class="benefit-description">All processing on-device, encrypted storage</p>
+              </div>
+            </div>
+
+            <div class="benefit-item">
+              <div class="benefit-icon">
+                <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                </svg>
+              </div>
+              <div>
+                <h4 class="benefit-title">Learns Your Workflow</h4>
+                <p class="benefit-description">Adapts to your patterns over time</p>
+              </div>
+            </div>
+
+            <div class="benefit-item">
+              <div class="benefit-icon">
+                <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+                </svg>
+              </div>
+              <div>
+                <h4 class="benefit-title">Menu Bar App</h4>
+                <p class="benefit-description">Quick access without disrupting your flow</p>
+              </div>
+            </div>
+
+            <div class="benefit-item">
+              <div class="benefit-icon">
+                <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 5.636a9 9 0 010 12.728m0 0l-2.829-2.829m2.829 2.829L21 21M15.536 8.464a5 5 0 010 7.072m0 0l-2.829-2.829m-4.243 2.829a4.978 4.978 0 01-1.414-2.83m-1.414 5.658a9 9 0 01-2.167-9.238m7.824 2.167a1 1 0 111.414 1.414m-1.414-1.414L3 3m8.293 8.293l1.414 1.414" />
+                </svg>
+              </div>
+              <div>
+                <h4 class="benefit-title">Works Offline</h4>
+                <p class="benefit-description">Full functionality without internet</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Terminal Visual -->
+        <div style="position: relative;">
+          <div class="terminal">
+            <div class="terminal-line">
+              <span class="terminal-prompt">$</span>
+              <span class="terminal-command">clearical --status</span>
+            </div>
+            <div class="terminal-output">
+              <div class="terminal-output-line">
+                <span class="terminal-output-arrow">▸</span>
+                Recording: <span class="terminal-output-value success">Active</span>
+              </div>
+              <div class="terminal-output-line">
+                <span class="terminal-output-arrow">▸</span>
+                Screenshots: <span class="terminal-output-value">47</span>
+              </div>
+              <div class="terminal-output-line">
+                <span class="terminal-output-arrow">▸</span>
+                AI Analysis: <span class="terminal-output-value success">Complete</span>
+              </div>
+              <div class="terminal-output-line">
+                <span class="terminal-output-arrow">▸</span>
+                Data Location: <span class="terminal-output-value">~/local/clearical</span>
+              </div>
+              <div class="terminal-output-line">
+                <span class="terminal-output-arrow">▸</span>
+                Network: <span class="terminal-output-value warning">Offline Mode</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="terminal-badge">
+            <div class="terminal-badge-content">
+              <div class="terminal-badge-dot"></div>
+              <span class="terminal-badge-text">100% local processing</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Pricing Section -->
+  <section id="pricing" class="section section-dark noise-bg">
+    <div class="section-container">
+      <div class="section-header">
+        <span class="section-label">Pricing</span>
+        <h2 class="section-title" style="color: var(--text-primary);">
+          Simple, transparent<br>
+          <span class="section-title-muted">pricing</span>
+        </h2>
+      </div>
+
+      <div class="pricing-grid">
+        <!-- Free Tier -->
+        <div class="pricing-card pricing-card-free">
+          <div class="pricing-header">
+            <h3 class="pricing-name">Free</h3>
+            <p class="pricing-tagline">For personal use</p>
+          </div>
+
+          <div class="pricing-price">
+            <span class="pricing-amount">$0</span>
+            <span class="pricing-period">/forever</span>
+          </div>
+
+          <ul class="pricing-features">
+            <li class="pricing-feature">
+              <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+              </svg>
+              Basic time tracking
+            </li>
+            <li class="pricing-feature">
+              <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+              </svg>
+              Local buckets & folders
+            </li>
+            <li class="pricing-feature">
+              <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+              </svg>
+              Screenshot capture
+            </li>
+            <li class="pricing-feature">
+              <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+              </svg>
+              CSV export
+            </li>
+          </ul>
+
+          <a href="#" class="btn btn-secondary pricing-cta">Download Free</a>
+        </div>
+
+        <!-- Workplace Plan -->
+        <div class="pricing-card pricing-card-pro">
+          <span class="pricing-badge">Most popular</span>
+
+          <div class="pricing-header">
+            <h3 class="pricing-name">Workplace</h3>
+            <p class="pricing-tagline">For professionals & teams</p>
+          </div>
+
+          <div class="pricing-price">
+            <span class="pricing-amount">$12</span>
+            <span class="pricing-period">/month</span>
+          </div>
+
+          <ul class="pricing-features">
+            <li class="pricing-feature">
+              <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+              </svg>
+              Everything in Free, plus:
+            </li>
+            <li class="pricing-feature">
+              <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+              </svg>
+              Jira integration
+            </li>
+            <li class="pricing-feature">
+              <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+              </svg>
+              Tempo timesheets sync
+            </li>
+            <li class="pricing-feature">
+              <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+              </svg>
+              AI-powered analysis
+            </li>
+            <li class="pricing-feature">
+              <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+              </svg>
+              Priority support
+            </li>
+          </ul>
+
+          <a href="#" class="btn btn-white pricing-cta" style="font-family: 'Syne', sans-serif; font-weight: 600;">
+            Start 14-Day Free Trial
+          </a>
+          <p class="pricing-note">No credit card required</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA Section -->
+  <section class="cta-section">
+    <div class="cta-bg"></div>
+    <div class="noise-bg" style="position: absolute; inset: 0; opacity: 0.1;"></div>
+
+    <div class="cta-container">
+      <h2 class="cta-title">
+        Ready to track time<br>intelligently?
+      </h2>
+      <p class="cta-description">
+        Join thousands of developers who've automated their timesheet workflow with Clearical.
+      </p>
+      <div class="cta-buttons">
+        <a href="#" class="btn btn-white btn-large">
+          Download for macOS
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+          </svg>
+        </a>
+        <a href="#" class="btn btn-ghost">
+          <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M0 12C0 5.373 5.373 0 12 0c4.873 0 9.067 2.904 10.947 7.077l-15.87 15.87A11.981 11.981 0 010 12z"/>
+            <path d="M12 24c-4.873 0-9.067-2.904-10.947-7.077l15.87-15.87A11.981 11.981 0 0124 12c0 6.627-5.373 12-12 12z"/>
+          </svg>
+          Windows & Linux
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="footer-container">
+      <div class="footer-grid">
+        <!-- Brand -->
+        <div>
+          <div class="footer-brand">
+            <div class="nav-logo">
+              <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <span class="footer-brand-text">clearical</span>
+          </div>
+          <p class="footer-description">
+            AI-powered time tracking for knowledge workers. Capture, analyze, and log your work automatically.
+          </p>
+        </div>
+
+        <!-- Product Links -->
+        <div>
+          <h4 class="footer-column-title">Product</h4>
+          <div class="footer-links">
+            <a href="#features" class="footer-link">Features</a>
+            <a href="#pricing" class="footer-link">Pricing</a>
+            <a href="#" class="footer-link">Download</a>
+            <a href="#" class="footer-link">Changelog</a>
+          </div>
+        </div>
+
+        <!-- Company Links -->
+        <div>
+          <h4 class="footer-column-title">Company</h4>
+          <div class="footer-links">
+            <a href="#" class="footer-link">About</a>
+            <a href="#" class="footer-link">Privacy</a>
+            <a href="#" class="footer-link">Terms</a>
+            <a href="#" class="footer-link">Support</a>
+          </div>
+        </div>
+      </div>
+
+      <div class="footer-bottom">
+        <p class="footer-copyright">&copy; 2026 Clearical. All rights reserved.</p>
+        <div class="footer-social">
+          <a href="#" class="footer-social-link">
+            <svg fill="currentColor" viewBox="0 0 24 24">
+              <path d="M24 4.557c-.883.392-1.832.656-2.828.775 1.017-.609 1.798-1.574 2.165-2.724-.951.564-2.005.974-3.127 1.195-.897-.957-2.178-1.555-3.594-1.555-3.179 0-5.515 2.966-4.797 6.045-4.091-.205-7.719-2.165-10.148-5.144-1.29 2.213-.669 5.108 1.523 6.574-.806-.026-1.566-.247-2.229-.616-.054 2.281 1.581 4.415 3.949 4.89-.693.188-1.452.232-2.224.084.626 1.956 2.444 3.379 4.6 3.419-2.07 1.623-4.678 2.348-7.29 2.04 2.179 1.397 4.768 2.212 7.548 2.212 9.142 0 14.307-7.721 13.995-14.646.962-.695 1.797-1.562 2.457-2.549z"/>
+            </svg>
+          </a>
+          <a href="#" class="footer-social-link">
+            <svg fill="currentColor" viewBox="0 0 24 24">
+              <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+            </svg>
+          </a>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    // Navigation scroll effect
+    const nav = document.getElementById('nav');
+    let lastScrollY = 0;
+
+    window.addEventListener('scroll', () => {
+      const currentScrollY = window.scrollY;
+
+      if (currentScrollY > 50) {
+        nav.classList.add('scrolled');
+      } else {
+        nav.classList.remove('scrolled');
+      }
+
+      lastScrollY = currentScrollY;
+    }, { passive: true });
+
+    // Smooth scroll for anchor links
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+      anchor.addEventListener('click', function (e) {
+        e.preventDefault();
+        const target = document.querySelector(this.getAttribute('href'));
+        if (target) {
+          target.scrollIntoView({
+            behavior: 'smooth',
+            block: 'start'
+          });
+        }
+      });
+    });
+
+    // Intersection Observer for fade-in animations
+    const observerOptions = {
+      threshold: 0.1,
+      rootMargin: '0px 0px -50px 0px'
+    };
+
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.style.opacity = '1';
+          entry.target.style.transform = 'translateY(0)';
+        }
+      });
+    }, observerOptions);
+
+    // Observe feature cards and steps
+    document.querySelectorAll('.feature-card, .step, .pricing-card, .benefit-item').forEach(el => {
+      el.style.opacity = '0';
+      el.style.transform = 'translateY(30px)';
+      el.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
+      observer.observe(el);
+    });
+  </script>
+</body>
 </html>
