@@ -105,7 +105,7 @@
           "arch": "arm64"
         }
       ],
-      "notarize": false,
+      "notarize": true,
       "extendInfo": {
         "NSMicrophoneUsageDescription": "Clearical needs microphone access to record and transcribe meetings when you're in a video call."
       }
