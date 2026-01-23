@@ -7,7 +7,6 @@ import { TempoValidationModal } from './TempoValidationModal';
 import { TempoAccountPicker } from './TempoAccountPicker';
 import { TempoConfigModal } from './TempoConfigModal';
 import { InlineTimeEditor } from './InlineTimeEditor';
-import { AddToCalendarButton } from './AddToCalendarButton';
 import { SplittingAssistant } from './SplittingAssistant';
 import { TranscriptionActivityEntry, findMeetingApp } from './TranscriptionActivityEntry';
 import { useStorage } from '../context/StorageContext';
@@ -327,12 +326,31 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
         try {
             console.log('[HistoryDetail] Requesting AI assignment suggestion');
 
-            // Get Jira issues for suggestion
+            // Get Jira issues for suggestion - include ALL synced issues, not just assigned
             let jiraIssues: LinkedJiraIssue[] = [];
             if (settings.jira?.enabled && jiraCache) {
                 try {
-                    const issues = await jiraCache.getAssignedIssues();
-                    jiraIssues = issues.map(issue => ({
+                    // Get assigned issues
+                    const assignedIssues = await jiraCache.getAssignedIssues();
+
+                    // Also get all issues from selected projects (from crawler/cache)
+                    const selectedProjects = settings.jira.selectedProjects || [];
+                    const projectIssuesPromises = selectedProjects.map(projectKey =>
+                        jiraCache.getProjectIssues(projectKey).catch(() => [])
+                    );
+                    const projectIssuesArrays = await Promise.all(projectIssuesPromises);
+                    const projectIssues = projectIssuesArrays.flat();
+
+                    // Combine and deduplicate by issue key
+                    const allIssues = [...assignedIssues, ...projectIssues];
+                    const uniqueIssuesMap = new Map<string, typeof allIssues[0]>();
+                    for (const issue of allIssues) {
+                        if (!uniqueIssuesMap.has(issue.key)) {
+                            uniqueIssuesMap.set(issue.key, issue);
+                        }
+                    }
+
+                    jiraIssues = Array.from(uniqueIssuesMap.values()).map(issue => ({
                         key: issue.key,
                         summary: issue.fields.summary,
                         issueType: issue.fields.issuetype.name,
@@ -340,6 +358,8 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                         projectKey: issue.fields.project.key,
                         projectName: issue.fields.project.name
                     }));
+
+                    console.log(`[HistoryDetail] Found ${jiraIssues.length} Jira issues for AI suggestion (${assignedIssues.length} assigned, ${projectIssues.length} from projects)`);
                 } catch (error) {
                     console.error('[HistoryDetail] Failed to fetch Jira issues:', error);
                 }
@@ -1232,15 +1252,9 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                         <h2 className="text-xl font-bold" style={{ fontFamily: 'var(--font-display)', color: 'var(--color-text-primary)' }}>Activity Details</h2>
                     </div>
 
-                    {/* Action Buttons - Log to Tempo and Add to Calendar */}
+                    {/* Action Buttons - Splitting Assistant and Log to dropdown */}
                     <div className="no-drag flex items-center gap-2">
-                        <AddToCalendarButton
-                            entry={entry}
-                            bucketName={selectedAssignment?.type === 'bucket' ? selectedAssignment.bucket?.name : undefined}
-                            onNavigateToSettings={onNavigateToSettings}
-                            jiraBaseUrl={settings.jira?.baseUrl}
-                        />
-                        {/* Suggest Splits button - only show for activities > 15 minutes */}
+                        {/* Splitting Assistant button - only show for activities > 15 minutes */}
                         {entry.duration > 15 * 60 * 1000 && (
                             <button
                                 onClick={handleSuggestSplits}
@@ -1278,55 +1292,58 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                                 ) : (
                                     <>
                                         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                            <path d="M12 5v14M5 12h14"/>
+                                            <path d="M16 3h5v5M8 3H3v5M3 16v5h5M21 16v5h-5M12 8v8M8 12h8"/>
                                         </svg>
-                                        Suggest Splits
+                                        Splitting Assistant
                                     </>
                                 )}
                             </button>
                         )}
-                        <button
-                            onClick={handleOpenTempoModal}
-                            className={`px-3 py-1.5 text-sm flex items-center justify-center gap-1.5 transition-all active:scale-95`}
-                            style={{
-                                backgroundColor: hasTempoAccess ? 'var(--color-accent)' : 'var(--color-bg-secondary)',
-                                color: hasTempoAccess ? '#FFFFFF' : 'var(--color-text-secondary)',
-                                borderRadius: 'var(--btn-radius)',
-                                transitionDuration: 'var(--duration-fast)',
-                                transitionTimingFunction: 'var(--ease-out)',
-                                boxShadow: hasTempoAccess ? 'var(--shadow-accent)' : 'var(--shadow-sm)',
-                                border: hasTempoAccess ? 'none' : '1px solid var(--color-border-primary)'
-                            }}
-                            onMouseEnter={(e) => {
-                                if (hasTempoAccess) {
-                                    e.currentTarget.style.backgroundColor = '#E64000';
-                                } else {
-                                    e.currentTarget.style.borderColor = 'var(--color-accent)';
-                                    e.currentTarget.style.color = 'var(--color-text-primary)';
-                                }
-                            }}
-                            onMouseLeave={(e) => {
-                                if (hasTempoAccess) {
-                                    e.currentTarget.style.backgroundColor = 'var(--color-accent)';
-                                } else {
-                                    e.currentTarget.style.borderColor = 'var(--color-border-primary)';
-                                    e.currentTarget.style.color = 'var(--color-text-secondary)';
-                                }
-                            }}
-                        >
-                            {hasTempoAccess ? (
-                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                    <circle cx="12" cy="12" r="10"/>
-                                    <path d="M12 6v6l4 2"/>
-                                </svg>
-                            ) : (
-                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-                                    <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-                                </svg>
-                            )}
-                            Log to Tempo
-                        </button>
+                        {/* Log to dropdown */}
+                        <div className="relative">
+                            <button
+                                onClick={handleOpenTempoModal}
+                                className={`px-3 py-1.5 text-sm flex items-center justify-center gap-1.5 transition-all active:scale-95`}
+                                style={{
+                                    backgroundColor: hasTempoAccess ? 'var(--color-accent)' : 'var(--color-bg-secondary)',
+                                    color: hasTempoAccess ? '#FFFFFF' : 'var(--color-text-secondary)',
+                                    borderRadius: 'var(--btn-radius)',
+                                    transitionDuration: 'var(--duration-fast)',
+                                    transitionTimingFunction: 'var(--ease-out)',
+                                    boxShadow: hasTempoAccess ? 'var(--shadow-accent)' : 'var(--shadow-sm)',
+                                    border: hasTempoAccess ? 'none' : '1px solid var(--color-border-primary)'
+                                }}
+                                onMouseEnter={(e) => {
+                                    if (hasTempoAccess) {
+                                        e.currentTarget.style.backgroundColor = '#E64000';
+                                    } else {
+                                        e.currentTarget.style.borderColor = 'var(--color-accent)';
+                                        e.currentTarget.style.color = 'var(--color-text-primary)';
+                                    }
+                                }}
+                                onMouseLeave={(e) => {
+                                    if (hasTempoAccess) {
+                                        e.currentTarget.style.backgroundColor = 'var(--color-accent)';
+                                    } else {
+                                        e.currentTarget.style.borderColor = 'var(--color-border-primary)';
+                                        e.currentTarget.style.color = 'var(--color-text-secondary)';
+                                    }
+                                }}
+                            >
+                                {hasTempoAccess ? (
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <circle cx="12" cy="12" r="10"/>
+                                        <path d="M12 6v6l4 2"/>
+                                    </svg>
+                                ) : (
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                                        <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                                    </svg>
+                                )}
+                                Log to Tempo
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
