@@ -225,9 +225,15 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
         }
     }, [selectedAssignment, settings.tempo, settings.jira, hasTempoAccess, hasJiraAccess]);
 
-    // Update local state when entry changes
+    // Update local state when switching to a different entry
+    // Note: description only syncs on entry.id change to prevent race condition with auto-save
     useEffect(() => {
         setDescription(entry.description || '');
+        setGenerationFailed(false);  // Reset on entry change to allow retry on new entry
+    }, [entry.id]);
+
+    // Update assignment when entry changes (can depend on more fields since it's not auto-saved on keystroke)
+    useEffect(() => {
         setSelectedAssignment(entry.assignment ||
             (entry.linkedJiraIssue ? {
                 type: 'jira' as const,
@@ -236,8 +242,7 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                 type: 'bucket' as const,
                 bucket: buckets.find(b => b.id === entry.bucketId)
             } : null));
-        setGenerationFailed(false);  // Reset on entry change to allow retry on new entry
-    }, [entry.id, entry.description, entry.assignment, entry.bucketId, entry.linkedJiraIssue, buckets]);
+    }, [entry.id, entry.assignment, entry.bucketId, entry.linkedJiraIssue, buckets]);
 
     // Auto-save function with debouncing
     const autoSave = () => {
