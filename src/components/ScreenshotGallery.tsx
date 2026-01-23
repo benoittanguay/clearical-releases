@@ -564,10 +564,9 @@ export function ScreenshotGallery({ screenshotPaths, metadata, onClose, onScreen
                                     }}
                                 >
                                     <svg className="w-4 h-4" style={{ color: 'var(--color-text-tertiary)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <circle cx="12" cy="12" r="10"/>
-                                        <polyline points="12 6 12 12 16 14"/>
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
                                     </svg>
-                                    <span className="text-sm" style={{ color: 'var(--color-text-tertiary)' }}>Waiting for analysis...</span>
+                                    <span className="text-sm" style={{ color: 'var(--color-text-tertiary)' }}>Analysis not available</span>
                                 </div>
                             )}
                         </div>

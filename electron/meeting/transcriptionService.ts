@@ -11,10 +11,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { TranscriptionResult, TranscriptionSegment, MEETING_EVENTS } from './types.js';
 import { EventEmitter } from 'events';
-
-// Supabase configuration
-const SUPABASE_URL = process.env.VITE_SUPABASE_URL || '';
-const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY || '';
+import { getConfig } from '../config.js';
 
 /**
  * Transcription usage information
@@ -55,6 +52,7 @@ export class TranscriptionService extends EventEmitter {
     private static instance: TranscriptionService | null = null;
     private supabase: SupabaseClient | null = null;
     private session: Session | null = null;
+    private supabaseUrl: string = '';
 
     private constructor() {
         super();
@@ -72,15 +70,19 @@ export class TranscriptionService extends EventEmitter {
     }
 
     /**
-     * Initialize Supabase client
+     * Initialize Supabase client using app config
      */
     private initializeSupabase(): void {
-        if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-            console.warn('[TranscriptionService] Supabase not configured');
+        const config = getConfig();
+
+        if (!config.supabase.url || !config.supabase.anonKey) {
+            console.warn('[TranscriptionService] Supabase not configured in app config');
             return;
         }
 
-        this.supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        this.supabaseUrl = config.supabase.url;
+        this.supabase = createClient(config.supabase.url, config.supabase.anonKey);
+        console.log('[TranscriptionService] Supabase client initialized');
     }
 
     /**
@@ -148,6 +150,7 @@ export class TranscriptionService extends EventEmitter {
         console.log('[TranscriptionService] Starting transcription for entry:', entryId);
 
         if (!this.supabase) {
+            console.error('[TranscriptionService] ERROR: Supabase client not initialized');
             return {
                 success: false,
                 transcriptionId: '',
@@ -161,6 +164,7 @@ export class TranscriptionService extends EventEmitter {
         }
 
         if (!this.session?.access_token) {
+            console.error('[TranscriptionService] ERROR: No authenticated session');
             return {
                 success: false,
                 transcriptionId: '',
@@ -175,7 +179,7 @@ export class TranscriptionService extends EventEmitter {
 
         try {
             // Call the Supabase Edge Function
-            const response = await fetch(`${SUPABASE_URL}/functions/v1/groq-transcribe`, {
+            const response = await fetch(`${this.supabaseUrl}/functions/v1/groq-transcribe`, {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${this.session.access_token}`,

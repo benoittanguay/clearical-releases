@@ -1,7 +1,7 @@
 {
   "name": "clearical",
   "private": true,
-  "version": "1.6.7",
+  "version": "1.7.0",
   "type": "module",
   "build": {
     "appId": "io.clearical.app",
@@ -105,7 +105,10 @@
           "arch": "arm64"
         }
       ],
-      "notarize": false
+      "notarize": false,
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "Clearical needs microphone access to record and transcribe meetings when you're in a video call."
+      }
     },
     "dmg": {
       "sign": true,

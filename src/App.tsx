@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTimer } from './hooks/useTimer';
 import { useStorage } from './context/StorageContext';
 import { useSettings } from './context/SettingsContext';
+import { useAudioRecording } from './context/AudioRecordingContext';
 import { analytics } from './services/analytics';
 import { Settings } from './components/Settings';
 import { HistoryDetail } from './components/HistoryDetail';
@@ -49,7 +50,9 @@ function App() {
   const [bucketsTab, setBucketsTab] = useState<'buckets' | 'jira'>('buckets');
   const [jiraRefreshFn, setJiraRefreshFn] = useState<(() => void) | null>(null);
 
-  const { isRunning, isPaused, elapsed, start: startTimer, stop: stopTimer, pause: pauseTimer, resume: resumeTimer, formatTime, checkPermissions } = useTimer();
+  const { isRunning, isPaused, elapsed, start: startTimer, stop: stopTimer, pause: pauseTimer, resume: resumeTimer, formatTime, checkPermissions, setActiveRecordingEntry } = useTimer();
+  const { clearPendingTranscription, waitForTranscription } = useAudioRecording();
+  const recordingSessionIdRef = useRef<string | null>(null);
 
   // Check for onboarding BEFORE migration - prevents flash of main UI
   useEffect(() => {
@@ -264,20 +267,49 @@ function App() {
 
       // Start timer fresh (elapsed should be 0)
       startTimer();
+
+      // Notify recording manager of active session for mic/camera recording
+      const sessionId = `session-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+      recordingSessionIdRef.current = sessionId;
+      setActiveRecordingEntry(sessionId);
     } else {
       try {
         // Set stopping state to show loading UI
         setIsStopping(true);
 
+        // Get the session ID before clearing
+        const sessionId = recordingSessionIdRef.current;
+
+        // Clear recording session - must happen before stopTimer for proper cleanup
+        setActiveRecordingEntry(null);
+        recordingSessionIdRef.current = null;
+
         // Stop timer and save entry - await to ensure AI analyses complete
         const finalActivity = await stopTimer();
+
+        // Wait for any pending transcription from the recording session (with timeout)
+        // This handles the race condition where transcription may still be in progress
+        console.log('[App] Waiting for transcription to complete (if recording was active)...');
+        const pendingTranscription = sessionId ? await waitForTranscription(sessionId, 15000) : null;
+        if (pendingTranscription) {
+          console.log('[App] Found pending transcription from recording session:', pendingTranscription.wordCount, 'words');
+        } else {
+          console.log('[App] No transcription available (no recording or timed out)');
+        }
+
         const newEntry = await addEntry({
           startTime: Date.now() - elapsed,
           endTime: Date.now(),
           duration: elapsed,
           assignment: selectedAssignment || undefined,
-          windowActivity: finalActivity
+          windowActivity: finalActivity,
+          transcription: pendingTranscription || undefined,
         });
+
+        // Clear the pending transcription after it's been applied
+        if (sessionId && pendingTranscription) {
+          clearPendingTranscription(sessionId);
+        }
 
         console.log('[App] Activity saved, navigating to details for entry:', newEntry.id);
 
@@ -301,6 +333,11 @@ function App() {
   const handlePermissionsGranted = () => {
     // Permissions are now granted, start the timer
     startTimer();
+
+    // Notify recording manager of active session for mic/camera recording
+    const sessionId = `session-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+    recordingSessionIdRef.current = sessionId;
+    setActiveRecordingEntry(sessionId);
   };
 
   const handlePauseResume = () => {

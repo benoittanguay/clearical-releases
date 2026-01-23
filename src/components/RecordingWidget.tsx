@@ -3,6 +3,7 @@
  *
  * Displays a floating overlay when audio recording is active.
  * Shows waveform visualization, duration, and stop button.
+ * Can be minimized by user, but will slide back in for meeting-ended prompts.
  */
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
@@ -14,41 +15,42 @@ interface AudioLevelData {
 
 export function RecordingWidget(): React.ReactElement {
     const [duration, setDuration] = useState(0);
-    const [audioLevels, setAudioLevels] = useState<number[]>(Array(24).fill(0.1));
-    const [ipcStatus, setIpcStatus] = useState<'checking' | 'connected' | 'disconnected'>('checking');
+    const [audioLevels, setAudioLevels] = useState<number[]>(Array(24).fill(0.05));
     const [stopClicked, setStopClicked] = useState(false);
+    const [showMeetingEndedPrompt, setShowMeetingEndedPrompt] = useState(false);
+    const [promptEntryId, setPromptEntryId] = useState<string | null>(null);
+    const [isMinimized, setIsMinimized] = useState(false);
+    const [slideIn, setSlideIn] = useState(false);
     const startTimeRef = useRef<number>(Date.now());
-    const animationFrameRef = useRef<number | undefined>(undefined);
-    const lastRealDataRef = useRef<number>(0);
     const hasRealDataRef = useRef<boolean>(false);
 
-    // Check IPC connection status on mount
+    // Verify IPC connection on mount
     useEffect(() => {
         const hasElectron = !!window.electron;
         const hasIpcRenderer = !!window.electron?.ipcRenderer;
-        const hasSend = !!window.electron?.ipcRenderer?.send;
+        const hasInvoke = !!window.electron?.ipcRenderer?.invoke;
         const hasOn = !!window.electron?.ipcRenderer?.on;
 
         console.log('[RecordingWidget] IPC status check:', {
             hasElectron,
             hasIpcRenderer,
-            hasSend,
+            hasInvoke,
             hasOn
         });
 
-        if (hasElectron && hasIpcRenderer && hasSend && hasOn) {
-            setIpcStatus('connected');
-            // Send a test ping to verify IPC is truly working
-            try {
-                window.electron.ipcRenderer.send('widget:ping', { timestamp: Date.now() });
-                console.log('[RecordingWidget] Test ping sent successfully');
-            } catch (e) {
-                console.error('[RecordingWidget] Test ping failed:', e);
-            }
-        } else {
-            setIpcStatus('disconnected');
-            console.error('[RecordingWidget] IPC NOT AVAILABLE - preload may not be loaded');
+        if (!hasElectron || !hasInvoke) {
+            console.error('[RecordingWidget] IPC not available');
+            return;
         }
+
+        // Ping to verify IPC is working
+        window.electron.ipcRenderer.invoke('widget:ping', { timestamp: Date.now() })
+            .then((response: { received: boolean; timestamp: number }) => {
+                console.log('[RecordingWidget] IPC connected:', response);
+            })
+            .catch((error: Error) => {
+                console.error('[RecordingWidget] IPC ping failed:', error);
+            });
     }, []);
 
     // Format duration as MM:SS
@@ -68,12 +70,10 @@ export function RecordingWidget(): React.ReactElement {
         return () => clearInterval(interval);
     }, []);
 
+
     // Listen for audio level updates from main process
     useEffect(() => {
         console.log('[RecordingWidget] Setting up audio levels listener');
-        console.log('[RecordingWidget] window.electron available:', !!window.electron);
-        console.log('[RecordingWidget] ipcRenderer available:', !!window.electron?.ipcRenderer);
-        console.log('[RecordingWidget] on method available:', !!window.electron?.ipcRenderer?.on);
 
         let audioLevelsReceivedCount = 0;
 
@@ -83,16 +83,23 @@ export function RecordingWidget(): React.ReactElement {
                 console.log('[RecordingWidget] Received audio levels, count:', audioLevelsReceivedCount, 'data:', data);
             }
             hasRealDataRef.current = true;
-            lastRealDataRef.current = Date.now();
+
             if (data && data.levels) {
-                setAudioLevels(data.levels);
+                // Apply logarithmic scaling to make quiet sounds more visible
+                // and boost the overall levels for better visualization
+                const scaledLevels = data.levels.map(level => {
+                    // Apply a curve that boosts low values more than high values
+                    // This makes quiet audio more visible while not clipping loud audio
+                    const boosted = Math.pow(level, 0.5) * 1.5; // Square root boost + multiplier
+                    return Math.max(0.08, Math.min(1, boosted));
+                });
+                setAudioLevels(scaledLevels);
             } else {
                 console.warn('[RecordingWidget] Invalid audio level data:', data);
             }
         };
 
         // Subscribe to audio level updates
-        // Note: The preload's `on` method strips the event, so data is the first arg
         const onFn = window.electron?.ipcRenderer?.on;
         if (!onFn) {
             console.error('[RecordingWidget] ipcRenderer.on not available - preload may not be loaded!');
@@ -108,67 +115,124 @@ export function RecordingWidget(): React.ReactElement {
         };
     }, []);
 
-    // Animate waveform bars with some randomness when no real data
+    // Listen for meeting-ended prompt trigger from main process
     useEffect(() => {
-        let lastUpdate = 0;
-        const animate = (timestamp: number) => {
-            // Only animate if we haven't received real data recently (>200ms)
-            const timeSinceRealData = Date.now() - lastRealDataRef.current;
-            if (!hasRealDataRef.current || timeSinceRealData > 200) {
-                if (timestamp - lastUpdate > 100) {
-                    lastUpdate = timestamp;
-                    setAudioLevels(prev => {
-                        // Add slight random variation to make it look alive
-                        return prev.map((_level, i) => {
-                            const baseLevel = 0.15 + Math.sin(timestamp / 300 + i * 0.5) * 0.1;
-                            const randomVariation = Math.random() * 0.15;
-                            return Math.max(0.1, Math.min(1, baseLevel + randomVariation));
-                        });
-                    });
-                }
+        console.log('[RecordingWidget] Setting up meeting-ended prompt listener');
+
+        const handleShowPrompt = (data: { entryId: string; silenceDuration: number }) => {
+            console.log('[RecordingWidget] *** RECEIVED MEETING ENDED PROMPT ***', data);
+            setPromptEntryId(data.entryId);
+            setShowMeetingEndedPrompt(true);
+
+            // If minimized, slide back in to show the prompt
+            if (isMinimized) {
+                setSlideIn(true);
+                setIsMinimized(false);
+                // Reset slideIn after animation completes
+                setTimeout(() => setSlideIn(false), 400);
             }
-            animationFrameRef.current = requestAnimationFrame(animate);
         };
 
-        animationFrameRef.current = requestAnimationFrame(animate);
+        const onFn = window.electron?.ipcRenderer?.on;
+        if (!onFn) {
+            console.error('[RecordingWidget] ipcRenderer.on not available for prompt listener');
+            return;
+        }
+
+        const unsubscribe = onFn('widget:show-meeting-ended-prompt', handleShowPrompt);
+        console.log('[RecordingWidget] Meeting-ended prompt listener registered');
 
         return () => {
-            if (animationFrameRef.current) {
-                cancelAnimationFrame(animationFrameRef.current);
-            }
+            console.log('[RecordingWidget] Cleaning up meeting-ended prompt listener');
+            unsubscribe?.();
         };
-    }, []);
+    }, [isMinimized]);
+
+    // Handle "Yes, meeting ended" response
+    const handleMeetingEndedYes = useCallback(async () => {
+        console.log('[RecordingWidget] *** USER CONFIRMED MEETING ENDED ***');
+        setShowMeetingEndedPrompt(false);
+
+        try {
+            await window.electron?.ipcRenderer?.invoke?.('widget:meeting-ended-response', {
+                response: 'yes',
+                entryId: promptEntryId,
+            });
+            console.log('[RecordingWidget] Meeting ended confirmation sent');
+        } catch (error) {
+            console.error('[RecordingWidget] Error sending meeting ended response:', error);
+        }
+    }, [promptEntryId]);
+
+    // Handle "No, continue recording" response
+    const handleMeetingEndedNo = useCallback(async () => {
+        console.log('[RecordingWidget] *** USER CHOSE TO CONTINUE RECORDING ***');
+        setShowMeetingEndedPrompt(false);
+
+        try {
+            await window.electron?.ipcRenderer?.invoke?.('widget:meeting-ended-response', {
+                response: 'no',
+                entryId: promptEntryId,
+            });
+            console.log('[RecordingWidget] Continue recording confirmation sent');
+        } catch (error) {
+            console.error('[RecordingWidget] Error sending continue response:', error);
+        }
+    }, [promptEntryId]);
 
     // Handle stop button click
-    const handleStop = useCallback(() => {
+    const handleStop = useCallback(async () => {
         console.log('[RecordingWidget] *** STOP BUTTON CLICKED ***');
         setStopClicked(true);
 
-        const hasElectron = !!window.electron;
-        const hasIpcRenderer = !!window.electron?.ipcRenderer;
-        const hasSend = !!window.electron?.ipcRenderer?.send;
+        const hasInvoke = !!window.electron?.ipcRenderer?.invoke;
 
-        console.log('[RecordingWidget] IPC availability at click time:', {
-            hasElectron,
-            hasIpcRenderer,
-            hasSend
-        });
-
-        if (!hasElectron || !hasIpcRenderer || !hasSend) {
-            console.error('[RecordingWidget] IPC NOT AVAILABLE - cannot stop recording');
+        if (!hasInvoke) {
+            console.error('[RecordingWidget] IPC invoke not available');
+            setStopClicked(false);
             return;
         }
 
         try {
-            window.electron.ipcRenderer.send('widget:stop-recording', { timestamp: Date.now() });
-            console.log('[RecordingWidget] Stop IPC message sent successfully');
+            const response = await window.electron.ipcRenderer.invoke('widget:stop-recording', { timestamp: Date.now() });
+            console.log('[RecordingWidget] Stop response:', response);
+            if (!response?.success) {
+                console.error('[RecordingWidget] Stop failed:', response?.error);
+                setStopClicked(false);
+            }
         } catch (error) {
-            console.error('[RecordingWidget] Error sending stop IPC:', error);
+            const err = error as Error;
+            console.error('[RecordingWidget] Stop IPC failed:', err);
+            setStopClicked(false);
         }
     }, []);
 
+    // Handle minimize button click
+    const handleMinimize = useCallback(() => {
+        console.log('[RecordingWidget] *** MINIMIZE CLICKED ***');
+        setIsMinimized(true);
+    }, []);
+
+    // Handle restore from minimized state
+    const handleRestore = useCallback(() => {
+        console.log('[RecordingWidget] *** RESTORE CLICKED ***');
+        setSlideIn(true);
+        setIsMinimized(false);
+        setTimeout(() => setSlideIn(false), 400);
+    }, []);
+
+    // Minimized view - compact pill
+    if (isMinimized) {
+        return (
+            <div className="recording-widget-minimized" onClick={handleRestore}>
+                <div className="recording-indicator" />
+                <span className="minimized-duration">{formatDuration(duration)}</span>
+            </div>
+        );
+    }
+
     return (
-        <div className="recording-widget">
+        <div className={`recording-widget ${slideIn ? 'slide-in' : ''}`}>
             {/* App Icon */}
             <div className="widget-icon">
                 <img src="./icon.png" alt="Clearical" />
@@ -176,31 +240,66 @@ export function RecordingWidget(): React.ReactElement {
 
             {/* Content */}
             <div className="widget-content">
-                <div className="widget-header">
-                    <div className="recording-indicator" />
-                    <span className="widget-title">Recording Meeting</span>
-                    <span className="widget-duration">{formatDuration(duration)}</span>
-                    {ipcStatus === 'disconnected' && (
-                        <span style={{ color: 'red', fontSize: '10px', marginLeft: '8px' }}>⚠️ IPC Error</span>
-                    )}
-                </div>
+                {showMeetingEndedPrompt ? (
+                    /* Meeting ended prompt */
+                    <div className="meeting-ended-prompt">
+                        <div className="prompt-header">
+                            <span className="prompt-title">Meeting ended?</span>
+                            <span className="prompt-subtitle">No audio detected</span>
+                        </div>
+                        <div className="prompt-buttons">
+                            <button
+                                className="prompt-button prompt-button-yes"
+                                onClick={handleMeetingEndedYes}
+                            >
+                                Yes, stop
+                            </button>
+                            <button
+                                className="prompt-button prompt-button-no"
+                                onClick={handleMeetingEndedNo}
+                            >
+                                No, continue
+                            </button>
+                        </div>
+                    </div>
+                ) : (
+                    /* Normal recording view */
+                    <>
+                        <div className="widget-header">
+                            <div className="recording-indicator" />
+                            <span className="widget-title">Recording</span>
+                            <span className="widget-duration">{formatDuration(duration)}</span>
+                        </div>
 
-                {/* Waveform Visualization */}
-                <div className="waveform-container">
-                    {audioLevels.map((level, index) => (
-                        <div
-                            key={index}
-                            className="waveform-bar"
-                            style={{
-                                height: `${Math.max(4, level * 28)}px`,
-                            }}
-                        />
-                    ))}
-                </div>
+                        {/* Waveform Visualization - Real audio data */}
+                        <div className="waveform-container">
+                            {audioLevels.map((level, index) => (
+                                <div
+                                    key={index}
+                                    className="waveform-bar"
+                                    style={{
+                                        height: `${Math.max(3, level * 26)}px`,
+                                    }}
+                                />
+                            ))}
+                        </div>
+                    </>
+                )}
             </div>
 
             {/* Actions */}
             <div className="widget-actions">
+                {!showMeetingEndedPrompt && (
+                    <button
+                        className="minimize-button"
+                        onClick={handleMinimize}
+                        title="Minimize"
+                    >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <line x1="5" y1="12" x2="19" y2="12" />
+                        </svg>
+                    </button>
+                )}
                 <button
                     className="stop-button"
                     onClick={handleStop}
@@ -209,7 +308,7 @@ export function RecordingWidget(): React.ReactElement {
                     <svg viewBox="0 0 24 24" fill="currentColor">
                         <rect x="6" y="6" width="12" height="12" rx="2" />
                     </svg>
-                    {stopClicked ? 'Stopping...' : 'Stop Recording'}
+                    {stopClicked ? 'Stopping...' : 'Stop'}
                 </button>
             </div>
         </div>

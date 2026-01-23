@@ -436,6 +436,26 @@ export interface ElectronAPI {
                 };
                 error?: string;
             }>;
+            // System audio capture (for capturing what others say in meetings)
+            isSystemAudioAvailable: () => Promise<boolean>;
+            startSystemAudioCapture: () => Promise<{ success: boolean; error?: string }>;
+            stopSystemAudioCapture: () => Promise<{ success: boolean }>;
+            onSystemAudioSamples: (callback: (data: {
+                samples: Float32Array;
+                channelCount: number;
+                sampleRate: number;
+                sampleCount: number;
+            }) => void) => (() => void) | undefined;
+            // Native microphone capture (bypasses getUserMedia limitations when Chrome has exclusive mic access)
+            isMicCaptureAvailable: () => Promise<boolean>;
+            startMicCapture: () => Promise<{ success: boolean; error?: string }>;
+            stopMicCapture: () => Promise<{ success: boolean }>;
+            onMicAudioSamples: (callback: (data: {
+                samples: Float32Array;
+                channelCount: number;
+                sampleRate: number;
+                sampleCount: number;
+            }) => void) => (() => void) | undefined;
             // Event subscriptions for automatic recording
             onRecordingShouldStart: (callback: (data: { entryId: string; timestamp: number }) => void) => (() => void) | undefined;
             onRecordingShouldStop: (callback: (data: { entryId: string; duration: number }) => void) => (() => void) | undefined;

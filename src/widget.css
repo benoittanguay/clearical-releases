@@ -1,16 +1,73 @@
 /**
  * Recording Widget Styles
+ * Clearical Design System - Warm Sand Aesthetic
+ *
+ * A floating overlay that appears when audio recording is active.
+ * Matches the Clearical app's warm cream/sand color palette with
+ * blood orange accents.
  */
 
+/* Import Google Fonts for consistency */
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
 :root {
-    --widget-bg: rgba(30, 30, 30, 0.95);
-    --widget-border: rgba(255, 255, 255, 0.1);
-    --widget-text: #ffffff;
-    --widget-text-secondary: rgba(255, 255, 255, 0.7);
-    --widget-accent: #ff4800;
-    --widget-accent-glow: rgba(255, 72, 0, 0.4);
-    --widget-waveform: #ff4800;
-    --widget-waveform-bg: rgba(255, 72, 0, 0.2);
+    /* Sand/Cream Color Palette */
+    --widget-bg: #F7EFE3;                       /* Sand - warm cream background */
+    --widget-bg-secondary: #FAF5EE;              /* Sand Lighter */
+    --widget-surface: #FFFFFF;                   /* Pure white for cards */
+    --widget-border: #E7DED2;                    /* Sand Darker - subtle border */
+    --widget-border-hover: #D4CFC6;              /* Darker sand for hover */
+
+    /* Text Colors */
+    --widget-text-primary: #0D0C0C;              /* Rich Black */
+    --widget-text-secondary: #6B6560;            /* Muted text */
+    --widget-text-tertiary: #8C877D;             /* Sand Dark - lighter text */
+
+    /* Accent Colors */
+    --widget-accent: #FF4800;                    /* Blood Orange */
+    --widget-accent-light: #FF6B35;              /* Blood Orange Lighter */
+    --widget-accent-muted: rgba(255, 72, 0, 0.08); /* Subtle accent bg */
+    --widget-accent-border: rgba(255, 72, 0, 0.15); /* Accent borders */
+
+    /* Recording Indicator */
+    --widget-recording: #DC2626;                 /* Error/Stop red */
+    --widget-recording-glow: rgba(220, 38, 38, 0.3);
+
+    /* Waveform */
+    --widget-waveform: #FF4800;
+    --widget-waveform-bg: rgba(255, 72, 0, 0.08);
+
+    /* Shadows - Soft and warm */
+    --widget-shadow-sm: 0 2px 8px -2px rgba(140, 135, 125, 0.15);
+    --widget-shadow-md: 0 8px 24px -8px rgba(140, 135, 125, 0.2);
+    --widget-shadow-lg: 0 16px 48px -16px rgba(140, 135, 125, 0.25);
+    --widget-shadow-glow: 0 4px 24px -4px rgba(255, 72, 0, 0.15);
+
+    /* Typography */
+    --font-display: 'DM Sans', system-ui, -apple-system, sans-serif;
+    --font-body: 'Inter', system-ui, -apple-system, sans-serif;
+    --font-mono: 'JetBrains Mono', 'SF Mono', monospace;
+
+    /* Spacing */
+    --space-xs: 4px;
+    --space-sm: 8px;
+    --space-md: 12px;
+    --space-lg: 16px;
+    --space-xl: 20px;
+
+    /* Border Radius */
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 14px;
+    --radius-xl: 18px;
+    --radius-full: 9999px;
+
+    /* Transitions */
+    --ease-out: cubic-bezier(0, 0, 0.2, 1);
+    --ease-spring: cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    --duration-fast: 150ms;
+    --duration-base: 200ms;
+    --duration-slow: 300ms;
 }
 
 * {
@@ -21,34 +78,52 @@
 
 body {
     background: transparent;
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    font-family: var(--font-body);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
 }
 
+/* Main Widget Container */
 .recording-widget {
     width: 100%;
     height: 100%;
     background: var(--widget-bg);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    border-radius: 16px;
+    border-radius: var(--radius-xl);
     border: 1px solid var(--widget-border);
     box-shadow:
-        0 25px 50px -12px rgba(0, 0, 0, 0.5),
-        0 0 0 1px rgba(255, 255, 255, 0.05) inset;
+        var(--widget-shadow-lg),
+        inset 0 1px 0 0 rgba(255, 255, 255, 0.5);
     display: flex;
     align-items: center;
-    padding: 16px 20px;
-    gap: 16px;
+    padding: var(--space-md) var(--space-lg);
+    gap: var(--space-md);
     -webkit-app-region: drag;
+    position: relative;
+    overflow: hidden;
 }
 
+/* Subtle noise texture overlay for depth */
+.recording-widget::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    opacity: 0.015;
+    pointer-events: none;
+    border-radius: inherit;
+}
+
+/* App Icon */
 .widget-icon {
     flex-shrink: 0;
-    width: 40px;
-    height: 40px;
-    border-radius: 10px;
+    width: 44px;
+    height: 44px;
+    border-radius: var(--radius-md);
     overflow: hidden;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    box-shadow: var(--widget-shadow-sm);
+    border: 1px solid var(--widget-border);
+    background: var(--widget-surface);
+    position: relative;
 }
 
 .widget-icon img {
@@ -57,27 +132,41 @@ body {
     object-fit: cover;
 }
 
+/* Content Section */
 .widget-content {
     flex: 1;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: var(--space-sm);
     min-width: 0;
 }
 
+/* Header Row */
 .widget-header {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--space-sm);
 }
 
+/* Recording Indicator - Pulsing Red Dot */
 .recording-indicator {
     width: 8px;
     height: 8px;
-    background: #ef4444;
-    border-radius: 50%;
+    background: var(--widget-recording);
+    border-radius: var(--radius-full);
     animation: pulse-recording 1.5s ease-in-out infinite;
-    box-shadow: 0 0 8px rgba(239, 68, 68, 0.6);
+    box-shadow: 0 0 0 0 var(--widget-recording-glow);
+    position: relative;
+}
+
+.recording-indicator::after {
+    content: '';
+    position: absolute;
+    inset: -3px;
+    border-radius: var(--radius-full);
+    background: var(--widget-recording);
+    opacity: 0;
+    animation: ping-recording 1.5s ease-in-out infinite;
 }
 
 @keyframes pulse-recording {
@@ -86,98 +175,361 @@ body {
         transform: scale(1);
     }
     50% {
-        opacity: 0.5;
-        transform: scale(0.9);
+        opacity: 0.7;
+        transform: scale(0.92);
     }
 }
 
+@keyframes ping-recording {
+    0% {
+        opacity: 0.4;
+        transform: scale(1);
+    }
+    100% {
+        opacity: 0;
+        transform: scale(2.2);
+    }
+}
+
+/* Title Text */
 .widget-title {
+    font-family: var(--font-display);
     font-size: 13px;
     font-weight: 600;
-    color: var(--widget-text);
-    font-family: 'DM Sans', sans-serif;
+    color: var(--widget-text-primary);
+    letter-spacing: -0.01em;
 }
 
+/* Duration Display */
 .widget-duration {
-    font-size: 11px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 500;
     color: var(--widget-text-secondary);
-    font-family: 'Inter', monospace;
     font-variant-numeric: tabular-nums;
+    letter-spacing: 0.02em;
+    margin-left: auto;
+    padding-left: var(--space-sm);
 }
 
+/* Waveform Container */
 .waveform-container {
-    height: 32px;
+    height: 28px;
     background: var(--widget-waveform-bg);
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
     overflow: hidden;
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 2px;
-    padding: 0 8px;
+    padding: 0 var(--space-sm);
+    border: 1px solid var(--widget-accent-border);
 }
 
+/* Individual Waveform Bars */
 .waveform-bar {
     width: 3px;
-    background: var(--widget-waveform);
+    background: linear-gradient(
+        to top,
+        var(--widget-accent) 0%,
+        var(--widget-accent-light) 100%
+    );
     border-radius: 2px;
-    transition: height 0.1s ease-out;
-    min-height: 4px;
+    transition: height 80ms var(--ease-out);
+    min-height: 3px;
+    opacity: 0.9;
 }
 
+/* Alternating bar opacity for depth */
+.waveform-bar:nth-child(odd) {
+    opacity: 1;
+}
+
+.waveform-bar:nth-child(even) {
+    opacity: 0.75;
+}
+
+/* Actions Section */
 .widget-actions {
     flex-shrink: 0;
     display: flex;
-    gap: 8px;
+    gap: var(--space-sm);
     -webkit-app-region: no-drag;
 }
 
+/* Stop Button - Primary Action */
 .stop-button {
     display: flex;
     align-items: center;
     gap: 6px;
-    padding: 8px 16px;
-    background: rgba(239, 68, 68, 0.15);
-    border: 1px solid rgba(239, 68, 68, 0.3);
-    border-radius: 8px;
-    color: #ef4444;
-    font-size: 12px;
+    padding: var(--space-sm) var(--space-md);
+    background: var(--widget-surface);
+    border: 1px solid var(--widget-border);
+    border-radius: var(--radius-md);
+    color: var(--widget-recording);
+    font-family: var(--font-mono);
+    font-size: 11px;
     font-weight: 600;
-    font-family: 'DM Sans', sans-serif;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition:
+        background-color var(--duration-fast) var(--ease-out),
+        border-color var(--duration-fast) var(--ease-out),
+        box-shadow var(--duration-fast) var(--ease-out),
+        transform var(--duration-fast) var(--ease-out);
+    box-shadow: var(--widget-shadow-sm);
+    position: relative;
+    overflow: hidden;
+}
+
+.stop-button::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+        135deg,
+        transparent 0%,
+        rgba(220, 38, 38, 0.04) 100%
+    );
+    opacity: 0;
+    transition: opacity var(--duration-fast) var(--ease-out);
 }
 
 .stop-button:hover {
-    background: rgba(239, 68, 68, 0.25);
-    border-color: rgba(239, 68, 68, 0.5);
+    background: var(--widget-bg-secondary);
+    border-color: rgba(220, 38, 38, 0.25);
+    box-shadow:
+        var(--widget-shadow-md),
+        0 0 0 3px rgba(220, 38, 38, 0.08);
     transform: translateY(-1px);
 }
 
+.stop-button:hover::before {
+    opacity: 1;
+}
+
 .stop-button:active {
-    transform: translateY(0);
+    transform: translateY(0) scale(0.98);
+    box-shadow: var(--widget-shadow-sm);
 }
 
 .stop-button svg {
-    width: 14px;
-    height: 14px;
+    width: 12px;
+    height: 12px;
+    position: relative;
 }
 
+/* Minimize Button (if needed) */
 .minimize-button {
     display: flex;
     align-items: center;
     justify-content: center;
     width: 32px;
     height: 32px;
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 8px;
-    color: var(--widget-text-secondary);
+    background: var(--widget-surface);
+    border: 1px solid var(--widget-border);
+    border-radius: var(--radius-md);
+    color: var(--widget-text-tertiary);
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition:
+        background-color var(--duration-fast) var(--ease-out),
+        border-color var(--duration-fast) var(--ease-out),
+        color var(--duration-fast) var(--ease-out);
 }
 
 .minimize-button:hover {
-    background: rgba(255, 255, 255, 0.1);
-    color: var(--widget-text);
+    background: var(--widget-bg-secondary);
+    border-color: var(--widget-border-hover);
+    color: var(--widget-text-secondary);
+}
+
+/* Entry Animation */
+@keyframes widget-enter {
+    from {
+        opacity: 0;
+        transform: translateY(-12px) scale(0.96);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.recording-widget {
+    animation: widget-enter var(--duration-slow) var(--ease-spring);
+}
+
+/* Hover state for entire widget - subtle lift */
+.recording-widget:hover {
+    box-shadow:
+        var(--widget-shadow-lg),
+        var(--widget-shadow-glow),
+        inset 0 1px 0 0 rgba(255, 255, 255, 0.5);
+}
+
+/* Meeting Ended Prompt - Compact inline question */
+.meeting-ended-prompt {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+    width: 100%;
+    animation: prompt-fade-in var(--duration-base) var(--ease-out);
+}
+
+@keyframes prompt-fade-in {
+    from {
+        opacity: 0;
+        transform: translateY(-4px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.prompt-header {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+}
+
+.prompt-title {
+    font-family: var(--font-display);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--widget-text-primary);
+}
+
+.prompt-subtitle {
+    font-family: var(--font-body);
+    font-size: 11px;
+    color: var(--widget-text-tertiary);
+}
+
+.prompt-buttons {
+    display: flex;
+    gap: var(--space-sm);
+    -webkit-app-region: no-drag;
+}
+
+.prompt-button {
+    flex: 1;
+    padding: var(--space-sm) var(--space-md);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition:
+        background-color var(--duration-fast) var(--ease-out),
+        border-color var(--duration-fast) var(--ease-out),
+        transform var(--duration-fast) var(--ease-out);
+}
+
+.prompt-button:active {
+    transform: scale(0.97);
+}
+
+/* Yes/Stop button - accent style */
+.prompt-button-yes {
+    background: var(--widget-accent);
+    border: 1px solid var(--widget-accent);
+    color: #FFFFFF;
+}
+
+.prompt-button-yes:hover {
+    background: var(--widget-accent-light);
+    border-color: var(--widget-accent-light);
+}
+
+/* No/Continue button - secondary style */
+.prompt-button-no {
+    background: var(--widget-surface);
+    border: 1px solid var(--widget-border);
+    color: var(--widget-text-secondary);
+}
+
+.prompt-button-no:hover {
+    background: var(--widget-bg-secondary);
+    border-color: var(--widget-border-hover);
+    color: var(--widget-text-primary);
+}
+
+/* ============================================
+   Minimized Widget State
+   ============================================ */
+
+/* Minimized view - compact pill that shows recording status */
+.recording-widget-minimized {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: var(--space-sm) var(--space-md);
+    background: var(--widget-bg);
+    border-radius: var(--radius-full);
+    border: 1px solid var(--widget-border);
+    box-shadow: var(--widget-shadow-md);
+    cursor: pointer;
+    -webkit-app-region: drag;
+    transition:
+        box-shadow var(--duration-fast) var(--ease-out),
+        transform var(--duration-fast) var(--ease-out);
+    animation: minimize-in var(--duration-slow) var(--ease-spring);
+}
+
+.recording-widget-minimized:hover {
+    box-shadow:
+        var(--widget-shadow-lg),
+        var(--widget-shadow-glow);
+    transform: scale(1.02);
+}
+
+.recording-widget-minimized:active {
+    transform: scale(0.98);
+}
+
+.minimized-duration {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--widget-text-primary);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.02em;
+}
+
+/* Animation for minimizing */
+@keyframes minimize-in {
+    from {
+        opacity: 0;
+        transform: scale(0.8);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+/* Slide-in animation when restoring or showing prompt */
+.recording-widget.slide-in {
+    animation: slide-in-from-top var(--duration-slow) var(--ease-spring);
+}
+
+@keyframes slide-in-from-top {
+    from {
+        opacity: 0;
+        transform: translateY(-20px) scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+/* Minimize button styling update */
+.minimize-button svg {
+    width: 14px;
+    height: 14px;
 }

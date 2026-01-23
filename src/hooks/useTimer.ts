@@ -34,6 +34,102 @@ export interface PermissionCheckResult {
     allGranted: boolean;
 }
 
+// Browser bundle IDs that may have dynamic window titles
+const BROWSER_BUNDLE_IDS = [
+    'com.google.Chrome',
+    'com.apple.Safari',
+    'org.mozilla.firefox',
+    'com.microsoft.edgemac',
+    'com.brave.Browser',
+    'com.operasoftware.Opera',
+];
+
+/**
+ * Extract a stable identifier from a window title for activity grouping.
+ * For video conferencing URLs, extracts the meeting ID portion.
+ * For general URLs, extracts the domain.
+ * Returns null if no stable identifier can be extracted.
+ */
+function extractStableIdentifier(windowTitle: string): string | null {
+    // Common video conferencing patterns with meeting IDs
+    // Google Meet: "Meet - abc-defg-hij - Something - Browser"
+    const meetPattern = /Meet\s*[-–]\s*([a-z]{3,4}-[a-z]{4}-[a-z]{3,4})/i;
+    const meetMatch = windowTitle.match(meetPattern);
+    if (meetMatch) {
+        return `meet.google.com/${meetMatch[1]}`;
+    }
+
+    // meet.google.com URL in title
+    const meetUrlPattern = /meet\.google\.com\/([a-z]{3,4}-[a-z]{4}-[a-z]{3,4})/i;
+    const meetUrlMatch = windowTitle.match(meetUrlPattern);
+    if (meetUrlMatch) {
+        return `meet.google.com/${meetUrlMatch[1]}`;
+    }
+
+    // Zoom meeting
+    const zoomPattern = /Zoom\s+(Meeting|Webinar)/i;
+    if (zoomPattern.test(windowTitle)) {
+        return 'zoom.us/meeting';
+    }
+
+    // Microsoft Teams
+    const teamsPattern = /Microsoft Teams/i;
+    if (teamsPattern.test(windowTitle)) {
+        return 'teams.microsoft.com';
+    }
+
+    // Generic URL pattern in title (often browsers show URL)
+    const urlPattern = /(?:https?:\/\/)?([a-zA-Z0-9][-a-zA-Z0-9]*(?:\.[a-zA-Z0-9][-a-zA-Z0-9]*)+)/;
+    const urlMatch = windowTitle.match(urlPattern);
+    if (urlMatch) {
+        return urlMatch[1].toLowerCase();
+    }
+
+    return null;
+}
+
+/**
+ * Determine if a window change is "significant" enough to create a new activity.
+ * Returns true if we should create a new activity, false if we should just update the title.
+ */
+function isSignificantWindowChange(
+    lastWindow: { appName: string; windowTitle: string; bundleId?: string } | null,
+    newWindow: { appName: string; windowTitle: string; bundleId?: string }
+): boolean {
+    // No previous window - always significant
+    if (!lastWindow) return true;
+
+    // Different app - always significant
+    if (lastWindow.appName !== newWindow.appName) return true;
+
+    // Same app, same title - not significant (shouldn't happen, but handle it)
+    if (lastWindow.windowTitle === newWindow.windowTitle) return false;
+
+    // For browser apps, check if we're on the same site/meeting
+    const isBrowser = BROWSER_BUNDLE_IDS.includes(newWindow.bundleId || '');
+    if (isBrowser) {
+        const lastIdentifier = extractStableIdentifier(lastWindow.windowTitle);
+        const newIdentifier = extractStableIdentifier(newWindow.windowTitle);
+
+        // If both have identifiers and they match, it's the same activity
+        if (lastIdentifier && newIdentifier && lastIdentifier === newIdentifier) {
+            return false; // Not significant - same site/meeting
+        }
+
+        // If we can extract an identifier from the new but not old (or vice versa),
+        // check if one title contains the other's identifier
+        if (lastIdentifier && newWindow.windowTitle.toLowerCase().includes(lastIdentifier.split('/')[0])) {
+            return false;
+        }
+        if (newIdentifier && lastWindow.windowTitle.toLowerCase().includes(newIdentifier.split('/')[0])) {
+            return false;
+        }
+    }
+
+    // Default: different title means different activity
+    return true;
+}
+
 export function useTimer() {
     const { settings } = useSettings();
     const { startAnalysis, completeAnalysis, failAnalysis } = useScreenshotAnalysis();
@@ -421,13 +517,25 @@ export function useTimer() {
                     }
                 }
 
-                // Check if window changed
-                const windowChanged = !lastWindowRef.current ||
+                // Check if window changed significantly (new activity vs minor title update)
+                const titleChanged = !lastWindowRef.current ||
                     lastWindowRef.current.appName !== result.appName ||
                     lastWindowRef.current.windowTitle !== result.windowTitle;
 
-                if (windowChanged) {
-                    console.log('[Renderer] Window change detected:', {
+                const significantChange = isSignificantWindowChange(lastWindowRef.current, result);
+
+                if (titleChanged && !significantChange && lastWindowRef.current) {
+                    // Minor title change (e.g., "Camera active" suffix in Google Meet)
+                    // Update the title in the ref but don't create a new activity
+                    console.log('[Renderer] Minor title change (same activity):', {
+                        from: lastWindowRef.current.windowTitle,
+                        to: result.windowTitle
+                    });
+                    lastWindowRef.current.windowTitle = result.windowTitle;
+                }
+
+                if (significantChange) {
+                    console.log('[Renderer] Significant window change detected:', {
                         from: lastWindowRef.current,
                         to: result
                     });
@@ -504,11 +612,11 @@ export function useTimer() {
                     }, INTERVAL_SCREENSHOT_TIME);
 
                 } else {
-                    // Same window - don't update timestamp!
+                    // Same activity - don't update timestamp!
                     // The timestamp represents when this activity STARTED, not the current poll time.
                     // Updating it would make all activities artificially short.
-                    // We just continue tracking the same window without any action needed.
-                    console.log('[Renderer] Same window, continuing activity tracking');
+                    // We just continue tracking the same activity without creating a new one.
+                    // (Minor title changes are handled above - same activity, different title)
                 }
             } catch (error) {
                 console.error('[Renderer] Error in pollWindow:', error);
@@ -880,11 +988,27 @@ export function useTimer() {
      * Recording will only happen when there's an active entry AND mic/camera is in use.
      */
     const setActiveRecordingEntry = (entryId: string | null) => {
+        console.log('[Timer] ========================================');
+        console.log('[Timer] setActiveRecordingEntry CALLED');
+        console.log('[Timer] entryId:', entryId);
+        console.log('[Timer] window.electron available:', !!window.electron);
+        console.log('[Timer] meeting API available:', !!window.electron?.ipcRenderer?.meeting);
+        console.log('[Timer] setActiveEntry function available:', !!window.electron?.ipcRenderer?.meeting?.setActiveEntry);
+        console.log('[Timer] ========================================');
+
         // @ts-ignore
         if (window.electron?.ipcRenderer?.meeting?.setActiveEntry) {
             // @ts-ignore
-            window.electron.ipcRenderer.meeting.setActiveEntry(entryId);
-            console.log('[Timer] Active recording entry set:', entryId);
+            window.electron.ipcRenderer.meeting.setActiveEntry(entryId)
+                .then((result: { success: boolean; error?: string }) => {
+                    console.log('[Timer] setActiveEntry IPC response:', result);
+                })
+                .catch((error: Error) => {
+                    console.error('[Timer] setActiveEntry IPC error:', error);
+                });
+            console.log('[Timer] Active recording entry request sent');
+        } else {
+            console.error('[Timer] *** CRITICAL: setActiveEntry function not available! ***');
         }
     };
 

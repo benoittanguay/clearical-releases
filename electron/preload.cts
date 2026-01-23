@@ -251,6 +251,42 @@ contextBridge.exposeInMainWorld('electron', {
                 ipcRenderer.invoke('meeting:save-audio-and-transcribe', entryId, audioBase64, mimeType),
             getTranscriptionUsage: () =>
                 ipcRenderer.invoke('meeting:get-transcription-usage'),
+            // System audio capture (for capturing what others say in meetings)
+            isSystemAudioAvailable: () =>
+                ipcRenderer.invoke('meeting:is-system-audio-available'),
+            startSystemAudioCapture: () =>
+                ipcRenderer.invoke('meeting:start-system-audio-capture'),
+            stopSystemAudioCapture: () =>
+                ipcRenderer.invoke('meeting:stop-system-audio-capture'),
+            onSystemAudioSamples: (callback: (data: { samples: Float32Array; channelCount: number; sampleRate: number; sampleCount: number }) => void) => {
+                const subscription = (_event: any, data: any) => {
+                    // Convert the samples array back to Float32Array if needed
+                    const samples = data.samples instanceof Float32Array
+                        ? data.samples
+                        : new Float32Array(data.samples);
+                    callback({ ...data, samples });
+                };
+                ipcRenderer.on('meeting:system-audio-samples', subscription);
+                return () => ipcRenderer.removeListener('meeting:system-audio-samples', subscription);
+            },
+            // Native microphone capture (bypasses getUserMedia limitations when Chrome has exclusive mic access)
+            isMicCaptureAvailable: () =>
+                ipcRenderer.invoke('meeting:is-mic-capture-available'),
+            startMicCapture: () =>
+                ipcRenderer.invoke('meeting:start-mic-capture'),
+            stopMicCapture: () =>
+                ipcRenderer.invoke('meeting:stop-mic-capture'),
+            onMicAudioSamples: (callback: (data: { samples: Float32Array; channelCount: number; sampleRate: number; sampleCount: number }) => void) => {
+                const subscription = (_event: any, data: any) => {
+                    // Convert the samples array back to Float32Array if needed
+                    const samples = data.samples instanceof Float32Array
+                        ? data.samples
+                        : new Float32Array(data.samples);
+                    callback({ ...data, samples });
+                };
+                ipcRenderer.on('meeting:mic-audio-samples', subscription);
+                return () => ipcRenderer.removeListener('meeting:mic-audio-samples', subscription);
+            },
             // Event subscriptions for automatic recording
             onRecordingShouldStart: (callback: (data: { entryId: string; timestamp: number }) => void) => {
                 const subscription = (_event: any, data: { entryId: string; timestamp: number }) => callback(data);

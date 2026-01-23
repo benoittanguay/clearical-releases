@@ -6,6 +6,8 @@
       "cflags_cc!": [ "-fno-exceptions" ],
       "sources": [
         "src/media_monitor.mm",
+        "src/system_audio_capture.mm",
+        "src/mic_capture.mm",
         "src/index.mm"
       ],
       "include_dirs": [
@@ -26,7 +28,10 @@
               "-framework AVFoundation",
               "-framework CoreMediaIO",
               "-framework IOKit",
-              "-framework Foundation"
+              "-framework Foundation",
+              "-framework ScreenCaptureKit",
+              "-framework CoreMedia",
+              "-framework Accelerate"
             ]
           }
         }]

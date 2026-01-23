@@ -15,7 +15,7 @@ import { EventEmitter } from 'events';
 import { BrowserWindow } from 'electron';
 import { mediaMonitor } from '../native/index.js';
 import { AudioRecorder, getAudioRecorder } from './audioRecorder.js';
-import { MEETING_EVENTS, MEETING_IPC_CHANNELS, MeetingPlatform } from './types.js';
+import { MEETING_EVENTS, MEETING_IPC_CHANNELS } from './types.js';
 import { getRecordingWidgetManager } from './recordingWidgetManager.js';
 
 export class RecordingManager extends EventEmitter {
@@ -176,8 +176,14 @@ export class RecordingManager extends EventEmitter {
      */
     private sendToRenderer(channel: string, ...args: any[]): void {
         const windows = BrowserWindow.getAllWindows();
+        console.log(`[RecordingManager] sendToRenderer: channel=${channel}, args=`, args);
+        console.log(`[RecordingManager] Found ${windows.length} windows`);
+
         for (const win of windows) {
             if (!win.isDestroyed()) {
+                const title = win.getTitle();
+                const url = win.webContents.getURL();
+                console.log(`[RecordingManager] Sending to window: title="${title}", url="${url}"`);
                 win.webContents.send(channel, ...args);
             }
         }
@@ -258,7 +264,9 @@ export class RecordingManager extends EventEmitter {
     }
 
     private onMediaStarted(device: 'microphone' | 'camera'): void {
-        console.log(`[RecordingManager] ${device} started`);
+        console.log(`[RecordingManager] ========================================`);
+        console.log(`[RecordingManager] *** onMediaStarted CALLBACK: ${device} ***`);
+        console.log(`[RecordingManager] ========================================`);
         console.log(`[RecordingManager] Current state:`, {
             isEnabled: this.isEnabled,
             activeEntryId: this.activeEntryId,
@@ -274,21 +282,21 @@ export class RecordingManager extends EventEmitter {
         // 2. There's an active entry
         // 3. We're not already recording
         if (!this.isEnabled) {
-            console.log('[RecordingManager] Auto-recording disabled, skipping');
+            console.log('[RecordingManager] *** SKIPPING: Auto-recording disabled ***');
             return;
         }
 
         if (!this.activeEntryId) {
-            console.log('[RecordingManager] No active entry, skipping recording');
+            console.log('[RecordingManager] *** SKIPPING: No active entry ***');
             return;
         }
 
         if (this.isRendererRecording) {
-            console.log('[RecordingManager] Already recording, continuing');
+            console.log('[RecordingManager] *** SKIPPING: Already recording ***');
             return;
         }
 
-        console.log('[RecordingManager] All conditions met, starting recording');
+        console.log('[RecordingManager] *** ALL CONDITIONS MET - Starting recording ***');
         this.notifyRendererToStartRecording();
     }
 

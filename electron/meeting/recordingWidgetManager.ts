@@ -46,19 +46,22 @@ export class RecordingWidgetManager {
      * Register IPC handlers for widget communication
      */
     private registerIpcHandlers(): void {
-        // Handle stop recording request from widget
-        ipcMain.on('widget:stop-recording', () => {
+        // Handle stop recording request from widget - use handle so widget gets response
+        ipcMain.handle('widget:stop-recording', async () => {
             console.log('[RecordingWidgetManager] Stop recording requested from widget');
             console.log('[RecordingWidgetManager] onStopCallback is set:', !!this.onStopCallback);
             if (this.onStopCallback) {
                 try {
                     this.onStopCallback();
                     console.log('[RecordingWidgetManager] Stop callback executed successfully');
+                    return { success: true };
                 } catch (error) {
                     console.error('[RecordingWidgetManager] Error in stop callback:', error);
+                    return { success: false, error: String(error) };
                 }
             } else {
                 console.warn('[RecordingWidgetManager] No stop callback registered!');
+                return { success: false, error: 'No callback registered' };
             }
         });
 
@@ -68,10 +71,11 @@ export class RecordingWidgetManager {
             this.hide();
         });
 
-        // Handle ping from widget to verify IPC is working
-        ipcMain.on('widget:ping', (_event, data) => {
+        // Handle ping from widget to verify IPC is working - use handle for response
+        ipcMain.handle('widget:ping', async (_event, data) => {
             console.log('[RecordingWidgetManager] *** WIDGET PING RECEIVED ***', data);
             console.log('[RecordingWidgetManager] This confirms preload is loaded and IPC is working!');
+            return { received: true, timestamp: Date.now() };
         });
 
         console.log('[RecordingWidgetManager] IPC handlers registered');
@@ -88,11 +92,22 @@ export class RecordingWidgetManager {
      * Show the recording widget
      */
     public show(): void {
+        console.log('[RecordingWidgetManager] show() called');
+        console.log('[RecordingWidgetManager] Current state:', {
+            isShowing: this.isShowing,
+            widgetWindowExists: !!this.widgetWindow,
+            widgetWindowDestroyed: this.widgetWindow?.isDestroyed(),
+        });
+
         if (this.isShowing && this.widgetWindow && !this.widgetWindow.isDestroyed()) {
+            console.log('[RecordingWidgetManager] Widget already showing, just calling show()');
             this.widgetWindow.show();
             return;
         }
 
+        console.log('[RecordingWidgetManager] Creating new widget window...');
+        // Reset the audio levels counter for the new session
+        this.audioLevelsSentCount = 0;
         this.createWindow();
         this.isShowing = true;
     }
@@ -116,12 +131,13 @@ export class RecordingWidgetManager {
         console.log('[RecordingWidgetManager] widgetWindow destroyed:', this.widgetWindow?.isDestroyed());
 
         if (this.widgetWindow && !this.widgetWindow.isDestroyed()) {
-            console.log('[RecordingWidgetManager] Closing widget window...');
-            this.widgetWindow.close();
+            console.log('[RecordingWidgetManager] Destroying widget window...');
+            // Use destroy() instead of close() because window was created with closable: false
+            this.widgetWindow.destroy();
             this.widgetWindow = null;
-            console.log('[RecordingWidgetManager] Widget window closed and nulled');
+            console.log('[RecordingWidgetManager] Widget window destroyed and nulled');
         } else {
-            console.log('[RecordingWidgetManager] Widget window already closed or null');
+            console.log('[RecordingWidgetManager] Widget window already destroyed or null');
         }
         this.isShowing = false;
     }
@@ -145,6 +161,21 @@ export class RecordingWidgetManager {
                 console.warn('[RecordingWidgetManager] Cannot send audio levels - widget window not available');
                 this.audioLevelsSentCount = -1; // Only log once
             }
+        }
+    }
+
+    /**
+     * Send meeting-ended prompt to widget (instead of system dialog)
+     */
+    public sendMeetingEndedPrompt(entryId: string, silenceDuration: number): void {
+        if (this.widgetWindow && !this.widgetWindow.isDestroyed()) {
+            console.log('[RecordingWidgetManager] Sending meeting-ended prompt to widget');
+            this.widgetWindow.webContents.send('widget:show-meeting-ended-prompt', {
+                entryId,
+                silenceDuration,
+            });
+        } else {
+            console.warn('[RecordingWidgetManager] Cannot send meeting-ended prompt - widget window not available');
         }
     }
 

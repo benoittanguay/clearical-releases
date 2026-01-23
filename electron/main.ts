@@ -40,6 +40,7 @@ import { getCalendarService, initializeCalendarService } from './calendar/calend
 import { getRecordingManager } from './meeting/recordingManager.js';
 import { MEETING_IPC_CHANNELS } from './meeting/types.js';
 import { getAudioRecorder } from './meeting/audioRecorder.js';
+import { mediaMonitor } from './native/index.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -1999,10 +2000,82 @@ ipcMain.handle(MEETING_IPC_CHANNELS.SET_AUTO_RECORD_ENABLED, (_event, enabled: b
 });
 
 // Audio levels forwarding to widget
-ipcMain.on(MEETING_IPC_CHANNELS.SEND_AUDIO_LEVELS, (_event, levels: number[]) => {
-    const { getRecordingWidgetManager } = require('./meeting/recordingWidgetManager.js');
+let audioLevelsForwardedCount = 0;
+ipcMain.on(MEETING_IPC_CHANNELS.SEND_AUDIO_LEVELS, async (_event, levels: number[]) => {
+    audioLevelsForwardedCount++;
+    if (audioLevelsForwardedCount <= 3 || audioLevelsForwardedCount % 100 === 0) {
+        console.log('[Main] Forwarding audio levels to widget, count:', audioLevelsForwardedCount);
+    }
+    const { getRecordingWidgetManager } = await import('./meeting/recordingWidgetManager.js');
     const widgetManager = getRecordingWidgetManager();
     widgetManager.sendAudioLevels(levels);
+});
+
+// Silence detection - meeting may have ended due to extended silence
+ipcMain.on('meeting:silence-detected', async (_event, data: { entryId: string; silenceDuration: number; askConfirmation?: boolean }) => {
+    console.log('[Main] *** SILENCE DETECTED ***');
+    console.log('[Main] entryId:', data.entryId, 'silenceDuration:', data.silenceDuration, 'askConfirmation:', data.askConfirmation);
+
+    const recordingManager = getRecordingManager();
+    const { getRecordingWidgetManager } = await import('./meeting/recordingWidgetManager.js');
+    const widgetManager = getRecordingWidgetManager();
+
+    // Check if we're still recording
+    if (recordingManager.getActiveEntry() !== data.entryId && recordingManager.getActiveEntry() !== null) {
+        console.log('[Main] Entry mismatch, ignoring silence detection');
+        return;
+    }
+
+    if (data.askConfirmation) {
+        // Show confirmation in widget instead of system dialog
+        console.log('[Main] Showing meeting ended prompt in widget');
+        widgetManager.sendMeetingEndedPrompt(data.entryId, data.silenceDuration);
+    }
+});
+
+// Handle widget meeting-ended response (yes/no from user)
+ipcMain.handle('widget:meeting-ended-response', async (_event, data: { response: 'yes' | 'no'; entryId: string | null }) => {
+    console.log('[Main] *** WIDGET MEETING ENDED RESPONSE ***');
+    console.log('[Main] response:', data.response, 'entryId:', data.entryId);
+
+    const recordingManager = getRecordingManager();
+    const { getRecordingWidgetManager } = await import('./meeting/recordingWidgetManager.js');
+    const widgetManager = getRecordingWidgetManager();
+
+    if (data.response === 'yes') {
+        // User confirmed meeting ended
+        console.log('[Main] User confirmed meeting ended via widget');
+
+        // Send stop event to renderer to stop the MediaRecorder
+        const windows = BrowserWindow.getAllWindows();
+        for (const win of windows) {
+            if (!win.isDestroyed()) {
+                win.webContents.send(MEETING_IPC_CHANNELS.EVENT_RECORDING_SHOULD_STOP, {
+                    entryId: data.entryId,
+                    duration: 0,
+                    reason: 'user_confirmed_meeting_ended',
+                });
+            }
+        }
+
+        // Close the widget
+        widgetManager.close();
+
+        return { success: true };
+    } else {
+        // User wants to continue recording
+        console.log('[Main] User chose to continue recording via widget');
+
+        // Notify renderer to reset silence timer
+        const windows = BrowserWindow.getAllWindows();
+        for (const win of windows) {
+            if (!win.isDestroyed()) {
+                win.webContents.send('meeting:reset-silence-timer');
+            }
+        }
+
+        return { success: true };
+    }
 });
 
 // Audio transcription IPC handlers
@@ -2067,6 +2140,95 @@ ipcMain.handle(MEETING_IPC_CHANNELS.GET_TRANSCRIPTION_USAGE, async () => {
             error: error instanceof Error ? error.message : 'Unknown error',
         };
     }
+});
+
+// System Audio Capture IPC handlers
+ipcMain.handle('meeting:is-system-audio-available', () => {
+    console.log('[Main] meeting:is-system-audio-available called');
+    return mediaMonitor.isSystemAudioCaptureAvailable();
+});
+
+let systemAudioSampleCount = 0;
+ipcMain.handle('meeting:start-system-audio-capture', () => {
+    console.log('[Main] meeting:start-system-audio-capture called');
+    systemAudioSampleCount = 0;
+    try {
+        const result = mediaMonitor.startSystemAudioCapture((info) => {
+            systemAudioSampleCount++;
+            // Log every 100th callback to avoid spam
+            if (systemAudioSampleCount % 100 === 1) {
+                console.log(`[Main] System audio samples received #${systemAudioSampleCount}: sampleCount=${info.sampleCount}, channelCount=${info.channelCount}, sampleRate=${info.sampleRate}`);
+            }
+            // Forward audio samples to all renderer windows
+            const windows = BrowserWindow.getAllWindows();
+            for (const win of windows) {
+                if (!win.isDestroyed()) {
+                    // Convert Float32Array to regular array for IPC
+                    win.webContents.send('meeting:system-audio-samples', {
+                        samples: Array.from(info.samples),
+                        channelCount: info.channelCount,
+                        sampleRate: info.sampleRate,
+                        sampleCount: info.sampleCount,
+                    });
+                }
+            }
+        });
+        console.log('[Main] meeting:start-system-audio-capture result:', result);
+        return result;
+    } catch (error) {
+        console.error('[Main] meeting:start-system-audio-capture error:', error);
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+});
+
+ipcMain.handle('meeting:stop-system-audio-capture', () => {
+    console.log('[Main] meeting:stop-system-audio-capture called');
+    mediaMonitor.stopSystemAudioCapture();
+    return { success: true };
+});
+
+// Native microphone capture (bypasses getUserMedia limitations)
+ipcMain.handle('meeting:is-mic-capture-available', () => {
+    console.log('[Main] meeting:is-mic-capture-available called');
+    return mediaMonitor.isMicCaptureAvailable();
+});
+
+let micSampleCount = 0;
+ipcMain.handle('meeting:start-mic-capture', () => {
+    console.log('[Main] meeting:start-mic-capture called');
+    micSampleCount = 0;
+    try {
+        const result = mediaMonitor.startMicCapture((info) => {
+            micSampleCount++;
+            // Log every 100th callback to avoid spam
+            if (micSampleCount % 100 === 1) {
+                console.log(`[Main] Native mic samples received #${micSampleCount}: sampleCount=${info.sampleCount}, channelCount=${info.channelCount}`);
+            }
+            // Send to all renderer windows
+            const windows = BrowserWindow.getAllWindows();
+            for (const win of windows) {
+                if (!win.isDestroyed()) {
+                    win.webContents.send('meeting:mic-audio-samples', {
+                        samples: Array.from(info.samples),
+                        channelCount: info.channelCount,
+                        sampleRate: info.sampleRate,
+                        sampleCount: info.sampleCount,
+                    });
+                }
+            }
+        });
+        console.log('[Main] meeting:start-mic-capture result:', result);
+        return result;
+    } catch (error) {
+        console.error('[Main] meeting:start-mic-capture error:', error);
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+});
+
+ipcMain.handle('meeting:stop-mic-capture', () => {
+    console.log('[Main] meeting:stop-mic-capture called');
+    mediaMonitor.stopMicCapture();
+    return { success: true };
 });
 
 // AI Assignment Suggestion Handler
@@ -3431,7 +3593,7 @@ function createWindow() {
             contextIsolation: true,
             webSecurity: true,
             sandbox: false,
-            devTools: false // Disable devTools
+            devTools: true  // Enable for debugging
         },
     });
 
@@ -3442,6 +3604,14 @@ function createWindow() {
     // In test mode or production, load from built files
     // In development (not test), load from Vite dev server
     const isTestMode = process.env.NODE_ENV === 'test';
+
+    // Add keyboard shortcut to open DevTools (Cmd+Option+I on Mac, Ctrl+Shift+I on Windows/Linux)
+    win.webContents.on('before-input-event', (event, input) => {
+        if ((input.meta || input.control) && input.alt && input.key.toLowerCase() === 'i') {
+            win?.webContents.toggleDevTools();
+            event.preventDefault();
+        }
+    });
 
     if (!app.isPackaged && !isTestMode) {
         win.loadURL('http://127.0.0.1:5173');
