@@ -134,7 +134,7 @@ export const WorklogEntryList: React.FC<WorklogEntryListProps> = ({
                     <div key={weekKey} className="mb-6 last:mb-0">
                         {/* Week Header - Sticky and more prominent */}
                         <div
-                            className="sticky top-0 z-20 px-4 py-2 -mx-4 flex items-center justify-between"
+                            className="sticky top-0 z-20 px-2.5 py-2 flex items-center justify-between"
                             style={{
                                 backgroundColor: 'var(--color-bg-primary)',
                                 backdropFilter: 'blur(8px)',
@@ -184,7 +184,7 @@ export const WorklogEntryList: React.FC<WorklogEntryListProps> = ({
                                     </button>
                                 )}
                                 <span
-                                    className="text-sm font-mono font-bold"
+                                    className="text-sm font-mono font-bold mr-10"
                                     style={{
                                         color: 'var(--color-accent)',
                                         fontFamily: 'var(--font-mono)'
@@ -216,7 +216,7 @@ export const WorklogEntryList: React.FC<WorklogEntryListProps> = ({
                                     <div key={dateKey} className={dayIndex > 0 ? 'mt-3' : ''}>
                                         {/* Date Separator Header - Sticky below week header */}
                                         <div
-                                            className="sticky z-10 px-3 py-2 -mx-4 flex items-center justify-between"
+                                            className="sticky z-10 px-2.5 py-2 flex items-center justify-between"
                                             style={{
                                                 backgroundColor: 'var(--color-bg-secondary)',
                                                 borderBottom: '1px solid var(--color-border-primary)',
@@ -258,7 +258,7 @@ export const WorklogEntryList: React.FC<WorklogEntryListProps> = ({
                                                         Log to Tempo
                                                     </button>
                                                 )}
-                                                <span className="text-xs font-mono" style={{ color: 'var(--color-accent)', fontFamily: 'var(--font-mono)' }}>
+                                                <span className="text-xs font-mono mr-10" style={{ color: 'var(--color-accent)', fontFamily: 'var(--font-mono)' }}>
                                                     {formatTime(totalDuration)}
                                                 </span>
                                             </div>
