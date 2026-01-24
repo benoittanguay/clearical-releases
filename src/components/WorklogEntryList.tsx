@@ -10,6 +10,8 @@ interface WorklogEntryListProps {
     onDeleteEntry: (entryId: string) => void;
     onBulkLogToTempo?: (dateKey: string) => void;
     tempoEnabled?: boolean;
+    /** When true, simplifies the UI for detail views (hides redundant Jira info, shows only day-level Log to Tempo) */
+    isDetailView?: boolean;
 }
 
 export const WorklogEntryList: React.FC<WorklogEntryListProps> = ({
@@ -19,7 +21,8 @@ export const WorklogEntryList: React.FC<WorklogEntryListProps> = ({
     onEntryClick,
     onDeleteEntry,
     onBulkLogToTempo,
-    tempoEnabled = false
+    tempoEnabled = false,
+    isDetailView = false
 }) => {
     // Helper function to get the start of week (Monday) for a given date
     const getWeekStart = (date: Date): Date => {
@@ -151,7 +154,8 @@ export const WorklogEntryList: React.FC<WorklogEntryListProps> = ({
                                 {formatWeekLabel(parseInt(weekKey))}
                             </h2>
                             <div className="flex items-center gap-3">
-                                {tempoEnabled && weekHasLoggableJiraActivities && onBulkLogToTempo && (
+                                {/* Hide week-level Log to Tempo in detail view - only show at day level */}
+                                {!isDetailView && tempoEnabled && weekHasLoggableJiraActivities && onBulkLogToTempo && (
                                     <button
                                         onClick={(e) => {
                                             e.stopPropagation();
@@ -303,8 +307,8 @@ export const WorklogEntryList: React.FC<WorklogEntryListProps> = ({
                                                         }}
                                                     >
                                                         <div className="flex flex-col flex-1 min-w-0">
-                                                            {/* Display assignment info */}
-                                                            {assignment && (
+                                                            {/* Display assignment info - hide Jira info in detail view since it's in the header */}
+                                                            {assignment && !(isDetailView && assignment.type === 'jira') && (
                                                                 <div className="flex items-center gap-2 mb-1">
                                                                     <div
                                                                         className="w-2 h-2 rounded-full"
@@ -332,8 +336,8 @@ export const WorklogEntryList: React.FC<WorklogEntryListProps> = ({
                                                                     )}
                                                                 </div>
                                                             )}
-                                                            {/* Secondary info for Jira issues */}
-                                                            {assignment?.type === 'jira' && assignment.jiraIssue && (
+                                                            {/* Secondary info for Jira issues - hide in detail view */}
+                                                            {!isDetailView && assignment?.type === 'jira' && assignment.jiraIssue && (
                                                                 <div className="text-xs mb-1 truncate" style={{ color: 'var(--color-text-secondary)' }}>
                                                                     {assignment.jiraIssue.summary}
                                                                 </div>

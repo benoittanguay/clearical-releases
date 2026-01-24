@@ -159,6 +159,7 @@ export const JiraDetailView: React.FC<JiraDetailViewProps> = ({
                     onDeleteEntry={onDeleteEntry}
                     onBulkLogToTempo={onBulkLogToTempo}
                     tempoEnabled={tempoEnabled}
+                    isDetailView={true}
                 />
             </div>
         </>
