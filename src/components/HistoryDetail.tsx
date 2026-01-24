@@ -1241,10 +1241,12 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                                 border: '1px solid var(--color-border-primary)'
                             }}
                             onMouseEnter={(e) => {
+                                e.currentTarget.style.backgroundColor = 'var(--color-accent)';
                                 e.currentTarget.style.borderColor = 'var(--color-accent)';
-                                e.currentTarget.style.color = 'var(--color-text-primary)';
+                                e.currentTarget.style.color = 'white';
                             }}
                             onMouseLeave={(e) => {
+                                e.currentTarget.style.backgroundColor = 'var(--color-bg-secondary)';
                                 e.currentTarget.style.borderColor = 'var(--color-border-primary)';
                                 e.currentTarget.style.color = 'var(--color-text-secondary)';
                             }}
