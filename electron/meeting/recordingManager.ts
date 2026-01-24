@@ -13,9 +13,9 @@
 
 import { EventEmitter } from 'events';
 import { BrowserWindow } from 'electron';
-import { mediaMonitor, MeetingAppInfo } from '../native/index.js';
+import { mediaMonitor } from '../native/index.js';
 import { AudioRecorder, getAudioRecorder } from './audioRecorder.js';
-import { MEETING_EVENTS, MEETING_IPC_CHANNELS } from './types.js';
+import { MEETING_EVENTS, MEETING_IPC_CHANNELS, MeetingAppInfo } from './types.js';
 import { getRecordingWidgetManager } from './recordingWidgetManager.js';
 
 export class RecordingManager extends EventEmitter {

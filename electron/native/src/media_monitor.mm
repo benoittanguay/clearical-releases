@@ -242,8 +242,8 @@ static OSStatus microphoneCallback(
                     CFStringRef deviceName = NULL;
                     UInt32 nameSize = sizeof(deviceName);
                     if (AudioObjectGetPropertyData(device, &nameAddress, 0, NULL, &nameSize, &deviceName) == noErr && deviceName) {
-                        [runningDeviceNames addObject:(__bridge NSString *)deviceName];
-                        CFRelease(deviceName);
+                        // Use __bridge_transfer to transfer ownership to ARC (no manual CFRelease needed)
+                        [runningDeviceNames addObject:(__bridge_transfer NSString *)deviceName];
                     }
                 }
             }

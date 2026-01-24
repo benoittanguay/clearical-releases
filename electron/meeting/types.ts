@@ -212,10 +212,22 @@ export const MEETING_EVENTS = {
 } as const;
 
 /**
+ * Information about a detected meeting app
+ */
+export interface MeetingAppInfo {
+    bundleId: string;
+    appName: string;
+    localizedName: string;
+    pid: number;
+    isActive: boolean;
+}
+
+/**
  * Media status returned by the native monitor
  */
 export interface MediaStatus {
     micInUse: boolean;
     cameraInUse: boolean;
     isRecording: boolean;
+    meetingApp: MeetingAppInfo | null;
 }

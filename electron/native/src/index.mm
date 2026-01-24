@@ -97,6 +97,11 @@ Napi::Value IsCameraInUse(const Napi::CallbackInfo& info) {
     return Napi::Boolean::New(env, [monitor isCameraInUse]);
 }
 
+// Helper for nil-safe NSString to const char* conversion
+static inline const char* SafeUTF8String(NSString *str) {
+    return str ? [str UTF8String] : "";
+}
+
 Napi::Value GetRunningMeetingApps(const Napi::CallbackInfo& info) {
     Napi::Env env = info.Env();
     MediaMonitor *monitor = [MediaMonitor sharedInstance];
@@ -107,9 +112,9 @@ Napi::Value GetRunningMeetingApps(const Napi::CallbackInfo& info) {
     for (NSUInteger i = 0; i < apps.count; i++) {
         NSDictionary *app = apps[i];
         Napi::Object appObj = Napi::Object::New(env);
-        appObj.Set("bundleId", Napi::String::New(env, [app[@"bundleId"] UTF8String]));
-        appObj.Set("appName", Napi::String::New(env, [app[@"appName"] UTF8String]));
-        appObj.Set("localizedName", Napi::String::New(env, [app[@"localizedName"] UTF8String]));
+        appObj.Set("bundleId", Napi::String::New(env, SafeUTF8String(app[@"bundleId"])));
+        appObj.Set("appName", Napi::String::New(env, SafeUTF8String(app[@"appName"])));
+        appObj.Set("localizedName", Napi::String::New(env, SafeUTF8String(app[@"localizedName"])));
         appObj.Set("pid", Napi::Number::New(env, [app[@"pid"] intValue]));
         appObj.Set("isActive", Napi::Boolean::New(env, [app[@"isActive"] boolValue]));
         result.Set(i, appObj);
@@ -129,9 +134,9 @@ Napi::Value GetLikelyMeetingAppUsingMic(const Napi::CallbackInfo& info) {
     }
 
     Napi::Object appObj = Napi::Object::New(env);
-    appObj.Set("bundleId", Napi::String::New(env, [app[@"bundleId"] UTF8String]));
-    appObj.Set("appName", Napi::String::New(env, [app[@"appName"] UTF8String]));
-    appObj.Set("localizedName", Napi::String::New(env, [app[@"localizedName"] UTF8String]));
+    appObj.Set("bundleId", Napi::String::New(env, SafeUTF8String(app[@"bundleId"])));
+    appObj.Set("appName", Napi::String::New(env, SafeUTF8String(app[@"appName"])));
+    appObj.Set("localizedName", Napi::String::New(env, SafeUTF8String(app[@"localizedName"])));
     appObj.Set("pid", Napi::Number::New(env, [app[@"pid"] intValue]));
     appObj.Set("isActive", Napi::Boolean::New(env, [app[@"isActive"] boolValue]));
 
@@ -150,9 +155,9 @@ Napi::Value GetCurrentMeetingApp(const Napi::CallbackInfo& info) {
     }
 
     Napi::Object appObj = Napi::Object::New(env);
-    appObj.Set("bundleId", Napi::String::New(env, [app[@"bundleId"] UTF8String]));
-    appObj.Set("appName", Napi::String::New(env, [app[@"appName"] UTF8String]));
-    appObj.Set("localizedName", Napi::String::New(env, [app[@"localizedName"] UTF8String]));
+    appObj.Set("bundleId", Napi::String::New(env, SafeUTF8String(app[@"bundleId"])));
+    appObj.Set("appName", Napi::String::New(env, SafeUTF8String(app[@"appName"])));
+    appObj.Set("localizedName", Napi::String::New(env, SafeUTF8String(app[@"localizedName"])));
     appObj.Set("pid", Napi::Number::New(env, [app[@"pid"] intValue]));
     appObj.Set("isActive", Napi::Boolean::New(env, [app[@"isActive"] boolValue]));
 
