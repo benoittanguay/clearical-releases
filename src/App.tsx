@@ -57,7 +57,6 @@ function App() {
   const { clearPendingTranscription, waitForTranscription } = useAudioRecording();
   const { roundTime, isRoundingEnabled } = useTimeRounding();
   const recordingSessionIdRef = useRef<string | null>(null);
-  const [isBulkLogging, setIsBulkLogging] = useState(false);
 
   // Check for onboarding BEFORE migration - prevents flash of main UI
   useEffect(() => {
@@ -252,15 +251,6 @@ function App() {
       return;
     }
 
-    // Helper to get week start (Sunday)
-    const getWeekStart = (date: Date): Date => {
-      const d = new Date(date);
-      const day = d.getDay();
-      d.setDate(d.getDate() - day);
-      d.setHours(0, 0, 0, 0);
-      return d;
-    };
-
     // Parse the key to determine date range
     const keyTimestamp = parseInt(dateKey);
     const keyDate = new Date(keyTimestamp);
@@ -362,8 +352,6 @@ function App() {
       return;
     }
 
-    setIsBulkLogging(true);
-
     try {
       // Initialize services
       const tempoService = new TempoService(settings.tempo.baseUrl, settings.tempo.apiToken);
@@ -440,8 +428,6 @@ function App() {
     } catch (error) {
       console.error('Bulk log to Tempo failed:', error);
       alert(`Failed to log to Tempo: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    } finally {
-      setIsBulkLogging(false);
     }
   };
 
