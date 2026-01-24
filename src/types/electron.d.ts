@@ -405,6 +405,8 @@ export interface ElectronAPI {
             // Audio capture and transcription
             saveAudioAndTranscribe: (entryId: string, audioBase64: string, mimeType?: string) => Promise<{
                 success: boolean;
+                audioPath?: string;  // Path to saved audio file (always returned, even on failure)
+                mimeType?: string;   // MIME type of audio file
                 transcription?: {
                     transcriptionId: string;
                     fullText: string;
@@ -423,6 +425,23 @@ export interface ElectronAPI {
                     monthlyUsedSeconds: number;
                     monthlyLimitSeconds: number;
                     remainingSeconds: number;
+                };
+                error?: string;
+            }>;
+            retryTranscription: (entryId: string, audioPath: string, mimeType: string) => Promise<{
+                success: boolean;
+                transcription?: {
+                    transcriptionId: string;
+                    fullText: string;
+                    segments: Array<{
+                        id: number;
+                        start: number;
+                        end: number;
+                        text: string;
+                    }>;
+                    language: string;
+                    duration: number;
+                    wordCount: number;
                 };
                 error?: string;
             }>;

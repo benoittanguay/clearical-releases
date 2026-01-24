@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useSettings } from '../context/SettingsContext';
 import { useScreenshotAnalysis } from '../context/ScreenshotAnalysisContext';
+import { FALLBACK_SCREENSHOT_DESCRIPTION } from '../constants';
 
 export interface TimerState {
     isRunning: boolean;
@@ -395,8 +396,7 @@ export function useTimer() {
                         // Notify context that analysis failed
                         failAnalysis(path, errorMsg);
 
-                        const fallbackDescription = 'Screenshot captured during work session';
-                        currentActivityScreenshotDescriptions.current[path] = fallbackDescription;
+                        currentActivityScreenshotDescriptions.current[path] = FALLBACK_SCREENSHOT_DESCRIPTION;
 
                         // Update state with fallback description
                         setWindowActivity(prev => {
@@ -406,7 +406,7 @@ export function useTimer() {
                                     const newDescriptions: { [path: string]: string } = Object.assign(
                                         {},
                                         existingDescriptions,
-                                        { [path]: fallbackDescription }
+                                        { [path]: FALLBACK_SCREENSHOT_DESCRIPTION }
                                     );
                                     return {
                                         ...activity,
@@ -431,8 +431,7 @@ export function useTimer() {
                     // Notify context that analysis encountered an error
                     failAnalysis(path, error instanceof Error ? error.message : 'Unknown error');
 
-                    const fallbackDescription = 'Screenshot captured during work session';
-                    currentActivityScreenshotDescriptions.current[path] = fallbackDescription;
+                    currentActivityScreenshotDescriptions.current[path] = FALLBACK_SCREENSHOT_DESCRIPTION;
 
                     // Update state with fallback description
                     setWindowActivity(prev => {
@@ -442,7 +441,7 @@ export function useTimer() {
                                 const newDescriptions: { [path: string]: string } = Object.assign(
                                     {},
                                     existingDescriptions,
-                                    { [path]: fallbackDescription }
+                                    { [path]: FALLBACK_SCREENSHOT_DESCRIPTION }
                                 );
                                 return {
                                     ...activity,

@@ -16,7 +16,7 @@
 
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
 import { useStorage } from './StorageContext';
-import type { EntryTranscription } from '../types/shared';
+import type { EntryTranscription, PendingTranscription } from '../types/shared';
 
 interface AudioRecordingState {
     isRecording: boolean;
@@ -50,6 +50,18 @@ interface AudioRecordingContextValue {
      * Returns the transcription if completed successfully within timeout, null otherwise
      */
     waitForTranscription: (sessionId: string, timeoutMs?: number) => Promise<EntryTranscription | null>;
+    /**
+     * Get pending audio info for a session/entry ID (when transcription failed but audio was saved)
+     */
+    getPendingAudio: (sessionId: string) => PendingTranscription | null;
+    /**
+     * Retry transcription for saved audio file
+     */
+    retryTranscription: (entryId: string, audioPath: string, mimeType: string) => Promise<EntryTranscription | null>;
+    /**
+     * Clear pending audio after it's been handled
+     */
+    clearPendingAudio: (sessionId: string) => void;
 }
 
 const AudioRecordingContext = createContext<AudioRecordingContextValue | null>(null);
@@ -80,6 +92,8 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
     const [isAutoRecordEnabled, setIsAutoRecordEnabled] = useState(true);
     // Store pending transcriptions by session ID for later association with entries
     const pendingTranscriptionsRef = useRef<Map<string, EntryTranscription>>(new Map());
+    // Store pending audio files (when transcription failed) for later retry
+    const pendingAudioRef = useRef<Map<string, PendingTranscription>>(new Map());
 
     // MediaRecorder refs
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -702,7 +716,22 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
                             setTranscriptionProgress(null);
                         }, 3000);
                     } else {
+                        // Transcription failed but audio should be saved
                         console.error('[AudioRecordingContext] Transcription failed:', result.error);
+
+                        // Store pending audio info if audio was saved
+                        if (result.audioPath) {
+                            const pendingAudio: PendingTranscription = {
+                                audioPath: result.audioPath,
+                                mimeType: result.mimeType || mimeType,
+                                status: 'failed',
+                                error: result.error,
+                                attemptedAt: Date.now(),
+                            };
+                            console.log('[AudioRecordingContext] Storing pending audio for retry:', pendingAudio);
+                            pendingAudioRef.current.set(entryId, pendingAudio);
+                        }
+
                         setTranscriptionProgress({
                             entryId,
                             status: 'error',
@@ -791,6 +820,93 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
         console.log('[AudioRecordingContext] waitForTranscription timed out after', timeoutMs, 'ms');
         return null;
     }, [state.isRecording, transcriptionProgress]);
+
+    /**
+     * Get pending audio info for a session/entry ID (when transcription failed but audio was saved)
+     */
+    const getPendingAudio = useCallback((sessionId: string): PendingTranscription | null => {
+        return pendingAudioRef.current.get(sessionId) || null;
+    }, []);
+
+    /**
+     * Clear pending audio after it's been handled
+     */
+    const clearPendingAudio = useCallback((sessionId: string): void => {
+        pendingAudioRef.current.delete(sessionId);
+    }, []);
+
+    /**
+     * Retry transcription for saved audio file
+     */
+    const retryTranscription = useCallback(async (entryId: string, audioPath: string, mimeType: string): Promise<EntryTranscription | null> => {
+        console.log('[AudioRecordingContext] Retrying transcription for entry:', entryId, 'audioPath:', audioPath);
+
+        setTranscriptionProgress({
+            entryId,
+            status: 'transcribing',
+        });
+
+        try {
+            const result = await window.electron.ipcRenderer.meeting.retryTranscription(entryId, audioPath, mimeType);
+
+            if (result.success && result.transcription) {
+                console.log('[AudioRecordingContext] Retry transcription complete:', result.transcription.wordCount, 'words');
+
+                const transcription: EntryTranscription = {
+                    transcriptionId: result.transcription.transcriptionId,
+                    fullText: result.transcription.fullText,
+                    segments: result.transcription.segments,
+                    language: result.transcription.language,
+                    audioDuration: result.transcription.duration,
+                    wordCount: result.transcription.wordCount,
+                    createdAt: Date.now(),
+                };
+
+                // Update pending transcriptions
+                pendingTranscriptionsRef.current.set(entryId, transcription);
+
+                // Clear pending audio since transcription succeeded
+                pendingAudioRef.current.delete(entryId);
+
+                setTranscriptionProgress({
+                    entryId,
+                    status: 'complete',
+                });
+
+                setTimeout(() => setTranscriptionProgress(null), 3000);
+
+                return transcription;
+            } else {
+                console.error('[AudioRecordingContext] Retry transcription failed:', result.error);
+
+                // Update pending audio with new error
+                const existingPending = pendingAudioRef.current.get(entryId);
+                if (existingPending) {
+                    pendingAudioRef.current.set(entryId, {
+                        ...existingPending,
+                        error: result.error,
+                        attemptedAt: Date.now(),
+                    });
+                }
+
+                setTranscriptionProgress({
+                    entryId,
+                    status: 'error',
+                    error: result.error,
+                });
+
+                return null;
+            }
+        } catch (error) {
+            console.error('[AudioRecordingContext] Retry transcription error:', error);
+            setTranscriptionProgress({
+                entryId,
+                status: 'error',
+                error: error instanceof Error ? error.message : 'Retry failed',
+            });
+            return null;
+        }
+    }, []);
 
     // Subscribe to recording events from main process
     useEffect(() => {
@@ -908,6 +1024,9 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
         getPendingTranscription,
         clearPendingTranscription,
         waitForTranscription,
+        getPendingAudio,
+        retryTranscription,
+        clearPendingAudio,
     };
 
     return (

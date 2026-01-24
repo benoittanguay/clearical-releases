@@ -111,6 +111,20 @@ export interface EntryTranscription {
     createdAt: number;
 }
 
+/** Status of a pending audio transcription */
+export interface PendingTranscription {
+    /** Path to the saved audio file */
+    audioPath: string;
+    /** MIME type of the audio file */
+    mimeType: string;
+    /** Current status */
+    status: 'pending' | 'failed';
+    /** Error message if transcription failed */
+    error?: string;
+    /** Timestamp of last transcription attempt */
+    attemptedAt?: number;
+}
+
 export interface TimeEntry {
     id: string;
     startTime: number;
@@ -134,4 +148,6 @@ export interface TimeEntry {
     tempoAccountAutoSelected?: boolean;
     /** Audio transcription from meeting/call recording */
     transcription?: EntryTranscription;
+    /** Pending transcription when audio was recorded but transcription failed */
+    pendingTranscription?: PendingTranscription;
 }

@@ -54,7 +54,7 @@ function App() {
   const [jiraRefreshFn, setJiraRefreshFn] = useState<(() => void) | null>(null);
 
   const { isRunning, isPaused, elapsed, start: startTimer, stop: stopTimer, pause: pauseTimer, resume: resumeTimer, formatTime, checkPermissions, setActiveRecordingEntry } = useTimer();
-  const { clearPendingTranscription, waitForTranscription } = useAudioRecording();
+  const { clearPendingTranscription, waitForTranscription, getPendingAudio, clearPendingAudio } = useAudioRecording();
   const { roundTime, isRoundingEnabled } = useTimeRounding();
   const recordingSessionIdRef = useRef<string | null>(null);
 
@@ -255,8 +255,9 @@ function App() {
     const keyTimestamp = parseInt(dateKey);
     const keyDate = new Date(keyTimestamp);
 
-    // Determine if this is a week key by checking if it's a Sunday
-    const isWeekKey = keyDate.getDay() === 0;
+    // Determine if this is a week key by checking if it's a Monday (week start)
+    // Note: getWeekStart() returns Monday, not Sunday
+    const isWeekKey = keyDate.getDay() === 1;
 
     // Calculate the date range to filter entries
     let startDate: Date, endDate: Date;
@@ -482,6 +483,12 @@ function App() {
           console.log('[App] No transcription available (no recording or timed out)');
         }
 
+        // Check for pending audio (failed transcription)
+        const pendingAudio = sessionId ? getPendingAudio(sessionId) : null;
+        if (pendingAudio) {
+          console.log('[App] Found pending audio from failed transcription:', pendingAudio.audioPath);
+        }
+
         const newEntry = await addEntry({
           startTime: Date.now() - elapsed,
           endTime: Date.now(),
@@ -489,11 +496,17 @@ function App() {
           assignment: selectedAssignment || undefined,
           windowActivity: finalActivity,
           transcription: pendingTranscription || undefined,
+          pendingTranscription: pendingAudio || undefined,
         });
 
         // Clear the pending transcription after it's been applied
         if (sessionId && pendingTranscription) {
           clearPendingTranscription(sessionId);
+        }
+
+        // Clear the pending audio after it's been saved to entry
+        if (sessionId && pendingAudio) {
+          clearPendingAudio(sessionId);
         }
 
         console.log('[App] Activity saved, navigating to details for entry:', newEntry.id);

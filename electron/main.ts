@@ -2079,15 +2079,117 @@ ipcMain.handle('widget:meeting-ended-response', async (_event, data: { response:
 });
 
 // Audio transcription IPC handlers
+// Audio recordings directory
+const RECORDINGS_DIR = path.join(app.getPath('userData'), 'recordings');
+
+// Ensure recordings directory exists
+function ensureRecordingsDir(): void {
+    if (!fs.existsSync(RECORDINGS_DIR)) {
+        fs.mkdirSync(RECORDINGS_DIR, { recursive: true });
+        console.log('[Main] Created recordings directory:', RECORDINGS_DIR);
+    }
+}
+
+// Get file extension from MIME type
+function getAudioExtension(mimeType: string): string {
+    const mimeToExt: Record<string, string> = {
+        'audio/webm': 'webm',
+        'audio/mp4': 'm4a',
+        'audio/mpeg': 'mp3',
+        'audio/wav': 'wav',
+        'audio/ogg': 'ogg',
+        'audio/flac': 'flac',
+    };
+    return mimeToExt[mimeType] || 'webm';
+}
+
 ipcMain.handle(MEETING_IPC_CHANNELS.SAVE_AUDIO_AND_TRANSCRIBE, async (_event, entryId: string, audioBase64: string, mimeType?: string) => {
     console.log('[Main] SAVE_AUDIO_AND_TRANSCRIBE called for entry:', entryId);
+
+    const actualMimeType = mimeType || 'audio/webm';
+    let audioPath: string | undefined;
+
     try {
+        // 1. Save audio file locally first (before transcription)
+        ensureRecordingsDir();
+        const extension = getAudioExtension(actualMimeType);
+        const timestamp = Date.now();
+        const filename = `${entryId}-${timestamp}.${extension}`;
+        audioPath = path.join(RECORDINGS_DIR, filename);
+
+        // Convert base64 to buffer and save
+        const audioBuffer = Buffer.from(audioBase64, 'base64');
+        fs.writeFileSync(audioPath, audioBuffer);
+        console.log('[Main] Audio file saved:', audioPath, 'size:', audioBuffer.length);
+
+        // 2. Attempt transcription
         const { getTranscriptionService } = await import('./meeting/transcriptionService.js');
         const transcriptionService = getTranscriptionService();
 
-        const result = await transcriptionService.transcribe(audioBase64, entryId, mimeType || 'audio/webm');
+        const result = await transcriptionService.transcribe(audioBase64, entryId, actualMimeType);
 
         if (result.success) {
+            // Transcription succeeded - optionally clean up audio file
+            // For now, keep it for reference
+            console.log('[Main] Transcription succeeded, audio saved at:', audioPath);
+            return {
+                success: true,
+                audioPath,
+                transcription: {
+                    transcriptionId: result.transcriptionId,
+                    fullText: result.fullText,
+                    segments: result.segments,
+                    language: result.language,
+                    duration: result.duration,
+                    wordCount: result.wordCount,
+                },
+            };
+        } else {
+            // Transcription failed but audio file is saved
+            console.log('[Main] Transcription failed but audio saved at:', audioPath);
+            return {
+                success: false,
+                audioPath,
+                mimeType: actualMimeType,
+                error: result.error || 'Transcription failed',
+            };
+        }
+    } catch (error) {
+        console.error('[Main] SAVE_AUDIO_AND_TRANSCRIBE error:', error);
+        return {
+            success: false,
+            audioPath, // May be undefined if save failed
+            mimeType: actualMimeType,
+            error: error instanceof Error ? error.message : 'Unknown error',
+        };
+    }
+});
+
+// Retry transcription for an entry with saved audio
+ipcMain.handle('meeting:retry-transcription', async (_event, entryId: string, audioPath: string, mimeType: string) => {
+    console.log('[Main] RETRY_TRANSCRIPTION called for entry:', entryId);
+
+    try {
+        // Read audio file
+        if (!fs.existsSync(audioPath)) {
+            return {
+                success: false,
+                error: 'Audio file not found',
+            };
+        }
+
+        const audioBuffer = fs.readFileSync(audioPath);
+        const audioBase64 = audioBuffer.toString('base64');
+        console.log('[Main] Loaded audio file for retry:', audioPath, 'size:', audioBuffer.length);
+
+        // Attempt transcription
+        const { getTranscriptionService } = await import('./meeting/transcriptionService.js');
+        const transcriptionService = getTranscriptionService();
+
+        const result = await transcriptionService.transcribe(audioBase64, entryId, mimeType);
+
+        if (result.success) {
+            console.log('[Main] Retry transcription succeeded for:', entryId);
             return {
                 success: true,
                 transcription: {
@@ -2106,7 +2208,7 @@ ipcMain.handle(MEETING_IPC_CHANNELS.SAVE_AUDIO_AND_TRANSCRIBE, async (_event, en
             };
         }
     } catch (error) {
-        console.error('[Main] SAVE_AUDIO_AND_TRANSCRIBE error:', error);
+        console.error('[Main] RETRY_TRANSCRIPTION error:', error);
         return {
             success: false,
             error: error instanceof Error ? error.message : 'Unknown error',
@@ -3321,21 +3423,56 @@ interface SplitSuggestion {
     confidence: number;
 }
 
-function parseSplitSuggestions(rawSuggestions: any[]): SplitSuggestion[] {
+function parseSplitSuggestions(
+    rawSuggestions: any[],
+    activityStartTime?: number,
+    activityEndTime?: number
+): SplitSuggestion[] {
     try {
         if (!Array.isArray(rawSuggestions)) {
             console.warn('[Main] parseSplitSuggestions: expected array, got:', typeof rawSuggestions);
             return [];
         }
 
-        return rawSuggestions.map((suggestion: any) => ({
-            startTime: suggestion.startTime || 0,
-            endTime: suggestion.endTime || 0,
-            description: suggestion.description || '',
-            suggestedBucket: suggestion.suggestedBucket || null,
-            suggestedJiraKey: suggestion.suggestedJiraKey || null,
-            confidence: typeof suggestion.confidence === 'number' ? suggestion.confidence : 0.5
-        }));
+        return rawSuggestions
+            .map((suggestion: any) => {
+                let startTime = suggestion.startTime || 0;
+                let endTime = suggestion.endTime || 0;
+
+                // Validate timestamps fall within activity range if provided
+                if (activityStartTime !== undefined && activityEndTime !== undefined) {
+                    // Check if timestamps are completely outside the valid range
+                    if (endTime < activityStartTime || startTime > activityEndTime) {
+                        console.warn('[Main] parseSplitSuggestions: suggestion outside valid range, discarding:', {
+                            suggestionStart: startTime,
+                            suggestionEnd: endTime,
+                            activityStart: activityStartTime,
+                            activityEnd: activityEndTime
+                        });
+                        return null; // Will be filtered out
+                    }
+
+                    // Clamp timestamps to valid range
+                    if (startTime < activityStartTime) {
+                        console.warn('[Main] parseSplitSuggestions: clamping startTime from', startTime, 'to', activityStartTime);
+                        startTime = activityStartTime;
+                    }
+                    if (endTime > activityEndTime) {
+                        console.warn('[Main] parseSplitSuggestions: clamping endTime from', endTime, 'to', activityEndTime);
+                        endTime = activityEndTime;
+                    }
+                }
+
+                return {
+                    startTime,
+                    endTime,
+                    description: suggestion.description || '',
+                    suggestedBucket: suggestion.suggestedBucket || null,
+                    suggestedJiraKey: suggestion.suggestedJiraKey || null,
+                    confidence: typeof suggestion.confidence === 'number' ? suggestion.confidence : 0.5
+                };
+            })
+            .filter((suggestion): suggestion is SplitSuggestion => suggestion !== null);
     } catch (error) {
         console.error('[Main] parseSplitSuggestions error:', error);
         return [];
@@ -3421,7 +3558,11 @@ ipcMain.handle('ai:analyze-splits', async (_, activityData: {
             }
 
             const parsed = JSON.parse(jsonText);
-            suggestions = parseSplitSuggestions(Array.isArray(parsed) ? parsed : []);
+            suggestions = parseSplitSuggestions(
+                Array.isArray(parsed) ? parsed : [],
+                activityData.startTime,
+                activityData.endTime
+            );
         } catch (parseError) {
             console.error('[Main] ai:analyze-splits: Failed to parse AI response:', parseError);
             console.error('[Main] ai:analyze-splits: Response was:', result.summary);

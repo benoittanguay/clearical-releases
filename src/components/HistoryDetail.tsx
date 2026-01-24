@@ -17,10 +17,12 @@ import { useToast } from '../context/ToastContext';
 import { useJiraCache } from '../context/JiraCacheContext';
 import { useTimeRounding } from '../hooks/useTimeRounding';
 import { useScreenshotAnalysis } from '../context/ScreenshotAnalysisContext';
+import { useAudioRecording } from '../context/AudioRecordingContext';
 import { analytics } from '../services/analytics';
 import { TempoService, type TempoAccount } from '../services/tempoService';
 import { JiraService } from '../services/jiraService';
 import type { SplitSuggestion } from '../types/electron';
+import { FALLBACK_SCREENSHOT_DESCRIPTION } from '../constants';
 
 /**
  * Extract window title from screenshot path as a fallback.
@@ -89,6 +91,7 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
     const jiraCache = useJiraCache();
     const { roundTime, isRoundingEnabled } = useTimeRounding();
     const { totalAnalyzing } = useScreenshotAnalysis();
+    const { retryTranscription, transcriptionProgress } = useAudioRecording();
     const activityRowRefs = useRef<Map<string, HTMLDivElement>>(new Map());
     const [description, setDescription] = useState(entry.description || '');
     const [selectedAssignment, setSelectedAssignment] = useState<WorkAssignment | null>(() => {
@@ -128,6 +131,13 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
     const [showSplittingAssistant, setShowSplittingAssistant] = useState(false);
     const [splitSuggestions, setSplitSuggestions] = useState<SplitSuggestion[]>([]);
     const [isAnalyzingSplits, setIsAnalyzingSplits] = useState(false);
+
+    // AI Analysis retry state
+    const [isRetryingAnalysis, setIsRetryingAnalysis] = useState(false);
+    const [retryProgress, setRetryProgress] = useState<{ completed: number; total: number } | null>(null);
+
+    // Transcription retry state
+    const [isRetryingTranscription, setIsRetryingTranscription] = useState(false);
 
     // Note: JiraCache initialization is handled by JiraCacheContext
     useEffect(() => {
@@ -769,6 +779,197 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
         setManualDescription('');
         setManualDuration('');
         setShowManualEntryForm(false);
+    };
+
+    // Get all screenshots that have failed AI analysis (have fallback description)
+    const getFailedAnalysisScreenshots = useMemo(() => {
+        const failedScreenshots: Array<{ path: string; timestamp: number }> = [];
+
+        if (!entry.windowActivity) return failedScreenshots;
+
+        for (const activity of entry.windowActivity) {
+            if (!activity.screenshotPaths) continue;
+
+            for (const path of activity.screenshotPaths) {
+                const description = activity.screenshotDescriptions?.[path];
+                // Check if this screenshot has the fallback description (indicating failed AI analysis)
+                if (description === FALLBACK_SCREENSHOT_DESCRIPTION) {
+                    // Extract timestamp from filename or use activity timestamp
+                    const filename = path.split('/').pop() || '';
+                    const timestampMatch = filename.match(/^(\d+)/);
+                    const timestamp = timestampMatch ? parseInt(timestampMatch[1], 10) : activity.timestamp;
+                    failedScreenshots.push({ path, timestamp });
+                }
+            }
+        }
+
+        return failedScreenshots;
+    }, [entry.windowActivity]);
+
+    const hasFailedAnalyses = getFailedAnalysisScreenshots.length > 0;
+
+    // Handler to retry all failed AI analyses
+    const handleRetryAIAnalysis = async () => {
+        if (isRetryingAnalysis || getFailedAnalysisScreenshots.length === 0) return;
+
+        setIsRetryingAnalysis(true);
+        setRetryProgress({ completed: 0, total: getFailedAnalysisScreenshots.length });
+
+        console.log(`[HistoryDetail] Retrying AI analysis for ${getFailedAnalysisScreenshots.length} screenshots`);
+
+        // Track all successful updates to batch them at the end
+        const successfulUpdates = new Map<string, {
+            description: string;
+            visionData: { confidence?: number; detectedText?: string[]; objects?: string[]; extraction?: any };
+        }>();
+
+        // Process screenshots one at a time to respect rate limits
+        let completed = 0;
+        const MAX_CONCURRENT = 2; // Process 2 at a time to balance speed and rate limits
+        const queue = [...getFailedAnalysisScreenshots];
+
+        const processOne = async (): Promise<void> => {
+            const item = queue.shift();
+            if (!item) return;
+
+            const { path, timestamp } = item;
+            try {
+                console.log(`[HistoryDetail] Retrying analysis for: ${path.split('/').pop()}`);
+                // @ts-ignore
+                const result = await window.electron?.ipcRenderer?.analyzeScreenshot(path, `retry-${timestamp}`);
+
+                if (result?.success && result.description && result.description !== FALLBACK_SCREENSHOT_DESCRIPTION) {
+                    console.log(`[HistoryDetail] ✅ Retry successful for: ${path.split('/').pop()}`);
+
+                    // Store the successful result for batch update later
+                    successfulUpdates.set(path, {
+                        description: result.description,
+                        visionData: {
+                            confidence: result.confidence,
+                            detectedText: result.detectedText,
+                            objects: result.objects,
+                            extraction: result.extraction
+                        }
+                    });
+                } else {
+                    console.log(`[HistoryDetail] ⚠️ Retry failed for: ${path.split('/').pop()}`, result?.error);
+                }
+            } catch (error) {
+                console.error(`[HistoryDetail] ❌ Retry error for: ${path.split('/').pop()}`, error);
+            }
+
+            completed++;
+            setRetryProgress({ completed, total: getFailedAnalysisScreenshots.length });
+        };
+
+        // Process in batches
+        while (queue.length > 0) {
+            const batch = [];
+            for (let i = 0; i < MAX_CONCURRENT && queue.length > 0; i++) {
+                batch.push(processOne());
+            }
+            await Promise.all(batch);
+
+            // Small delay between batches to respect rate limits
+            if (queue.length > 0) {
+                await new Promise(resolve => setTimeout(resolve, 500));
+            }
+        }
+
+        // Batch update: Apply all successful updates in a single database write
+        if (successfulUpdates.size > 0) {
+            console.log(`[HistoryDetail] Applying ${successfulUpdates.size} successful updates in batch`);
+
+            const updatedActivity = entry.windowActivity?.map(activity => {
+                if (!activity.screenshotPaths) return activity;
+
+                // Check if any screenshots in this activity were successfully updated
+                const hasUpdates = activity.screenshotPaths.some(path => successfulUpdates.has(path));
+                if (!hasUpdates) return activity;
+
+                // Build updated descriptions and vision data for this activity
+                const newDescriptions: { [path: string]: string } = { ...(activity.screenshotDescriptions || {}) };
+                const newVisionData: { [path: string]: { confidence?: number; detectedText?: string[]; objects?: string[]; extraction?: any } } = {
+                    ...(activity.screenshotVisionData || {})
+                };
+
+                // Apply all updates for screenshots in this activity
+                for (const path of activity.screenshotPaths) {
+                    const update = successfulUpdates.get(path);
+                    if (update) {
+                        newDescriptions[path] = update.description;
+                        newVisionData[path] = update.visionData;
+                    }
+                }
+
+                return {
+                    ...activity,
+                    screenshotDescriptions: newDescriptions,
+                    screenshotVisionData: newVisionData
+                };
+            });
+
+            // Single database write with all changes
+            if (updatedActivity) {
+                onUpdate(entry.id, { windowActivity: updatedActivity });
+            }
+        }
+
+        setIsRetryingAnalysis(false);
+        setRetryProgress(null);
+        showToast({
+            type: 'success',
+            title: 'Retry completed',
+            message: `AI analysis retry completed. ${successfulUpdates.size} of ${getFailedAnalysisScreenshots.length} screenshots successfully analyzed.`,
+            duration: 3000
+        });
+    };
+
+    const handleRetryTranscription = async () => {
+        if (!entry.pendingTranscription || isRetryingTranscription) return;
+
+        setIsRetryingTranscription(true);
+
+        try {
+            console.log('[HistoryDetail] Retrying transcription for entry:', entry.id);
+            const transcription = await retryTranscription(
+                entry.id,
+                entry.pendingTranscription.audioPath,
+                entry.pendingTranscription.mimeType
+            );
+
+            if (transcription) {
+                // Update entry with successful transcription and clear pending
+                onUpdate(entry.id, {
+                    transcription,
+                    pendingTranscription: undefined,
+                });
+
+                showToast({
+                    type: 'success',
+                    title: 'Transcription successful',
+                    message: `Transcribed ${transcription.wordCount} words`,
+                    duration: 3000,
+                });
+            } else {
+                showToast({
+                    type: 'error',
+                    title: 'Transcription failed',
+                    message: 'Failed to transcribe audio. Please try again later.',
+                    duration: 5000,
+                });
+            }
+        } catch (error) {
+            console.error('[HistoryDetail] Error retrying transcription:', error);
+            showToast({
+                type: 'error',
+                title: 'Transcription error',
+                message: error instanceof Error ? error.message : 'An unexpected error occurred',
+                duration: 5000,
+            });
+        } finally {
+            setIsRetryingTranscription(false);
+        }
     };
 
     const handleOpenTempoModal = () => {
@@ -1702,16 +1903,64 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                 <div className="mt-6">
                     <div className="flex items-center justify-between mb-3">
                         <h3 className="text-base font-semibold" style={{ color: 'var(--color-text-primary)' }}>Window Activity</h3>
-                        <button
-                            onClick={() => setShowManualEntryForm(!showManualEntryForm)}
-                            className="px-3 py-1 bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white text-xs rounded-lg transition-all flex items-center gap-1"
-                        >
-                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                <line x1="12" y1="5" x2="12" y2="19" />
-                                <line x1="5" y1="12" x2="19" y2="12" />
-                            </svg>
-                            Add Manual Entry
-                        </button>
+                        <div className="flex items-center gap-2">
+                            {/* Retry AI Analysis button - only shows when there are failed analyses */}
+                            {hasFailedAnalyses && (
+                                <button
+                                    onClick={handleRetryAIAnalysis}
+                                    disabled={isRetryingAnalysis}
+                                    className="px-3 py-1 text-xs rounded-lg transition-all flex items-center gap-1 border"
+                                    style={{
+                                        backgroundColor: isRetryingAnalysis ? 'var(--color-bg-tertiary)' : 'var(--color-bg-secondary)',
+                                        borderColor: 'var(--color-border-primary)',
+                                        color: isRetryingAnalysis ? 'var(--color-text-tertiary)' : 'var(--color-text-secondary)',
+                                        cursor: isRetryingAnalysis ? 'not-allowed' : 'pointer',
+                                    }}
+                                    onMouseEnter={(e) => {
+                                        if (!isRetryingAnalysis) {
+                                            e.currentTarget.style.borderColor = 'var(--color-accent)';
+                                            e.currentTarget.style.color = 'var(--color-accent)';
+                                        }
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        if (!isRetryingAnalysis) {
+                                            e.currentTarget.style.borderColor = 'var(--color-border-primary)';
+                                            e.currentTarget.style.color = 'var(--color-text-secondary)';
+                                        }
+                                    }}
+                                    title={`${getFailedAnalysisScreenshots.length} screenshot${getFailedAnalysisScreenshots.length !== 1 ? 's' : ''} with failed analysis`}
+                                >
+                                    {isRetryingAnalysis ? (
+                                        <>
+                                            <svg className="animate-spin" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                                            </svg>
+                                            {retryProgress ? `${retryProgress.completed}/${retryProgress.total}` : 'Retrying...'}
+                                        </>
+                                    ) : (
+                                        <>
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+                                                <path d="M21 3v5h-5" />
+                                                <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+                                                <path d="M8 16H3v5" />
+                                            </svg>
+                                            Retry AI Analysis ({getFailedAnalysisScreenshots.length})
+                                        </>
+                                    )}
+                                </button>
+                            )}
+                            <button
+                                onClick={() => setShowManualEntryForm(!showManualEntryForm)}
+                                className="px-3 py-1 bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white text-xs rounded-lg transition-all flex items-center gap-1"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                    <line x1="12" y1="5" x2="12" y2="19" />
+                                    <line x1="5" y1="12" x2="19" y2="12" />
+                                </svg>
+                                Add Manual Entry
+                            </button>
+                        </div>
                     </div>
                 {/* Manual Entry Form */}
                 {showManualEntryForm && (
@@ -2137,6 +2386,91 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                                 </div>
                             );
                         })}
+                    </div>
+                )}
+
+                {/* Pending Transcription Section - Failed transcription with retry option */}
+                {entry.pendingTranscription && (
+                    <div className="mt-3 rounded-lg border p-4" style={{
+                        backgroundColor: 'var(--color-bg-secondary)',
+                        borderColor: 'var(--color-border-primary)',
+                        borderRadius: 'var(--radius-xl)',
+                    }}>
+                        <div className="flex items-start justify-between gap-3">
+                            <div className="flex-1">
+                                <div className="flex items-center gap-2 mb-2">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--color-text-tertiary)' }}>
+                                        <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
+                                        <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                                        <line x1="12" x2="12" y1="19" y2="22"/>
+                                    </svg>
+                                    <h4 className="text-sm font-semibold" style={{ color: 'var(--color-text-primary)' }}>
+                                        Audio Recording Available
+                                    </h4>
+                                    <span className="px-2 py-0.5 text-xs rounded" style={{
+                                        backgroundColor: 'rgba(251, 191, 36, 0.1)',
+                                        color: 'rgb(217, 119, 6)',
+                                    }}>
+                                        Transcription Failed
+                                    </span>
+                                </div>
+                                {entry.pendingTranscription.error && (
+                                    <p className="text-xs mb-3" style={{ color: 'var(--color-text-tertiary)' }}>
+                                        Error: {entry.pendingTranscription.error}
+                                    </p>
+                                )}
+                                <p className="text-xs mb-1" style={{ color: 'var(--color-text-secondary)' }}>
+                                    An audio recording was saved, but the transcription service was unavailable.
+                                </p>
+                                {entry.pendingTranscription.attemptedAt && (
+                                    <p className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+                                        Last attempted: {new Date(entry.pendingTranscription.attemptedAt).toLocaleString()}
+                                    </p>
+                                )}
+                            </div>
+                            <button
+                                onClick={handleRetryTranscription}
+                                disabled={isRetryingTranscription || (transcriptionProgress?.entryId === entry.id && transcriptionProgress?.status === 'transcribing')}
+                                className="px-3 py-2 text-xs rounded-lg transition-all flex items-center gap-2 border whitespace-nowrap"
+                                style={{
+                                    backgroundColor: (isRetryingTranscription || (transcriptionProgress?.entryId === entry.id && transcriptionProgress?.status === 'transcribing')) ? 'var(--color-bg-tertiary)' : 'var(--color-bg-secondary)',
+                                    borderColor: 'var(--color-border-primary)',
+                                    color: (isRetryingTranscription || (transcriptionProgress?.entryId === entry.id && transcriptionProgress?.status === 'transcribing')) ? 'var(--color-text-tertiary)' : 'var(--color-text-secondary)',
+                                    cursor: (isRetryingTranscription || (transcriptionProgress?.entryId === entry.id && transcriptionProgress?.status === 'transcribing')) ? 'not-allowed' : 'pointer',
+                                }}
+                                onMouseEnter={(e) => {
+                                    if (!isRetryingTranscription && !(transcriptionProgress?.entryId === entry.id && transcriptionProgress?.status === 'transcribing')) {
+                                        e.currentTarget.style.borderColor = 'var(--color-accent)';
+                                        e.currentTarget.style.color = 'var(--color-accent)';
+                                    }
+                                }}
+                                onMouseLeave={(e) => {
+                                    if (!isRetryingTranscription && !(transcriptionProgress?.entryId === entry.id && transcriptionProgress?.status === 'transcribing')) {
+                                        e.currentTarget.style.borderColor = 'var(--color-border-primary)';
+                                        e.currentTarget.style.color = 'var(--color-text-secondary)';
+                                    }
+                                }}
+                            >
+                                {(isRetryingTranscription || (transcriptionProgress?.entryId === entry.id && transcriptionProgress?.status === 'transcribing')) ? (
+                                    <>
+                                        <svg className="animate-spin" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                            <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                                        </svg>
+                                        Transcribing...
+                                    </>
+                                ) : (
+                                    <>
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                            <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+                                            <path d="M21 3v5h-5" />
+                                            <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+                                            <path d="M8 16H3v5" />
+                                        </svg>
+                                        Retry Transcription
+                                    </>
+                                )}
+                            </button>
+                        </div>
                     </div>
                 )}
 

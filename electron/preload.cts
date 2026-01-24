@@ -249,6 +249,8 @@ contextBridge.exposeInMainWorld('electron', {
             // Audio capture and transcription
             saveAudioAndTranscribe: (entryId: string, audioBase64: string, mimeType?: string) =>
                 ipcRenderer.invoke('meeting:save-audio-and-transcribe', entryId, audioBase64, mimeType),
+            retryTranscription: (entryId: string, audioPath: string, mimeType: string) =>
+                ipcRenderer.invoke('meeting:retry-transcription', entryId, audioPath, mimeType),
             getTranscriptionUsage: () =>
                 ipcRenderer.invoke('meeting:get-transcription-usage'),
             // System audio capture (for capturing what others say in meetings)
