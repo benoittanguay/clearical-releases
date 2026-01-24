@@ -189,35 +189,33 @@ else
     echo "  Skipping notarization (no credentials or not Developer ID signed)"
 fi
 
-# Step 5: Create final archives (parallel)
-# Optimized: Create DMG and ZIP simultaneously, only once (after potential stapling)
+# Step 5: Staple notarization tickets and create final ZIP
 echo ""
-echo -e "${BLUE}Step 5: Creating release archives (parallel)...${NC}"
+echo -e "${BLUE}Step 5: Finalizing release archives...${NC}"
 
-# Clean up any existing archives
-rm -f "$DMG_PATH" "$ZIP_PATH" "dist/Clearical-arm64.dmg.blockmap" "dist/Clearical-arm64.zip.blockmap"
+# electron-builder already created a proper DMG with background and Applications shortcut
+# We just need to staple the notarization ticket to it
 
-# Create DMG in background
-(
-    hdiutil create -volname "Clearical" -srcfolder "$APP_PATH" -ov -format UDZO "$DMG_PATH" 2>&1 | grep -E "(created|error)" || true
-    # Staple DMG if notarization succeeded
-    if [ "$CAN_NOTARIZE" = true ] && xcrun stapler validate "$APP_PATH" &>/dev/null; then
-        xcrun stapler staple "$DMG_PATH" 2>&1 | grep -E "(staple|Processing)" || true
-    fi
-) &
-DMG_PID=$!
+# Clean up blockmaps (not needed for GitHub releases)
+rm -f "dist/Clearical-arm64.dmg.blockmap" "dist/Clearical-arm64.zip.blockmap"
 
-# Create ZIP in background
+# Staple DMG if notarization succeeded
+if [ "$CAN_NOTARIZE" = true ] && xcrun stapler validate "$APP_PATH" &>/dev/null; then
+    echo "  Stapling notarization ticket to DMG..."
+    xcrun stapler staple "$DMG_PATH" 2>&1 | grep -E "(staple|Processing|worked)" || true
+    echo "  ✓ DMG stapled"
+else
+    echo "  ⚠ Skipping DMG stapling (app not notarized)"
+fi
+
+# Create fresh ZIP with the stapled app (for auto-updater)
+echo "  Creating ZIP archive..."
+rm -f "$ZIP_PATH"
 (
     cd dist
     ditto -c -k --sequesterRsrc --keepParent mac-arm64/Clearical.app Clearical-arm64.zip
-) &
-ZIP_PID=$!
-
-# Wait for both to complete
-echo "  Creating DMG and ZIP in parallel..."
-wait $DMG_PID && echo "  ✓ DMG created" || echo -e "${RED}  ✗ DMG creation failed${NC}"
-wait $ZIP_PID && echo "  ✓ ZIP created" || echo -e "${RED}  ✗ ZIP creation failed${NC}"
+)
+echo "  ✓ ZIP created"
 
 # Verify notarization with Gatekeeper (if notarized)
 if [ "$CAN_NOTARIZE" = true ] && xcrun stapler validate "$APP_PATH" &>/dev/null; then
@@ -283,23 +281,49 @@ if [ "$PUBLISH" = true ]; then
         echo "  ✓ Artifacts uploaded to existing release"
     else
         echo "  Creating new release v${VERSION}..."
+
+        # Extract release notes from CHANGELOG.md for this version
+        CHANGELOG_FILE="$PROJECT_ROOT/CHANGELOG.md"
+        if [ -f "$CHANGELOG_FILE" ]; then
+            # Extract content between this version header and the next version header (or end of relevant content)
+            RELEASE_NOTES=$(awk -v ver="$VERSION" '
+                /^## \[/ {
+                    if (found) exit
+                    if (index($0, "[" ver "]")) found=1
+                    next
+                }
+                /^---/ { if (found) exit }
+                found { print }
+            ' "$CHANGELOG_FILE" | sed '/^$/N;/^\n$/d')
+
+            if [ -z "$RELEASE_NOTES" ]; then
+                echo -e "${YELLOW}  ⚠ No changelog entry found for v${VERSION}, using generic notes${NC}"
+                RELEASE_NOTES="See CHANGELOG.md for details."
+            else
+                echo "  ✓ Found changelog entry for v${VERSION}"
+            fi
+        else
+            echo -e "${YELLOW}  ⚠ CHANGELOG.md not found, using generic notes${NC}"
+            RELEASE_NOTES="See CHANGELOG.md for details."
+        fi
+
         gh release create "v${VERSION}" \
             dist/Clearical-arm64.dmg \
             dist/Clearical-arm64.zip \
             dist/latest-mac.yml \
             --repo benoittanguay/clearical-releases \
             --title "v${VERSION}" \
-            --notes "Release v${VERSION}
+            --notes "## What's New
+
+$RELEASE_NOTES
+
+---
 
 ## macOS Installation
 
 Download the DMG, open it, and drag Clearical to your Applications folder.
 
-The app is **signed and notarized** by Apple for your security.
-
-## What's New
-
-See commit history for changes in this release."
+The app is **signed and notarized** by Apple for your security."
         echo "  ✓ Release created and artifacts uploaded"
     fi
 
