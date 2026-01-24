@@ -17,12 +17,26 @@ typedef void (*MediaStateCallback)(bool isActive, const char* deviceType);
 @property (nonatomic, assign) MediaStateCallback callback;
 @property (nonatomic, assign) BOOL microphoneInUse;
 @property (nonatomic, assign) BOOL cameraInUse;
+@property (nonatomic, strong, readonly) NSDictionary *likelyMeetingApp;
 
 + (instancetype)sharedInstance;
 - (void)startMonitoring;
 - (void)stopMonitoring;
 - (BOOL)isMicrophoneInUse;
 - (BOOL)isCameraInUse;
+
+/**
+ * Get list of known meeting apps currently running
+ * Returns array of dictionaries with keys: bundleId, appName, pid
+ */
+- (NSArray<NSDictionary *> *)getRunningMeetingApps;
+
+/**
+ * Get the meeting app most likely using the microphone
+ * Called automatically when mic state changes to active
+ * Returns dictionary with bundleId, appName, pid or nil if no meeting app found
+ */
+- (NSDictionary *)getLikelyMeetingAppUsingMic;
 
 @end
 

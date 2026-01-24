@@ -30,6 +30,14 @@ export interface MicAudioSamplesInfo {
     sampleCount: number;
 }
 
+export interface MeetingAppInfo {
+    bundleId: string;
+    appName: string;
+    localizedName: string;
+    pid: number;
+    isActive: boolean;
+}
+
 class MediaMonitorWrapper extends EventEmitter {
     private native: any;
     private isRunning: boolean = false;
@@ -232,6 +240,51 @@ class MediaMonitorWrapper extends EventEmitter {
         } catch (err) {
             console.warn('[MediaMonitor] isMicCapturing error:', err);
             return false;
+        }
+    }
+
+    // Meeting app detection methods
+
+    /**
+     * Get list of known meeting apps currently running
+     * Returns array of meeting app info objects
+     */
+    getRunningMeetingApps(): MeetingAppInfo[] {
+        if (!this.native) return [];
+        try {
+            return this.native.getRunningMeetingApps() || [];
+        } catch (err) {
+            console.warn('[MediaMonitor] getRunningMeetingApps error:', err);
+            return [];
+        }
+    }
+
+    /**
+     * Get the meeting app most likely using the microphone
+     * Called automatically when mic state changes to active
+     * Returns meeting app info or null if no meeting app found
+     */
+    getLikelyMeetingAppUsingMic(): MeetingAppInfo | null {
+        if (!this.native) return null;
+        try {
+            return this.native.getLikelyMeetingAppUsingMic() || null;
+        } catch (err) {
+            console.warn('[MediaMonitor] getLikelyMeetingAppUsingMic error:', err);
+            return null;
+        }
+    }
+
+    /**
+     * Get the current meeting app (cached from last mic activation)
+     * Returns meeting app info or null if not in a meeting
+     */
+    getCurrentMeetingApp(): MeetingAppInfo | null {
+        if (!this.native) return null;
+        try {
+            return this.native.getCurrentMeetingApp() || null;
+        } catch (err) {
+            console.warn('[MediaMonitor] getCurrentMeetingApp error:', err);
+            return null;
         }
     }
 }

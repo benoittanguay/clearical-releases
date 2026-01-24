@@ -13,7 +13,7 @@
 
 import { EventEmitter } from 'events';
 import { BrowserWindow } from 'electron';
-import { mediaMonitor } from '../native/index.js';
+import { mediaMonitor, MeetingAppInfo } from '../native/index.js';
 import { AudioRecorder, getAudioRecorder } from './audioRecorder.js';
 import { MEETING_EVENTS, MEETING_IPC_CHANNELS } from './types.js';
 import { getRecordingWidgetManager } from './recordingWidgetManager.js';
@@ -26,6 +26,7 @@ export class RecordingManager extends EventEmitter {
     private isEnabled: boolean = true;
     private isRendererRecording: boolean = false;
     private recordingStartTime: number | null = null;
+    private currentMeetingApp: MeetingAppInfo | null = null;
 
     private constructor() {
         super();
@@ -104,10 +105,18 @@ export class RecordingManager extends EventEmitter {
             const micInUse = mediaMonitor.isMicrophoneInUse();
             const cameraInUse = mediaMonitor.isCameraInUse();
             const mediaInUse = mediaMonitor.isMediaInUse();
+
+            // If mic is in use, detect which meeting app is using it
+            if (micInUse && !this.currentMeetingApp) {
+                this.currentMeetingApp = mediaMonitor.getLikelyMeetingAppUsingMic();
+                console.log('[RecordingManager] Detected meeting app:', this.currentMeetingApp);
+            }
+
             console.log('[RecordingManager] Entry active, checking media:', {
                 micInUse,
                 cameraInUse,
                 mediaInUse,
+                meetingApp: this.currentMeetingApp?.appName || null,
                 isRendererRecording: this.isRendererRecording
             });
 
@@ -163,12 +172,27 @@ export class RecordingManager extends EventEmitter {
     /**
      * Get current media status
      */
-    public getMediaStatus(): { micInUse: boolean; cameraInUse: boolean; isRecording: boolean } {
+    public getMediaStatus(): { micInUse: boolean; cameraInUse: boolean; isRecording: boolean; meetingApp: MeetingAppInfo | null } {
         return {
             micInUse: mediaMonitor.isMicrophoneInUse(),
             cameraInUse: mediaMonitor.isCameraInUse(),
-            isRecording: this.isRendererRecording
+            isRecording: this.isRendererRecording,
+            meetingApp: this.currentMeetingApp
         };
+    }
+
+    /**
+     * Get current meeting app info
+     */
+    public getCurrentMeetingApp(): MeetingAppInfo | null {
+        return this.currentMeetingApp;
+    }
+
+    /**
+     * Get list of running meeting apps
+     */
+    public getRunningMeetingApps(): MeetingAppInfo[] {
+        return mediaMonitor.getRunningMeetingApps();
     }
 
     /**
@@ -203,10 +227,12 @@ export class RecordingManager extends EventEmitter {
 
         console.log('[RecordingManager] *** NOTIFYING RENDERER TO START RECORDING ***');
         console.log('[RecordingManager] Entry ID:', this.activeEntryId);
+        console.log('[RecordingManager] Meeting app:', this.currentMeetingApp?.appName || 'Unknown');
         console.log('[RecordingManager] Channel:', MEETING_IPC_CHANNELS.EVENT_RECORDING_SHOULD_START);
         this.sendToRenderer(MEETING_IPC_CHANNELS.EVENT_RECORDING_SHOULD_START, {
             entryId: this.activeEntryId,
             timestamp: this.recordingStartTime,
+            meetingApp: this.currentMeetingApp,
         });
         console.log('[RecordingManager] Start event sent to all renderer windows');
 
@@ -217,6 +243,7 @@ export class RecordingManager extends EventEmitter {
         this.emit(MEETING_EVENTS.RECORDING_STARTED, {
             entryId: this.activeEntryId,
             timestamp: this.recordingStartTime,
+            meetingApp: this.currentMeetingApp,
         });
     }
 
@@ -229,7 +256,8 @@ export class RecordingManager extends EventEmitter {
         console.log('[RecordingManager] Current state:', {
             isRendererRecording: this.isRendererRecording,
             overrideEntryId,
-            activeEntryId: this.activeEntryId
+            activeEntryId: this.activeEntryId,
+            meetingApp: this.currentMeetingApp?.appName || null
         });
 
         if (!this.isRendererRecording) {
@@ -240,11 +268,13 @@ export class RecordingManager extends EventEmitter {
         const duration = this.recordingStartTime ? Date.now() - this.recordingStartTime : 0;
         // Use override if provided, otherwise use current activeEntryId
         const entryId = overrideEntryId !== undefined ? overrideEntryId : this.activeEntryId;
+        const meetingApp = this.currentMeetingApp;
 
-        console.log('[RecordingManager] Sending stop event to renderer:', { entryId, duration });
+        console.log('[RecordingManager] Sending stop event to renderer:', { entryId, duration, meetingApp: meetingApp?.appName });
         this.sendToRenderer(MEETING_IPC_CHANNELS.EVENT_RECORDING_SHOULD_STOP, {
             entryId,
             duration,
+            meetingApp,
         });
 
         // Close the recording widget
@@ -255,10 +285,12 @@ export class RecordingManager extends EventEmitter {
 
         this.isRendererRecording = false;
         this.recordingStartTime = null;
+        // Keep currentMeetingApp until next meeting starts (for reference)
 
         this.emit(MEETING_EVENTS.RECORDING_STOPPED, {
             entryId,
             duration,
+            meetingApp,
         });
         console.log('[RecordingManager] Recording stopped, state reset');
     }
@@ -267,15 +299,23 @@ export class RecordingManager extends EventEmitter {
         console.log(`[RecordingManager] ========================================`);
         console.log(`[RecordingManager] *** onMediaStarted CALLBACK: ${device} ***`);
         console.log(`[RecordingManager] ========================================`);
+
+        // Detect which meeting app is using the mic
+        if (device === 'microphone') {
+            this.currentMeetingApp = mediaMonitor.getLikelyMeetingAppUsingMic();
+            console.log(`[RecordingManager] Detected meeting app:`, this.currentMeetingApp);
+        }
+
         console.log(`[RecordingManager] Current state:`, {
             isEnabled: this.isEnabled,
             activeEntryId: this.activeEntryId,
             isRendererRecording: this.isRendererRecording,
             micInUse: mediaMonitor.isMicrophoneInUse(),
             cameraInUse: mediaMonitor.isCameraInUse(),
+            meetingApp: this.currentMeetingApp?.appName || null,
         });
 
-        this.emit(MEETING_EVENTS.MEDIA_STARTED, { device });
+        this.emit(MEETING_EVENTS.MEDIA_STARTED, { device, meetingApp: this.currentMeetingApp });
 
         // Only start recording if:
         // 1. Auto-recording is enabled
@@ -303,7 +343,15 @@ export class RecordingManager extends EventEmitter {
     private onMediaStopped(device: 'microphone' | 'camera'): void {
         console.log(`[RecordingManager] *** ${device.toUpperCase()} STOPPED ***`);
 
-        this.emit(MEETING_EVENTS.MEDIA_STOPPED, { device });
+        const previousMeetingApp = this.currentMeetingApp;
+
+        // Clear meeting app when mic stops
+        if (device === 'microphone') {
+            this.currentMeetingApp = null;
+            console.log('[RecordingManager] Cleared meeting app info');
+        }
+
+        this.emit(MEETING_EVENTS.MEDIA_STOPPED, { device, meetingApp: previousMeetingApp });
 
         const micInUse = mediaMonitor.isMicrophoneInUse();
         const cameraInUse = mediaMonitor.isCameraInUse();

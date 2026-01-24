@@ -2,6 +2,12 @@
 #import "media_monitor.h"
 #import <CoreMediaIO/CMIOHardware.h>
 #import <IOKit/IOKitLib.h>
+#import <AppKit/AppKit.h>
+
+/**
+ * Known meeting app bundle IDs mapped to display names
+ */
+static NSDictionary<NSString*, NSString*> *MEETING_APP_BUNDLE_IDS = nil;
 
 @implementation MediaMonitor {
     AudioObjectPropertyAddress _micPropertyAddress;
@@ -10,6 +16,38 @@
     dispatch_queue_t _monitoringQueue;
     NSTimer *_cameraPollingTimer;
     NSTimer *_micPollingTimer;  // Fallback polling for mic
+    NSDictionary *_likelyMeetingApp;  // The meeting app likely using the mic
+}
+
+@synthesize likelyMeetingApp = _likelyMeetingApp;
+
++ (void)initialize {
+    if (self == [MediaMonitor class]) {
+        MEETING_APP_BUNDLE_IDS = @{
+            // Native video meeting apps
+            @"us.zoom.videomeetings": @"Zoom",
+            @"us.zoom.xos": @"Zoom",
+            @"com.microsoft.teams": @"Microsoft Teams",
+            @"com.microsoft.teams2": @"Microsoft Teams",
+            @"com.discord.Discord": @"Discord",
+            @"com.tinyspeck.slackmacgap": @"Slack",
+            @"com.apple.FaceTime": @"FaceTime",
+            @"com.cisco.webex.meetings": @"Webex",
+            @"com.skype.skype": @"Skype",
+            @"com.webex.meetingmanager": @"Webex",
+            @"com.logmein.GoToMeeting": @"GoToMeeting",
+
+            // Browsers (for Google Meet, Zoom Web, Teams Web)
+            @"com.google.Chrome": @"Browser",
+            @"com.apple.Safari": @"Browser",
+            @"org.mozilla.firefox": @"Browser",
+            @"com.microsoft.edgemac": @"Browser",
+            @"com.brave.Browser": @"Browser",
+            @"company.thebrowser.Browser": @"Arc",
+            @"com.operasoftware.Opera": @"Browser",
+            @"com.vivaldi.Vivaldi": @"Browser",
+        };
+    }
 }
 
 + (instancetype)sharedInstance {
@@ -229,6 +267,22 @@ static OSStatus microphoneCallback(
               wasInUse, anyInputRunning, wasInUse != _microphoneInUse);
     }
 
+    // When mic becomes active, detect which meeting app is likely using it
+    if (!wasInUse && _microphoneInUse) {
+        _likelyMeetingApp = [self getLikelyMeetingAppUsingMic];
+        if (_likelyMeetingApp) {
+            NSLog(@"[MediaMonitor] *** MIC ACTIVATED - Likely app: %@ (%@) ***",
+                  _likelyMeetingApp[@"localizedName"], _likelyMeetingApp[@"bundleId"]);
+        } else {
+            NSLog(@"[MediaMonitor] *** MIC ACTIVATED - No known meeting app detected ***");
+        }
+    } else if (wasInUse && !_microphoneInUse) {
+        // Mic deactivated, clear the likely app
+        NSLog(@"[MediaMonitor] *** MIC DEACTIVATED - was using: %@ ***",
+              _likelyMeetingApp[@"localizedName"] ?: @"unknown");
+        _likelyMeetingApp = nil;
+    }
+
     if (wasInUse != _microphoneInUse && _callback) {
         NSLog(@"[MediaMonitor] *** FIRING MICROPHONE CALLBACK: isActive=%d ***", _microphoneInUse);
         _callback(_microphoneInUse, "microphone");
@@ -441,6 +495,88 @@ static OSStatus microphoneCallback(
         result = _cameraInUse;
     });
     return result;
+}
+
+- (NSArray<NSDictionary *> *)getRunningMeetingApps {
+    NSMutableArray<NSDictionary *> *meetingApps = [NSMutableArray array];
+
+    NSArray<NSRunningApplication *> *runningApps = [[NSWorkspace sharedWorkspace] runningApplications];
+
+    for (NSRunningApplication *app in runningApps) {
+        NSString *bundleId = app.bundleIdentifier;
+        if (bundleId && MEETING_APP_BUNDLE_IDS[bundleId]) {
+            NSDictionary *appInfo = @{
+                @"bundleId": bundleId,
+                @"appName": MEETING_APP_BUNDLE_IDS[bundleId],
+                @"localizedName": app.localizedName ?: @"",
+                @"pid": @(app.processIdentifier),
+                @"isActive": @(app.isActive),
+            };
+            [meetingApps addObject:appInfo];
+        }
+    }
+
+    return [meetingApps copy];
+}
+
+- (NSDictionary *)getLikelyMeetingAppUsingMic {
+    NSArray<NSDictionary *> *runningMeetingApps = [self getRunningMeetingApps];
+
+    if (runningMeetingApps.count == 0) {
+        return nil;
+    }
+
+    // Priority order:
+    // 1. Native meeting apps (non-browser) that are active
+    // 2. Native meeting apps (non-browser) that are running
+    // 3. Browsers that are active
+    // 4. Any browser running
+
+    NSDictionary *activeMeetingApp = nil;
+    NSDictionary *runningMeetingApp = nil;
+    NSDictionary *activeBrowser = nil;
+    NSDictionary *runningBrowser = nil;
+
+    for (NSDictionary *app in runningMeetingApps) {
+        NSString *appName = app[@"appName"];
+        BOOL isActive = [app[@"isActive"] boolValue];
+        BOOL isBrowser = [appName isEqualToString:@"Browser"] || [appName isEqualToString:@"Arc"];
+
+        if (isBrowser) {
+            if (isActive && !activeBrowser) {
+                activeBrowser = app;
+            } else if (!runningBrowser) {
+                runningBrowser = app;
+            }
+        } else {
+            // Native meeting app
+            if (isActive && !activeMeetingApp) {
+                activeMeetingApp = app;
+            } else if (!runningMeetingApp) {
+                runningMeetingApp = app;
+            }
+        }
+    }
+
+    // Return in priority order
+    if (activeMeetingApp) {
+        NSLog(@"[MediaMonitor] Likely meeting app (active native): %@", activeMeetingApp[@"localizedName"]);
+        return activeMeetingApp;
+    }
+    if (runningMeetingApp) {
+        NSLog(@"[MediaMonitor] Likely meeting app (running native): %@", runningMeetingApp[@"localizedName"]);
+        return runningMeetingApp;
+    }
+    if (activeBrowser) {
+        NSLog(@"[MediaMonitor] Likely meeting app (active browser): %@", activeBrowser[@"localizedName"]);
+        return activeBrowser;
+    }
+    if (runningBrowser) {
+        NSLog(@"[MediaMonitor] Likely meeting app (running browser): %@", runningBrowser[@"localizedName"]);
+        return runningBrowser;
+    }
+
+    return nil;
 }
 
 @end

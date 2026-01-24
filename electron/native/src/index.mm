@@ -97,6 +97,68 @@ Napi::Value IsCameraInUse(const Napi::CallbackInfo& info) {
     return Napi::Boolean::New(env, [monitor isCameraInUse]);
 }
 
+Napi::Value GetRunningMeetingApps(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    MediaMonitor *monitor = [MediaMonitor sharedInstance];
+
+    NSArray<NSDictionary *> *apps = [monitor getRunningMeetingApps];
+    Napi::Array result = Napi::Array::New(env, apps.count);
+
+    for (NSUInteger i = 0; i < apps.count; i++) {
+        NSDictionary *app = apps[i];
+        Napi::Object appObj = Napi::Object::New(env);
+        appObj.Set("bundleId", Napi::String::New(env, [app[@"bundleId"] UTF8String]));
+        appObj.Set("appName", Napi::String::New(env, [app[@"appName"] UTF8String]));
+        appObj.Set("localizedName", Napi::String::New(env, [app[@"localizedName"] UTF8String]));
+        appObj.Set("pid", Napi::Number::New(env, [app[@"pid"] intValue]));
+        appObj.Set("isActive", Napi::Boolean::New(env, [app[@"isActive"] boolValue]));
+        result.Set(i, appObj);
+    }
+
+    return result;
+}
+
+Napi::Value GetLikelyMeetingAppUsingMic(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    MediaMonitor *monitor = [MediaMonitor sharedInstance];
+
+    NSDictionary *app = [monitor getLikelyMeetingAppUsingMic];
+
+    if (!app) {
+        return env.Null();
+    }
+
+    Napi::Object appObj = Napi::Object::New(env);
+    appObj.Set("bundleId", Napi::String::New(env, [app[@"bundleId"] UTF8String]));
+    appObj.Set("appName", Napi::String::New(env, [app[@"appName"] UTF8String]));
+    appObj.Set("localizedName", Napi::String::New(env, [app[@"localizedName"] UTF8String]));
+    appObj.Set("pid", Napi::Number::New(env, [app[@"pid"] intValue]));
+    appObj.Set("isActive", Napi::Boolean::New(env, [app[@"isActive"] boolValue]));
+
+    return appObj;
+}
+
+Napi::Value GetCurrentMeetingApp(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    MediaMonitor *monitor = [MediaMonitor sharedInstance];
+
+    // Return the cached likely meeting app (set when mic became active)
+    NSDictionary *app = monitor.likelyMeetingApp;
+
+    if (!app) {
+        return env.Null();
+    }
+
+    Napi::Object appObj = Napi::Object::New(env);
+    appObj.Set("bundleId", Napi::String::New(env, [app[@"bundleId"] UTF8String]));
+    appObj.Set("appName", Napi::String::New(env, [app[@"appName"] UTF8String]));
+    appObj.Set("localizedName", Napi::String::New(env, [app[@"localizedName"] UTF8String]));
+    appObj.Set("pid", Napi::Number::New(env, [app[@"pid"] intValue]));
+    appObj.Set("isActive", Napi::Boolean::New(env, [app[@"isActive"] boolValue]));
+
+    return appObj;
+}
+
 // System Audio Capture functions
 
 // Counter for logging frequency
@@ -419,6 +481,11 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
     exports.Set("stop", Napi::Function::New(env, Stop));
     exports.Set("isMicrophoneInUse", Napi::Function::New(env, IsMicrophoneInUse));
     exports.Set("isCameraInUse", Napi::Function::New(env, IsCameraInUse));
+
+    // Meeting app detection
+    exports.Set("getRunningMeetingApps", Napi::Function::New(env, GetRunningMeetingApps));
+    exports.Set("getLikelyMeetingAppUsingMic", Napi::Function::New(env, GetLikelyMeetingAppUsingMic));
+    exports.Set("getCurrentMeetingApp", Napi::Function::New(env, GetCurrentMeetingApp));
 
     // System audio capture
     exports.Set("isSystemAudioCaptureAvailable", Napi::Function::New(env, IsSystemAudioCaptureAvailable));
