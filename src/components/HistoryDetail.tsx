@@ -1778,7 +1778,7 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                                         }
                                     }}
                                     disabled={isAssigningBucket || !entry.description}
-                                    className="px-2.5 py-1 text-white text-xs rounded-md transition-all hover:scale-105 active:scale-95 flex items-center gap-1 disabled:cursor-not-allowed"
+                                    className="px-2.5 py-1 text-white text-xs rounded-md transition-all active:scale-95 flex items-center gap-1 disabled:cursor-not-allowed"
                                     style={{
                                         backgroundColor: isAssigningBucket || !entry.description ? '#9CA3AF' : 'var(--color-surface-dark)',
                                         opacity: 1,
@@ -1787,7 +1787,7 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                                     }}
                                     onMouseEnter={(e) => {
                                         if (!isAssigningBucket && entry.description) {
-                                            e.currentTarget.style.backgroundColor = '#1a1919';
+                                            e.currentTarget.style.backgroundColor = '#3a3a3a';
                                         }
                                     }}
                                     onMouseLeave={(e) => {
@@ -1852,7 +1852,7 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                                                 await autoSelectTempoAccount(currentAssignment.jiraIssue, availableAccounts, true);
                                             }
                                         }}
-                                        className="px-2.5 py-1 text-white text-xs rounded-md transition-all hover:scale-105 active:scale-95 flex items-center gap-1 disabled:cursor-not-allowed"
+                                        className="px-2.5 py-1 text-white text-xs rounded-md transition-all active:scale-95 flex items-center gap-1 disabled:cursor-not-allowed"
                                         style={{
                                             backgroundColor: isAssigningTempoAccount || !currentAssignment?.jiraIssue || availableAccounts.length === 0 ? '#9CA3AF' : 'var(--color-surface-dark)',
                                             opacity: 1,
@@ -1861,7 +1861,7 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                                         }}
                                         onMouseEnter={(e) => {
                                             if (!isAssigningTempoAccount && currentAssignment?.jiraIssue && availableAccounts.length > 0) {
-                                                e.currentTarget.style.backgroundColor = '#1a1919';
+                                                e.currentTarget.style.backgroundColor = '#3a3a3a';
                                             }
                                         }}
                                         onMouseLeave={(e) => {
@@ -1991,7 +1991,7 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                                 <button
                                     onClick={() => handleGenerateSummary(true)}
                                     disabled={isGeneratingSummary}
-                                    className="px-2.5 py-1 text-white text-xs rounded-md transition-all hover:scale-105 active:scale-95 flex items-center gap-1 disabled:cursor-not-allowed"
+                                    className="px-2.5 py-1 text-white text-xs rounded-md transition-all active:scale-95 flex items-center gap-1 disabled:cursor-not-allowed"
                                     style={{
                                         backgroundColor: isGeneratingSummary ? '#9CA3AF' : 'var(--color-surface-dark)',
                                         transitionDuration: 'var(--duration-fast)',
@@ -2000,7 +2000,7 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                                     }}
                                     onMouseEnter={(e) => {
                                         if (!isGeneratingSummary) {
-                                            e.currentTarget.style.backgroundColor = '#1a1919';
+                                            e.currentTarget.style.backgroundColor = '#3a3a3a';
                                         }
                                     }}
                                     onMouseLeave={(e) => {

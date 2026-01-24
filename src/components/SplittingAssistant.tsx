@@ -25,6 +25,22 @@ export interface SplittingAssistantProps {
   onApply: (splits: SplitSuggestion[]) => void;  // API format to backend
 }
 
+// Distinct segment colors for visual differentiation
+const SEGMENT_COLORS = [
+  '#3B82F6', // Blue
+  '#22C55E', // Green
+  '#F97316', // Orange
+  '#A855F7', // Purple
+  '#EC4899', // Pink
+  '#06B6D4', // Cyan
+  '#EAB308', // Yellow
+  '#EF4444', // Red
+  '#14B8A6', // Teal
+  '#6366F1', // Indigo
+  '#84CC16', // Lime
+  '#F59E0B', // Amber
+];
+
 // Helper functions to transform between API and UI formats
 let suggestionIdCounter = 0;
 
@@ -83,7 +99,13 @@ function formatTimeRange(startTime: number, endTime: number): string {
   return `${formatTime(startTime)} - ${formatTime(endTime)}`;
 }
 
-// Bucket colors available in CSS variables
+// Get a distinct color for a segment based on its index
+function getSegmentColor(index: number, bucket?: { color: string }): string {
+  if (bucket?.color) {
+    return bucket.color;
+  }
+  return SEGMENT_COLORS[index % SEGMENT_COLORS.length];
+}
 
 export function SplittingAssistant({
   activity,
@@ -93,12 +115,10 @@ export function SplittingAssistant({
   onApply,
 }: SplittingAssistantProps) {
   const [segments, setSegments] = useState<UISplitSuggestion[]>([]);
-  const [initialUISegments, setInitialUISegments] = useState<UISplitSuggestion[]>([]);
   const [selectedSegmentId, setSelectedSegmentId] = useState<string | null>(null);
   const [editingSegmentId, setEditingSegmentId] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [draggedCutIndex, setDraggedCutIndex] = useState<number | null>(null);
-  const [addSplitPosition, setAddSplitPosition] = useState<number | null>(null);
   const [confirmationModal, setConfirmationModal] = useState<{
     isOpen: boolean;
     title: string;
@@ -118,7 +138,6 @@ export function SplittingAssistant({
         // Transform API suggestions to UI format
         const uiSuggestions = initialSuggestions.map(s => apiToUISuggestion(s, buckets));
         setSegments(uiSuggestions);
-        setInitialUISegments(uiSuggestions);
 
         // Set initial selection
         if (uiSuggestions.length > 0) {
@@ -129,7 +148,6 @@ export function SplittingAssistant({
         // Fallback: transform without bucket lookup
         const uiSuggestions = initialSuggestions.map(s => apiToUISuggestion(s, []));
         setSegments(uiSuggestions);
-        setInitialUISegments(uiSuggestions);
         if (uiSuggestions.length > 0) {
           setSelectedSegmentId(uiSuggestions[0].id);
         }
@@ -225,65 +243,6 @@ export function SplittingAssistant({
     }
   }, [isDragging, handleCutDragMove, handleCutDragEnd]);
 
-  // Handle timeline hover for add split indicator
-  const handleTimelineMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!timelineRef.current || isDragging) return;
-
-    const rect = timelineRef.current.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const percent = (x / rect.width) * 100;
-
-    // Check if near existing cut markers
-    const isNearMarker = cutPoints.some((cutTime) => {
-      const cutPercent = timeToPercent(cutTime);
-      return Math.abs(percent - cutPercent) < 5;
-    });
-
-    if (!isNearMarker && percent > 5 && percent < 95) {
-      setAddSplitPosition(percent);
-    } else {
-      setAddSplitPosition(null);
-    }
-  };
-
-  const handleTimelineMouseLeave = () => {
-    setAddSplitPosition(null);
-  };
-
-  // Add a new split at the current position
-  const handleAddSplit = () => {
-    if (addSplitPosition === null) return;
-
-    const newCutTime = percentToTime(addSplitPosition);
-
-    // Find which segment to split
-    const segmentIndex = segments.findIndex(
-      (seg) => newCutTime >= seg.startTime && newCutTime < seg.endTime
-    );
-
-    if (segmentIndex === -1) return;
-
-    const segmentToSplit = segments[segmentIndex];
-
-    // Create two new segments
-    const newSegments = [...segments];
-    const firstHalf: UISplitSuggestion = {
-      ...segmentToSplit,
-      id: `${segmentToSplit.id}-a`,
-      endTime: newCutTime,
-    };
-    const secondHalf: UISplitSuggestion = {
-      ...segmentToSplit,
-      id: `${segmentToSplit.id}-b`,
-      startTime: newCutTime,
-      description: '',
-    };
-
-    newSegments.splice(segmentIndex, 1, firstHalf, secondHalf);
-    setSegments(newSegments);
-    setAddSplitPosition(null);
-  };
-
   // Remove a split (merge with next segment)
   const handleRemoveSplit = (segmentId: string) => {
     const segmentIndex = segments.findIndex((seg) => seg.id === segmentId);
@@ -327,19 +286,6 @@ export function SplittingAssistant({
         seg.id === segmentId ? { ...seg, description: newDescription } : seg
       )
     );
-  };
-
-  // Reset to initial suggestions
-  const handleReset = () => {
-    setConfirmationModal({
-      isOpen: true,
-      title: 'Reset Changes',
-      message: 'Reset all changes to original AI suggestions?',
-      onConfirm: () => {
-        setSegments(initialUISegments);
-        setConfirmationModal(null);
-      },
-    });
   };
 
   // Apply splits - transform UI format back to API format
@@ -388,83 +334,34 @@ export function SplittingAssistant({
                 color: 'var(--color-accent)',
               }}
             >
-              {segments.length - 1} splits suggested
+              {segments.length} splits suggested
             </div>
           </div>
         </div>
 
         {/* Scrollable Content */}
         <div className="flex-1 overflow-y-auto p-6">
-          {/* Instructions */}
-          <div
-            className="p-4 rounded-xl mb-6 border"
-            style={{
-              background: 'var(--color-accent-muted)',
-              borderColor: 'rgba(255, 72, 0, 0.15)',
-            }}
-          >
-            <h3
-              className="text-sm font-semibold mb-2"
-              style={{
-                fontFamily: 'var(--font-display)',
-                color: 'var(--color-accent)',
-              }}
-            >
-              How to use
-            </h3>
-            <ul className="text-xs text-[var(--color-text-secondary)] space-y-1">
-              <li className="pl-4 relative before:content-['>'] before:absolute before:left-0 before:text-[var(--color-accent)] before:font-semibold">
-                Drag cut markers to adjust split points
-              </li>
-              <li className="pl-4 relative before:content-['>'] before:absolute before:left-0 before:text-[var(--color-accent)] before:font-semibold">
-                Hover over timeline to add new splits
-              </li>
-              <li className="pl-4 relative before:content-['>'] before:absolute before:left-0 before:text-[var(--color-accent)] before:font-semibold">
-                Click segments to see details
-              </li>
-              <li className="pl-4 relative before:content-['>'] before:absolute before:left-0 before:text-[var(--color-accent)] before:font-semibold">
-                Remove unwanted splits with the X button
-              </li>
-            </ul>
-          </div>
-
           {/* Timeline Container */}
           <div className="bg-[var(--color-bg-secondary)] border border-[var(--color-border-primary)] rounded-xl p-6 mb-6 shadow-sm">
-            <div className="flex justify-between items-center mb-4">
-              <h2
-                className="text-base font-semibold text-[var(--color-text-primary)]"
-                style={{ fontFamily: 'var(--font-display)' }}
-              >
-                Timeline
-              </h2>
-              <div className="flex gap-2">
-                <button
-                  onClick={handleReset}
-                  className="px-4 py-2 text-xs font-medium rounded-full bg-[var(--color-bg-tertiary)] text-[var(--color-text-primary)] hover:bg-[var(--color-bg-quaternary)] transition-all flex items-center gap-2"
-                  style={{ fontFamily: 'var(--font-body)' }}
-                >
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-                    <path d="M3 3v5h5" />
-                  </svg>
-                  Reset
-                </button>
-              </div>
-            </div>
+            <h2
+              className="text-base font-semibold text-[var(--color-text-primary)] mb-4"
+              style={{ fontFamily: 'var(--font-display)' }}
+            >
+              Timeline
+            </h2>
 
             {/* Timeline */}
             <div
               ref={timelineRef}
               className="relative h-20 mb-2"
-              onMouseMove={handleTimelineMouseMove}
-              onMouseLeave={handleTimelineMouseLeave}
             >
               {/* Timeline Track */}
               <div className="absolute top-1/2 left-0 right-0 h-12 -translate-y-1/2 bg-[var(--color-bg-tertiary)] rounded-lg overflow-hidden flex">
                 {segments.map((segment, index) => {
                   const width = ((segment.endTime - segment.startTime) / activity.duration) * 100;
                   const isActive = segment.id === selectedSegmentId;
-                  const color = segment.suggestedBucket?.color || 'var(--bucket-blue)';
+                  // Selected segment is dark gray, others are colored
+                  const color = isActive ? '#4B5563' : getSegmentColor(index, segment.suggestedBucket);
 
                   return (
                     <div
@@ -473,19 +370,20 @@ export function SplittingAssistant({
                       style={{
                         width: `${width}%`,
                         background: color,
-                        filter: isActive ? 'brightness(1.1)' : undefined,
                         boxShadow: isActive ? 'inset 0 0 0 2px rgba(255, 255, 255, 0.3)' : undefined,
                       }}
                       onClick={() => handleSelectSegment(segment.id)}
                       onMouseEnter={(e) => {
-                        e.currentTarget.style.filter = 'brightness(1.05)';
+                        if (!isActive) {
+                          e.currentTarget.style.filter = 'brightness(1.05)';
+                        }
                       }}
                       onMouseLeave={(e) => {
-                        e.currentTarget.style.filter = isActive ? 'brightness(1.1)' : '';
+                        e.currentTarget.style.filter = '';
                       }}
                     >
                       <span className="text-[10px] font-semibold text-white px-2 truncate opacity-90 hover:opacity-100" style={{ textShadow: '0 1px 2px rgba(0, 0, 0, 0.3)' }}>
-                        {segment.suggestedBucket?.name || `Segment ${index + 1}`}
+                        {segment.suggestedBucket?.name || segment.suggestedJiraKey || `Segment ${index + 1}`}
                       </span>
                     </div>
                   );
@@ -518,17 +416,6 @@ export function SplittingAssistant({
                   </div>
                 );
               })}
-
-              {/* Add Split Indicator */}
-              {addSplitPosition !== null && (
-                <div
-                  className="absolute top-1/2 -translate-x-1/2 -translate-y-1/2 w-6 h-6 bg-[var(--color-bg-secondary)] border-2 border-dashed border-[var(--color-text-tertiary)] rounded-full flex items-center justify-center text-sm text-[var(--color-text-tertiary)] cursor-pointer hover:bg-[var(--color-accent)] hover:border-[var(--color-accent)] hover:border-solid hover:text-white transition-all z-20"
-                  style={{ left: `${addSplitPosition}%` }}
-                  onClick={handleAddSplit}
-                >
-                  +
-                </div>
-              )}
             </div>
 
             {/* Time Labels */}
@@ -540,11 +427,12 @@ export function SplittingAssistant({
 
           {/* Segment Cards */}
           <div className="space-y-3">
-            {segments.map((segment) => {
+            {segments.map((segment, index) => {
               const isActive = segment.id === selectedSegmentId;
               const isEditing = segment.id === editingSegmentId;
               const duration = segment.endTime - segment.startTime;
-              const color = segment.suggestedBucket?.color || 'var(--bucket-blue)';
+              // Selected segment is dark gray, others are colored
+              const color = isActive ? '#4B5563' : getSegmentColor(index, segment.suggestedBucket);
 
               return (
                 <div
@@ -570,18 +458,53 @@ export function SplittingAssistant({
                 >
                   {/* Header */}
                   <div className="flex items-center gap-3 mb-3">
-                    <div className="w-1 h-8 rounded flex-shrink-0" style={{ background: color }} />
+                    <div className="w-1.5 h-10 rounded-full flex-shrink-0" style={{ background: color }} />
 
-                    <div className="flex flex-col">
-                      <div className="text-sm font-semibold text-[var(--color-text-primary)]">
-                        {formatTimeRange(segment.startTime, segment.endTime)}
+                    <div className="flex flex-col flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <div className="text-sm font-semibold text-[var(--color-text-primary)]">
+                          {formatTimeRange(segment.startTime, segment.endTime)}
+                        </div>
+                        <div className="text-xs text-[var(--color-text-tertiary)]">
+                          ({formatDuration(duration)})
+                        </div>
                       </div>
-                      <div className="text-xs text-[var(--color-text-secondary)]">
-                        {formatDuration(duration)}
+                      {/* Assignment badges inline with time */}
+                      <div className="flex flex-wrap gap-1.5 mt-1">
+                        {segment.suggestedBucket && (
+                          <span
+                            className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold text-white"
+                            style={{ background: color }}
+                          >
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                            </svg>
+                            {segment.suggestedBucket.name}
+                          </span>
+                        )}
+                        {segment.suggestedJiraKey && (
+                          <span
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold"
+                            style={{
+                              background: 'var(--color-info-muted)',
+                              color: 'var(--color-info)',
+                            }}
+                          >
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
+                              <path d="M11.571 11.513H0a5.218 5.218 0 0 0 5.232 5.215h2.13v2.057A5.215 5.215 0 0 0 12.575 24V12.518a1.005 1.005 0 0 0-1.005-1.005zm5.723-5.756H5.736a5.215 5.215 0 0 0 5.215 5.214h2.129v2.058a5.218 5.218 0 0 0 5.215 5.214V6.758a1.001 1.001 0 0 0-1.001-1.001zM23.013 0H11.455a5.215 5.215 0 0 0 5.215 5.215h2.129v2.057A5.215 5.215 0 0 0 24 12.483V1.005A1.005 1.005 0 0 0 23.013 0z" />
+                            </svg>
+                            {segment.suggestedJiraKey}
+                          </span>
+                        )}
+                        {!segment.suggestedBucket && !segment.suggestedJiraKey && (
+                          <span className="text-[10px] text-[var(--color-text-tertiary)] italic">
+                            No assignment
+                          </span>
+                        )}
                       </div>
                     </div>
 
-                    <div className="ml-auto flex gap-1">
+                    <div className="ml-auto flex gap-1 flex-shrink-0">
                       <button
                         className="w-7 h-7 flex items-center justify-center rounded-lg text-[var(--color-text-tertiary)] hover:bg-[#FAF5EE] hover:text-[var(--color-text-primary)] transition-all"
                         onClick={(e) => {
@@ -623,31 +546,10 @@ export function SplittingAssistant({
                       placeholder="Add description..."
                     />
                   ) : (
-                    <div className="text-[13px] leading-relaxed text-[var(--color-text-primary)] mb-3">
+                    <div className="text-[13px] leading-relaxed text-[var(--color-text-secondary)]">
                       {segment.description || <span className="text-[var(--color-text-tertiary)] italic">No description</span>}
                     </div>
                   )}
-
-                  {/* Suggestions */}
-                  <div className="flex flex-wrap gap-2">
-                    {segment.suggestedBucket && (
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-[var(--color-bg-tertiary)] rounded-full text-[11px] font-medium text-[var(--color-text-secondary)]">
-                        <span className="w-1.5 h-1.5 rounded-full" style={{ background: color }} />
-                        {segment.suggestedBucket.name}
-                      </span>
-                    )}
-                    {segment.suggestedJiraKey && (
-                      <span
-                        className="px-2.5 py-1 rounded-full text-[11px] font-medium"
-                        style={{
-                          background: 'var(--color-accent-muted)',
-                          color: 'var(--color-accent)',
-                        }}
-                      >
-                        {segment.suggestedJiraKey}
-                      </span>
-                    )}
-                  </div>
                 </div>
               );
             })}
@@ -700,12 +602,7 @@ export function SplittingAssistant({
                     Processing...
                   </>
                 ) : (
-                  <>
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <polyline points="20 6 9 17 4 12" />
-                    </svg>
-                    Apply Splits
-                  </>
+                  'Split Recording'
                 )}
               </button>
             </div>

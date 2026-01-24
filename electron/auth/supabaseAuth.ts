@@ -439,7 +439,21 @@ export class SupabaseAuthService {
                     hasData: !!data,
                     hasSession: !!data?.session
                 });
-                this.clearSession();
+
+                // Only clear session if the refresh token is explicitly invalid/revoked
+                // Don't clear on temporary failures (network issues, service hiccups)
+                const isRefreshTokenInvalid = error?.message?.toLowerCase().includes('invalid') ||
+                    error?.message?.toLowerCase().includes('revoked') ||
+                    error?.message?.toLowerCase().includes('expired') ||
+                    error?.code === 'invalid_grant' ||
+                    error?.code === 'refresh_token_not_found';
+
+                if (isRefreshTokenInvalid) {
+                    console.error('[SupabaseAuth] Refresh token is invalid/revoked, clearing session');
+                    this.clearSession();
+                } else {
+                    console.warn('[SupabaseAuth] Refresh failed (possibly temporary), keeping session for retry');
+                }
                 return false;
             }
 
@@ -455,7 +469,8 @@ export class SupabaseAuthService {
             return true;
         } catch (error) {
             console.error('[SupabaseAuth] Session refresh error:', error);
-            this.clearSession();
+            // Don't clear session on network/unexpected errors - allow retry
+            console.warn('[SupabaseAuth] Keeping session for potential retry');
             return false;
         }
     }

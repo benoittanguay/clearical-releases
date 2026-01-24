@@ -72,7 +72,8 @@ export function JiraConfigModal({
     }, []);
 
     const handleSave = () => {
-        onSave(tempJiraSettings);
+        // Always enable when saving configuration
+        onSave({ ...tempJiraSettings, enabled: true });
         onClose();
     };
 
@@ -190,145 +191,126 @@ export function JiraConfigModal({
                 </div>
 
                 <div className="space-y-4">
-                    <div className="flex items-center gap-3 mb-4">
-                        <input
-                            id="jira-enabled"
-                            type="checkbox"
-                            checked={tempJiraSettings.enabled}
-                            onChange={(e) => {
-                                setTempJiraSettings(prev => ({ ...prev, enabled: e.target.checked }));
-                            }}
-                            className="w-4 h-4 text-[var(--color-accent)] bg-[var(--color-bg-tertiary)] border border-[var(--color-border-primary)] rounded focus:ring-[var(--color-accent)] focus:ring-1"
-                        />
-                        <label htmlFor="jira-enabled" className="text-sm text-[var(--color-text-primary)]">
-                            Enable Jira Integration
+                    <div>
+                        <label className="block text-sm text-[var(--color-text-secondary)] mb-2 font-display">
+                            Jira Base URL *
                         </label>
+                        <input
+                            type="text"
+                            value={tempJiraSettings.baseUrl}
+                            onChange={(e) => {
+                                setTempJiraSettings(prev => ({ ...prev, baseUrl: e.target.value }));
+                            }}
+                            className="w-full bg-[var(--color-bg-tertiary)] border border-[var(--color-border-primary)] text-[var(--color-text-primary)] text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]"
+                            placeholder="https://your-domain.atlassian.net"
+                        />
                     </div>
 
-                    {tempJiraSettings.enabled && (
-                        <>
-                            <div>
-                                <label className="block text-sm text-[var(--color-text-secondary)] mb-2 font-display">
-                                    Jira Base URL *
-                                </label>
-                                <input
-                                    type="text"
-                                    value={tempJiraSettings.baseUrl}
-                                    onChange={(e) => {
-                                        setTempJiraSettings(prev => ({ ...prev, baseUrl: e.target.value }));
-                                    }}
-                                    className="w-full bg-[var(--color-bg-tertiary)] border border-[var(--color-border-primary)] text-[var(--color-text-primary)] text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]"
-                                    placeholder="https://your-domain.atlassian.net"
-                                />
+                    <div>
+                        <label className="block text-sm text-[var(--color-text-secondary)] mb-2 font-display">
+                            Email *
+                        </label>
+                        <input
+                            type="email"
+                            value={tempJiraSettings.email}
+                            onChange={(e) => {
+                                setTempJiraSettings(prev => ({ ...prev, email: e.target.value }));
+                            }}
+                            className="w-full bg-[var(--color-bg-tertiary)] border border-[var(--color-border-primary)] text-[var(--color-text-primary)] text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]"
+                            placeholder="your.email@company.com"
+                        />
+                    </div>
+
+                    <div>
+                        <label className="block text-sm text-[var(--color-text-secondary)] mb-2 font-display">
+                            API Token *
+                        </label>
+                        <input
+                            type="password"
+                            value={tempJiraSettings.apiToken}
+                            onChange={(e) => {
+                                setTempJiraSettings(prev => ({ ...prev, apiToken: e.target.value }));
+                            }}
+                            className="w-full bg-[var(--color-bg-tertiary)] border border-[var(--color-border-primary)] text-[var(--color-text-primary)] text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]"
+                            placeholder="Enter your Jira API token"
+                        />
+                        <div className="text-xs text-[var(--color-text-secondary)] mt-1">
+                            Generate at: Jira → Profile → Security → Create and manage API tokens
+                        </div>
+                    </div>
+
+                    <button
+                        onClick={handleTestJira}
+                        disabled={isTestingJira}
+                        className="w-full px-4 py-2 bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] disabled:bg-[var(--color-bg-tertiary)] disabled:cursor-not-allowed disabled:text-[var(--color-text-tertiary)] text-white text-sm rounded-lg transition-colors flex items-center justify-center gap-2"
+                    >
+                        {isTestingJira ? (
+                            <>
+                                <div className="w-3 h-3 border border-white border-t-transparent rounded-full animate-spin"></div>
+                                Testing Jira...
+                            </>
+                        ) : (
+                            'Test Jira Connection'
+                        )}
+                    </button>
+
+                    {/* Project Selection */}
+                    {availableProjects.length > 0 && (
+                        <div className="mt-6">
+                            <label className="block text-sm text-[var(--color-text-secondary)] mb-2 font-display">
+                                Select Projects to Fetch Data From
+                            </label>
+                            <div className="text-xs text-[var(--color-text-secondary)] mb-3">
+                                Choose which projects to include in issue fetching. This improves performance and focuses on relevant data for AI features.
                             </div>
 
-                            <div>
-                                <label className="block text-sm text-[var(--color-text-secondary)] mb-2 font-display">
-                                    Email *
-                                </label>
-                                <input
-                                    type="email"
-                                    value={tempJiraSettings.email}
-                                    onChange={(e) => {
-                                        setTempJiraSettings(prev => ({ ...prev, email: e.target.value }));
-                                    }}
-                                    className="w-full bg-[var(--color-bg-tertiary)] border border-[var(--color-border-primary)] text-[var(--color-text-primary)] text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]"
-                                    placeholder="your.email@company.com"
-                                />
+                            <div className="flex items-center gap-2 mb-3">
+                                <button
+                                    onClick={selectAllProjects}
+                                    className="text-xs text-[var(--color-accent)] hover:text-[var(--color-accent-hover)] underline"
+                                >
+                                    Select All
+                                </button>
+                                <span className="text-xs text-[var(--color-text-secondary)]">|</span>
+                                <button
+                                    onClick={clearAllProjects}
+                                    className="text-xs text-[var(--color-accent)] hover:text-[var(--color-accent-hover)] underline"
+                                >
+                                    Clear All
+                                </button>
+                                <span className="text-xs text-[var(--color-text-secondary)] ml-2">
+                                    {tempJiraSettings.selectedProjects?.length || 0} of {availableProjects.length} selected
+                                </span>
                             </div>
 
-                            <div>
-                                <label className="block text-sm text-[var(--color-text-secondary)] mb-2 font-display">
-                                    API Token *
-                                </label>
-                                <input
-                                    type="password"
-                                    value={tempJiraSettings.apiToken}
-                                    onChange={(e) => {
-                                        setTempJiraSettings(prev => ({ ...prev, apiToken: e.target.value }));
-                                    }}
-                                    className="w-full bg-[var(--color-bg-tertiary)] border border-[var(--color-border-primary)] text-[var(--color-text-primary)] text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]"
-                                    placeholder="Enter your Jira API token"
-                                />
-                                <div className="text-xs text-[var(--color-text-secondary)] mt-1">
-                                    Generate at: Jira → Profile → Security → Create and manage API tokens
-                                </div>
-                            </div>
-
-                            <button
-                                onClick={handleTestJira}
-                                disabled={isTestingJira}
-                                className="w-full px-4 py-2 bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] disabled:bg-[var(--color-bg-tertiary)] disabled:cursor-not-allowed disabled:text-[var(--color-text-tertiary)] text-white text-sm rounded-lg transition-colors flex items-center justify-center gap-2"
-                            >
-                                {isTestingJira ? (
-                                    <>
-                                        <div className="w-3 h-3 border border-white border-t-transparent rounded-full animate-spin"></div>
-                                        Testing Jira...
-                                    </>
-                                ) : (
-                                    'Test Jira Connection'
-                                )}
-                            </button>
-
-                            {/* Project Selection */}
-                            {availableProjects.length > 0 && (
-                                <div className="mt-6">
-                                    <label className="block text-sm text-[var(--color-text-secondary)] mb-2 font-display">
-                                        Select Projects to Fetch Data From
-                                    </label>
-                                    <div className="text-xs text-[var(--color-text-secondary)] mb-3">
-                                        Choose which projects to include in issue fetching. This improves performance and focuses on relevant data for AI features.
-                                    </div>
-
-                                    <div className="flex items-center gap-2 mb-3">
-                                        <button
-                                            onClick={selectAllProjects}
-                                            className="text-xs text-[var(--color-accent)] hover:text-[var(--color-accent-hover)] underline"
+                            <div className="max-h-48 overflow-y-auto bg-[var(--color-bg-tertiary)] border border-[var(--color-border-primary)] rounded-lg px-3 py-2">
+                                {availableProjects.map((project) => (
+                                    <div key={project.key} className="flex items-center gap-2 py-2 border-b border-[var(--color-border-primary)] last:border-b-0">
+                                        <input
+                                            type="checkbox"
+                                            id={`project-${project.key}`}
+                                            checked={tempJiraSettings.selectedProjects?.includes(project.key) || false}
+                                            onChange={() => handleProjectToggle(project.key)}
+                                            className="w-4 h-4 text-[var(--color-accent)] bg-[var(--color-bg-tertiary)] border border-[var(--color-border-primary)] rounded focus:ring-[var(--color-accent)] focus:ring-1"
+                                        />
+                                        <label
+                                            htmlFor={`project-${project.key}`}
+                                            className="flex-1 text-sm text-[var(--color-text-primary)] cursor-pointer"
                                         >
-                                            Select All
-                                        </button>
-                                        <span className="text-xs text-[var(--color-text-secondary)]">|</span>
-                                        <button
-                                            onClick={clearAllProjects}
-                                            className="text-xs text-[var(--color-accent)] hover:text-[var(--color-accent-hover)] underline"
-                                        >
-                                            Clear All
-                                        </button>
-                                        <span className="text-xs text-[var(--color-text-secondary)] ml-2">
-                                            {tempJiraSettings.selectedProjects?.length || 0} of {availableProjects.length} selected
-                                        </span>
+                                            <span className="font-medium text-[var(--color-accent)]">{project.key}</span>
+                                            <span className="text-[var(--color-text-secondary)] ml-2">- {project.name}</span>
+                                        </label>
                                     </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
 
-                                    <div className="max-h-48 overflow-y-auto bg-[var(--color-bg-tertiary)] border border-[var(--color-border-primary)] rounded-lg px-3 py-2">
-                                        {availableProjects.map((project) => (
-                                            <div key={project.key} className="flex items-center gap-2 py-2 border-b border-[var(--color-border-primary)] last:border-b-0">
-                                                <input
-                                                    type="checkbox"
-                                                    id={`project-${project.key}`}
-                                                    checked={tempJiraSettings.selectedProjects?.includes(project.key) || false}
-                                                    onChange={() => handleProjectToggle(project.key)}
-                                                    className="w-4 h-4 text-[var(--color-accent)] bg-[var(--color-bg-tertiary)] border border-[var(--color-border-primary)] rounded focus:ring-[var(--color-accent)] focus:ring-1"
-                                                />
-                                                <label
-                                                    htmlFor={`project-${project.key}`}
-                                                    className="flex-1 text-sm text-[var(--color-text-primary)] cursor-pointer"
-                                                >
-                                                    <span className="font-medium text-[var(--color-accent)]">{project.key}</span>
-                                                    <span className="text-[var(--color-text-secondary)] ml-2">- {project.name}</span>
-                                                </label>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-
-                            {loadingProjects && (
-                                <div className="mt-4 flex items-center justify-center py-4 text-sm text-[var(--color-text-secondary)]">
-                                    <div className="w-4 h-4 border border-[var(--color-text-secondary)] border-t-transparent rounded-full animate-spin mr-2"></div>
-                                    Loading available projects...
-                                </div>
-                            )}
-                        </>
+                    {loadingProjects && (
+                        <div className="mt-4 flex items-center justify-center py-4 text-sm text-[var(--color-text-secondary)]">
+                            <div className="w-4 h-4 border border-[var(--color-text-secondary)] border-t-transparent rounded-full animate-spin mr-2"></div>
+                            Loading available projects...
+                        </div>
                     )}
                 </div>
 

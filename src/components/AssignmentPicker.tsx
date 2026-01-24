@@ -307,8 +307,8 @@ export function AssignmentPicker({ value, onChange, placeholder = "Select assign
                             <span className="italic">No assignment</span>
                         </button>
 
-                        {/* Manual buckets section */}
-                        {filteredBuckets.length > 0 && (
+                        {/* Manual buckets section - only show when not filtering by specific project */}
+                        {filteredBuckets.length > 0 && selectedProject === 'all' && (
                             <div>
                                 <div className="px-4 py-1.5 text-[10px] font-medium uppercase tracking-wider"
                                      style={{
@@ -393,7 +393,7 @@ export function AssignmentPicker({ value, onChange, placeholder = "Select assign
                         )}
 
                         {/* Empty state */}
-                        {filteredBuckets.length === 0 && (!hasJiraAccess || !settings.jira?.enabled || filteredJiraIssues.length === 0) && (
+                        {(selectedProject !== 'all' ? filteredJiraIssues.length === 0 : (filteredBuckets.length === 0 && (!hasJiraAccess || !settings.jira?.enabled || filteredJiraIssues.length === 0))) && (
                             <div className="px-4 py-12 text-center text-sm animate-fade-in"
                                  style={{ color: 'var(--color-text-tertiary)' }}>
                                 <svg className="w-12 h-12 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ opacity: 0.5 }}>

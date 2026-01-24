@@ -62,9 +62,9 @@
   --glow-red: 0 0 20px rgb(239 68 68 / 0.5);
   --glow-yellow: 0 0 20px rgb(234 179 8 / 0.5);
 
-  /* Focus Ring */
-  --focus-ring: 0 0 0 3px rgb(59 130 246 / 0.5);
-  --focus-ring-offset: 0 0 0 2px #111827, 0 0 0 5px rgb(59 130 246 / 0.5);
+  /* Focus Ring - disabled for cleaner UI */
+  --focus-ring: none;
+  --focus-ring-offset: none;
 
   /* Compact Spacing System for Dense UI */
   --space-xs: 4px;
@@ -75,16 +75,14 @@
   --space-2xl: 24px;
 }
 
-/* Enhanced Focus States for Accessibility */
+/* Focus States - minimal styling for cleaner UI */
 *:focus-visible {
   outline: none;
-  box-shadow: var(--focus-ring);
-  transition: box-shadow var(--duration-fast) var(--ease-out);
 }
 
 button:focus-visible,
 a:focus-visible {
-  box-shadow: var(--focus-ring-offset);
+  outline: none;
 }
 
 /* Custom Scrollbar Styling */

@@ -164,7 +164,10 @@ export class TranscriptionService extends EventEmitter {
         }
 
         if (!this.session?.access_token) {
-            console.error('[TranscriptionService] ERROR: No authenticated session');
+            console.error('[TranscriptionService] ERROR: No authenticated session', {
+                hasSession: !!this.session,
+                hasToken: !!this.session?.access_token,
+            });
             return {
                 success: false,
                 transcriptionId: '',
@@ -173,12 +176,36 @@ export class TranscriptionService extends EventEmitter {
                 language: '',
                 duration: 0,
                 wordCount: 0,
-                error: 'Not authenticated',
+                error: 'Not authenticated - please sign in from Settings',
+            };
+        }
+
+        // Check if token is expired
+        const tokenExpiresAt = this.session.expires_at ? this.session.expires_at * 1000 : 0;
+        const isTokenExpired = tokenExpiresAt > 0 && Date.now() > tokenExpiresAt;
+        console.log('[TranscriptionService] Session state:', {
+            tokenExpiresAt: tokenExpiresAt ? new Date(tokenExpiresAt).toISOString() : 'unknown',
+            isExpired: isTokenExpired,
+            userId: this.session.user?.id?.substring(0, 8),
+        });
+
+        if (isTokenExpired) {
+            console.error('[TranscriptionService] ERROR: Access token has expired');
+            return {
+                success: false,
+                transcriptionId: '',
+                segments: [],
+                fullText: '',
+                language: '',
+                duration: 0,
+                wordCount: 0,
+                error: 'Session expired - please sign in again from Settings',
             };
         }
 
         try {
             // Call the Supabase Edge Function
+            console.log('[TranscriptionService] Calling edge function, audio size:', Math.round(audioBase64.length / 1024), 'KB');
             const response = await fetch(`${this.supabaseUrl}/functions/v1/groq-transcribe`, {
                 method: 'POST',
                 headers: {
@@ -193,13 +220,24 @@ export class TranscriptionService extends EventEmitter {
                 }),
             });
 
-            const result = await response.json() as TranscriptionApiResult;
+            // Log response status for debugging
+            console.log('[TranscriptionService] Edge function response status:', response.status, response.statusText);
 
-            if (!result.success || !result.transcription) {
-                console.error('[TranscriptionService] Transcription failed:', result.error);
+            // Handle non-OK responses
+            if (!response.ok) {
+                let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+                try {
+                    const errorBody = await response.json() as { error?: string };
+                    if (errorBody && typeof errorBody.error === 'string') {
+                        errorMessage = errorBody.error;
+                    }
+                } catch {
+                    // Response wasn't JSON, use the status message
+                }
+                console.error('[TranscriptionService] Edge function error:', errorMessage);
                 this.emit(MEETING_EVENTS.TRANSCRIPTION_ERROR, {
                     entryId,
-                    error: result.error || 'Transcription failed',
+                    error: errorMessage,
                 });
                 return {
                     success: false,
@@ -209,7 +247,29 @@ export class TranscriptionService extends EventEmitter {
                     language: '',
                     duration: 0,
                     wordCount: 0,
-                    error: result.error || 'Transcription failed',
+                    error: errorMessage,
+                };
+            }
+
+            const result = await response.json() as TranscriptionApiResult;
+            console.log('[TranscriptionService] Edge function result:', { success: result.success, hasTranscription: !!result.transcription, error: result.error });
+
+            if (!result.success || !result.transcription) {
+                const errorMessage = result.error || 'Transcription failed (no transcription in response)';
+                console.error('[TranscriptionService] Transcription failed:', errorMessage);
+                this.emit(MEETING_EVENTS.TRANSCRIPTION_ERROR, {
+                    entryId,
+                    error: errorMessage,
+                });
+                return {
+                    success: false,
+                    transcriptionId: '',
+                    segments: [],
+                    fullText: '',
+                    language: '',
+                    duration: 0,
+                    wordCount: 0,
+                    error: errorMessage,
                 };
             }
 

@@ -4,7 +4,7 @@
   "version": "1.7.4",
   "type": "module",
   "build": {
-    "appId": "io.clearical.app",
+    "appId": "com.clearical.app",
     "productName": "Clearical",
     "protocols": [
       {
@@ -166,6 +166,27 @@
       ],
       "category": "Office"
     },
+    "mas": {
+      "icon": "build/icon.icns",
+      "category": "public.app-category.productivity",
+      "entitlements": "build/entitlements.mas.plist",
+      "entitlementsInherit": "build/entitlements.mas.inherit.plist",
+      "provisioningProfile": "build/embedded.provisionprofile",
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false,
+      "artifactName": "${productName}-${version}-mas.${ext}",
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "Clearical needs microphone access to record and transcribe meetings when you're in a video call.",
+        "NSScreenCaptureUsageDescription": "Clearical needs screen recording permission to capture what you're working on and generate activity descriptions.",
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "pkg": {
+      "installLocation": "/Applications",
+      "allowAnywhere": false,
+      "allowCurrentUserHome": false,
+      "allowRootDirectory": false
+    },
     "publish": {
       "provider": "github",
       "owner": "benoittanguay",
@@ -183,6 +204,7 @@
     "build:electron": "npm run build:native && cross-env BUILD_ENV=production tsc -b && vite build && npm run build:electron-main && electron-builder",
     "build:electron:dev": "npm run build:native && cross-env BUILD_ENV=development tsc -b && vite build && npm run build:electron-main && electron-builder",
     "build:electron:prod": "npm run build:native && cross-env BUILD_ENV=production tsc -b && vite build && npm run build:electron-main && electron-builder",
+    "build:mas": "npm run build:native && cross-env BUILD_ENV=production tsc -b && vite build && npm run build:electron-main && electron-builder --mac mas --arm64",
     "release": "./scripts/release.sh",
     "release:publish": "./scripts/release.sh --publish",
     "lint": "eslint .",

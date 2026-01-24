@@ -4,6 +4,17 @@
 
 ---
 
+## Subtitle
+
+**Character limit:** 30
+**Character count:** 29 ✓
+
+```
+Protect your flow. AI tracks.
+```
+
+---
+
 ## Promotional Text
 
 **Character limit:** 170

@@ -67,7 +67,8 @@ export function TempoConfigModal({
     }, []);
 
     const handleSave = () => {
-        onSave(tempTempoSettings);
+        // Always enable when saving configuration
+        onSave({ ...tempTempoSettings, enabled: true });
         onClose();
     };
 
@@ -132,116 +133,97 @@ export function TempoConfigModal({
                 </div>
 
                 <div className="space-y-4">
-                    <div className="flex items-center gap-3 mb-4">
-                        <input
-                            id="tempo-enabled"
-                            type="checkbox"
-                            checked={tempTempoSettings.enabled}
-                            onChange={(e) => {
-                                setTempTempoSettings(prev => ({ ...prev, enabled: e.target.checked }));
-                            }}
-                            className="w-4 h-4 text-[var(--color-accent)] bg-[var(--color-bg-tertiary)] border border-[var(--color-border-primary)] rounded focus:ring-[var(--color-accent)] focus:ring-1"
-                        />
-                        <label htmlFor="tempo-enabled" className="text-sm text-[var(--color-text-primary)]">
-                            Enable Tempo Integration
+                    <div>
+                        <label className="block text-sm text-[var(--color-text-secondary)] mb-2 font-display">
+                            API Token *
                         </label>
+                        <input
+                            type="password"
+                            value={tempTempoSettings.apiToken}
+                            onChange={(e) => {
+                                setTempTempoSettings(prev => ({ ...prev, apiToken: e.target.value }));
+                            }}
+                            className="w-full bg-[var(--color-bg-tertiary)] border border-[var(--color-border-primary)] text-[var(--color-text-primary)] text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]"
+                            placeholder="Enter your Tempo API token"
+                        />
+                        <div className="text-xs text-[var(--color-text-secondary)] mt-1">
+                            Get your API token from Tempo → Settings → API Integration
+                        </div>
                     </div>
 
-                    {tempTempoSettings.enabled && (
-                        <>
+                    <div>
+                        <label className="block text-sm text-[var(--color-text-secondary)] mb-2 font-display">
+                            Base URL *
+                        </label>
+                        <select
+                            value={tempTempoSettings.baseUrl}
+                            onChange={(e) => {
+                                setTempTempoSettings(prev => ({ ...prev, baseUrl: e.target.value }));
+                            }}
+                            className="w-full bg-[var(--color-bg-tertiary)] border border-[var(--color-border-primary)] text-[var(--color-text-primary)] text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]"
+                        >
+                            <option value="https://api.tempo.io">Global (api.tempo.io)</option>
+                            <option value="https://api.eu.tempo.io">EU (api.eu.tempo.io)</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label className="block text-sm text-[var(--color-text-secondary)] mb-2 font-display">
+                            Default Issue Key (Optional)
+                        </label>
+                        <input
+                            type="text"
+                            value={tempTempoSettings.defaultIssueKey || ''}
+                            onChange={(e) => {
+                                setTempTempoSettings(prev => ({ ...prev, defaultIssueKey: e.target.value }));
+                            }}
+                            className="w-full bg-[var(--color-bg-tertiary)] border border-[var(--color-border-primary)] text-[var(--color-text-primary)] text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]"
+                            placeholder="e.g. PROJECT-123"
+                        />
+                        <div className="text-xs text-[var(--color-text-secondary)] mt-1">
+                            Default Jira issue for time logging (can be overridden per entry)
+                        </div>
+                    </div>
+
+                    <button
+                        onClick={handleTestTempo}
+                        disabled={isTestingTempo}
+                        className="w-full px-4 py-2 bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] disabled:bg-[var(--color-bg-tertiary)] disabled:cursor-not-allowed disabled:text-[var(--color-text-tertiary)] text-white text-sm rounded-lg transition-colors flex items-center justify-center gap-2"
+                    >
+                        {isTestingTempo ? (
+                            <>
+                                <div className="w-3 h-3 border border-white border-t-transparent rounded-full animate-spin"></div>
+                                Testing Tempo...
+                            </>
+                        ) : (
+                            'Test Tempo Connection'
+                        )}
+                    </button>
+
+                    {/* Account Selection Note */}
+                    <div className="mt-4 bg-[var(--color-info-muted)] border border-[var(--color-info)]/30 rounded-lg p-3">
+                        <div className="flex items-start gap-2">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[var(--color-info)] flex-shrink-0 mt-0.5">
+                                <circle cx="12" cy="12" r="10"/>
+                                <path d="M12 16v-4"/>
+                                <path d="M12 8h.01"/>
+                            </svg>
                             <div>
-                                <label className="block text-sm text-[var(--color-text-secondary)] mb-2 font-display">
-                                    API Token *
-                                </label>
-                                <input
-                                    type="password"
-                                    value={tempTempoSettings.apiToken}
-                                    onChange={(e) => {
-                                        setTempTempoSettings(prev => ({ ...prev, apiToken: e.target.value }));
-                                    }}
-                                    className="w-full bg-[var(--color-bg-tertiary)] border border-[var(--color-border-primary)] text-[var(--color-text-primary)] text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]"
-                                    placeholder="Enter your Tempo API token"
-                                />
-                                <div className="text-xs text-[var(--color-text-secondary)] mt-1">
-                                    Get your API token from Tempo → Settings → API Integration
+                                <div className="text-[var(--color-info)] text-xs font-semibold mb-1">Account Selection</div>
+                                <div className="text-[var(--color-text-secondary)] text-xs">
+                                    Tempo accounts are now selected when logging time. The account dropdown will show accounts linked to the specific Jira issue you're logging time to.
                                 </div>
                             </div>
+                        </div>
+                    </div>
 
-                            <div>
-                                <label className="block text-sm text-[var(--color-text-secondary)] mb-2 font-display">
-                                    Base URL *
-                                </label>
-                                <select
-                                    value={tempTempoSettings.baseUrl}
-                                    onChange={(e) => {
-                                        setTempTempoSettings(prev => ({ ...prev, baseUrl: e.target.value }));
-                                    }}
-                                    className="w-full bg-[var(--color-bg-tertiary)] border border-[var(--color-border-primary)] text-[var(--color-text-primary)] text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]"
-                                >
-                                    <option value="https://api.tempo.io">Global (api.tempo.io)</option>
-                                    <option value="https://api.eu.tempo.io">EU (api.eu.tempo.io)</option>
-                                </select>
-                            </div>
-
-                            <div>
-                                <label className="block text-sm text-[var(--color-text-secondary)] mb-2 font-display">
-                                    Default Issue Key (Optional)
-                                </label>
-                                <input
-                                    type="text"
-                                    value={tempTempoSettings.defaultIssueKey || ''}
-                                    onChange={(e) => {
-                                        setTempTempoSettings(prev => ({ ...prev, defaultIssueKey: e.target.value }));
-                                    }}
-                                    className="w-full bg-[var(--color-bg-tertiary)] border border-[var(--color-border-primary)] text-[var(--color-text-primary)] text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]"
-                                    placeholder="e.g. PROJECT-123"
-                                />
-                                <div className="text-xs text-[var(--color-text-secondary)] mt-1">
-                                    Default Jira issue for time logging (can be overridden per entry)
-                                </div>
-                            </div>
-
-                            <button
-                                onClick={handleTestTempo}
-                                disabled={isTestingTempo}
-                                className="w-full px-4 py-2 bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] disabled:bg-[var(--color-bg-tertiary)] disabled:cursor-not-allowed disabled:text-[var(--color-text-tertiary)] text-white text-sm rounded-lg transition-colors flex items-center justify-center gap-2"
-                            >
-                                {isTestingTempo ? (
-                                    <>
-                                        <div className="w-3 h-3 border border-white border-t-transparent rounded-full animate-spin"></div>
-                                        Testing Tempo...
-                                    </>
-                                ) : (
-                                    'Test Tempo Connection'
-                                )}
-                            </button>
-
-                            {/* Account Selection Note */}
-                            <div className="mt-4 bg-[var(--color-info-muted)] border border-[var(--color-info)]/30 rounded-lg p-3">
-                                <div className="flex items-start gap-2">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[var(--color-info)] flex-shrink-0 mt-0.5">
-                                        <circle cx="12" cy="12" r="10"/>
-                                        <path d="M12 16v-4"/>
-                                        <path d="M12 8h.01"/>
-                                    </svg>
-                                    <div>
-                                        <div className="text-[var(--color-info)] text-xs font-semibold mb-1">Account Selection</div>
-                                        <div className="text-[var(--color-text-secondary)] text-xs">
-                                            Tempo accounts are now selected when logging time. The account dropdown will show accounts linked to the specific Jira issue you're logging time to.
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Account Blacklist Manager */}
-                            <div className="mt-6 pt-6 border-t border-[var(--color-border-primary)]">
-                                <TempoAccountBlacklistManager
-                                    tempoApiToken={tempTempoSettings.apiToken}
-                                    tempoBaseUrl={tempTempoSettings.baseUrl}
-                                />
-                            </div>
-                        </>
-                    )}
+                    {/* Account Blacklist Manager */}
+                    <div className="mt-6 pt-6 border-t border-[var(--color-border-primary)]">
+                        <TempoAccountBlacklistManager
+                            tempoApiToken={tempTempoSettings.apiToken}
+                            tempoBaseUrl={tempTempoSettings.baseUrl}
+                        />
+                    </div>
                 </div>
 
                 <div className="flex justify-end gap-3 mt-8">

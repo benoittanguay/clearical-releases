@@ -1,12 +1,12 @@
 /**
  * Gemini API Client for Edge Functions
  *
- * Shared module for calling Google Gemini 2.5 Flash Lite API.
- * Using Flash Lite for higher free tier limits (15 RPM, 1000 RPD vs 10 RPM, 250 RPD).
- * API key is stored in Supabase secrets.
+ * Shared module for calling Google Gemini 2.0 Flash API.
+ * Using Gemini 2.0 Flash for best performance and reasonable rate limits.
+ * API key is stored in Supabase secrets as GEMINI_API_KEY.
  */
 
-const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent';
+const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
 
 // Retry configuration for rate limit handling
 const RETRY_CONFIG = {

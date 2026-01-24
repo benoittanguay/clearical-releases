@@ -504,10 +504,15 @@ class AIService {
                 const errorData = await response.json().catch(() => ({ error: 'Unknown error' })) as GeminiProxyResponse;
                 lastError = errorData.error || `Request failed with status ${response.status}`;
 
-                // If server says token is invalid/expired, clear local session and prompt re-auth
+                // If server says token is invalid/expired, return error but don't sign out
+                // The auth service will handle session clearing during refresh attempts
+                // Calling signOut() here is too aggressive and causes cascading failures
                 if (response.status === 401 && errorData.error?.includes('Invalid or expired')) {
-                    console.log('[AIService] Server rejected token, clearing local session');
-                    await getAuthService().signOut();
+                    console.log('[AIService] Server rejected token - user may need to re-authenticate');
+                    // Note: We don't call signOut() here because:
+                    // 1. The token might have expired between refresh and request (race)
+                    // 2. The auth service handles clearing invalid refresh tokens
+                    // 3. Aggressive sign-out causes all concurrent requests to fail
                     return {
                         success: false,
                         error: 'Session expired. Please sign in again from Settings.'
