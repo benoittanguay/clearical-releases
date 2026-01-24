@@ -4,6 +4,9 @@ import { useStorage } from './context/StorageContext';
 import { useSettings } from './context/SettingsContext';
 import { useAudioRecording } from './context/AudioRecordingContext';
 import { analytics } from './services/analytics';
+import { TempoService } from './services/tempoService';
+import { JiraService } from './services/jiraService';
+import { useTimeRounding } from './hooks/useTimeRounding';
 import { Settings } from './components/Settings';
 import { HistoryDetail } from './components/HistoryDetail';
 import { ExportDialog } from './components/ExportDialog';
@@ -52,7 +55,9 @@ function App() {
 
   const { isRunning, isPaused, elapsed, start: startTimer, stop: stopTimer, pause: pauseTimer, resume: resumeTimer, formatTime, checkPermissions, setActiveRecordingEntry } = useTimer();
   const { clearPendingTranscription, waitForTranscription } = useAudioRecording();
+  const { roundTime, isRoundingEnabled } = useTimeRounding();
   const recordingSessionIdRef = useRef<string | null>(null);
+  const [isBulkLogging, setIsBulkLogging] = useState(false);
 
   // Check for onboarding BEFORE migration - prevents flash of main UI
   useEffect(() => {
@@ -231,19 +236,213 @@ function App() {
     setShowUpdateSuccessModal(false);
   };
 
-  const handleBulkLogToTempo = async (_dateKey?: string) => {
-    if (!settings.tempo?.enabled) {
+  const handleBulkLogToTempo = async (dateKey?: string) => {
+    if (!dateKey) return;
+
+    // Check if Tempo is configured
+    if (!settings.tempo?.enabled || !settings.tempo?.apiToken || !settings.tempo?.baseUrl) {
       setCurrentView('settings');
       return;
     }
 
-    // Show a warning that bulk logging is not recommended without account selection
-    alert(
-      'Bulk Logging Limitation:\n\n' +
-      'Due to Tempo\'s requirement for account selection per issue, bulk logging is not recommended. ' +
-      'Please use the "Log to Tempo" button on individual activities to select the appropriate account for each entry.\n\n' +
-      'This ensures accurate time tracking with the correct Tempo accounts.'
-    );
+    // Check if Jira is configured (required for Tempo)
+    if (!settings.jira?.enabled || !settings.jira?.apiToken || !settings.jira?.baseUrl || !settings.jira?.email) {
+      alert('Please configure Jira settings first. Jira credentials are required to log time to Tempo.');
+      setCurrentView('settings');
+      return;
+    }
+
+    // Helper to get week start (Sunday)
+    const getWeekStart = (date: Date): Date => {
+      const d = new Date(date);
+      const day = d.getDay();
+      d.setDate(d.getDate() - day);
+      d.setHours(0, 0, 0, 0);
+      return d;
+    };
+
+    // Parse the key to determine date range
+    const keyTimestamp = parseInt(dateKey);
+    const keyDate = new Date(keyTimestamp);
+
+    // Determine if this is a week key by checking if it's a Sunday
+    const isWeekKey = keyDate.getDay() === 0;
+
+    // Calculate the date range to filter entries
+    let startDate: Date, endDate: Date;
+    if (isWeekKey) {
+      startDate = new Date(keyTimestamp);
+      endDate = new Date(keyTimestamp);
+      endDate.setDate(endDate.getDate() + 7); // Week is 7 days
+    } else {
+      startDate = new Date(keyTimestamp);
+      endDate = new Date(keyTimestamp);
+      endDate.setDate(endDate.getDate() + 1); // Single day
+    }
+
+    // Filter entries in the date range
+    const entriesInRange = entries.filter(entry => {
+      const entryDate = new Date(entry.startTime);
+      entryDate.setHours(0, 0, 0, 0);
+      return entryDate >= startDate && entryDate < endDate;
+    });
+
+    // Categorize entries
+    const entriesToLog: typeof entries = [];
+    const entriesWithoutAccount: typeof entries = [];
+
+    entriesInRange.forEach(entry => {
+      // Get Jira key from assignment
+      const assignment = entry.assignment ||
+        (entry.linkedJiraIssue ? { type: 'jira' as const, jiraIssue: entry.linkedJiraIssue } : null);
+
+      const hasJiraIssue = assignment?.type === 'jira' && assignment.jiraIssue;
+
+      if (hasJiraIssue && entry.tempoAccount?.key) {
+        entriesToLog.push(entry);
+      } else if (hasJiraIssue && !entry.tempoAccount?.key) {
+        entriesWithoutAccount.push(entry);
+      }
+      // Entries without Jira issue are silently ignored
+    });
+
+    if (entriesToLog.length === 0) {
+      if (entriesWithoutAccount.length > 0) {
+        alert(
+          `No entries could be logged.\n\n` +
+          `${entriesWithoutAccount.length} ${entriesWithoutAccount.length === 1 ? 'entry has' : 'entries have'} a Jira issue but no Tempo account assigned.\n\n` +
+          `Please assign a Tempo account to each entry before bulk logging.`
+        );
+      } else {
+        alert('No entries with Jira issues found in this time period.');
+      }
+      return;
+    }
+
+    // Build detailed confirmation message based on granularity
+    let confirmMessage: string;
+
+    if (isWeekKey) {
+      // Week view: show days with entry counts
+      const entriesByDay = new Map<string, typeof entriesToLog>();
+      entriesToLog.forEach(entry => {
+        const entryDate = new Date(entry.startTime);
+        const dayLabel = entryDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+        if (!entriesByDay.has(dayLabel)) {
+          entriesByDay.set(dayLabel, []);
+        }
+        entriesByDay.get(dayLabel)!.push(entry);
+      });
+
+      const dayLines = Array.from(entriesByDay.entries())
+        .map(([day, dayEntries]) => `• ${day}: ${dayEntries.length} ${dayEntries.length === 1 ? 'entry' : 'entries'}`)
+        .join('\n');
+
+      confirmMessage = `Log ${entriesToLog.length} ${entriesToLog.length === 1 ? 'entry' : 'entries'} to Tempo?\n\n${dayLines}`;
+    } else {
+      // Day view: show each entry
+      const entryLines = entriesToLog
+        .map(entry => {
+          const assignment = entry.assignment ||
+            (entry.linkedJiraIssue ? { type: 'jira' as const, jiraIssue: entry.linkedJiraIssue } : null);
+          const jiraKey = assignment?.type === 'jira' ? assignment.jiraIssue?.key : 'Unknown';
+          const duration = isRoundingEnabled ? roundTime(entry.duration).rounded : entry.duration;
+          return `• ${jiraKey}: ${formatTime(duration)}`;
+        })
+        .join('\n');
+
+      confirmMessage = `Log ${entriesToLog.length} ${entriesToLog.length === 1 ? 'entry' : 'entries'} to Tempo?\n\n${entryLines}`;
+    }
+
+    if (entriesWithoutAccount.length > 0) {
+      confirmMessage += `\n\n⚠️ ${entriesWithoutAccount.length} ${entriesWithoutAccount.length === 1 ? 'entry' : 'entries'} will be skipped (no Tempo account assigned).`;
+    }
+
+    if (!confirm(confirmMessage)) {
+      return;
+    }
+
+    setIsBulkLogging(true);
+
+    try {
+      // Initialize services
+      const tempoService = new TempoService(settings.tempo.baseUrl, settings.tempo.apiToken);
+      const jiraService = new JiraService(settings.jira.baseUrl, settings.jira.email, settings.jira.apiToken);
+
+      // Get current user's account ID (required by Tempo API)
+      const currentUser = await jiraService.getCurrentUser();
+
+      let successCount = 0;
+      let failedCount = 0;
+      const errors: string[] = [];
+
+      // Log each entry
+      for (const entry of entriesToLog) {
+        try {
+          const assignment = entry.assignment ||
+            (entry.linkedJiraIssue ? { type: 'jira' as const, jiraIssue: entry.linkedJiraIssue } : null);
+
+          const jiraKey = assignment?.type === 'jira' ? assignment.jiraIssue?.key : null;
+          if (!jiraKey || !entry.tempoAccount?.key) continue;
+
+          // Get numeric issue ID from Jira
+          const issueId = await jiraService.getIssueIdFromKey(jiraKey);
+          const numericIssueId = parseInt(issueId, 10);
+          if (isNaN(numericIssueId) || numericIssueId <= 0) {
+            throw new Error(`Invalid issue ID for ${jiraKey}`);
+          }
+
+          // Calculate duration (respect rounding settings)
+          const durationToLog = isRoundingEnabled ? roundTime(entry.duration).rounded : entry.duration;
+
+          // Create worklog
+          const worklog = {
+            issueId: numericIssueId,
+            timeSpentSeconds: TempoService.durationMsToSeconds(durationToLog),
+            startDate: TempoService.formatDate(entry.startTime),
+            startTime: TempoService.formatTime(entry.startTime),
+            description: entry.description?.trim() || `Time logged from Clearical for ${formatTime(durationToLog)}`,
+            authorAccountId: currentUser.accountId,
+            attributes: [
+              {
+                key: '_Account_',
+                value: entry.tempoAccount.key
+              }
+            ],
+          };
+
+          await tempoService.createWorklog(worklog);
+          successCount++;
+        } catch (error) {
+          failedCount++;
+          const jiraKey = entry.assignment?.type === 'jira'
+            ? entry.assignment.jiraIssue?.key
+            : entry.linkedJiraIssue?.key;
+          errors.push(`${jiraKey || 'Unknown'}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+      }
+
+      // Show results
+      let resultMessage = `Logged ${successCount} of ${entriesToLog.length} ${entriesToLog.length === 1 ? 'entry' : 'entries'} to Tempo.`;
+
+      if (failedCount > 0) {
+        resultMessage += `\n\n${failedCount} ${failedCount === 1 ? 'entry' : 'entries'} failed to log:\n${errors.slice(0, 5).join('\n')}`;
+        if (errors.length > 5) {
+          resultMessage += `\n... and ${errors.length - 5} more`;
+        }
+      }
+
+      if (entriesWithoutAccount.length > 0) {
+        resultMessage += `\n\n${entriesWithoutAccount.length} ${entriesWithoutAccount.length === 1 ? 'entry was' : 'entries were'} skipped (no Tempo account assigned).`;
+      }
+
+      alert(resultMessage);
+    } catch (error) {
+      console.error('Bulk log to Tempo failed:', error);
+      alert(`Failed to log to Tempo: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setIsBulkLogging(false);
+    }
   };
 
   const handleCreateBucket = (name: string, color: string, parentId?: string | null) => {

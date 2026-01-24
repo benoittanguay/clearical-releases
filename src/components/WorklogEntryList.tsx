@@ -157,28 +157,25 @@ export const WorklogEntryList: React.FC<WorklogEntryListProps> = ({
                                             e.stopPropagation();
                                             onBulkLogToTempo(weekKey);
                                         }}
-                                        className="no-drag flex items-center gap-2 px-3 py-1.5 rounded-md transition-all text-xs font-semibold"
+                                        className="no-drag flex items-center gap-1.5 px-3 py-1.5 text-xs transition-all active:scale-95"
                                         style={{
-                                            backgroundColor: 'transparent',
-                                            color: 'var(--color-text-secondary)',
-                                            border: '1px solid var(--color-border-primary)',
-                                            transitionDuration: 'var(--duration-base)',
-                                            transitionTimingFunction: 'var(--ease-out)'
+                                            backgroundColor: 'var(--color-accent)',
+                                            color: '#FFFFFF',
+                                            borderRadius: 'var(--btn-radius)',
+                                            transitionDuration: 'var(--duration-fast)',
+                                            transitionTimingFunction: 'var(--ease-out)',
+                                            boxShadow: 'var(--shadow-accent)'
                                         }}
                                         onMouseEnter={(e) => {
-                                            e.currentTarget.style.backgroundColor = 'var(--color-bg-secondary)';
-                                            e.currentTarget.style.borderColor = 'var(--color-border-secondary)';
-                                            e.currentTarget.style.transform = 'translateY(-1px)';
+                                            e.currentTarget.style.backgroundColor = '#E64000';
                                         }}
                                         onMouseLeave={(e) => {
-                                            e.currentTarget.style.backgroundColor = 'transparent';
-                                            e.currentTarget.style.borderColor = 'var(--color-border-primary)';
-                                            e.currentTarget.style.transform = 'translateY(0)';
+                                            e.currentTarget.style.backgroundColor = 'var(--color-accent)';
                                         }}
                                     >
                                         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                            <circle cx="12" cy="12" r="10" />
-                                            <polyline points="12 6 12 12 16 14" />
+                                            <circle cx="12" cy="12" r="10"/>
+                                            <path d="M12 6v6l4 2"/>
                                         </svg>
                                         Log to Tempo
                                     </button>
@@ -234,26 +231,25 @@ export const WorklogEntryList: React.FC<WorklogEntryListProps> = ({
                                                             e.stopPropagation();
                                                             onBulkLogToTempo(dateKey);
                                                         }}
-                                                        className="no-drag flex items-center gap-1.5 px-2 py-1 rounded-md transition-all text-xs font-medium"
+                                                        className="no-drag flex items-center gap-1.5 px-2 py-1 text-xs transition-all active:scale-95"
                                                         style={{
-                                                            backgroundColor: 'transparent',
-                                                            color: 'var(--color-text-secondary)',
-                                                            border: '1px solid var(--color-border-primary)',
-                                                            transitionDuration: 'var(--duration-base)',
-                                                            transitionTimingFunction: 'var(--ease-out)'
+                                                            backgroundColor: 'var(--color-accent)',
+                                                            color: '#FFFFFF',
+                                                            borderRadius: 'var(--btn-radius)',
+                                                            transitionDuration: 'var(--duration-fast)',
+                                                            transitionTimingFunction: 'var(--ease-out)',
+                                                            boxShadow: 'var(--shadow-accent)'
                                                         }}
                                                         onMouseEnter={(e) => {
-                                                            e.currentTarget.style.backgroundColor = 'var(--color-bg-secondary)';
-                                                            e.currentTarget.style.borderColor = 'var(--color-border-secondary)';
+                                                            e.currentTarget.style.backgroundColor = '#E64000';
                                                         }}
                                                         onMouseLeave={(e) => {
-                                                            e.currentTarget.style.backgroundColor = 'transparent';
-                                                            e.currentTarget.style.borderColor = 'var(--color-border-primary)';
+                                                            e.currentTarget.style.backgroundColor = 'var(--color-accent)';
                                                         }}
                                                     >
                                                         <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                                            <circle cx="12" cy="12" r="10" />
-                                                            <polyline points="12 6 12 12 16 14" />
+                                                            <circle cx="12" cy="12" r="10"/>
+                                                            <path d="M12 6v6l4 2"/>
                                                         </svg>
                                                         Log to Tempo
                                                     </button>
