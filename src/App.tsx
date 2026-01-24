@@ -1405,26 +1405,9 @@ function App() {
                                       e.stopPropagation();
                                       handleBulkLogToTempo(weekKey);
                                     }}
-                                    className="no-drag flex items-center gap-2 px-3 py-1.5 rounded-md transition-all text-xs font-semibold"
-                                    style={{
-                                      backgroundColor: 'transparent',
-                                      color: 'var(--color-text-secondary)',
-                                      border: '1px solid var(--color-border-primary)',
-                                      transitionDuration: 'var(--duration-base)',
-                                      transitionTimingFunction: 'var(--ease-out)'
-                                    }}
-                                    onMouseEnter={(e) => {
-                                      e.currentTarget.style.backgroundColor = 'var(--color-bg-secondary)';
-                                      e.currentTarget.style.borderColor = 'var(--color-border-secondary)';
-                                      e.currentTarget.style.transform = 'translateY(-1px)';
-                                    }}
-                                    onMouseLeave={(e) => {
-                                      e.currentTarget.style.backgroundColor = 'transparent';
-                                      e.currentTarget.style.borderColor = 'var(--color-border-primary)';
-                                      e.currentTarget.style.transform = 'translateY(0)';
-                                    }}
+                                    className="no-drag flex items-center gap-1.5 px-3 py-1.5 bg-transparent hover:bg-[var(--color-bg-ghost-hover)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] text-xs rounded-lg transition-all border border-[var(--color-border-primary)]"
                                   >
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                       <circle cx="12" cy="12" r="10" />
                                       <polyline points="12 6 12 12 16 14" />
                                     </svg>
@@ -1464,11 +1447,11 @@ function App() {
                                   <div key={dateKey} className={dayIndex > 0 ? 'mt-3' : ''}>
                                     {/* Date Separator Header - Sticky below week header */}
                                     <div
-                                      className="sticky z-10 px-3 py-2 -mx-4 flex items-center justify-between"
+                                      className="sticky z-10 px-4 py-2 -mx-4 flex items-center justify-between"
                                       style={{
                                         backgroundColor: 'var(--color-bg-secondary)',
                                         borderBottom: '1px solid var(--color-border-primary)',
-                                        top: '33px',
+                                        top: '37px',
                                         marginTop: dayIndex === 0 ? '-1px' : undefined
                                       }}
                                     >
@@ -1482,22 +1465,7 @@ function App() {
                                               e.stopPropagation();
                                               handleBulkLogToTempo(dateKey);
                                             }}
-                                            className="no-drag flex items-center gap-1.5 px-2 py-1 rounded-md transition-all text-xs font-medium"
-                                            style={{
-                                              backgroundColor: 'transparent',
-                                              color: 'var(--color-text-secondary)',
-                                              border: '1px solid var(--color-border-primary)',
-                                              transitionDuration: 'var(--duration-base)',
-                                              transitionTimingFunction: 'var(--ease-out)'
-                                            }}
-                                            onMouseEnter={(e) => {
-                                              e.currentTarget.style.backgroundColor = 'var(--color-bg-secondary)';
-                                              e.currentTarget.style.borderColor = 'var(--color-border-secondary)';
-                                            }}
-                                            onMouseLeave={(e) => {
-                                              e.currentTarget.style.backgroundColor = 'transparent';
-                                              e.currentTarget.style.borderColor = 'var(--color-border-primary)';
-                                            }}
+                                            className="no-drag flex items-center gap-1.5 px-3 py-1.5 bg-transparent hover:bg-[var(--color-bg-ghost-hover)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] text-xs rounded-lg transition-all border border-[var(--color-border-primary)]"
                                           >
                                             <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                               <circle cx="12" cy="12" r="10" />

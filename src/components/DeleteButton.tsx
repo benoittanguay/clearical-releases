@@ -64,10 +64,10 @@ export function DeleteButton({
                 hoverColor: 'var(--color-error)'
             };
         }
-        // subtle variant - ghost button style with destructive hover (no background change)
+        // subtle variant - ghost button style with warm hover background (matches BucketItem)
         return {
-            color: 'var(--color-text-secondary)',
-            hoverBg: 'transparent',
+            color: 'var(--color-text-tertiary)',
+            hoverBg: '#FAF5EE',
             hoverColor: 'var(--color-error)'
         };
     };

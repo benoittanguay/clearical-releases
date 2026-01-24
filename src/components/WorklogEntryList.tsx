@@ -161,23 +161,9 @@ export const WorklogEntryList: React.FC<WorklogEntryListProps> = ({
                                             e.stopPropagation();
                                             onBulkLogToTempo(weekKey);
                                         }}
-                                        className="no-drag flex items-center gap-1.5 px-3 py-1.5 text-xs transition-all active:scale-95"
-                                        style={{
-                                            backgroundColor: 'var(--color-accent)',
-                                            color: '#FFFFFF',
-                                            borderRadius: 'var(--btn-radius)',
-                                            transitionDuration: 'var(--duration-fast)',
-                                            transitionTimingFunction: 'var(--ease-out)',
-                                            boxShadow: 'var(--shadow-accent)'
-                                        }}
-                                        onMouseEnter={(e) => {
-                                            e.currentTarget.style.backgroundColor = '#E64000';
-                                        }}
-                                        onMouseLeave={(e) => {
-                                            e.currentTarget.style.backgroundColor = 'var(--color-accent)';
-                                        }}
+                                        className="no-drag flex items-center gap-1.5 px-3 py-1.5 bg-transparent hover:bg-[var(--color-bg-ghost-hover)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] text-xs rounded-lg transition-all border border-[var(--color-border-primary)]"
                                     >
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                             <circle cx="12" cy="12" r="10"/>
                                             <path d="M12 6v6l4 2"/>
                                         </svg>
@@ -235,21 +221,7 @@ export const WorklogEntryList: React.FC<WorklogEntryListProps> = ({
                                                             e.stopPropagation();
                                                             onBulkLogToTempo(dateKey);
                                                         }}
-                                                        className="no-drag flex items-center gap-1.5 px-2 py-1 text-xs transition-all active:scale-95"
-                                                        style={{
-                                                            backgroundColor: 'var(--color-accent)',
-                                                            color: '#FFFFFF',
-                                                            borderRadius: 'var(--btn-radius)',
-                                                            transitionDuration: 'var(--duration-fast)',
-                                                            transitionTimingFunction: 'var(--ease-out)',
-                                                            boxShadow: 'var(--shadow-accent)'
-                                                        }}
-                                                        onMouseEnter={(e) => {
-                                                            e.currentTarget.style.backgroundColor = '#E64000';
-                                                        }}
-                                                        onMouseLeave={(e) => {
-                                                            e.currentTarget.style.backgroundColor = 'var(--color-accent)';
-                                                        }}
+                                                        className="no-drag flex items-center gap-1.5 px-3 py-1.5 bg-transparent hover:bg-[var(--color-bg-ghost-hover)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] text-xs rounded-lg transition-all border border-[var(--color-border-primary)]"
                                                     >
                                                         <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                                             <circle cx="12" cy="12" r="10"/>

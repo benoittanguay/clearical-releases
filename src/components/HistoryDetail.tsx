@@ -1268,6 +1268,181 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
         }
     };
 
+    // Helper to run AI tasks for a split entry (non-blocking - failures don't prevent entry creation)
+    const runAITasksForSplit = async (
+        splitEntry: TimeEntry,
+        description: string,
+        suggestedJiraKey: string | null
+    ): Promise<Partial<TimeEntry>> => {
+        const updates: Partial<TimeEntry> = {};
+        const autoAssignEnabled = settings.ai?.autoAssignWork !== false;
+        const autoSelectAccountEnabled = settings.ai?.autoSelectAccount !== false;
+
+        // Skip AI tasks if disabled in settings
+        if (!autoAssignEnabled && !autoSelectAccountEnabled) {
+            return updates;
+        }
+
+        // Collect Jira issues at the start for use in both assignment and Tempo account selection
+        let jiraIssues: LinkedJiraIssue[] = [];
+        if (settings.jira?.enabled && jiraCache) {
+            try {
+                const assignedIssues = await jiraCache.getAssignedIssues();
+                const selectedProjects = settings.jira.selectedProjects || [];
+                const projectIssuesPromises = selectedProjects.map(projectKey =>
+                    jiraCache.getProjectIssues(projectKey).catch(() => [])
+                );
+                const projectIssuesArrays = await Promise.all(projectIssuesPromises);
+                const projectIssues = projectIssuesArrays.flat();
+
+                const allIssues = [...assignedIssues, ...projectIssues];
+                const uniqueIssuesMap = new Map<string, typeof allIssues[0]>();
+                for (const issue of allIssues) {
+                    if (!uniqueIssuesMap.has(issue.key)) {
+                        uniqueIssuesMap.set(issue.key, issue);
+                    }
+                }
+
+                jiraIssues = Array.from(uniqueIssuesMap.values()).map(issue => ({
+                    key: issue.key,
+                    summary: issue.fields.summary,
+                    issueType: issue.fields.issuetype.name,
+                    status: issue.fields.status.name,
+                    projectKey: issue.fields.project.key,
+                    projectName: issue.fields.project.name
+                }));
+            } catch (error) {
+                console.error('[handleApplySplits] Failed to fetch Jira issues:', error);
+                // Continue without Jira issues - bucket assignment can still work
+            }
+        }
+
+        // 1. Run AI bucket/Jira assignment if enabled and we have a description
+        if (autoAssignEnabled && description) {
+            try {
+                // Get calendar context
+                let calendarContext = {
+                    currentEvent: null as string | null,
+                    recentEvents: [] as string[],
+                    upcomingEvents: [] as string[]
+                };
+                try {
+                    const calendarResult = await window.electron.ipcRenderer.calendar.getContext(splitEntry.startTime);
+                    if (calendarResult?.success) {
+                        calendarContext = {
+                            currentEvent: calendarResult.currentEvent,
+                            recentEvents: calendarResult.recentEvents || [],
+                            upcomingEvents: calendarResult.upcomingEvents || []
+                        };
+                    }
+                } catch {
+                    // Continue with empty calendar context
+                }
+
+                // Call AI assignment suggestion
+                const assignmentResult = await window.electron?.ipcRenderer?.suggestAssignment({
+                    context: {
+                        description,
+                        appNames: Array.from(new Set(splitEntry.windowActivity?.map(a => a.appName) || [])),
+                        windowTitles: Array.from(new Set(splitEntry.windowActivity?.map(a => a.windowTitle) || [])),
+                        detectedTechnologies: [],
+                        detectedActivities: [],
+                        duration: splitEntry.duration,
+                        startTime: splitEntry.startTime,
+                        currentCalendarEvent: calendarContext.currentEvent,
+                        recentCalendarEvents: calendarContext.recentEvents,
+                        upcomingCalendarEvents: calendarContext.upcomingEvents
+                    },
+                    buckets: buckets,
+                    jiraIssues: jiraIssues,
+                    historicalEntries: entries.slice(0, 50)
+                });
+
+                if (assignmentResult?.success && assignmentResult.suggestion?.assignment) {
+                    const assignment = assignmentResult.suggestion.assignment;
+
+                    if (assignment.type === 'bucket' && assignment.bucket) {
+                        const matchedBucket = buckets.find(b => b.name === assignment.bucket?.name);
+                        if (matchedBucket) {
+                            updates.bucketId = matchedBucket.id;
+                            updates.assignment = {
+                                type: 'bucket',
+                                bucket: {
+                                    id: matchedBucket.id,
+                                    name: matchedBucket.name,
+                                    color: matchedBucket.color
+                                }
+                            };
+                            updates.assignmentAutoSelected = true;
+                        }
+                    } else if (assignment.type === 'jira' && assignment.jiraIssue) {
+                        updates.linkedJiraIssue = assignment.jiraIssue;
+                        updates.assignment = {
+                            type: 'jira',
+                            jiraIssue: assignment.jiraIssue
+                        };
+                        updates.assignmentAutoSelected = true;
+                    }
+                }
+            } catch (error) {
+                console.error('[handleApplySplits] AI assignment failed for split:', error);
+                // Continue - entry will be created without AI assignment
+            }
+        }
+
+        // 2. If we have a Jira issue (from AI or suggested), try to auto-select Tempo account
+        const jiraIssue = updates.linkedJiraIssue ||
+            (suggestedJiraKey ? jiraIssues.find(j => j.key === suggestedJiraKey) : null);
+
+        if (autoSelectAccountEnabled && jiraIssue && settings.tempo?.enabled) {
+            try {
+                // Fetch Tempo accounts for this issue
+                const jiraService = new JiraService(
+                    settings.jira!.baseUrl!,
+                    settings.jira!.email!,
+                    settings.jira!.apiToken!
+                );
+                const issueId = await jiraService.getIssueIdFromKey(jiraIssue.key);
+
+                const tempoService = new TempoService(settings.tempo.baseUrl!, settings.tempo.apiToken!);
+                const accounts = await tempoService.getAccountsForIssue(parseInt(issueId, 10));
+
+                if (accounts.length > 0) {
+                    // Get historical account usage
+                    const historicalAccounts = entries
+                        .filter(e => e.assignment?.type === 'jira' && e.tempoAccount)
+                        .map(e => ({
+                            issueKey: e.assignment!.jiraIssue!.key,
+                            accountKey: e.tempoAccount!.key
+                        }));
+
+                    // Call AI Tempo account selection
+                    const accountResult = await window.electron?.ipcRenderer?.selectTempoAccount?.({
+                        issue: jiraIssue,
+                        accounts,
+                        description,
+                        historicalAccounts,
+                        historicalEntries: entries
+                    });
+
+                    if (accountResult?.success && accountResult.selection?.account) {
+                        updates.tempoAccount = {
+                            key: accountResult.selection.account.key,
+                            name: accountResult.selection.account.name,
+                            id: accountResult.selection.account.id
+                        };
+                        updates.tempoAccountAutoSelected = true;
+                    }
+                }
+            } catch (error) {
+                console.error('[handleApplySplits] Failed to auto-select Tempo account:', error);
+                // Continue - entry will be created without Tempo account
+            }
+        }
+
+        return updates;
+    };
+
     // Handler for applying splits
     const handleApplySplits = async (splits: SplitSuggestion[]) => {
         try {
@@ -1282,6 +1457,14 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                     15 * 60 * 1000, // Minimum 15 minutes
                     Math.ceil(rawDuration / (15 * 60 * 1000)) * (15 * 60 * 1000)
                 );
+
+                // Filter window activities that fall within this split's time range
+                const splitWindowActivity = entry.windowActivity?.filter(activity => {
+                    const activityEnd = activity.timestamp + activity.duration;
+                    return activity.timestamp >= split.startTime && activityEnd <= split.endTime;
+                });
+
+                // Create base entry
                 const newEntry: TimeEntry = {
                     id: newEntryId,
                     startTime: split.startTime,
@@ -1289,23 +1472,28 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                     duration: roundedDuration,
                     description: split.description,
                     descriptionAutoGenerated: false,
-                    // Try to find matching bucket
+                    // Try to find matching bucket from split suggestion
                     bucketId: split.suggestedBucket ?
                         buckets.find(b => b.name === split.suggestedBucket)?.id :
-                        entry.bucketId,
+                        undefined,
                     // Copy Jira issue if suggested key matches current entry
                     linkedJiraIssue: split.suggestedJiraKey && entry.linkedJiraIssue?.key === split.suggestedJiraKey ?
                         entry.linkedJiraIssue :
                         undefined,
-                    // Filter window activities that fall within this split's time range
-                    windowActivity: entry.windowActivity?.filter(activity => {
-                        const activityEnd = activity.timestamp + activity.duration;
-                        return activity.timestamp >= split.startTime && activityEnd <= split.endTime;
-                    })
+                    windowActivity: splitWindowActivity
                 };
 
-                // Insert the new entry
-                const insertResult = await window.electron.ipcRenderer.db.insertEntry(newEntry);
+                // Run AI tasks to enhance the entry with bucket/Jira/Tempo assignments
+                const aiUpdates = await runAITasksForSplit(newEntry, split.description, split.suggestedJiraKey);
+
+                // Merge AI updates into the entry
+                const enhancedEntry: TimeEntry = {
+                    ...newEntry,
+                    ...aiUpdates
+                };
+
+                // Insert the enhanced entry
+                const insertResult = await window.electron.ipcRenderer.db.insertEntry(enhancedEntry);
                 if (insertResult.success) {
                     newEntryIds.push(newEntryId);
                 } else {
@@ -1507,51 +1695,28 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                                 )}
                             </button>
                         )}
-                        {/* Log to dropdown */}
-                        <div className="relative">
-                            <button
-                                onClick={handleOpenTempoModal}
-                                className={`px-3 py-1.5 text-sm flex items-center justify-center gap-1.5 transition-all active:scale-95`}
-                                style={{
-                                    backgroundColor: hasTempoAccess ? 'var(--color-accent)' : 'var(--color-bg-secondary)',
-                                    color: hasTempoAccess ? '#FFFFFF' : 'var(--color-text-secondary)',
-                                    borderRadius: 'var(--btn-radius)',
-                                    transitionDuration: 'var(--duration-fast)',
-                                    transitionTimingFunction: 'var(--ease-out)',
-                                    boxShadow: hasTempoAccess ? 'var(--shadow-accent)' : 'var(--shadow-sm)',
-                                    border: hasTempoAccess ? 'none' : '1px solid var(--color-border-primary)'
-                                }}
-                                onMouseEnter={(e) => {
-                                    if (hasTempoAccess) {
-                                        e.currentTarget.style.backgroundColor = '#E64000';
-                                    } else {
-                                        e.currentTarget.style.borderColor = 'var(--color-accent)';
-                                        e.currentTarget.style.color = 'var(--color-text-primary)';
-                                    }
-                                }}
-                                onMouseLeave={(e) => {
-                                    if (hasTempoAccess) {
-                                        e.currentTarget.style.backgroundColor = 'var(--color-accent)';
-                                    } else {
-                                        e.currentTarget.style.borderColor = 'var(--color-border-primary)';
-                                        e.currentTarget.style.color = 'var(--color-text-secondary)';
-                                    }
-                                }}
-                            >
-                                {hasTempoAccess ? (
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                        <circle cx="12" cy="12" r="10"/>
-                                        <path d="M12 6v6l4 2"/>
-                                    </svg>
-                                ) : (
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-                                        <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-                                    </svg>
-                                )}
-                                Log to Tempo
-                            </button>
-                        </div>
+                        {/* Log to Tempo button */}
+                        <button
+                            onClick={handleOpenTempoModal}
+                            className={`px-3 py-1.5 text-xs rounded-lg transition-all font-medium flex items-center gap-1.5 ${
+                                hasTempoAccess
+                                    ? 'bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white'
+                                    : 'bg-transparent hover:bg-[var(--color-bg-ghost-hover)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] border border-[var(--color-border-primary)]'
+                            }`}
+                        >
+                            {hasTempoAccess ? (
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <circle cx="12" cy="12" r="10"/>
+                                    <path d="M12 6v6l4 2"/>
+                                </svg>
+                            ) : (
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                                    <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                                </svg>
+                            )}
+                            Log to Tempo
+                        </button>
                     </div>
                 </div>
             </div>
