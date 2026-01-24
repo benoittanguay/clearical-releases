@@ -366,9 +366,10 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
                             }
                         };
 
-                        // Connect script processor to destination (adds system audio to mix)
+                        // Connect script processor to analyser (for silence detection) and destination
+                        scriptProcessor.connect(analyser);
                         scriptProcessor.connect(destination);
-                        console.log('[AudioRecordingContext] System audio ScriptProcessor connected to destination');
+                        console.log('[AudioRecordingContext] System audio ScriptProcessor connected to analyser and destination');
                     }
                 }
             } catch (sysAudioError) {
