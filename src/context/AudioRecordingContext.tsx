@@ -91,7 +91,8 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
     const [transcriptionProgress, setTranscriptionProgress] = useState<TranscriptionProgress | null>(null);
     const [isAutoRecordEnabled, setIsAutoRecordEnabled] = useState(true);
     // Store pending transcriptions by session ID for later association with entries
-    const pendingTranscriptionsRef = useRef<Map<string, EntryTranscription>>(new Map());
+    // Uses array to support multiple recordings per session (e.g., multiple meetings during one timer session)
+    const pendingTranscriptionsRef = useRef<Map<string, EntryTranscription[]>>(new Map());
     // Store pending audio files (when transcription failed) for later retry
     const pendingAudioRef = useRef<Map<string, PendingTranscription>>(new Map());
 
@@ -437,14 +438,35 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
                     const timeDomainDeviation = Math.max(timeDomainMax - 128, 128 - timeDomainMin);
 
                     // Use time domain for silence detection (more reliable than frequency)
-                    const isSilentByTimeDomain = timeDomainDeviation < 3; // Very little deviation from center
+                    const isSystemAudioSilent = timeDomainDeviation < 3; // Very little deviation from center
+
+                    // Also check if native mic has recent audio activity
+                    // This prevents false silence detection when Chrome has exclusive system audio
+                    let isMicActive = false;
+                    if (nativeMicBufferRef.current.length > 0) {
+                        // Check the most recent mic buffer chunk for audio activity
+                        const recentMicChunk = nativeMicBufferRef.current[nativeMicBufferRef.current.length - 1];
+                        if (recentMicChunk && recentMicChunk.length > 0) {
+                            // Calculate RMS (root mean square) to detect audio activity
+                            let sumSquares = 0;
+                            for (let i = 0; i < Math.min(recentMicChunk.length, 1000); i++) {
+                                sumSquares += recentMicChunk[i] * recentMicChunk[i];
+                            }
+                            const rms = Math.sqrt(sumSquares / Math.min(recentMicChunk.length, 1000));
+                            // If RMS is above threshold, mic has audio (threshold ~0.01 for speech)
+                            isMicActive = rms > 0.005;
+                        }
+                    }
+
+                    // Only consider truly silent if BOTH system audio AND mic are silent
+                    const isTrulySilent = isSystemAudioSilent && !isMicActive;
 
                     // Silence detection for meeting end
-                    if (isSilentByTimeDomain) {
+                    if (isTrulySilent) {
                         if (silenceStartTimeRef.current === null) {
                             silenceStartTimeRef.current = Date.now();
                             silenceConfirmationShownRef.current = false;
-                            console.log('[AudioRecordingContext] Silence detected, starting timer...');
+                            console.log('[AudioRecordingContext] Silence detected (sysAudio silent + mic inactive), starting timer...');
                         } else {
                             const silenceDuration = Date.now() - silenceStartTimeRef.current;
                             // Log every 5 seconds of silence
@@ -464,9 +486,10 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
                             }
                         }
                     } else {
-                        // Reset silence timer when audio is detected
+                        // Reset silence timer when audio is detected (either system audio or mic)
                         if (silenceStartTimeRef.current !== null) {
-                            console.log('[AudioRecordingContext] Audio detected, resetting silence timer');
+                            const reason = isMicActive ? 'mic active' : 'system audio detected';
+                            console.log('[AudioRecordingContext] Audio detected (' + reason + '), resetting silence timer');
                             silenceConfirmationShownRef.current = false;
                         }
                         silenceStartTimeRef.current = null;
@@ -486,7 +509,7 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
                                 'freqMax:', maxVal, 'freqMin:', minVal,
                                 'timeMax:', timeDomainMax, 'timeMin:', timeDomainMin, 'timeDev:', timeDomainDeviation,
                                 'avg:', averageLevel.toFixed(3),
-                                'isSilence:', isSilentByTimeDomain);
+                                'sysAudioSilent:', isSystemAudioSilent, 'micActive:', isMicActive, 'trulySilent:', isTrulySilent);
                         }
                     } else if (audioLevelsSentCount === 0) {
                         console.error('[AudioRecordingContext] sendAudioLevels function not available!');
@@ -690,8 +713,12 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
 
                         // Store pending transcription - it will be associated with the entry later
                         // This is necessary because the entry may not exist yet (it's created when timer stops)
+                        // Uses array to support multiple recordings per session
                         console.log('[AudioRecordingContext] Storing pending transcription for session:', entryId);
-                        pendingTranscriptionsRef.current.set(entryId, transcription);
+                        const existingTranscriptions = pendingTranscriptionsRef.current.get(entryId) || [];
+                        existingTranscriptions.push(transcription);
+                        pendingTranscriptionsRef.current.set(entryId, existingTranscriptions);
+                        console.log('[AudioRecordingContext] Total transcriptions for session:', existingTranscriptions.length);
 
                         // Note: The entry may not exist yet as it's created when the timer stops.
                         // The transcription is stored as pending and will be attached to the entry
@@ -764,9 +791,55 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
 
     /**
      * Get pending transcription for a session ID
+     * Merges multiple transcriptions if multiple recordings occurred during the session
      */
     const getPendingTranscription = useCallback((sessionId: string): EntryTranscription | null => {
-        return pendingTranscriptionsRef.current.get(sessionId) || null;
+        const transcriptions = pendingTranscriptionsRef.current.get(sessionId);
+        if (!transcriptions || transcriptions.length === 0) {
+            return null;
+        }
+
+        // If only one transcription, return it directly
+        if (transcriptions.length === 1) {
+            return transcriptions[0];
+        }
+
+        // Merge multiple transcriptions into one
+        console.log('[AudioRecordingContext] Merging', transcriptions.length, 'transcriptions for session:', sessionId);
+
+        // Combine all transcriptions with separator
+        const mergedFullText = transcriptions
+            .map((t, i) => `[Recording ${i + 1}]\n${t.fullText}`)
+            .join('\n\n---\n\n');
+
+        // Merge segments with offset adjustment
+        let segmentOffset = 0;
+        const mergedSegments = transcriptions.flatMap((t) => {
+            const adjustedSegments = (t.segments || []).map(seg => ({
+                ...seg,
+                start: seg.start + segmentOffset,
+                end: seg.end + segmentOffset,
+            }));
+            segmentOffset += t.audioDuration || 0;
+            return adjustedSegments;
+        });
+
+        // Sum up durations and word counts
+        const totalDuration = transcriptions.reduce((sum, t) => sum + (t.audioDuration || 0), 0);
+        const totalWordCount = transcriptions.reduce((sum, t) => sum + (t.wordCount || 0), 0);
+
+        const merged: EntryTranscription = {
+            transcriptionId: transcriptions[0].transcriptionId, // Use first transcription's ID
+            fullText: mergedFullText,
+            segments: mergedSegments,
+            language: transcriptions[0].language,
+            audioDuration: totalDuration,
+            wordCount: totalWordCount,
+            createdAt: transcriptions[0].createdAt,
+        };
+
+        console.log('[AudioRecordingContext] Merged transcription:', totalWordCount, 'words,', totalDuration, 'seconds');
+        return merged;
     }, []);
 
     /**
@@ -779,6 +852,7 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
     /**
      * Wait for transcription to complete for a session ID
      * Polls the pending transcriptions until one is available or timeout
+     * Returns merged transcription if multiple recordings occurred during the session
      */
     const waitForTranscription = useCallback(async (sessionId: string, timeoutMs: number = 30000): Promise<EntryTranscription | null> => {
         console.log('[AudioRecordingContext] waitForTranscription called, sessionId:', sessionId, 'timeout:', timeoutMs);
@@ -788,20 +862,31 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
         const minWaitTime = 2000; // Wait at least 2 seconds to allow STOP event to propagate
 
         while (Date.now() - startTime < timeoutMs) {
-            // Check if transcription is available
-            const transcription = pendingTranscriptionsRef.current.get(sessionId);
-            if (transcription) {
-                console.log('[AudioRecordingContext] Transcription found after', Date.now() - startTime, 'ms');
-                return transcription;
+            // Check if transcription is available (uses array, checks length > 0)
+            const transcriptions = pendingTranscriptionsRef.current.get(sessionId);
+            if (transcriptions && transcriptions.length > 0) {
+                // Wait a bit more to see if more recordings are coming
+                // (give time for any in-progress transcription to finish)
+                if (!state.isRecording && !transcriptionProgress) {
+                    console.log('[AudioRecordingContext] Transcription(s) found after', Date.now() - startTime, 'ms, count:', transcriptions.length);
+                    return getPendingTranscription(sessionId); // Returns merged transcription
+                }
             }
 
             // Only apply early exit logic after minimum wait time
             // This gives time for the STOP event to propagate and transcription to start
             const elapsedMs = Date.now() - startTime;
             if (elapsedMs > minWaitTime) {
+                // If we have transcriptions and no recording is active, return them
+                const existingTranscriptions = pendingTranscriptionsRef.current.get(sessionId);
+                if (existingTranscriptions && existingTranscriptions.length > 0 && !state.isRecording && !transcriptionProgress) {
+                    console.log('[AudioRecordingContext] Returning', existingTranscriptions.length, 'transcription(s) after', elapsedMs, 'ms');
+                    return getPendingTranscription(sessionId); // Returns merged transcription
+                }
+
                 // Check if transcription failed (no recording was active or it errored)
                 // If there's no recording and no pending transcription, don't wait
-                if (!state.isRecording && !transcriptionProgress) {
+                if (!state.isRecording && !transcriptionProgress && (!existingTranscriptions || existingTranscriptions.length === 0)) {
                     console.log('[AudioRecordingContext] No active recording and no transcription in progress after', elapsedMs, 'ms, returning null');
                     return null;
                 }
@@ -817,9 +902,16 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
             await new Promise(resolve => setTimeout(resolve, pollInterval));
         }
 
+        // On timeout, return whatever transcriptions we have (merged)
+        const finalTranscriptions = pendingTranscriptionsRef.current.get(sessionId);
+        if (finalTranscriptions && finalTranscriptions.length > 0) {
+            console.log('[AudioRecordingContext] Timeout reached, returning', finalTranscriptions.length, 'transcription(s)');
+            return getPendingTranscription(sessionId);
+        }
+
         console.log('[AudioRecordingContext] waitForTranscription timed out after', timeoutMs, 'ms');
         return null;
-    }, [state.isRecording, transcriptionProgress]);
+    }, [state.isRecording, transcriptionProgress, getPendingTranscription]);
 
     /**
      * Get pending audio info for a session/entry ID (when transcription failed but audio was saved)
@@ -862,8 +954,10 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
                     createdAt: Date.now(),
                 };
 
-                // Update pending transcriptions
-                pendingTranscriptionsRef.current.set(entryId, transcription);
+                // Update pending transcriptions (add to array for this session)
+                const existingTranscriptions = pendingTranscriptionsRef.current.get(entryId) || [];
+                existingTranscriptions.push(transcription);
+                pendingTranscriptionsRef.current.set(entryId, existingTranscriptions);
 
                 // Clear pending audio since transcription succeeded
                 pendingAudioRef.current.delete(entryId);

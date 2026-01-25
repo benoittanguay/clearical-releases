@@ -16,7 +16,11 @@
       body {
         font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
         background: transparent;
-        overflow: hidden;
+        min-height: 100vh;
+        display: flex;
+        align-items: flex-start;
+        justify-content: center;
+        padding: 0 40px 40px 40px; /* Space for shadows: none on top, 40px on sides/bottom */
         -webkit-app-region: drag;
       }
     </style>
