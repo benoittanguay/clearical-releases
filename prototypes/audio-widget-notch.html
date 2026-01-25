@@ -1,0 +1,712 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audio Widget - Notch Style</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f0f23 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding-top: 0;
+        }
+
+        /* Simulated screen top edge */
+        .screen-top {
+            width: 100%;
+            height: 0;
+            background: #000;
+            position: relative;
+            display: flex;
+            justify-content: center;
+        }
+
+        /* Main Widget Container - Notch Style */
+        .audio-widget {
+            position: relative;
+            background: #000000;
+            border-radius: 0 0 28px 28px;
+            padding: 8px 14px 14px 14px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+            box-shadow:
+                0 8px 32px rgba(0, 0, 0, 0.5),
+                0 2px 8px rgba(0, 0, 0, 0.3),
+                inset 0 1px 0 rgba(255, 255, 255, 0.05);
+            transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            transform-origin: top center;
+            cursor: pointer;
+            overflow: hidden;
+        }
+
+        /* Expanded state dimensions */
+        .audio-widget.expanded {
+            width: 380px;
+            padding: 10px 14px 14px 14px;
+        }
+
+        /* Compact state - small pill */
+        .audio-widget.compact {
+            width: 180px;
+            padding: 10px 16px;
+            border-radius: 0 0 22px 22px;
+        }
+
+        /* Subtle inner glow */
+        .audio-widget::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: inherit;
+            background: radial-gradient(ellipse at 50% 0%, rgba(255,255,255,0.03) 0%, transparent 60%);
+            pointer-events: none;
+        }
+
+        /* Top Row - Expanded */
+        .widget-top-row {
+            display: flex;
+            align-items: center;
+            width: 100%;
+            position: relative;
+            height: 36px;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .compact .widget-top-row {
+            justify-content: center;
+            height: 24px;
+        }
+
+        /* App Icon */
+        .app-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            overflow: hidden;
+            flex-shrink: 0;
+            background: #1a1a1a;
+            border: 1px solid rgba(255,255,255,0.1);
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .compact .app-icon {
+            width: 0;
+            height: 0;
+            opacity: 0;
+            margin: 0;
+        }
+
+        .app-icon img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        /* Recording Pill - Always visible */
+        .recording-pill-container {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 30;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .compact .recording-pill-container {
+            position: relative;
+            left: auto;
+            top: auto;
+            transform: none;
+        }
+
+        /* Recording Status Pill */
+        .recording-pill {
+            background: #FF4800;
+            border-radius: 6px;
+            padding: 5px 10px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .compact .recording-pill {
+            background: transparent;
+            padding: 0;
+            gap: 8px;
+        }
+
+        .recording-dot {
+            width: 8px;
+            height: 8px;
+            background: #FFFFFF;
+            border-radius: 50%;
+            animation: pulse 1.5s ease-in-out infinite;
+            flex-shrink: 0;
+        }
+
+        .compact .recording-dot {
+            background: #FF4800;
+            width: 10px;
+            height: 10px;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(0.9); }
+        }
+
+        .recording-text {
+            color: #FFFFFF;
+            font-size: 12px;
+            font-weight: 500;
+            letter-spacing: -0.01em;
+            white-space: nowrap;
+            transition: all 0.3s ease;
+        }
+
+        .compact .recording-text {
+            font-size: 13px;
+            font-weight: 600;
+            font-variant-numeric: tabular-nums;
+        }
+
+        /* Duration in compact mode */
+        .compact-duration {
+            display: none;
+        }
+
+        .compact .compact-duration {
+            display: block;
+        }
+
+        .compact .expanded-text {
+            display: none;
+        }
+
+        /* Action Buttons */
+        .action-buttons {
+            display: flex;
+            gap: 6px;
+            margin-left: auto;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .compact .action-buttons {
+            width: 0;
+            opacity: 0;
+            overflow: hidden;
+            margin: 0;
+        }
+
+        .action-btn {
+            background: #1A1A1A;
+            border: 1px solid #3A3A3A;
+            border-radius: 8px;
+            padding: 6px 10px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            font-family: inherit;
+        }
+
+        .action-btn:hover {
+            background: #252525;
+            border-color: #4A4A4A;
+        }
+
+        .action-btn:active {
+            transform: scale(0.97);
+        }
+
+        .action-btn .stop-icon {
+            width: 8px;
+            height: 8px;
+            background: #888888;
+            border-radius: 1px;
+        }
+
+        .action-btn .hide-icon {
+            width: 10px;
+            height: 2px;
+            background: #888888;
+            border-radius: 1px;
+        }
+
+        .action-btn span {
+            font-size: 12px;
+            font-weight: 500;
+            color: #FFFFFF;
+        }
+
+        /* Waveform Section */
+        .waveform-section {
+            width: 100%;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            overflow: hidden;
+        }
+
+        .compact .waveform-section {
+            height: 0;
+            opacity: 0;
+            margin: 0;
+        }
+
+        /* Waveform Container */
+        .waveform-container {
+            height: 44px;
+            border-radius: 12px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Retro TV scanline pattern overlay */
+        .waveform-container::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: repeating-linear-gradient(
+                to bottom,
+                rgba(255, 255, 255, 0.15) 0px,
+                rgba(255, 255, 255, 0.15) 2px,
+                transparent 2px,
+                transparent 4px
+            );
+            mix-blend-mode: overlay;
+            pointer-events: none;
+            z-index: 5;
+            border-radius: 12px;
+        }
+
+        .waveform-bg-left {
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 50%;
+            background: #FF4800;
+            border-radius: 12px 0 0 12px;
+        }
+
+        .waveform-bg-right {
+            position: absolute;
+            right: 0;
+            top: 0;
+            bottom: 0;
+            width: 50%;
+            background: #F5EDE0;
+            border-radius: 0 12px 12px 0;
+        }
+
+        .waveform-track {
+            display: flex;
+            align-items: center;
+            position: absolute;
+            height: 100%;
+            top: 0;
+            z-index: 10;
+            transition: transform 150ms ease-out;
+            transform-origin: center center;
+        }
+
+        /* Playhead */
+        .playhead {
+            position: absolute;
+            left: 50%;
+            width: 2px;
+            background: #FF4800;
+            transform: translateX(-50%);
+            z-index: 25;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .compact .playhead {
+            opacity: 0;
+        }
+
+        .waveform-bar {
+            border-radius: 1px;
+            flex-shrink: 0;
+            position: relative;
+        }
+
+        .bar-layer-recorded {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 1px;
+        }
+
+        .bar-layer-buffer {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(90, 80, 70, 0.5);
+            border-radius: 1px;
+        }
+
+        /* Mini waveform for compact mode */
+        .mini-waveform {
+            display: none;
+            align-items: center;
+            gap: 2px;
+            height: 16px;
+            margin-left: 8px;
+        }
+
+        .compact .mini-waveform {
+            display: flex;
+        }
+
+        .mini-bar {
+            width: 2px;
+            background: #FF4800;
+            border-radius: 1px;
+            transition: height 80ms ease-out;
+        }
+
+        /* Instructions */
+        .instructions {
+            position: fixed;
+            bottom: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(255,255,255,0.4);
+            font-size: 13px;
+            text-align: center;
+        }
+
+        .instructions kbd {
+            background: rgba(255,255,255,0.1);
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-family: inherit;
+            margin: 0 4px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Simulated screen top -->
+    <div class="screen-top">
+        <div class="audio-widget expanded" id="widget">
+            <!-- Top Row -->
+            <div class="widget-top-row" id="topRow">
+                <!-- App Icon -->
+                <div class="app-icon">
+                    <img src="../public/icon.png" alt="Clearical">
+                </div>
+
+                <!-- Recording Pill Container -->
+                <div class="recording-pill-container">
+                    <div class="recording-pill" id="recordingPill">
+                        <div class="recording-dot"></div>
+                        <span class="recording-text expanded-text">Recording...</span>
+                        <span class="recording-text compact-duration" id="compactDuration">00:00</span>
+                    </div>
+                    <!-- Mini waveform for compact mode -->
+                    <div class="mini-waveform" id="miniWaveform"></div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="action-buttons">
+                    <button class="action-btn stop-btn">
+                        <div class="stop-icon"></div>
+                        <span>Stop</span>
+                    </button>
+                    <button class="action-btn hide-btn" id="hideBtn">
+                        <div class="hide-icon"></div>
+                        <span>Hide</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Waveform Section -->
+            <div class="waveform-section">
+                <div class="waveform-container" id="waveformContainer">
+                    <div class="waveform-bg-left"></div>
+                    <div class="waveform-bg-right"></div>
+                    <div class="waveform-track" id="waveformTrack"></div>
+                </div>
+            </div>
+
+            <!-- Playhead -->
+            <div class="playhead" id="playhead"></div>
+        </div>
+    </div>
+
+    <div class="instructions">
+        Click the widget to toggle between <kbd>compact</kbd> and <kbd>expanded</kbd> states
+    </div>
+
+    <script>
+        // Configuration
+        const BAR_WIDTH = 2;
+        const BAR_GAP = 4;
+        const BAR_STEP = BAR_WIDTH + BAR_GAP;
+        const SCROLL_SPEED = 30;
+        const MIN_HEIGHT = 6;
+        const MAX_HEIGHT = 32;
+        const MINI_BARS = 12;
+
+        let isCompact = false;
+        let containerWidth = 380 - 28; // widget width minus padding
+        let duration = 0;
+        let startTime = Date.now();
+
+        // Format duration as MM:SS
+        function formatDuration(ms) {
+            const totalSeconds = Math.floor(ms / 1000);
+            const minutes = Math.floor(totalSeconds / 60);
+            const seconds = totalSeconds % 60;
+            return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        }
+
+        // Update duration display
+        setInterval(() => {
+            duration = Date.now() - startTime;
+            document.getElementById('compactDuration').textContent = formatDuration(duration);
+        }, 100);
+
+        // Toggle compact/expanded
+        const widget = document.getElementById('widget');
+        const hideBtn = document.getElementById('hideBtn');
+
+        widget.addEventListener('click', (e) => {
+            // Don't toggle if clicking buttons
+            if (e.target.closest('.action-btn')) return;
+
+            toggleCompact();
+        });
+
+        hideBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (!isCompact) {
+                toggleCompact();
+            }
+        });
+
+        function toggleCompact() {
+            isCompact = !isCompact;
+            widget.classList.toggle('compact', isCompact);
+            widget.classList.toggle('expanded', !isCompact);
+
+            if (!isCompact) {
+                // Recalculate playhead position after transition
+                setTimeout(positionPlayhead, 50);
+            }
+        }
+
+        // Position playhead
+        function positionPlayhead() {
+            if (isCompact) return;
+
+            const widgetEl = document.getElementById('widget');
+            const pill = document.getElementById('recordingPill');
+            const waveform = document.getElementById('waveformContainer');
+            const playhead = document.getElementById('playhead');
+
+            const widgetRect = widgetEl.getBoundingClientRect();
+            const pillRect = pill.getBoundingClientRect();
+            const waveformRect = waveform.getBoundingClientRect();
+
+            const pillCenterY = pillRect.top + pillRect.height / 2 - widgetRect.top;
+            const waveformBottom = waveformRect.bottom - widgetRect.top;
+            const playheadEnd = waveformBottom + 4;
+
+            playhead.style.top = pillCenterY + 'px';
+            playhead.style.height = (playheadEnd - pillCenterY) + 'px';
+        }
+
+        // State for waveform generation
+        let trackPosition = 0;
+        const bars = [];
+        let currentIntensity = 0;
+        let lastHeight = 20;
+        let audioState = 'normal';
+        let stateCounter = 0;
+
+        function generateBarHeight() {
+            stateCounter--;
+            if (stateCounter <= 0) {
+                const rand = Math.random();
+                if (rand < 0.15) {
+                    audioState = 'loud';
+                    stateCounter = 3 + Math.floor(Math.random() * 8);
+                } else if (rand < 0.3) {
+                    audioState = 'quiet';
+                    stateCounter = 5 + Math.floor(Math.random() * 10);
+                } else {
+                    audioState = 'normal';
+                    stateCounter = 2 + Math.floor(Math.random() * 5);
+                }
+            }
+
+            let targetHeight;
+            if (audioState === 'loud') {
+                targetHeight = MAX_HEIGHT * (0.7 + Math.random() * 0.3);
+            } else if (audioState === 'quiet') {
+                targetHeight = MIN_HEIGHT + Math.random() * 8;
+            } else {
+                targetHeight = MIN_HEIGHT + (MAX_HEIGHT - MIN_HEIGHT) * (0.3 + Math.random() * 0.4);
+            }
+
+            lastHeight = lastHeight * 0.3 + targetHeight * 0.7;
+            return Math.round(lastHeight);
+        }
+
+        function createBar(height) {
+            const bar = document.createElement('div');
+            bar.className = 'waveform-bar';
+            bar.style.width = BAR_WIDTH + 'px';
+            bar.style.minWidth = BAR_WIDTH + 'px';
+            bar.style.height = height + 'px';
+            bar.style.marginRight = BAR_GAP + 'px';
+
+            const recordedLayer = document.createElement('div');
+            recordedLayer.className = 'bar-layer-recorded';
+            bar.appendChild(recordedLayer);
+
+            const bufferLayer = document.createElement('div');
+            bufferLayer.className = 'bar-layer-buffer';
+            bar.appendChild(bufferLayer);
+
+            return bar;
+        }
+
+        function updateBarColors() {
+            const centerX = containerWidth / 2;
+            const containerRect = document.getElementById('waveformContainer').getBoundingClientRect();
+
+            bars.forEach((barData) => {
+                const bar = barData.element;
+                const barRect = bar.getBoundingClientRect();
+                const barCenterX = barRect.left + barRect.width / 2 - containerRect.left;
+
+                const recordedLayer = bar.querySelector('.bar-layer-recorded');
+                const bufferLayer = bar.querySelector('.bar-layer-buffer');
+
+                if (barCenterX < centerX) {
+                    recordedLayer.style.opacity = '1';
+                    bufferLayer.style.opacity = '0';
+                } else {
+                    recordedLayer.style.opacity = '0';
+                    bufferLayer.style.opacity = '1';
+                }
+            });
+        }
+
+        // Initialize mini waveform
+        function initMiniWaveform() {
+            const container = document.getElementById('miniWaveform');
+            for (let i = 0; i < MINI_BARS; i++) {
+                const bar = document.createElement('div');
+                bar.className = 'mini-bar';
+                bar.style.height = '4px';
+                container.appendChild(bar);
+            }
+        }
+
+        // Update mini waveform
+        function updateMiniWaveform() {
+            const container = document.getElementById('miniWaveform');
+            const miniBars = container.children;
+
+            for (let i = 0; i < miniBars.length; i++) {
+                const height = 4 + Math.random() * 12 * currentIntensity;
+                miniBars[i].style.height = height + 'px';
+            }
+        }
+
+        function initWaveform() {
+            const track = document.getElementById('waveformTrack');
+            const barsNeeded = Math.ceil(containerWidth / BAR_STEP) + 25;
+
+            for (let i = 0; i < barsNeeded; i++) {
+                const height = generateBarHeight();
+                const bar = createBar(height);
+                bars.push({ element: bar, height });
+                track.appendChild(bar);
+            }
+
+            trackPosition = containerWidth / 2;
+            track.style.left = trackPosition + 'px';
+        }
+
+        let lastTime = performance.now();
+        function animate(currentTime) {
+            const deltaTime = (currentTime - lastTime) / 1000;
+            lastTime = currentTime;
+
+            const track = document.getElementById('waveformTrack');
+
+            trackPosition -= SCROLL_SPEED * deltaTime;
+            track.style.left = trackPosition + 'px';
+
+            const trackWidth = bars.length * BAR_STEP;
+            const rightEdge = trackPosition + trackWidth;
+
+            if (rightEdge < containerWidth + BAR_STEP * 5) {
+                const height = generateBarHeight();
+                const bar = createBar(height);
+                bars.push({ element: bar, height });
+                track.appendChild(bar);
+
+                const newIntensity = (height - MIN_HEIGHT) / (MAX_HEIGHT - MIN_HEIGHT);
+                currentIntensity = currentIntensity * 0.2 + newIntensity * 0.8;
+            }
+
+            const pulseScale = 0.88 + (currentIntensity * 0.24);
+            track.style.transform = `scaleY(${pulseScale})`;
+
+            if (bars.length > 0) {
+                const barRight = trackPosition + BAR_STEP;
+                if (barRight < -BAR_STEP) {
+                    const removed = bars.shift();
+                    removed.element.remove();
+                    trackPosition += BAR_STEP;
+                    track.style.left = trackPosition + 'px';
+                }
+            }
+
+            updateBarColors();
+            updateMiniWaveform();
+            requestAnimationFrame(animate);
+        }
+
+        // Initialize
+        window.addEventListener('load', () => {
+            positionPlayhead();
+            initWaveform();
+            initMiniWaveform();
+            requestAnimationFrame(animate);
+            window.addEventListener('resize', positionPlayhead);
+        });
+    </script>
+</body>
+</html>
