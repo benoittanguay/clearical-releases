@@ -3645,7 +3645,36 @@ function createTray() {
 
     // Right-click shows context menu
     tray.on('right-click', () => {
+        // Get current recording state
+        const recordingManager = getRecordingManager();
+        const mediaStatus = recordingManager.getMediaStatus();
+
         const contextMenu = Menu.buildFromTemplate([
+            {
+                label: timerState.isRunning ? (timerState.isPaused ? '▶ Resume Chrono' : '⏹ Stop Chrono') : '▶ Start Chrono',
+                click: () => {
+                    // Send toggle command to renderer
+                    const windows = BrowserWindow.getAllWindows();
+                    for (const window of windows) {
+                        if (!window.isDestroyed()) {
+                            window.webContents.send('tray:toggle-chrono');
+                        }
+                    }
+                }
+            },
+            {
+                label: mediaStatus.isRecording ? '⏹ Stop Recording' : '🎙 Start Recording',
+                click: () => {
+                    // Send toggle command to renderer
+                    const windows = BrowserWindow.getAllWindows();
+                    for (const window of windows) {
+                        if (!window.isDestroyed()) {
+                            window.webContents.send('tray:toggle-recording');
+                        }
+                    }
+                }
+            },
+            { type: 'separator' },
             { label: 'Quit', click: () => {
                 // Use comprehensive cleanup instead of simple quit
                 cleanupAndQuit();

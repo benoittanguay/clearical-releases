@@ -1,74 +1,9 @@
 /**
  * Recording Widget Styles
- * Clearical Design System - Warm Sand Aesthetic
- *
- * A floating overlay that appears when audio recording is active.
- * Matches the Clearical app's warm cream/sand color palette with
- * blood orange accents.
+ * Dynamic Island-style notch widget with animations
  */
 
-/* Import Google Fonts for consistency */
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap');
-
-:root {
-    /* Sand/Cream Color Palette */
-    --widget-bg: #F7EFE3;                       /* Sand - warm cream background */
-    --widget-bg-secondary: #FAF5EE;              /* Sand Lighter */
-    --widget-surface: #FFFFFF;                   /* Pure white for cards */
-    --widget-border: #E7DED2;                    /* Sand Darker - subtle border */
-    --widget-border-hover: #D4CFC6;              /* Darker sand for hover */
-
-    /* Text Colors */
-    --widget-text-primary: #0D0C0C;              /* Rich Black */
-    --widget-text-secondary: #6B6560;            /* Muted text */
-    --widget-text-tertiary: #8C877D;             /* Sand Dark - lighter text */
-
-    /* Accent Colors */
-    --widget-accent: #FF4800;                    /* Blood Orange */
-    --widget-accent-light: #FF6B35;              /* Blood Orange Lighter */
-    --widget-accent-muted: rgba(255, 72, 0, 0.08); /* Subtle accent bg */
-    --widget-accent-border: rgba(255, 72, 0, 0.15); /* Accent borders */
-
-    /* Recording Indicator */
-    --widget-recording: #DC2626;                 /* Error/Stop red */
-    --widget-recording-glow: rgba(220, 38, 38, 0.3);
-
-    /* Waveform */
-    --widget-waveform: #FF4800;
-    --widget-waveform-bg: rgba(255, 72, 0, 0.08);
-
-    /* Shadows - Soft and warm */
-    --widget-shadow-sm: 0 2px 8px -2px rgba(140, 135, 125, 0.15);
-    --widget-shadow-md: 0 8px 24px -8px rgba(140, 135, 125, 0.2);
-    --widget-shadow-lg: 0 16px 48px -16px rgba(140, 135, 125, 0.25);
-    --widget-shadow-glow: 0 4px 24px -4px rgba(255, 72, 0, 0.15);
-
-    /* Typography */
-    --font-display: 'DM Sans', system-ui, -apple-system, sans-serif;
-    --font-body: 'Inter', system-ui, -apple-system, sans-serif;
-    --font-mono: 'JetBrains Mono', 'SF Mono', monospace;
-
-    /* Spacing */
-    --space-xs: 4px;
-    --space-sm: 8px;
-    --space-md: 12px;
-    --space-lg: 16px;
-    --space-xl: 20px;
-
-    /* Border Radius */
-    --radius-sm: 6px;
-    --radius-md: 10px;
-    --radius-lg: 14px;
-    --radius-xl: 18px;
-    --radius-full: 9999px;
-
-    /* Transitions */
-    --ease-out: cubic-bezier(0, 0, 0.2, 1);
-    --ease-spring: cubic-bezier(0.175, 0.885, 0.32, 1.275);
-    --duration-fast: 150ms;
-    --duration-base: 200ms;
-    --duration-slow: 300ms;
-}
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
 
 * {
     margin: 0;
@@ -76,460 +11,596 @@
     box-sizing: border-box;
 }
 
-body {
-    background: transparent;
-    font-family: var(--font-body);
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
+/* Remove focus outlines from all buttons in the widget */
+button:focus,
+button:focus-visible {
+    outline: none;
+    box-shadow: none;
 }
 
-/* Main Widget Container */
-.recording-widget {
-    width: 100%;
-    height: 100%;
-    background: var(--widget-bg);
-    border-radius: var(--radius-xl);
-    border: 1px solid var(--widget-border);
+body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: transparent;
+    min-height: 100vh;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 0 40px 40px 40px; /* Space for shadows: none on top, 40px on sides/bottom */
+    -webkit-app-region: drag;
+}
+
+/* ============================================
+   MAIN WIDGET CONTAINER
+   ============================================ */
+
+.audio-widget {
+    width: 520px;
+    background: #0D0D0D;
+    border-radius: 0 0 24px 24px;
+    padding: 10px 12px 12px 12px;
+    position: relative;
     box-shadow:
-        var(--widget-shadow-lg),
-        inset 0 1px 0 0 rgba(255, 255, 255, 0.5);
+        0 8px 32px rgba(0, 0, 0, 0.4),
+        0 2px 8px rgba(0, 0, 0, 0.2);
+    /* Combined: slide down + curtain reveal */
+    clip-path: inset(0 0 0 0 round 0 0 24px 24px);
+    animation: slideAndRevealIn 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+/* ============================================
+   ENTER ANIMATION - Slide down + curtain reveal
+   ============================================ */
+
+@keyframes slideAndRevealIn {
+    0% {
+        transform: translateY(-100%);
+        clip-path: inset(0 42% 0 42% round 0 0 24px 24px);
+    }
+    60% {
+        transform: translateY(0);
+        clip-path: inset(0 42% 0 42% round 0 0 24px 24px);
+    }
+    100% {
+        transform: translateY(0);
+        clip-path: inset(0 0 0 0 round 0 0 24px 24px);
+    }
+}
+
+/* ============================================
+   EXIT ANIMATION - Curtain close + slide up
+   ============================================ */
+
+@keyframes slideAndRevealOut {
+    0% {
+        transform: translateY(0);
+        clip-path: inset(0 0 0 0 round 0 0 24px 24px);
+    }
+    40% {
+        transform: translateY(0);
+        clip-path: inset(0 42% 0 42% round 0 0 24px 24px);
+    }
+    100% {
+        transform: translateY(-100%);
+        clip-path: inset(0 42% 0 42% round 0 0 24px 24px);
+    }
+}
+
+.audio-widget.hiding {
+    animation: slideAndRevealOut 0.35s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+/* ============================================
+   TOP ROW LAYOUT
+   ============================================ */
+
+.widget-top-row {
     display: flex;
     align-items: center;
-    padding: var(--space-md) var(--space-lg);
-    gap: var(--space-md);
-    -webkit-app-region: drag;
+    padding: 0 2px;
     position: relative;
+    height: 36px;
+    margin-bottom: 8px;
+}
+
+/* ============================================
+   APP ICON - Starts centered, moves to left
+   ============================================ */
+
+.app-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
     overflow: hidden;
-}
-
-/* Subtle noise texture overlay for depth */
-.recording-widget::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-    opacity: 0.015;
-    pointer-events: none;
-    border-radius: inherit;
-}
-
-/* App Icon */
-.widget-icon {
     flex-shrink: 0;
-    width: 44px;
-    height: 44px;
-    border-radius: var(--radius-md);
-    overflow: hidden;
-    box-shadow: var(--widget-shadow-sm);
-    border: 1px solid var(--widget-border);
-    background: var(--widget-surface);
-    position: relative;
+    background: #1a1a1a;
+    border: 1px solid rgba(255,255,255,0.1);
+    animation: iconToLeft 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 
-.widget-icon img {
+@keyframes iconToLeft {
+    0% {
+        transform: translateX(232px);
+    }
+    60% {
+        transform: translateX(232px);
+    }
+    100% {
+        transform: translateX(0);
+    }
+}
+
+@keyframes iconToCenter {
+    0% {
+        transform: translateX(0);
+    }
+    40% {
+        transform: translateX(232px);
+    }
+    100% {
+        transform: translateX(232px);
+    }
+}
+
+.hiding .app-icon {
+    animation: iconToCenter 0.35s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.app-icon img {
     width: 100%;
     height: 100%;
     object-fit: cover;
 }
 
-/* Content Section */
-.widget-content {
-    flex: 1;
+/* ============================================
+   RECORDING PILL - Centered status indicator
+   ============================================ */
+
+.recording-pill-container {
+    position: absolute;
+    left: 50%;
+    top: 0;
+    bottom: 0;
+    transform: translateX(-50%);
     display: flex;
     flex-direction: column;
-    gap: var(--space-sm);
-    min-width: 0;
+    align-items: center;
+    justify-content: center;
+    z-index: 30;
 }
 
-/* Header Row */
-.widget-header {
+.recording-pill {
+    background: #FF4800;
+    border-radius: 8px;
+    padding: 6px 12px;
     display: flex;
     align-items: center;
-    gap: var(--space-sm);
+    gap: 7px;
+    animation: fadeInDelayed 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 
-/* Recording Indicator - Pulsing Red Dot */
-.recording-indicator {
-    width: 8px;
-    height: 8px;
-    background: var(--widget-recording);
-    border-radius: var(--radius-full);
-    animation: pulse-recording 1.5s ease-in-out infinite;
-    box-shadow: 0 0 0 0 var(--widget-recording-glow);
-    position: relative;
-}
-
-.recording-indicator::after {
-    content: '';
-    position: absolute;
-    inset: -3px;
-    border-radius: var(--radius-full);
-    background: var(--widget-recording);
-    opacity: 0;
-    animation: ping-recording 1.5s ease-in-out infinite;
-}
-
-@keyframes pulse-recording {
-    0%, 100% {
-        opacity: 1;
-        transform: scale(1);
-    }
-    50% {
-        opacity: 0.7;
-        transform: scale(0.92);
-    }
-}
-
-@keyframes ping-recording {
+@keyframes fadeInDelayed {
     0% {
-        opacity: 0.4;
-        transform: scale(1);
+        opacity: 0;
+    }
+    70% {
+        opacity: 0;
+    }
+    100% {
+        opacity: 1;
+    }
+}
+
+@keyframes fadeOutEarly {
+    0% {
+        opacity: 1;
+    }
+    30% {
+        opacity: 0;
     }
     100% {
         opacity: 0;
-        transform: scale(2.2);
     }
 }
 
-/* Title Text */
-.widget-title {
-    font-family: var(--font-display);
+.hiding .recording-pill {
+    animation: fadeOutEarly 0.35s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.recording-dot {
+    width: 7px;
+    height: 7px;
+    background: #FFFFFF;
+    border-radius: 50%;
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+}
+
+.recording-text {
+    color: #FFFFFF;
     font-size: 13px;
-    font-weight: 600;
-    color: var(--widget-text-primary);
+    font-weight: 500;
     letter-spacing: -0.01em;
 }
 
-/* Duration Display */
-.widget-duration {
-    font-family: var(--font-mono);
-    font-size: 12px;
-    font-weight: 500;
-    color: var(--widget-text-secondary);
-    font-variant-numeric: tabular-nums;
-    letter-spacing: 0.02em;
+/* ============================================
+   ACTION BUTTONS
+   ============================================ */
+
+.action-buttons {
+    display: flex;
+    gap: 6px;
     margin-left: auto;
-    padding-left: var(--space-sm);
-}
-
-/* Waveform Container */
-.waveform-container {
-    height: 28px;
-    background: var(--widget-waveform-bg);
-    border-radius: var(--radius-sm);
-    overflow: hidden;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 2px;
-    padding: 0 var(--space-sm);
-    border: 1px solid var(--widget-accent-border);
-}
-
-/* Individual Waveform Bars */
-.waveform-bar {
-    width: 3px;
-    background: linear-gradient(
-        to top,
-        var(--widget-accent) 0%,
-        var(--widget-accent-light) 100%
-    );
-    border-radius: 2px;
-    transition: height 80ms var(--ease-out);
-    min-height: 3px;
-    opacity: 0.9;
-}
-
-/* Alternating bar opacity for depth */
-.waveform-bar:nth-child(odd) {
-    opacity: 1;
-}
-
-.waveform-bar:nth-child(even) {
-    opacity: 0.75;
-}
-
-/* Actions Section */
-.widget-actions {
-    flex-shrink: 0;
-    display: flex;
-    gap: var(--space-sm);
     -webkit-app-region: no-drag;
+    animation: fadeInDelayed 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 
-/* Stop Button - Primary Action */
-.stop-button {
+.hiding .action-buttons {
+    animation: fadeOutEarly 0.35s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.action-btn {
+    background: #1A1A1A;
+    border: 1px solid #4A4A4A;
+    border-radius: 8px;
+    padding: 6px 12px;
     display: flex;
     align-items: center;
     gap: 6px;
-    padding: var(--space-sm) var(--space-md);
-    background: var(--widget-surface);
-    border: 1px solid var(--widget-border);
-    border-radius: var(--radius-md);
-    color: var(--widget-recording);
-    font-family: var(--font-mono);
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.02em;
-    text-transform: uppercase;
     cursor: pointer;
-    transition:
-        background-color var(--duration-fast) var(--ease-out),
-        border-color var(--duration-fast) var(--ease-out),
-        box-shadow var(--duration-fast) var(--ease-out),
-        transform var(--duration-fast) var(--ease-out);
-    box-shadow: var(--widget-shadow-sm);
-    position: relative;
-    overflow: hidden;
+    transition: all 0.15s ease;
+    font-family: inherit;
 }
 
-.stop-button::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(
-        135deg,
-        transparent 0%,
-        rgba(220, 38, 38, 0.04) 100%
-    );
-    opacity: 0;
-    transition: opacity var(--duration-fast) var(--ease-out);
+.action-btn:hover {
+    background: #252525;
+    border-color: #5A5A5A;
 }
 
-.stop-button:hover {
-    background: var(--widget-bg-secondary);
-    border-color: rgba(220, 38, 38, 0.25);
-    box-shadow:
-        var(--widget-shadow-md),
-        0 0 0 3px rgba(220, 38, 38, 0.08);
-    transform: translateY(-1px);
-}
-
-.stop-button:hover::before {
-    opacity: 1;
-}
-
-.stop-button:active {
-    transform: translateY(0) scale(0.98);
-    box-shadow: var(--widget-shadow-sm);
-}
-
-.stop-button svg {
-    width: 12px;
-    height: 12px;
-    position: relative;
-}
-
-/* Minimize Button (if needed) */
-.minimize-button {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 32px;
-    height: 32px;
-    background: var(--widget-surface);
-    border: 1px solid var(--widget-border);
-    border-radius: var(--radius-md);
-    color: var(--widget-text-tertiary);
-    cursor: pointer;
-    transition:
-        background-color var(--duration-fast) var(--ease-out),
-        border-color var(--duration-fast) var(--ease-out),
-        color var(--duration-fast) var(--ease-out);
-}
-
-.minimize-button:hover {
-    background: var(--widget-bg-secondary);
-    border-color: var(--widget-border-hover);
-    color: var(--widget-text-secondary);
-}
-
-/* Entry Animation */
-@keyframes widget-enter {
-    from {
-        opacity: 0;
-        transform: translateY(-12px) scale(0.96);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0) scale(1);
-    }
-}
-
-.recording-widget {
-    animation: widget-enter var(--duration-slow) var(--ease-spring);
-}
-
-/* Hover state for entire widget - subtle lift */
-.recording-widget:hover {
-    box-shadow:
-        var(--widget-shadow-lg),
-        var(--widget-shadow-glow),
-        inset 0 1px 0 0 rgba(255, 255, 255, 0.5);
-}
-
-/* Meeting Ended Prompt - Compact inline question */
-.meeting-ended-prompt {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-sm);
-    width: 100%;
-    animation: prompt-fade-in var(--duration-base) var(--ease-out);
-}
-
-@keyframes prompt-fade-in {
-    from {
-        opacity: 0;
-        transform: translateY(-4px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-.prompt-header {
-    display: flex;
-    align-items: center;
-    gap: var(--space-sm);
-}
-
-.prompt-title {
-    font-family: var(--font-display);
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--widget-text-primary);
-}
-
-.prompt-subtitle {
-    font-family: var(--font-body);
-    font-size: 11px;
-    color: var(--widget-text-tertiary);
-}
-
-.prompt-buttons {
-    display: flex;
-    gap: var(--space-sm);
-    -webkit-app-region: no-drag;
-}
-
-.prompt-button {
-    flex: 1;
-    padding: var(--space-sm) var(--space-md);
-    font-family: var(--font-mono);
-    font-size: 10px;
-    font-weight: 600;
-    letter-spacing: 0.02em;
-    text-transform: uppercase;
-    border-radius: var(--radius-sm);
-    cursor: pointer;
-    transition:
-        background-color var(--duration-fast) var(--ease-out),
-        border-color var(--duration-fast) var(--ease-out),
-        transform var(--duration-fast) var(--ease-out);
-}
-
-.prompt-button:active {
+.action-btn:active {
     transform: scale(0.97);
 }
 
-/* Yes/Stop button - accent style */
-.prompt-button-yes {
-    background: var(--widget-accent);
-    border: 1px solid var(--widget-accent);
+.action-btn .stop-icon {
+    width: 8px;
+    height: 8px;
+    background: #888888;
+    border-radius: 1px;
+}
+
+.action-btn .hide-icon {
+    width: 10px;
+    height: 2px;
+    background: #888888;
+    border-radius: 1px;
+}
+
+.action-btn span {
+    font-size: 13px;
+    font-weight: 500;
     color: #FFFFFF;
 }
 
-.prompt-button-yes:hover {
-    background: var(--widget-accent-light);
-    border-color: var(--widget-accent-light);
+/* ============================================
+   WAVEFORM CONTAINER
+   ============================================ */
+
+.waveform-container {
+    height: 48px;
+    border-radius: 14px;
+    position: relative;
+    overflow: hidden;
+    clip-path: inset(0 0 0 0 round 14px);
+    animation: waveformReveal 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 
-/* No/Continue button - secondary style */
-.prompt-button-no {
-    background: var(--widget-surface);
-    border: 1px solid var(--widget-border);
-    color: var(--widget-text-secondary);
+@keyframes waveformReveal {
+    0% {
+        clip-path: inset(0 50% 0 50% round 14px);
+    }
+    60% {
+        clip-path: inset(0 50% 0 50% round 14px);
+    }
+    100% {
+        clip-path: inset(0 0 0 0 round 14px);
+    }
 }
 
-.prompt-button-no:hover {
-    background: var(--widget-bg-secondary);
-    border-color: var(--widget-border-hover);
-    color: var(--widget-text-primary);
+@keyframes waveformHide {
+    0% {
+        clip-path: inset(0 0 0 0 round 14px);
+    }
+    40% {
+        clip-path: inset(0 50% 0 50% round 14px);
+    }
+    100% {
+        clip-path: inset(0 50% 0 50% round 14px);
+    }
+}
+
+.hiding .waveform-container {
+    animation: waveformHide 0.35s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+/* Retro TV scanline pattern overlay */
+.waveform-container::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(
+        to bottom,
+        rgba(255, 255, 255, 0.2) 0px,
+        rgba(255, 255, 255, 0.2) 2px,
+        transparent 2px,
+        transparent 4px
+    );
+    mix-blend-mode: overlay;
+    pointer-events: none;
+    z-index: 5;
+    border-radius: 14px;
+}
+
+.waveform-bg-left {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 50%;
+    background: #FF4800;
+    border-radius: 14px 0 0 14px;
+}
+
+.waveform-bg-right {
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 50%;
+    background: #F5EDE0;
+    border-radius: 0 14px 14px 0;
+}
+
+.waveform-track {
+    display: flex;
+    align-items: center;
+    position: absolute;
+    height: 100%;
+    top: 0;
+    z-index: 10;
+    transition: transform 150ms ease-out;
+    transform-origin: center center;
 }
 
 /* ============================================
-   Minimized Widget State
+   PLAYHEAD
    ============================================ */
 
-/* Minimized view - compact pill that shows recording status */
-.recording-widget-minimized {
+.playhead {
+    position: absolute;
+    left: 50%;
+    width: 2px;
+    background: #FF4800;
+    transform: translateX(-50%);
+    z-index: 25;
+    animation: fadeInDelayed 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.hiding .playhead {
+    animation: fadeOutEarly 0.35s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+/* ============================================
+   WAVEFORM BARS
+   ============================================ */
+
+.waveform-bar {
+    border-radius: 1px;
+    flex-shrink: 0;
+    position: relative;
+}
+
+.bar-layer-recorded {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(255, 255, 255, 0.9);
+    border-radius: 1px;
+}
+
+.bar-layer-buffer {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(90, 80, 70, 0.5);
+    border-radius: 1px;
+}
+
+/* ============================================
+   STOP STATE - Success confirmation
+   ============================================ */
+
+.audio-widget.stopped {
+    animation: morphToStopped 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+@keyframes morphToStopped {
+    0% {
+        clip-path: inset(0 0 0 0 round 0 0 24px 24px);
+    }
+    100% {
+        clip-path: inset(0 32% 0 32% round 0 0 24px 24px);
+    }
+}
+
+.stopped .action-buttons {
+    animation: fadeOutStopped 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.stopped .waveform-container {
+    animation: waveformHideStopped 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+@keyframes waveformHideStopped {
+    0% {
+        clip-path: inset(0 0 0 0 round 14px);
+        opacity: 1;
+    }
+    100% {
+        clip-path: inset(0 50% 0 50% round 14px);
+        opacity: 0;
+    }
+}
+
+@keyframes fadeOutStopped {
+    0% {
+        opacity: 1;
+    }
+    100% {
+        opacity: 0;
+    }
+}
+
+.stopped .playhead {
+    animation: fadeOutStopped 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.stopped .recording-pill {
+    animation: none;
+    opacity: 1;
+}
+
+.stopped .recording-pill .recording-dot {
+    animation: none;
+    background: #22C55E;
+    transition: background 0.3s ease;
+}
+
+.stopped .recording-pill .recording-text {
+    display: none;
+}
+
+.stopped .app-icon {
+    animation: iconToCenterStopped 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+@keyframes iconToCenterStopped {
+    0% {
+        transform: translateX(0);
+    }
+    100% {
+        transform: translateX(232px);
+    }
+}
+
+/* Success checkmark */
+.success-check {
+    display: none;
+    color: #22C55E;
+    font-size: 14px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.stopped .success-check {
     display: flex;
     align-items: center;
-    gap: var(--space-sm);
-    padding: var(--space-sm) var(--space-md);
-    background: var(--widget-bg);
-    border-radius: var(--radius-full);
-    border: 1px solid var(--widget-border);
-    box-shadow: var(--widget-shadow-md);
+    gap: 6px;
+    animation: fadeInQuick 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    animation-delay: 0.3s;
+    opacity: 0;
+}
+
+@keyframes fadeInQuick {
+    0% {
+        opacity: 0;
+    }
+    100% {
+        opacity: 1;
+    }
+}
+
+.success-check svg {
+    width: 16px;
+    height: 16px;
+}
+
+/* ============================================
+   MEETING ENDED OVERLAY
+   ============================================ */
+
+.meeting-ended-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(13, 13, 13, 0.5);
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    z-index: 30; /* Above playhead (z-index: 25) */
+    animation: fadeIn 0.3s ease-out forwards;
+}
+
+@keyframes fadeIn {
+    0% {
+        opacity: 0;
+    }
+    100% {
+        opacity: 1;
+    }
+}
+
+.meeting-ended-text {
+    color: #FFFFFF;
+    font-size: 14px;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+}
+
+.meeting-ended-buttons {
+    display: flex;
+    gap: 8px;
+    -webkit-app-region: no-drag;
+}
+
+.meeting-ended-btn {
+    border: none;
+    border-radius: 8px;
+    padding: 6px 14px;
+    font-size: 13px;
+    font-weight: 500;
     cursor: pointer;
-    -webkit-app-region: drag;
-    transition:
-        box-shadow var(--duration-fast) var(--ease-out),
-        transform var(--duration-fast) var(--ease-out);
-    animation: minimize-in var(--duration-slow) var(--ease-spring);
+    transition: all 0.15s ease;
+    font-family: inherit;
 }
 
-.recording-widget-minimized:hover {
-    box-shadow:
-        var(--widget-shadow-lg),
-        var(--widget-shadow-glow);
-    transform: scale(1.02);
+.meeting-ended-btn:active {
+    transform: scale(0.97);
 }
 
-.recording-widget-minimized:active {
-    transform: scale(0.98);
+.meeting-ended-btn.yes-btn {
+    background: #FF4800;
+    color: #FFFFFF;
 }
 
-.minimized-duration {
-    font-family: var(--font-mono);
-    font-size: 11px;
-    font-weight: 600;
-    color: var(--widget-text-primary);
-    font-variant-numeric: tabular-nums;
-    letter-spacing: 0.02em;
+.meeting-ended-btn.yes-btn:hover {
+    background: #FF5A1A;
 }
 
-/* Animation for minimizing */
-@keyframes minimize-in {
-    from {
-        opacity: 0;
-        transform: scale(0.8);
-    }
-    to {
-        opacity: 1;
-        transform: scale(1);
-    }
+.meeting-ended-btn.no-btn {
+    background: #2A2A2A;
+    color: #FFFFFF;
+    border: 1px solid #4A4A4A;
 }
 
-/* Slide-in animation when restoring or showing prompt */
-.recording-widget.slide-in {
-    animation: slide-in-from-top var(--duration-slow) var(--ease-spring);
-}
-
-@keyframes slide-in-from-top {
-    from {
-        opacity: 0;
-        transform: translateY(-20px) scale(0.95);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0) scale(1);
-    }
-}
-
-/* Minimize button styling update */
-.minimize-button svg {
-    width: 14px;
-    height: 14px;
+.meeting-ended-btn.no-btn:hover {
+    background: #353535;
+    border-color: #5A5A5A;
 }

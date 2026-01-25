@@ -57,6 +57,7 @@ function App() {
   const { clearPendingTranscription, waitForTranscription, getPendingAudio, clearPendingAudio } = useAudioRecording();
   const { roundTime, isRoundingEnabled } = useTimeRounding();
   const recordingSessionIdRef = useRef<string | null>(null);
+  const handleStartStopRef = useRef<() => void>(() => {});
 
   // Check for onboarding BEFORE migration - prevents flash of main UI
   useEffect(() => {
@@ -528,6 +529,9 @@ function App() {
     }
   };
 
+  // Keep ref updated with latest handleStartStop
+  handleStartStopRef.current = handleStartStop;
+
   const handlePermissionsGranted = () => {
     // Permissions are now granted, start the timer
     startTimer();
@@ -590,6 +594,41 @@ function App() {
       };
     }
   }, [isRunning]);
+
+  // Listen for tray menu commands
+  useEffect(() => {
+    // @ts-ignore
+    if (window.electron?.ipcRenderer?.on) {
+      console.log('[Renderer] Setting up tray command listeners');
+
+      // @ts-ignore
+      const unsubscribeChrono = window.electron.ipcRenderer.on('tray:toggle-chrono', () => {
+        console.log('[Renderer] Tray toggle chrono command received');
+        handleStartStopRef.current();
+      });
+
+      // @ts-ignore
+      const unsubscribeRecording = window.electron.ipcRenderer.on('tray:toggle-recording', () => {
+        console.log('[Renderer] Tray toggle recording command received');
+        // Toggle recording state
+        if (recordingSessionIdRef.current) {
+          // Stop recording
+          setActiveRecordingEntry(null);
+          recordingSessionIdRef.current = null;
+        } else {
+          // Start recording (only if chrono is running - checked via ref)
+          const sessionId = `session-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+          recordingSessionIdRef.current = sessionId;
+          setActiveRecordingEntry(sessionId);
+        }
+      });
+
+      return () => {
+        if (unsubscribeChrono) unsubscribeChrono();
+        if (unsubscribeRecording) unsubscribeRecording();
+      };
+    }
+  }, [setActiveRecordingEntry]);
 
   return (
     <div className="flex h-screen overflow-hidden font-sans w-full flex-col" style={{ backgroundColor: 'var(--color-bg-primary)', color: 'var(--color-text-primary)' }}>
