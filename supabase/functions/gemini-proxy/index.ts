@@ -112,6 +112,13 @@ interface HistoricalPatternsData {
     frequentBuckets: Array<{ id: string; name: string; frequency: number }>;
 }
 
+interface MeetingTranscriptionData {
+    transcriptionText: string;
+    recordingCount: number;
+    totalDuration: number;
+    languages: string[];
+}
+
 interface RequestBody {
     operation: 'analyze' | 'classify' | 'summarize';
     // Task type for signal filtering (new approach)
@@ -566,6 +573,10 @@ interface AggregatedContext {
     userDomain?: string;
     // Technologies
     technologies: string[];
+    // Meeting transcriptions
+    transcriptionText?: string;
+    transcriptionRecordingCount?: number;
+    transcriptionDuration?: number;
     // Confidence levels for weighting
     confidenceLevels: Record<string, 'high' | 'medium' | 'low'>;
 }
@@ -646,6 +657,16 @@ function extractContextFromSignals(signals: ContextSignal[]): AggregatedContext 
                 }
                 if (data.languages) {
                     context.technologies.push(...data.languages);
+                }
+                break;
+            }
+            case 'meeting_transcription': {
+                const data = signal.data as MeetingTranscriptionData;
+                if (data.transcriptionText && data.transcriptionText.trim().length > 0) {
+                    context.transcriptionText = data.transcriptionText;
+                    context.transcriptionRecordingCount = data.recordingCount;
+                    context.transcriptionDuration = data.totalDuration;
+                    context.hasData = true;
                 }
                 break;
             }
@@ -802,6 +823,23 @@ Example bad: "Managed notifications while reviewing code changes and checking em
         sections.push(`\nTechnologies detected: ${context.technologies.join(', ')}`);
     }
 
+    // Meeting transcription - valuable context for understanding discussions
+    if (context.transcriptionText && context.transcriptionText.length > 0) {
+        const recordingInfo = context.transcriptionRecordingCount && context.transcriptionRecordingCount > 1
+            ? ` (${context.transcriptionRecordingCount} recordings)`
+            : '';
+        const durationInfo = context.transcriptionDuration
+            ? `, ${Math.round(context.transcriptionDuration / 60)} min audio`
+            : '';
+        sections.push(`\n**MEETING RECORDING TRANSCRIPTION**${recordingInfo}${durationInfo}:`);
+        // Truncate very long transcriptions to avoid token limits (keep first ~2000 chars)
+        const truncatedText = context.transcriptionText.length > 2000
+            ? context.transcriptionText.substring(0, 2000) + '... [truncated]'
+            : context.transcriptionText;
+        sections.push(truncatedText);
+        sections.push(`\n→ IMPORTANT: If transcription contains meeting discussion, the timesheet entry should reflect the meeting topic/outcome, not just screen activities.`);
+    }
+
     // Session duration
     if (duration && duration > 0) {
         const minutes = Math.round(duration / 60000);
@@ -869,8 +907,13 @@ function isPeripheralWindowTitle(title: string): boolean {
 function generateFallbackFromSignals(context: AggregatedContext): string {
     const parts: string[] = [];
 
+    // If we have meeting transcription, prioritize it
+    if (context.transcriptionText && context.transcriptionRecordingCount && context.transcriptionRecordingCount > 0) {
+        const recordingWord = context.transcriptionRecordingCount > 1 ? 'recordings' : 'recording';
+        parts.push(`Meeting with ${context.transcriptionRecordingCount} audio ${recordingWord}`);
+    }
     // If we have screenshot descriptions, summarize count
-    if (context.screenshotDescriptions.length > 0) {
+    else if (context.screenshotDescriptions.length > 0) {
         parts.push(`Completed ${context.screenshotDescriptions.length} activities`);
     }
 

@@ -30,6 +30,7 @@ import {
     UserProfileSignal,
     HistoricalPatternsSignal,
     JiraContextSignal,
+    MeetingTranscriptionSignal,
     // Helper functions
     createScreenshotSignal,
     createWindowActivitySignal,
@@ -38,7 +39,8 @@ import {
     createTimeContextSignal,
     createTechnologiesSignal,
     createHistoricalPatternsSignal,
-    createJiraContextSignal
+    createJiraContextSignal,
+    createMeetingTranscriptionSignal
 } from './contextSignals.js';
 
 /**
@@ -176,6 +178,26 @@ class SignalAggregatorService {
     ): void {
         if (issueKey) {
             this.addSignal(entryId, createJiraContextSignal(issueKey, issueSummary, issueType, projectKey));
+        }
+    }
+
+    /**
+     * Set meeting transcription signal for an entry
+     */
+    setMeetingTranscription(
+        entryId: string,
+        transcriptionText: string,
+        recordingCount: number,
+        totalDuration: number,
+        languages: string[]
+    ): void {
+        if (transcriptionText && transcriptionText.trim().length > 0) {
+            this.addSignal(entryId, createMeetingTranscriptionSignal(
+                transcriptionText,
+                recordingCount,
+                totalDuration,
+                languages
+            ));
         }
     }
 

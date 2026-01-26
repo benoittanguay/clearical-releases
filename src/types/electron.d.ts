@@ -147,6 +147,11 @@ export interface ElectronAPI {
             startTime: number;
             endTime: number;
             userRole?: string;
+            transcriptions?: Array<{
+                text: string;
+                duration: number;
+                language: string;
+            }>;
         }) => Promise<{
             success: boolean;
             summary?: string;

@@ -883,6 +883,13 @@ class AIService {
                     if (data.currentEvent) currentEvent = data.currentEvent;
                     break;
                 }
+                case 'meeting_transcription': {
+                    const data = signal.data as { transcriptionText: string; recordingCount: number };
+                    if (data.transcriptionText && data.recordingCount > 0) {
+                        parts.push(`with ${data.recordingCount} meeting recording${data.recordingCount > 1 ? 's' : ''}`);
+                    }
+                    break;
+                }
             }
         }
 

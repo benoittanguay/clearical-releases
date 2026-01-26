@@ -29,10 +29,16 @@ contextBridge.exposeInMainWorld('electron', {
             screenshotDescriptions: string[];
             windowTitles: string[];
             appNames: string[];
+            appDurations?: Record<string, number>;
             duration: number;
             startTime: number;
             endTime: number;
             userRole?: string;
+            transcriptions?: Array<{
+                text: string;
+                duration: number;
+                language: string;
+            }>;
         }) => ipcRenderer.invoke('generate-activity-summary', context),
         analyzeSplits: (activityData: {
             id: string;

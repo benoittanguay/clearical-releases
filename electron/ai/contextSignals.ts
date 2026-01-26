@@ -31,6 +31,7 @@ export type ContextSignalType =
     | 'screenshot_analysis'    // AI-analyzed screenshot descriptions
     | 'window_activity'        // App names and window titles
     | 'detected_technologies'  // Technologies detected in activities
+    | 'meeting_transcription'  // Meeting recording transcriptions
     // TEMPORAL category - time-based context
     | 'calendar_events'        // Calendar context (current, recent, upcoming)
     | 'time_context'           // Time of day, day of week patterns
@@ -54,6 +55,7 @@ export const SIGNAL_CATEGORY_MAP: Record<ContextSignalType, SignalCategory> = {
     'screenshot_analysis': 'activity',
     'window_activity': 'activity',
     'detected_technologies': 'activity',
+    'meeting_transcription': 'activity',
     // TEMPORAL category
     'calendar_events': 'temporal',
     'time_context': 'temporal',
@@ -132,6 +134,24 @@ export interface DetectedTechnologiesSignal extends ContextSignal {
         technologies: string[];
         frameworks?: string[];
         languages?: string[];
+    };
+}
+
+/**
+ * Meeting transcription signal (ACTIVITY category)
+ */
+export interface MeetingTranscriptionSignal extends ContextSignal {
+    type: 'meeting_transcription';
+    category: 'activity';
+    data: {
+        /** Combined transcription text from all recordings */
+        transcriptionText: string;
+        /** Number of recording sessions */
+        recordingCount: number;
+        /** Total audio duration in seconds */
+        totalDuration: number;
+        /** Detected languages (ISO 639-1 codes) */
+        languages: string[];
     };
 }
 
@@ -222,6 +242,7 @@ export type AnyContextSignal =
     | ScreenshotAnalysisSignal
     | WindowActivitySignal
     | DetectedTechnologiesSignal
+    | MeetingTranscriptionSignal
     | CalendarEventsSignal
     | TimeContextSignal
     | UserProfileSignal
@@ -348,6 +369,30 @@ export function createTechnologiesSignal(
             technologies: [...new Set(technologies)],
             frameworks: frameworks ? [...new Set(frameworks)] : undefined,
             languages: languages ? [...new Set(languages)] : undefined
+        }
+    };
+}
+
+/**
+ * Helper function to create a meeting transcription signal
+ */
+export function createMeetingTranscriptionSignal(
+    transcriptionText: string,
+    recordingCount: number,
+    totalDuration: number,
+    languages: string[]
+): MeetingTranscriptionSignal {
+    return {
+        type: 'meeting_transcription',
+        category: 'activity',
+        source: 'audio_recording',
+        confidence: 'high',
+        timestamp: Date.now(),
+        data: {
+            transcriptionText,
+            recordingCount,
+            totalDuration,
+            languages: [...new Set(languages)]
         }
     };
 }
@@ -544,6 +589,9 @@ export function hasSignalData(signals: AnyContextSignal[]): boolean {
             case 'jira_context':
                 const jc = signal.data as JiraContextSignal['data'];
                 return !!jc.issueKey;
+            case 'meeting_transcription':
+                const mt = signal.data as MeetingTranscriptionSignal['data'];
+                return mt.transcriptionText.length > 0;
             default:
                 return signal.data !== null && signal.data !== undefined;
         }
@@ -597,6 +645,11 @@ export function getSignalSummary(signals: AnyContextSignal[]): Record<string, nu
             case 'jira_context':
                 const jc = signal.data as JiraContextSignal['data'];
                 if (jc.issueKey) summary['jira'] = jc.issueKey;
+                break;
+            case 'meeting_transcription':
+                const mt = signal.data as MeetingTranscriptionSignal['data'];
+                summary['transcriptions'] = mt.recordingCount;
+                summary['transcription_duration'] = `${Math.round(mt.totalDuration)}s`;
                 break;
         }
     }

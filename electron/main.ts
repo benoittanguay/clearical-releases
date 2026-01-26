@@ -2390,12 +2390,18 @@ ipcMain.handle('generate-activity-summary', async (event, context: {
     startTime: number;
     endTime: number;
     userRole?: string;  // Optional user role for domain context
+    transcriptions?: Array<{  // Meeting recording transcriptions
+        text: string;
+        duration: number;
+        language: string;
+    }>;
 }) => {
     console.log('[Main] generate-activity-summary requested for entry:', context.entryId);
     console.log('[Main] Screenshot descriptions:', context.screenshotDescriptions.length);
     console.log('[Main] Window titles:', context.windowTitles?.length || 0);
     console.log('[Main] App names:', context.appNames);
     console.log('[Main] App durations:', context.appDurations);
+    console.log('[Main] Transcriptions:', context.transcriptions?.length || 0);
 
     try {
         // Use signal aggregator to collect and store signals for this entry
@@ -2415,6 +2421,33 @@ ipcMain.handle('generate-activity-summary', async (event, context: {
                 context.windowTitles || [],
                 context.appDurations  // Pass app durations for primary task identification
             );
+        }
+
+        // ACTIVITY signals: Meeting transcriptions
+        if (context.transcriptions && context.transcriptions.length > 0) {
+            // Combine all transcription texts
+            const combinedText = context.transcriptions
+                .map(t => t.text)
+                .filter(text => text && text.trim())
+                .join('\n\n---\n\n');
+
+            const totalDuration = context.transcriptions.reduce((sum, t) => sum + (t.duration || 0), 0);
+            const languages = [...new Set(context.transcriptions.map(t => t.language).filter(Boolean))];
+
+            if (combinedText.trim()) {
+                signalAggregator.setMeetingTranscription(
+                    context.entryId,
+                    combinedText,
+                    context.transcriptions.length,
+                    totalDuration,
+                    languages
+                );
+                console.log('[Main] Added meeting transcription signal:', {
+                    recordingCount: context.transcriptions.length,
+                    totalDuration,
+                    textLength: combinedText.length
+                });
+            }
         }
 
         // TEMPORAL signals: Calendar events

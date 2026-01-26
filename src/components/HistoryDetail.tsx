@@ -1197,6 +1197,30 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                 }
             });
 
+            // Collect transcriptions from meeting recordings
+            const transcriptions: Array<{ text: string; duration: number; language: string }> = [];
+
+            // Collect from transcriptions array (new format - multiple recordings)
+            if (entry.transcriptions && entry.transcriptions.length > 0) {
+                entry.transcriptions.forEach(t => {
+                    if (t.fullText && t.fullText.trim()) {
+                        transcriptions.push({
+                            text: t.fullText,
+                            duration: t.audioDuration || 0,
+                            language: t.language || 'en'
+                        });
+                    }
+                });
+            }
+            // Also check legacy single transcription field
+            else if (entry.transcription?.fullText) {
+                transcriptions.push({
+                    text: entry.transcription.fullText,
+                    duration: entry.transcription?.audioDuration || 0,
+                    language: entry.transcription?.language || 'en'
+                });
+            }
+
             // Call the IPC handler to generate summary
             // The signal aggregator will collect signals and filter by task type
             // @ts-ignore
@@ -1208,7 +1232,8 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                 appDurations,  // Time spent per app for weighting primary task
                 duration: entry.duration,
                 startTime: entry.startTime,
-                endTime: entry.endTime
+                endTime: entry.endTime,
+                transcriptions: transcriptions.length > 0 ? transcriptions : undefined
             });
 
             if (result?.success && result.summary) {
