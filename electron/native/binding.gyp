@@ -8,6 +8,7 @@
         "src/media_monitor.mm",
         "src/system_audio_capture.mm",
         "src/mic_capture.mm",
+        "src/speech_transcriber.mm",
         "src/index.mm"
       ],
       "include_dirs": [
@@ -31,7 +32,9 @@
               "-framework Foundation",
               "-framework ScreenCaptureKit",
               "-framework CoreMedia",
-              "-framework Accelerate"
+              "-framework Accelerate",
+              "-framework Speech",
+              "-framework AudioToolbox"
             ]
           }
         }]

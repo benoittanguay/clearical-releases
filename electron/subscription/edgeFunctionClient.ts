@@ -254,6 +254,76 @@ export class EdgeFunctionClient {
     }
 
     /**
+     * Get transcription usage for the current month
+     * Used to track Groq usage for premium users (20hr limit before Apple fallback)
+     *
+     * @returns Usage info with monthlyUsedSeconds, or null if unavailable
+     */
+    async getTranscriptionUsage(): Promise<{
+        monthlyUsedSeconds: number;
+        monthlyLimitSeconds: number;
+        remainingSeconds: number;
+    } | null> {
+        console.log('[EdgeFunctionClient] Getting transcription usage');
+
+        try {
+            const authService = getAuthService();
+            const session = await authService.getSession();
+
+            if (!session) {
+                console.log('[EdgeFunctionClient] No active session for usage query');
+                return null;
+            }
+
+            // Get start of current month (UTC)
+            const now = new Date();
+            const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+
+            // Query transcription_usage table for this month
+            const response = await fetch(
+                `${this.config.supabase.url}/rest/v1/transcription_usage?user_id=eq.${session.user.id}&created_at=gte.${monthStart.toISOString()}&select=duration_seconds`,
+                {
+                    headers: {
+                        'apikey': this.config.supabase.anonKey,
+                        'Authorization': `Bearer ${session.accessToken}`,
+                    },
+                }
+            );
+
+            if (!response.ok) {
+                console.error('[EdgeFunctionClient] Failed to get transcription usage:', response.status);
+                return null;
+            }
+
+            const usageRecords = await response.json() as Array<{ duration_seconds: number }>;
+            const monthlyUsedSeconds = usageRecords.reduce((sum, record) => sum + (record.duration_seconds || 0), 0);
+
+            // Get subscription status to determine limit
+            const subscriptionStatus = await this.getSubscriptionStatus();
+            const isPremium = subscriptionStatus?.status === 'active' || subscriptionStatus?.status === 'trialing';
+
+            // Limits: Free = 8hrs, Premium = 20hrs (for Groq)
+            const monthlyLimitSeconds = isPremium ? 20 * 60 * 60 : 8 * 60 * 60;
+            const remainingSeconds = Math.max(0, monthlyLimitSeconds - monthlyUsedSeconds);
+
+            console.log('[EdgeFunctionClient] Transcription usage:', {
+                usedHours: Math.round(monthlyUsedSeconds / 3600 * 10) / 10,
+                limitHours: monthlyLimitSeconds / 3600,
+                remainingHours: Math.round(remainingSeconds / 3600 * 10) / 10,
+            });
+
+            return {
+                monthlyUsedSeconds,
+                monthlyLimitSeconds,
+                remainingSeconds,
+            };
+        } catch (error) {
+            console.error('[EdgeFunctionClient] Error getting transcription usage:', error);
+            return null;
+        }
+    }
+
+    /**
      * Update the user's app version in their Supabase profile.
      * Called on login/app start to track which version each user is running.
      *

@@ -22,8 +22,10 @@ import { corsHeaders } from '../_shared/cors.ts';
 import { createSupabaseClient, supabaseAdmin, extractToken } from '../_shared/supabase.ts';
 
 // Usage limits (seconds per month)
-const MONTHLY_LIMIT_FREE_SECONDS = 10 * 60 * 60; // 10 hours = 36000 seconds
-const MONTHLY_LIMIT_PREMIUM_SECONDS = -1; // -1 = unlimited
+// Free users: 8 hours/month (Groq fallback when Apple unavailable)
+// Premium/Trial: 20 hours/month Groq, then unlimited Apple on-device
+const MONTHLY_LIMIT_FREE_SECONDS = 8 * 60 * 60; // 8 hours = 28800 seconds
+const MONTHLY_LIMIT_PREMIUM_SECONDS = 20 * 60 * 60; // 20 hours = 72000 seconds
 
 // Groq API configuration
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/audio/transcriptions';
@@ -110,10 +112,16 @@ serve(async (req) => {
         // Check monthly usage limit
         const usageCheck = await checkMonthlyUsage(user.id, isPremium);
         if (!usageCheck.allowed) {
+            const limitHours = Math.round(usageCheck.limitSeconds / 3600);
+            const errorMessage = isPremium
+                ? `Monthly Groq transcription limit (${limitHours} hours) exceeded. Transcription will continue using on-device Apple Speech.`
+                : `Monthly transcription limit (${limitHours} hours) exceeded. Upgrade to premium for more transcription hours.`;
+
             return new Response(
                 JSON.stringify({
                     success: false,
-                    error: `Monthly transcription limit exceeded. Free tier limit: ${Math.round(MONTHLY_LIMIT_FREE_SECONDS / 3600)} hours/month. Upgrade to premium for unlimited transcription.`,
+                    error: errorMessage,
+                    quotaExceeded: true, // Signal to client to use Apple fallback
                     usage: {
                         durationSeconds: 0,
                         monthlyUsedSeconds: usageCheck.usedSeconds,
@@ -301,7 +309,11 @@ function getExtension(mimeType: string): string {
 }
 
 /**
- * Check if user is within monthly usage limits
+ * Check if user is within monthly Groq usage limits
+ *
+ * Limits:
+ * - Free users: 8 hours/month (Groq fallback when Apple unavailable)
+ * - Premium/Trial: 20 hours/month Groq, then switch to Apple on-device
  */
 async function checkMonthlyUsage(userId: string, isPremium: boolean): Promise<{
     allowed: boolean;
@@ -309,11 +321,6 @@ async function checkMonthlyUsage(userId: string, isPremium: boolean): Promise<{
     limitSeconds: number;
 }> {
     const limitSeconds = isPremium ? MONTHLY_LIMIT_PREMIUM_SECONDS : MONTHLY_LIMIT_FREE_SECONDS;
-
-    // Premium users have unlimited usage
-    if (limitSeconds < 0) {
-        return { allowed: true, usedSeconds: 0, limitSeconds };
-    }
 
     // Get start of current month (UTC)
     const now = new Date();

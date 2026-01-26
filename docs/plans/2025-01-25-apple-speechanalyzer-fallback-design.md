@@ -1,25 +1,30 @@
 # Apple SpeechAnalyzer Fallback for Transcription
 
 **Date:** 2025-01-25
-**Status:** Draft
+**Status:** Implementing
 
 ## Overview
 
-Add Apple's on-device SpeechAnalyzer API as the primary transcription engine for free-tier users, with Groq Whisper as a fallback when Apple's API is unavailable.
+Add Apple's on-device Speech Recognition as a fallback/primary transcription engine based on user tier and usage quotas.
 
 ## User Tiers & Transcription Logic
 
-| Tier | Primary Engine | Fallback | Limit |
-|------|---------------|----------|-------|
-| Free | Apple SpeechAnalyzer | Groq (if Apple unavailable) | 10hr/month on Groq |
-| Premium/Trial | Groq Whisper Large v3 Turbo | - | Unlimited |
+| Tier | Primary Engine | Fallback | Monthly Limit |
+|------|---------------|----------|---------------|
+| Free | Apple on-device | Groq (if Apple unavailable) | 8 hrs/month |
+| Premium/Trial | Groq (first 20 hrs) | Apple on-device (after 20 hrs) | 20 hrs Groq + unlimited Apple |
 
-### When Apple SpeechAnalyzer is unavailable:
-- macOS < 16.0 (Tahoe)
-- Intel Macs (no Apple Silicon)
-- API failure/crash
+### Routing Logic:
 
-In these cases, free-tier users fall back to Groq with the existing 10hr/month cap.
+**Free users:**
+- Use Apple Speech Recognition (on-device)
+- 8 hours/month limit
+- If Apple unavailable (macOS < 10.15, Intel Mac): Fall back to Groq with same 8hr limit
+
+**Premium/Trial users:**
+- First 20 hours: Groq Whisper Large v3 Turbo (best quality)
+- After 20 hours: Apple on-device (unlimited)
+- If Apple unavailable: Continue with Groq (no hard cutoff)
 
 ## Architecture
 
@@ -28,10 +33,14 @@ In these cases, free-tier users fall back to Groq with the existing 10hr/month c
 │                   TranscriptionService                       │
 ├─────────────────────────────────────────────────────────────┤
 │  transcribe(audio, entryId)                                 │
-│    ├─ isPremium? ──────────────────────► GroqTranscriber    │
-│    └─ isFree?                                               │
-│         ├─ isAppleAvailable? ──────────► AppleTranscriber   │
-│         └─ else (fallback) ────────────► GroqTranscriber    │
+│    │                                                        │
+│    ├─ isFree?                                               │
+│    │    └─ Apple (8hr/month limit)                          │
+│    │         └─ Groq fallback if Apple unavailable          │
+│    │                                                        │
+│    └─ isPremium/Trial?                                      │
+│         ├─ Groq quota remaining? ──► Groq (track usage)     │
+│         └─ Groq quota exceeded? ───► Apple (unlimited)      │
 └─────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────┐     ┌─────────────────────┐
@@ -39,93 +48,85 @@ In these cases, free-tier users fall back to Groq with the existing 10hr/month c
 │  (native module)    │     │  (edge function)    │
 ├─────────────────────┤     ├─────────────────────┤
 │ - On-device         │     │ - Cloud-based       │
-│ - macOS 16+ only    │     │ - Any platform      │
-│ - Apple Silicon     │     │ - Higher quality    │
-│ - Free              │     │ - ~$0.04/hr         │
+│ - macOS 10.15+      │     │ - Any platform      │
+│ - Free              │     │ - Higher quality    │
+│ - Unlimited (after  │     │ - ~$0.04/hr         │
+│   Groq quota)       │     │ - 20hr premium cap  │
 └─────────────────────┘     └─────────────────────┘
 ```
 
 ## Implementation Components
 
-### 1. Native Module Extension (`electron/native/`)
-
-Add SpeechAnalyzer wrapper to existing `media_monitor` native module:
+### 1. Native Module (`electron/native/`)
 
 **New files:**
 - `src/speech_transcriber.h` - Header with N-API bindings
-- `src/speech_transcriber.mm` - Objective-C++ implementation
+- `src/speech_transcriber.mm` - Objective-C++ implementation using SFSpeechRecognizer
 
-**Capabilities to expose:**
-- `isAvailable()` - Check if SpeechAnalyzer is available (macOS 16+, Apple Silicon)
-- `transcribe(audioBuffer, language?)` - Transcribe audio, return text + segments
-- `getSupportedLanguages()` - List available languages
+**Exported functions:**
+- `isSpeechTranscriptionAvailable()` - Check if Apple Speech is available
+- `getSupportedTranscriptionLanguages()` - List available languages
+- `transcribeAudioFile(filePath, language?)` - Transcribe from file
+- `transcribeAudioBuffer(buffer, sampleRate, language?)` - Transcribe from buffer
 
 **Framework linkage (binding.gyp):**
 ```
-"-framework Speech"
+"-framework Speech",
+"-framework AudioToolbox"
 ```
 
 ### 2. TypeScript Service Layer (`electron/meeting/`)
 
-**Modify:** `transcriptionService.ts`
-- Add `AppleTranscriber` class that calls native module
-- Update `transcribe()` to route based on tier + availability
-- Emit same events for UI compatibility
+**New file:** `appleTranscriber.ts`
+- Wraps native module
+- Provides same interface as Groq transcriber
+- Handles availability checks
 
-**New:** `appleTranscriber.ts`
+**Modified:** `transcriptionService.ts`
+- Added `shouldUseAppleTranscription()` routing logic
+- Added `groqUsageSeconds` tracking for premium users
+- Added `setPremiumStatus()` and `setGroqUsage()` methods
+- Routes based on tier and quota
+
+### 3. Edge Function (`supabase/functions/groq-transcribe/`)
+
+**Updated limits:**
 ```typescript
-export class AppleTranscriber {
-  static isAvailable(): boolean
-  async transcribe(audioBase64: string, language?: string): Promise<TranscriptionResult>
-}
+const MONTHLY_LIMIT_FREE_SECONDS = 8 * 60 * 60;    // 8 hours
+const MONTHLY_LIMIT_PREMIUM_SECONDS = 20 * 60 * 60; // 20 hours
 ```
 
-### 3. Native Module TypeScript Types
-
-**Modify:** `src/types/electron.d.ts`
-- Add `speechTranscriber` to native module types
+**New response field:**
+- `quotaExceeded: true` - Signals client to use Apple fallback
 
 ## Data Flow
 
-### Free-tier user (Apple available):
+### Premium user (within Groq quota):
 ```
-Audio Buffer
-    │
-    ▼
-TranscriptionService.transcribe()
-    │
-    ├─ Check: isPremium? → No
-    ├─ Check: AppleTranscriber.isAvailable()? → Yes
-    │
-    ▼
-AppleTranscriber.transcribe()
-    │
-    ▼
-Native Module (speech_transcriber.mm)
-    │
-    ▼
-SpeechAnalyzer Framework (on-device)
-    │
-    ▼
-TranscriptionResult { text, segments, language, duration }
+Audio → TranscriptionService
+         ├─ isPremium? Yes
+         ├─ Groq quota remaining? Yes
+         └─ GroqTranscriber → Edge Function → Groq API
+              └─ Track usage in DB
+              └─ Return result
 ```
 
-### Free-tier user (Apple NOT available):
+### Premium user (Groq quota exceeded):
 ```
-Audio Buffer
-    │
-    ▼
-TranscriptionService.transcribe()
-    │
-    ├─ Check: isPremium? → No
-    ├─ Check: AppleTranscriber.isAvailable()? → No
-    ├─ Check: monthlyUsage < 10hr? → Yes
-    │
-    ▼
-GroqTranscriber (existing flow via Edge Function)
-    │
-    ▼
-TranscriptionResult
+Audio → TranscriptionService
+         ├─ isPremium? Yes
+         ├─ Groq quota remaining? No
+         └─ AppleTranscriber → Native Module → SFSpeechRecognizer
+              └─ Return result (no quota tracking)
+```
+
+### Free user:
+```
+Audio → TranscriptionService
+         ├─ isPremium? No
+         └─ AppleTranscriber → Native Module → SFSpeechRecognizer
+              └─ Check 8hr limit (local)
+              └─ Return result
 ```
 
 ## API Compatibility
@@ -143,29 +144,14 @@ interface TranscriptionResult {
   wordCount: number;
   error?: string;
 }
-
-interface TranscriptionSegment {
-  id: number;
-  start: number;  // seconds
-  end: number;    // seconds
-  text: string;
-}
 ```
-
-## Error Handling
-
-| Scenario | Behavior |
-|----------|----------|
-| Apple transcription fails mid-process | Return error, do NOT fall back to Groq (avoid double-billing risk) |
-| Apple not available at start | Fall back to Groq (with limit check) |
-| Groq limit exceeded | Return error with upgrade prompt |
-| Network error (Groq) | Return error, suggest retry |
 
 ## DMG Size Impact
 
 | Component | Size |
 |-----------|------|
 | Speech.framework | 0 MB (system) |
+| AudioToolbox.framework | 0 MB (system) |
 | Native module code | ~50-100 KB |
 | **Total** | **< 0.1 MB** |
 
@@ -173,34 +159,27 @@ Current DMG: 217 MB → New DMG: ~217 MB (negligible increase)
 
 ## Runtime Requirements
 
-- **Apple SpeechAnalyzer:** macOS 16.0+ (Tahoe), Apple Silicon
-- **Groq fallback:** Any macOS with internet
+- **Apple Speech:** macOS 10.15+ (Catalina), any processor
+- **On-device recognition:** macOS 13+ (Ventura) for best performance
+- **Groq:** Any macOS with internet
 
-## Testing Plan
+## Files Modified/Created
 
-1. **Unit tests:** Mock native module, test routing logic
-2. **Integration tests:**
-   - Transcribe sample audio with Apple
-   - Verify fallback triggers on simulated unavailability
-3. **Manual testing:**
-   - Test on macOS 16 (Apple path)
-   - Test on macOS 14 (Groq fallback path)
-
-## Migration Notes
-
-- Existing premium users: No change
-- Existing free users on macOS 16+: Automatic upgrade to on-device
-- Existing free users on older macOS: Continue using Groq with limits
-
-## Files to Modify/Create
-
-**Create:**
+**Created:**
 - `electron/native/src/speech_transcriber.h`
 - `electron/native/src/speech_transcriber.mm`
 - `electron/meeting/appleTranscriber.ts`
 
-**Modify:**
-- `electron/native/binding.gyp` - Add Speech framework
+**Modified:**
+- `electron/native/binding.gyp` - Added Speech, AudioToolbox frameworks
 - `electron/native/src/index.mm` - Export new functions
-- `electron/meeting/transcriptionService.ts` - Add routing logic
-- `src/types/electron.d.ts` - Add types
+- `electron/meeting/transcriptionService.ts` - Routing logic
+- `electron/auth/ipcHandlers.ts` - Premium status updates
+- `supabase/functions/groq-transcribe/index.ts` - New limits
+
+## Migration Notes
+
+- Free users: Now use Apple on-device (8hr/month)
+- Premium users: Get 20hrs Groq then unlimited Apple
+- Existing usage tracking continues to work
+- No database migrations needed

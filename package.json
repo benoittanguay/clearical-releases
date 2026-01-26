@@ -107,7 +107,8 @@
       ],
       "notarize": true,
       "extendInfo": {
-        "NSMicrophoneUsageDescription": "Clearical needs microphone access to record and transcribe meetings when you're in a video call."
+        "NSMicrophoneUsageDescription": "Clearical needs microphone access to record and transcribe meetings when you're in a video call.",
+        "NSSpeechRecognitionUsageDescription": "Clearical uses on-device speech recognition to transcribe your meeting recordings."
       }
     },
     "dmg": {
@@ -178,6 +179,7 @@
       "extendInfo": {
         "NSMicrophoneUsageDescription": "Clearical needs microphone access to record and transcribe meetings when you're in a video call.",
         "NSScreenCaptureUsageDescription": "Clearical needs screen recording permission to capture what you're working on and generate activity descriptions.",
+        "NSSpeechRecognitionUsageDescription": "Clearical uses on-device speech recognition to transcribe your meeting recordings.",
         "ITSAppUsesNonExemptEncryption": false
       }
     },

@@ -195,6 +195,11 @@ export const MEETING_IPC_CHANNELS = {
     EVENT_RECORDING_SHOULD_STOP: 'meeting:event-recording-should-stop',
     // Audio levels from renderer to widget
     SEND_AUDIO_LEVELS: 'meeting:send-audio-levels',
+    // Prompt mode for when meeting detected but no timer running
+    REQUEST_START_TIMER: 'meeting:request-start-timer',   // Main→Renderer: ask to start timer
+    PROMPT_ACCEPTED: 'meeting:prompt-accepted',            // Widget→Main: user clicked "Yes"
+    PROMPT_DISMISSED: 'meeting:prompt-dismissed',          // Widget→Main: user clicked "Dismiss"
+    SHOW_PROMPT: 'meeting:show-prompt',                    // Main→Widget: show prompt UI
 } as const;
 
 /**

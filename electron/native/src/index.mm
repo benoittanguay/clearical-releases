@@ -4,6 +4,7 @@
 #include "media_monitor.h"
 #include "system_audio_capture.h"
 #include "mic_capture.h"
+#include "speech_transcriber.h"
 
 // Store reference to JS callback function for media state
 static Napi::ThreadSafeFunction tsfn;
@@ -480,6 +481,145 @@ Napi::Value IsMicCapturing(const Napi::CallbackInfo& info) {
     return Napi::Boolean::New(env, [capture isCapturing]);
 }
 
+// Speech Transcription functions
+
+Napi::Value IsSpeechTranscriptionAvailable(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    return Napi::Boolean::New(env, [SpeechTranscriberWrapper isAvailable]);
+}
+
+Napi::Value GetSupportedTranscriptionLanguages(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+
+    NSArray<NSString *> *languages = [SpeechTranscriberWrapper supportedLanguages];
+    Napi::Array result = Napi::Array::New(env, languages.count);
+
+    for (NSUInteger i = 0; i < languages.count; i++) {
+        result.Set(i, Napi::String::New(env, [languages[i] UTF8String]));
+    }
+
+    return result;
+}
+
+Napi::Value TranscribeAudioFile(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+
+    if (info.Length() < 1 || !info[0].IsString()) {
+        Napi::TypeError::New(env, "File path string required").ThrowAsJavaScriptException();
+        return env.Null();
+    }
+
+    std::string filePath = info[0].As<Napi::String>().Utf8Value();
+    std::string language = "";
+
+    if (info.Length() >= 2 && info[1].IsString()) {
+        language = info[1].As<Napi::String>().Utf8Value();
+    }
+
+    NSString *nsFilePath = [NSString stringWithUTF8String:filePath.c_str()];
+    NSString *nsLanguage = language.empty() ? nil : [NSString stringWithUTF8String:language.c_str()];
+
+    NSLog(@"[SpeechTranscriber] TranscribeAudioFile called: %@, language: %@", nsFilePath, nsLanguage ?: @"auto");
+
+    TranscriptionResult *result = [SpeechTranscriberWrapper transcribeFile:nsFilePath language:nsLanguage];
+
+    Napi::Object resultObj = Napi::Object::New(env);
+    resultObj.Set("success", Napi::Boolean::New(env, result.success));
+
+    if (result.success) {
+        resultObj.Set("text", Napi::String::New(env, result.text ? [result.text UTF8String] : ""));
+        resultObj.Set("language", Napi::String::New(env, result.language ? [result.language UTF8String] : ""));
+        resultObj.Set("duration", Napi::Number::New(env, result.duration));
+
+        // Convert segments
+        Napi::Array segmentsArray = Napi::Array::New(env, result.segments.count);
+        for (NSUInteger i = 0; i < result.segments.count; i++) {
+            TranscriptionSegment *seg = result.segments[i];
+            Napi::Object segObj = Napi::Object::New(env);
+            segObj.Set("id", Napi::Number::New(env, seg.segmentId));
+            segObj.Set("start", Napi::Number::New(env, seg.startTime));
+            segObj.Set("end", Napi::Number::New(env, seg.endTime));
+            segObj.Set("text", Napi::String::New(env, seg.text ? [seg.text UTF8String] : ""));
+            segmentsArray.Set(i, segObj);
+        }
+        resultObj.Set("segments", segmentsArray);
+    } else {
+        resultObj.Set("error", Napi::String::New(env, result.error ? [result.error UTF8String] : "Unknown error"));
+    }
+
+    return resultObj;
+}
+
+Napi::Value TranscribeAudioBuffer(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+
+    if (info.Length() < 2) {
+        Napi::TypeError::New(env, "Audio buffer and sample rate required").ThrowAsJavaScriptException();
+        return env.Null();
+    }
+
+    // Get audio data - can be Float32Array or ArrayBuffer
+    NSData *audioData;
+    if (info[0].IsTypedArray()) {
+        Napi::Float32Array typedArray = info[0].As<Napi::Float32Array>();
+        size_t byteLength = typedArray.ByteLength();
+        audioData = [NSData dataWithBytes:typedArray.Data() length:byteLength];
+    } else if (info[0].IsArrayBuffer()) {
+        Napi::ArrayBuffer arrayBuffer = info[0].As<Napi::ArrayBuffer>();
+        audioData = [NSData dataWithBytes:arrayBuffer.Data() length:arrayBuffer.ByteLength()];
+    } else {
+        Napi::TypeError::New(env, "First argument must be Float32Array or ArrayBuffer").ThrowAsJavaScriptException();
+        return env.Null();
+    }
+
+    if (!info[1].IsNumber()) {
+        Napi::TypeError::New(env, "Sample rate must be a number").ThrowAsJavaScriptException();
+        return env.Null();
+    }
+
+    double sampleRate = info[1].As<Napi::Number>().DoubleValue();
+
+    std::string language = "";
+    if (info.Length() >= 3 && info[2].IsString()) {
+        language = info[2].As<Napi::String>().Utf8Value();
+    }
+
+    NSString *nsLanguage = language.empty() ? nil : [NSString stringWithUTF8String:language.c_str()];
+
+    NSLog(@"[SpeechTranscriber] TranscribeAudioBuffer called: %lu bytes, sampleRate: %.0f, language: %@",
+          (unsigned long)audioData.length, sampleRate, nsLanguage ?: @"auto");
+
+    TranscriptionResult *result = [SpeechTranscriberWrapper transcribeAudioData:audioData
+                                                                     sampleRate:sampleRate
+                                                                       language:nsLanguage];
+
+    Napi::Object resultObj = Napi::Object::New(env);
+    resultObj.Set("success", Napi::Boolean::New(env, result.success));
+
+    if (result.success) {
+        resultObj.Set("text", Napi::String::New(env, result.text ? [result.text UTF8String] : ""));
+        resultObj.Set("language", Napi::String::New(env, result.language ? [result.language UTF8String] : ""));
+        resultObj.Set("duration", Napi::Number::New(env, result.duration));
+
+        // Convert segments
+        Napi::Array segmentsArray = Napi::Array::New(env, result.segments.count);
+        for (NSUInteger i = 0; i < result.segments.count; i++) {
+            TranscriptionSegment *seg = result.segments[i];
+            Napi::Object segObj = Napi::Object::New(env);
+            segObj.Set("id", Napi::Number::New(env, seg.segmentId));
+            segObj.Set("start", Napi::Number::New(env, seg.startTime));
+            segObj.Set("end", Napi::Number::New(env, seg.endTime));
+            segObj.Set("text", Napi::String::New(env, seg.text ? [seg.text UTF8String] : ""));
+            segmentsArray.Set(i, segObj);
+        }
+        resultObj.Set("segments", segmentsArray);
+    } else {
+        resultObj.Set("error", Napi::String::New(env, result.error ? [result.error UTF8String] : "Unknown error"));
+    }
+
+    return resultObj;
+}
+
 Napi::Object Init(Napi::Env env, Napi::Object exports) {
     // Media monitoring
     exports.Set("start", Napi::Function::New(env, Start));
@@ -503,6 +643,12 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
     exports.Set("startMicCapture", Napi::Function::New(env, StartMicCapture));
     exports.Set("stopMicCapture", Napi::Function::New(env, StopMicCapture));
     exports.Set("isMicCapturing", Napi::Function::New(env, IsMicCapturing));
+
+    // Speech transcription (Apple on-device)
+    exports.Set("isSpeechTranscriptionAvailable", Napi::Function::New(env, IsSpeechTranscriptionAvailable));
+    exports.Set("getSupportedTranscriptionLanguages", Napi::Function::New(env, GetSupportedTranscriptionLanguages));
+    exports.Set("transcribeAudioFile", Napi::Function::New(env, TranscribeAudioFile));
+    exports.Set("transcribeAudioBuffer", Napi::Function::New(env, TranscribeAudioBuffer));
 
     return exports;
 }

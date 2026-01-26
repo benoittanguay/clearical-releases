@@ -1,8 +1,10 @@
 /**
  * Transcription Service
  *
- * Sends audio to the Groq Whisper API via Supabase Edge Function
- * and returns transcription results.
+ * Routes transcription requests based on user tier:
+ * - Premium/Trial users → Groq Whisper (cloud, higher quality)
+ * - Free users → Apple Speech (on-device, free)
+ * - Free users (Apple unavailable) → Groq Whisper (with 10hr/month limit)
  */
 
 import { createClient, SupabaseClient, Session } from '@supabase/supabase-js';
@@ -12,6 +14,7 @@ import * as path from 'path';
 import { TranscriptionResult, TranscriptionSegment, MEETING_EVENTS } from './types.js';
 import { EventEmitter } from 'events';
 import { getConfig } from '../config.js';
+import { getAppleTranscriber } from './appleTranscriber.js';
 
 /**
  * Transcription usage information
@@ -53,6 +56,7 @@ export class TranscriptionService extends EventEmitter {
     private supabase: SupabaseClient | null = null;
     private session: Session | null = null;
     private supabaseUrl: string = '';
+    private isPremium: boolean = false;
 
     private constructor() {
         super();
@@ -94,6 +98,83 @@ export class TranscriptionService extends EventEmitter {
     }
 
     /**
+     * Set the user's premium status
+     * This should be called when the user's subscription status is known
+     */
+    public setPremiumStatus(isPremium: boolean): void {
+        this.isPremium = isPremium;
+        console.log('[TranscriptionService] Premium status set:', isPremium);
+    }
+
+    /**
+     * Groq usage tracking for premium users (20 hour limit before Apple fallback)
+     */
+    private groqUsageSeconds: number = 0;
+    private static readonly PREMIUM_GROQ_LIMIT_SECONDS = 20 * 60 * 60; // 20 hours
+
+    /**
+     * Set the current Groq usage (loaded from database on startup)
+     */
+    public setGroqUsage(usageSeconds: number): void {
+        this.groqUsageSeconds = usageSeconds;
+        console.log('[TranscriptionService] Groq usage set:', Math.round(usageSeconds / 3600 * 10) / 10, 'hours');
+    }
+
+    /**
+     * Add to Groq usage tracking
+     */
+    private addGroqUsage(durationSeconds: number): void {
+        this.groqUsageSeconds += durationSeconds;
+        console.log('[TranscriptionService] Groq usage updated:', Math.round(this.groqUsageSeconds / 3600 * 10) / 10, 'hours');
+    }
+
+    /**
+     * Check if premium user has exceeded Groq quota (20 hours)
+     */
+    private isPremiumGroqQuotaExceeded(): boolean {
+        return this.groqUsageSeconds >= TranscriptionService.PREMIUM_GROQ_LIMIT_SECONDS;
+    }
+
+    /**
+     * Determine which transcription engine to use based on tier and usage
+     *
+     * Logic:
+     * - Free users: Always Apple on-device (with 8hr/month limit enforced elsewhere)
+     * - Premium/Trial users: Groq for first 20 hours, then Apple
+     */
+    private shouldUseAppleTranscription(): boolean {
+        const appleTranscriber = getAppleTranscriber();
+        const appleAvailable = appleTranscriber.isAvailable();
+
+        // Free users: always use Apple (if available)
+        if (!this.isPremium) {
+            if (appleAvailable) {
+                console.log('[TranscriptionService] Using Apple (free user)');
+                return true;
+            }
+            // Apple not available for free user - they can't transcribe
+            console.log('[TranscriptionService] Apple not available for free user');
+            return true; // Will fail gracefully in Apple transcriber
+        }
+
+        // Premium/Trial users: check Groq quota
+        if (this.isPremiumGroqQuotaExceeded()) {
+            if (appleAvailable) {
+                console.log('[TranscriptionService] Using Apple (premium user, Groq quota exceeded)');
+                return true;
+            }
+            // Apple not available but Groq quota exceeded - continue with Groq anyway
+            console.log('[TranscriptionService] Groq quota exceeded but Apple not available, continuing with Groq');
+            return false;
+        }
+
+        // Premium user with Groq quota remaining
+        console.log('[TranscriptionService] Using Groq (premium user, quota remaining:',
+            Math.round((TranscriptionService.PREMIUM_GROQ_LIMIT_SECONDS - this.groqUsageSeconds) / 3600 * 10) / 10, 'hours)');
+        return false;
+    }
+
+    /**
      * Transcribe audio from a file path
      *
      * @param filePath - Path to the audio file
@@ -122,6 +203,12 @@ export class TranscriptionService extends EventEmitter {
             };
         }
 
+        // Route based on user tier
+        if (this.shouldUseAppleTranscription()) {
+            return this.transcribeWithApple(filePath, entryId, language);
+        }
+
+        // Use Groq (premium users or Apple not available)
         const audioBuffer = await fs.promises.readFile(filePath);
         const audioBase64 = audioBuffer.toString('base64');
 
@@ -129,7 +216,51 @@ export class TranscriptionService extends EventEmitter {
         const ext = path.extname(filePath).toLowerCase();
         const mimeType = this.getMimeType(ext);
 
-        return this.transcribe(audioBase64, entryId, mimeType, language);
+        return this.transcribeWithGroq(audioBase64, entryId, mimeType, language);
+    }
+
+    /**
+     * Transcribe using Apple's on-device Speech Recognition
+     */
+    private async transcribeWithApple(
+        filePath: string,
+        entryId: string,
+        language?: string
+    ): Promise<TranscriptionResult> {
+        console.log('[TranscriptionService] Using Apple transcription for:', filePath);
+
+        const appleTranscriber = getAppleTranscriber();
+        const result = await appleTranscriber.transcribeFile(filePath, entryId, language);
+
+        if (result.success) {
+            this.emit(MEETING_EVENTS.TRANSCRIPTION_COMPLETE, {
+                entryId,
+                transcription: result,
+                usage: null, // Apple transcription doesn't have usage tracking
+            });
+        } else {
+            // Apple failed, try Groq as fallback
+            console.warn('[TranscriptionService] Apple transcription failed, falling back to Groq:', result.error);
+
+            // Check if we have session for Groq fallback
+            if (!this.session?.access_token) {
+                this.emit(MEETING_EVENTS.TRANSCRIPTION_ERROR, {
+                    entryId,
+                    error: result.error || 'Apple transcription failed and Groq fallback unavailable (not signed in)',
+                });
+                return result;
+            }
+
+            // Try Groq fallback
+            const audioBuffer = await fs.promises.readFile(filePath);
+            const audioBase64 = audioBuffer.toString('base64');
+            const ext = path.extname(filePath).toLowerCase();
+            const mimeType = this.getMimeType(ext);
+
+            return this.transcribeWithGroq(audioBase64, entryId, mimeType, language);
+        }
+
+        return result;
     }
 
     /**
@@ -148,6 +279,77 @@ export class TranscriptionService extends EventEmitter {
         language?: string
     ): Promise<TranscriptionResult> {
         console.log('[TranscriptionService] Starting transcription for entry:', entryId);
+
+        // Route based on user tier
+        if (this.shouldUseAppleTranscription()) {
+            // Apple needs a file, so save to temp file first
+            return this.transcribeBase64WithApple(audioBase64, entryId, mimeType, language);
+        }
+
+        // Use Groq
+        return this.transcribeWithGroq(audioBase64, entryId, mimeType, language);
+    }
+
+    /**
+     * Transcribe base64 audio using Apple (saves to temp file first)
+     */
+    private async transcribeBase64WithApple(
+        audioBase64: string,
+        entryId: string,
+        mimeType: string,
+        language?: string
+    ): Promise<TranscriptionResult> {
+        // Save to temp file
+        const ext = this.getExtensionFromMimeType(mimeType);
+        const tempDir = app.getPath('temp');
+        const tempFile = path.join(tempDir, `transcribe-${entryId}-${Date.now()}.${ext}`);
+
+        try {
+            const audioBuffer = Buffer.from(audioBase64, 'base64');
+            await fs.promises.writeFile(tempFile, audioBuffer);
+
+            const result = await this.transcribeWithApple(tempFile, entryId, language);
+
+            // Clean up temp file
+            fs.promises.unlink(tempFile).catch(() => {});
+
+            return result;
+        } catch (error) {
+            // Clean up on error
+            fs.promises.unlink(tempFile).catch(() => {});
+
+            console.error('[TranscriptionService] Failed to write temp file for Apple transcription:', error);
+            // Fall back to Groq
+            return this.transcribeWithGroq(audioBase64, entryId, mimeType, language);
+        }
+    }
+
+    /**
+     * Get file extension from MIME type
+     */
+    private getExtensionFromMimeType(mimeType: string): string {
+        const baseMimeType = mimeType.split(';')[0].trim();
+        const mimeToExt: Record<string, string> = {
+            'audio/webm': 'webm',
+            'audio/mp4': 'm4a',
+            'audio/mpeg': 'mp3',
+            'audio/wav': 'wav',
+            'audio/ogg': 'ogg',
+            'audio/flac': 'flac',
+        };
+        return mimeToExt[baseMimeType] || 'webm';
+    }
+
+    /**
+     * Transcribe audio using Groq Whisper API
+     */
+    private async transcribeWithGroq(
+        audioBase64: string,
+        entryId: string,
+        mimeType: string = 'audio/webm',
+        language?: string
+    ): Promise<TranscriptionResult> {
+        console.log('[TranscriptionService] Using Groq transcription for entry:', entryId);
 
         if (!this.supabase) {
             console.error('[TranscriptionService] ERROR: Supabase client not initialized');

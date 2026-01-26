@@ -11,6 +11,7 @@ import { getEdgeFunctionClient } from '../subscription/edgeFunctionClient.js';
 import { getSubscriptionValidator } from '../subscription/ipcHandlers.js';
 import { getCalendarService } from '../calendar/calendarService.js';
 import { getTranscriptionService } from '../meeting/transcriptionService.js';
+import { isPremiumStatus } from '../subscription/types.js';
 
 /**
  * Get the current app version
@@ -28,6 +29,7 @@ function updateTranscriptionSession(authSession: AuthSession | null): void {
 
     if (!authSession) {
         transcriptionService.setSession(null);
+        transcriptionService.setPremiumStatus(false);
         console.log('[Auth] Cleared transcription service session');
         return;
     }
@@ -50,6 +52,43 @@ function updateTranscriptionSession(authSession: AuthSession | null): void {
 
     transcriptionService.setSession(supabaseSession as any);
     console.log('[Auth] Updated transcription service session for user:', authSession.user.email);
+}
+
+/**
+ * Update TranscriptionService with subscription status and Groq usage
+ */
+async function updateTranscriptionPremiumStatus(): Promise<void> {
+    const transcriptionService = getTranscriptionService();
+    const subscriptionValidator = getSubscriptionValidator();
+
+    if (!subscriptionValidator) {
+        transcriptionService.setPremiumStatus(false);
+        return;
+    }
+
+    try {
+        const validationResult = await subscriptionValidator.validate();
+        const premium = isPremiumStatus(validationResult.subscription?.status);
+        transcriptionService.setPremiumStatus(premium);
+
+        // If premium, also fetch Groq usage from edge function
+        if (premium) {
+            try {
+                const edgeClient = getEdgeFunctionClient();
+                const usage = await edgeClient.getTranscriptionUsage();
+                if (usage && typeof usage.monthlyUsedSeconds === 'number') {
+                    transcriptionService.setGroqUsage(usage.monthlyUsedSeconds);
+                }
+            } catch (usageError) {
+                console.warn('[Auth] Failed to fetch Groq usage (non-blocking):', usageError);
+            }
+        }
+
+        console.log('[Auth] Updated transcription premium status:', premium);
+    } catch (error) {
+        console.error('[Auth] Failed to update transcription premium status:', error);
+        transcriptionService.setPremiumStatus(false);
+    }
 }
 
 /**
@@ -106,6 +145,9 @@ async function validateSessionOnStartup(authService: SupabaseAuthService): Promi
 
             // Wire up transcription service with the session
             updateTranscriptionSession(session);
+
+            // Update premium status and Groq usage for transcription routing
+            updateTranscriptionPremiumStatus();
         } else {
             console.log('[Auth] No active session - user needs to sign in for AI features');
         }
@@ -260,6 +302,8 @@ async function handleVerifyOtp(
                         plan: validationResult.subscription?.plan,
                         mode: validationResult.mode,
                     });
+                    // Update transcription service with premium status
+                    updateTranscriptionPremiumStatus();
                 }).catch((error) => {
                     console.error('[Auth] Failed to refresh subscription (non-blocking):', error);
                 });
@@ -317,6 +361,8 @@ async function handleSignInWithOAuth(
                         plan: validationResult.subscription?.plan,
                         mode: validationResult.mode,
                     });
+                    // Update transcription service with premium status
+                    updateTranscriptionPremiumStatus();
                 }).catch((error) => {
                     console.error('[Auth] Failed to refresh subscription (non-blocking):', error);
                 });
