@@ -12,10 +12,10 @@ import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// Widget dimensions
-const WIDGET_WIDTH = 420;
-const WIDGET_HEIGHT = 80;
-const WIDGET_MARGIN_TOP = 16;
+// Widget dimensions (extra space for shadow to render)
+const SHADOW_PADDING = 40; // Space for box-shadow to render
+const WIDGET_WIDTH = 520 + (SHADOW_PADDING * 2); // 600px total
+const WIDGET_HEIGHT = 120 + SHADOW_PADDING; // 160px total - only need padding on bottom/sides
 
 /**
  * Recording Widget Manager
@@ -27,6 +27,8 @@ export class RecordingWidgetManager {
     private widgetWindow: BrowserWindow | null = null;
     private isShowing = false;
     private onStopCallback: (() => void) | null = null;
+    private onPromptAcceptedCallback: (() => void) | null = null;
+    private onPromptDismissedCallback: (() => void) | null = null;
 
     private constructor() {
         this.registerIpcHandlers();
@@ -71,11 +73,48 @@ export class RecordingWidgetManager {
             this.hide();
         });
 
+        // Handle hide request from widget (with animation)
+        ipcMain.handle('widget:hide', async () => {
+            console.log('[RecordingWidgetManager] Hide requested from widget');
+            this.hide();
+            return { success: true };
+        });
+
         // Handle ping from widget to verify IPC is working - use handle for response
         ipcMain.handle('widget:ping', async (_event, data) => {
             console.log('[RecordingWidgetManager] *** WIDGET PING RECEIVED ***', data);
             console.log('[RecordingWidgetManager] This confirms preload is loaded and IPC is working!');
             return { received: true, timestamp: Date.now() };
+        });
+
+        // Handle prompt accepted from widget
+        ipcMain.handle('widget:prompt-accepted', async () => {
+            console.log('[RecordingWidgetManager] Prompt accepted from widget');
+            if (this.onPromptAcceptedCallback) {
+                try {
+                    this.onPromptAcceptedCallback();
+                    return { success: true };
+                } catch (error) {
+                    console.error('[RecordingWidgetManager] Error in prompt accepted callback:', error);
+                    return { success: false, error: String(error) };
+                }
+            }
+            return { success: false, error: 'No callback registered' };
+        });
+
+        // Handle prompt dismissed from widget
+        ipcMain.handle('widget:prompt-dismissed', async () => {
+            console.log('[RecordingWidgetManager] Prompt dismissed from widget');
+            if (this.onPromptDismissedCallback) {
+                try {
+                    this.onPromptDismissedCallback();
+                    return { success: true };
+                } catch (error) {
+                    console.error('[RecordingWidgetManager] Error in prompt dismissed callback:', error);
+                    return { success: false, error: String(error) };
+                }
+            }
+            return { success: false, error: 'No callback registered' };
         });
 
         console.log('[RecordingWidgetManager] IPC handlers registered');
@@ -86,6 +125,57 @@ export class RecordingWidgetManager {
      */
     public setOnStopCallback(callback: () => void): void {
         this.onStopCallback = callback;
+    }
+
+    /**
+     * Set callback for when user accepts the prompt (clicks "Yes, Start")
+     */
+    public setOnPromptAcceptedCallback(callback: () => void): void {
+        this.onPromptAcceptedCallback = callback;
+    }
+
+    /**
+     * Set callback for when user dismisses the prompt (clicks "Dismiss")
+     */
+    public setOnPromptDismissedCallback(callback: () => void): void {
+        this.onPromptDismissedCallback = callback;
+    }
+
+    /**
+     * Show the widget in prompt mode (asking to start timer)
+     */
+    public showPrompt(meetingApp: { appName: string; bundleId: string } | null): void {
+        console.log('[RecordingWidgetManager] showPrompt() called');
+        console.log('[RecordingWidgetManager] Meeting app:', meetingApp?.appName || 'Unknown');
+
+        // Create window if needed
+        if (!this.widgetWindow || this.widgetWindow.isDestroyed()) {
+            console.log('[RecordingWidgetManager] Creating widget window for prompt mode');
+            this.audioLevelsSentCount = 0;
+            this.createWindow();
+        }
+
+        // Send prompt mode message to widget after it's ready
+        const sendPromptMessage = () => {
+            if (this.widgetWindow && !this.widgetWindow.isDestroyed()) {
+                console.log('[RecordingWidgetManager] Sending show-prompt message to widget');
+                this.widgetWindow.webContents.send('widget:show-prompt', {
+                    meetingApp,
+                    timestamp: Date.now(),
+                });
+            }
+        };
+
+        // Wait for window to be ready
+        if (this.widgetWindow) {
+            if (this.widgetWindow.webContents.isLoading()) {
+                this.widgetWindow.webContents.once('did-finish-load', sendPromptMessage);
+            } else {
+                sendPromptMessage();
+            }
+        }
+
+        this.isShowing = true;
     }
 
     /**
@@ -181,15 +271,17 @@ export class RecordingWidgetManager {
 
     /**
      * Create the widget window
+     * Positioned at top center, overlapping macOS menu bar like Dynamic Island
      */
     private createWindow(): void {
         // Get the primary display
         const primaryDisplay = screen.getPrimaryDisplay();
-        const { width: screenWidth } = primaryDisplay.workAreaSize;
+        const { width: screenWidth } = primaryDisplay.size;
 
-        // Position at top center of screen
+        // Position at top center - will be repositioned to y=0 after show
         const x = Math.round((screenWidth - WIDGET_WIDTH) / 2);
-        const y = WIDGET_MARGIN_TOP;
+        const workArea = primaryDisplay.workArea;
+        const menuBarHeight = workArea.y; // Get menu bar height for initial position
 
         // Determine the preload script path
         const preloadPath = path.join(__dirname, '..', 'preload.cjs');
@@ -209,7 +301,7 @@ export class RecordingWidgetManager {
             width: WIDGET_WIDTH,
             height: WIDGET_HEIGHT,
             x,
-            y,
+            y: menuBarHeight, // Initial position at menu bar bottom
             frame: false,
             transparent: true,
             resizable: false,
@@ -219,7 +311,11 @@ export class RecordingWidgetManager {
             closable: false,
             alwaysOnTop: true,
             skipTaskbar: true,
-            hasShadow: true,
+            hasShadow: false,          // No window shadow - CSS handles it
+            roundedCorners: false,     // No rounded corners from OS
+            titleBarStyle: 'hidden',   // Hide title bar completely
+            trafficLightPosition: { x: -100, y: -100 }, // Move traffic lights off-screen
+            visualEffectState: 'inactive',
             show: false,
             webPreferences: {
                 preload: preloadPath,
@@ -228,10 +324,16 @@ export class RecordingWidgetManager {
             },
         });
 
-        // Set window level to float above other windows (macOS)
+        // Set transparent background
+        this.widgetWindow.setBackgroundColor('#00000000');
+
+        // Set window level to float above menu bar (macOS)
         if (process.platform === 'darwin') {
-            this.widgetWindow.setAlwaysOnTop(true, 'floating');
+            // 'pop-up-menu' level allows the window to appear above the menu bar
+            this.widgetWindow.setAlwaysOnTop(true, 'pop-up-menu');
             this.widgetWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+            // Ignore mouse events outside the visible content
+            this.widgetWindow.setIgnoreMouseEvents(false);
         }
 
         // Load the widget HTML
@@ -244,10 +346,21 @@ export class RecordingWidgetManager {
             this.widgetWindow.loadFile(widgetPath);
         }
 
-        // Show window once ready
+        // Show window once ready, then reposition to overlap menu bar
         this.widgetWindow.once('ready-to-show', () => {
             if (this.widgetWindow && !this.widgetWindow.isDestroyed()) {
                 this.widgetWindow.show();
+
+                // After showing, reposition to overlap menu bar
+                // Use a small delay to bypass initial positioning restrictions on macOS
+                setTimeout(() => {
+                    if (this.widgetWindow && !this.widgetWindow.isDestroyed()) {
+                        const targetY = 0; // Top of screen, overlapping menu bar
+                        this.widgetWindow.setPosition(x, targetY);
+                        console.log('[RecordingWidgetManager] Repositioned to y=0 after show');
+                    }
+                }, 100);
+
                 // Open devtools in dev mode to see widget console logs
                 if (process.env.VITE_DEV_SERVER_URL) {
                     this.widgetWindow.webContents.openDevTools({ mode: 'detach' });

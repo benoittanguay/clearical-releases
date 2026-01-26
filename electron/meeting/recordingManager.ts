@@ -27,6 +27,7 @@ export class RecordingManager extends EventEmitter {
     private isRendererRecording: boolean = false;
     private recordingStartTime: number | null = null;
     private currentMeetingApp: MeetingAppInfo | null = null;
+    private isPromptMode: boolean = false;  // When widget is showing "Start timer?" prompt
 
     private constructor() {
         super();
@@ -45,6 +46,14 @@ export class RecordingManager extends EventEmitter {
             // Stop recording when user clicks stop in widget
             this.notifyRendererToStopRecording();
             widgetManager.close();
+        });
+        widgetManager.setOnPromptAcceptedCallback(() => {
+            console.log('[RecordingManager] Prompt accepted from widget');
+            this.handlePromptAccepted();
+        });
+        widgetManager.setOnPromptDismissedCallback(() => {
+            console.log('[RecordingManager] Prompt dismissed from widget');
+            this.handlePromptDismissed();
         });
     }
 
@@ -110,6 +119,14 @@ export class RecordingManager extends EventEmitter {
             if (micInUse && !this.currentMeetingApp) {
                 this.currentMeetingApp = mediaMonitor.getLikelyMeetingAppUsingMic();
                 console.log('[RecordingManager] Detected meeting app:', this.currentMeetingApp);
+            }
+
+            // Edge case: If prompt was showing and user started timer manually, close prompt
+            if (this.isPromptMode) {
+                console.log('[RecordingManager] Timer started while prompt showing - closing prompt');
+                this.isPromptMode = false;
+                const widgetManager = getRecordingWidgetManager();
+                widgetManager.close();
             }
 
             console.log('[RecordingManager] Entry active, checking media:', {
@@ -327,7 +344,8 @@ export class RecordingManager extends EventEmitter {
         }
 
         if (!this.activeEntryId) {
-            console.log('[RecordingManager] *** SKIPPING: No active entry ***');
+            console.log('[RecordingManager] *** No active entry - showing prompt widget ***');
+            this.showPromptWidget();
             return;
         }
 
@@ -368,6 +386,10 @@ export class RecordingManager extends EventEmitter {
             if (this.isRendererRecording) {
                 console.log('[RecordingManager] *** ALL MEDIA STOPPED - STOPPING RECORDING AND CLOSING WIDGET ***');
                 this.notifyRendererToStopRecording();
+            } else if (this.isPromptMode) {
+                // Edge case: Media stopped while prompt was showing - auto-dismiss
+                console.log('[RecordingManager] *** ALL MEDIA STOPPED WHILE PROMPT SHOWING - AUTO-DISMISSING ***');
+                this.handlePromptDismissed();
             } else {
                 console.log('[RecordingManager] All media stopped but not recording, nothing to stop');
             }
@@ -384,6 +406,61 @@ export class RecordingManager extends EventEmitter {
 
         // Now we just notify the renderer to start capturing
         this.notifyRendererToStartRecording();
+    }
+
+    /**
+     * Show prompt widget asking user to start timer
+     */
+    private showPromptWidget(): void {
+        if (this.isPromptMode) {
+            console.log('[RecordingManager] Already in prompt mode');
+            return;
+        }
+
+        this.isPromptMode = true;
+        const widgetManager = getRecordingWidgetManager();
+        widgetManager.showPrompt(this.currentMeetingApp);
+        console.log('[RecordingManager] Prompt widget shown');
+    }
+
+    /**
+     * Handle user accepting the prompt (clicked "Yes, Start")
+     */
+    public handlePromptAccepted(): void {
+        console.log('[RecordingManager] *** handlePromptAccepted ***');
+        this.isPromptMode = false;
+
+        // Close the prompt widget
+        const widgetManager = getRecordingWidgetManager();
+        widgetManager.close();
+
+        // Send request to main app to start timer
+        // The main app will then call setActiveEntry which will trigger recording
+        console.log('[RecordingManager] Sending request-start-timer to renderer');
+        this.sendToRenderer(MEETING_IPC_CHANNELS.REQUEST_START_TIMER, {
+            meetingApp: this.currentMeetingApp,
+            timestamp: Date.now(),
+        });
+    }
+
+    /**
+     * Handle user dismissing the prompt (clicked "Dismiss")
+     */
+    public handlePromptDismissed(): void {
+        console.log('[RecordingManager] *** handlePromptDismissed ***');
+        this.isPromptMode = false;
+
+        // Close the widget
+        const widgetManager = getRecordingWidgetManager();
+        widgetManager.close();
+        console.log('[RecordingManager] Prompt dismissed, widget closed');
+    }
+
+    /**
+     * Check if currently in prompt mode
+     */
+    public isInPromptMode(): boolean {
+        return this.isPromptMode;
     }
 }
 

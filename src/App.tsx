@@ -612,7 +612,7 @@ function App() {
       });
 
       // @ts-ignore
-      const unsubscribeRecording = window.electron.ipcRenderer.on('tray:toggle-recording', () => {
+      const unsubscribeRecording = window.electron.ipcRenderer.on('tray:toggle-recording', async () => {
         console.log('[Renderer] Tray toggle recording command received');
         // Toggle recording state
         if (recordingSessionIdRef.current) {
@@ -620,7 +620,20 @@ function App() {
           setActiveRecordingEntry(null);
           recordingSessionIdRef.current = null;
         } else {
-          // Start recording (only if chrono is running - checked via ref)
+          // Start recording - also start timer if not running (same as widget prompt)
+          if (!isRunning) {
+            console.log('[Renderer] Timer not running, starting timer first');
+            // Check permissions before starting
+            const permissions = await checkPermissions();
+            if (!permissions.requiredGranted || !permissions.hasScreenRecording) {
+              console.log('[Renderer] Missing permissions, showing modal');
+              setShowPermissionModal(true);
+              return;
+            }
+            // Start timer
+            startTimer();
+          }
+          // Start recording session
           const sessionId = `session-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
           recordingSessionIdRef.current = sessionId;
           setActiveRecordingEntry(sessionId);
@@ -632,7 +645,52 @@ function App() {
         if (unsubscribeRecording) unsubscribeRecording();
       };
     }
-  }, [setActiveRecordingEntry]);
+  }, [setActiveRecordingEntry, isRunning, checkPermissions, startTimer]);
+
+  // Listen for widget prompt to start timer (meeting detected but timer not running)
+  useEffect(() => {
+    // @ts-ignore
+    if (window.electron?.ipcRenderer?.on) {
+      console.log('[Renderer] Setting up meeting:request-start-timer listener');
+
+      // @ts-ignore
+      const unsubscribe = window.electron.ipcRenderer.on('meeting:request-start-timer', async (data: { meetingApp: { appName: string; bundleId: string } | null; timestamp: number }) => {
+        console.log('[Renderer] Received request-start-timer from widget prompt:', data);
+
+        // Don't start if timer is already running
+        if (isRunning) {
+          console.log('[Renderer] Timer already running, ignoring request');
+          return;
+        }
+
+        // Check permissions before starting
+        const permissions = await checkPermissions();
+
+        // Show permission modal if ANY permission is missing
+        if (!permissions.requiredGranted || !permissions.hasScreenRecording) {
+          console.log('[Renderer] Missing permissions, showing modal');
+          setShowPermissionModal(true);
+          return;
+        }
+
+        // Start timer
+        console.log('[Renderer] Starting timer from widget prompt');
+        startTimer();
+
+        // Notify recording manager of active session for mic/camera recording
+        const sessionId = `session-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+        recordingSessionIdRef.current = sessionId;
+        setActiveRecordingEntry(sessionId);
+
+        // Navigate to chrono view
+        setCurrentView('chrono');
+      });
+
+      return () => {
+        if (unsubscribe) unsubscribe();
+      };
+    }
+  }, [isRunning, checkPermissions, startTimer, setActiveRecordingEntry]);
 
   return (
     <div className="flex h-screen overflow-hidden font-sans w-full flex-col" style={{ backgroundColor: 'var(--color-bg-primary)', color: 'var(--color-text-primary)' }}>

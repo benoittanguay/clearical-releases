@@ -654,3 +654,130 @@ body {
     background: #353535;
     border-color: #5A5A5A;
 }
+
+/* ============================================
+   PROMPT MODE - Start Timer Prompt
+   ============================================ */
+
+.audio-widget.prompt-mode {
+    /* Same entrance animation as recording mode */
+    animation: slideAndRevealIn 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.prompt-container {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 4px 4px;
+}
+
+.prompt-mode .app-icon {
+    animation: iconFadeIn 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    transform: translateX(0);
+}
+
+@keyframes iconFadeIn {
+    0% {
+        opacity: 0;
+    }
+    60% {
+        opacity: 0;
+    }
+    100% {
+        opacity: 1;
+    }
+}
+
+.prompt-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    animation: fadeInDelayed 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.prompt-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: #FFFFFF;
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+}
+
+.prompt-meeting-icon {
+    font-size: 14px;
+}
+
+.prompt-subtitle {
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 12px;
+    font-weight: 400;
+}
+
+.prompt-question {
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 13px;
+    font-weight: 500;
+    margin-top: 2px;
+}
+
+.prompt-buttons {
+    display: flex;
+    gap: 8px;
+    -webkit-app-region: no-drag;
+    animation: fadeInDelayed 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.prompt-btn {
+    border: none;
+    border-radius: 8px;
+    padding: 8px 16px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    font-family: inherit;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.prompt-btn:active {
+    transform: scale(0.97);
+}
+
+.prompt-btn.yes-btn {
+    background: #FF4800;
+    color: #FFFFFF;
+}
+
+.prompt-btn.yes-btn:hover {
+    background: #FF5A1A;
+}
+
+.prompt-btn-icon {
+    width: 14px;
+    height: 14px;
+}
+
+.prompt-btn.dismiss-btn {
+    background: #2A2A2A;
+    color: #FFFFFF;
+    border: 1px solid #4A4A4A;
+}
+
+.prompt-btn.dismiss-btn:hover {
+    background: #353535;
+    border-color: #5A5A5A;
+}
+
+/* Hiding animation for prompt mode */
+.audio-widget.prompt-mode.hiding {
+    animation: slideAndRevealOut 0.35s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.hiding .prompt-container {
+    animation: fadeOutEarly 0.35s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}

@@ -26,10 +26,16 @@ const MIN_HEIGHT = 6;
 const MAX_HEIGHT = 36;
 const CONTAINER_WIDTH = 520 - 24; // Widget width minus padding
 
+interface MeetingAppInfo {
+    appName: string;
+    bundleId: string;
+}
+
 export function RecordingWidget(): React.ReactElement {
-    const [widgetState, setWidgetState] = useState<'recording' | 'stopped' | 'hiding'>('recording');
+    const [widgetState, setWidgetState] = useState<'prompt' | 'recording' | 'stopped' | 'hiding'>('recording');
     const [showMeetingEndedPrompt, setShowMeetingEndedPrompt] = useState(false);
     const [promptEntryId, setPromptEntryId] = useState<string | null>(null);
+    const [promptMeetingApp, setPromptMeetingApp] = useState<MeetingAppInfo | null>(null);
 
     // Waveform state
     const [bars, setBars] = useState<WaveformBar[]>([]);
@@ -49,9 +55,9 @@ export function RecordingWidget(): React.ReactElement {
     const widgetRef = useRef<HTMLDivElement>(null);
     const recordingPillRef = useRef<HTMLDivElement>(null);
 
-    // Track real audio levels for waveform - store the current RMS level
+    // Track real audio levels for waveform - store recent levels for smoothing
     const currentAudioLevelRef = useRef<number>(0);
-    const audioLevelIndexRef = useRef<number>(0);
+    const recentAudioLevelsRef = useRef<number[]>([]); // Rolling buffer of recent peak levels
     const hasRealAudioRef = useRef<boolean>(false);
 
     // Verify IPC connection on mount
@@ -95,22 +101,40 @@ export function RecordingWidget(): React.ReactElement {
 
             if (data && data.levels && data.levels.length > 0) {
                 hasRealAudioRef.current = true;
-                // Use different frequency bins to create variation
-                // Pick a level based on incrementing index to create more visual interest
-                audioLevelIndexRef.current = (audioLevelIndexRef.current + 1) % data.levels.length;
 
-                // Combine a few frequency bins for the current level with some averaging
-                const idx = audioLevelIndexRef.current;
-                const level1 = data.levels[idx] || 0;
-                const level2 = data.levels[(idx + 1) % data.levels.length] || 0;
-                const level3 = data.levels[(idx + 2) % data.levels.length] || 0;
+                // Calculate a weighted RMS across frequency bins
+                // Weight mid frequencies (speech range) higher for voice visualization
+                let weightedSum = 0;
+                let totalWeight = 0;
+                for (let i = 0; i < data.levels.length; i++) {
+                    // Weight curve: higher for mid frequencies (bins 2-15 out of 24)
+                    // This corresponds to 200Hz-4kHz range where speech energy is concentrated
+                    const weight = i < 2 ? 0.3 : i < 15 ? 1.0 : 0.5;
+                    weightedSum += data.levels[i] * data.levels[i] * weight;
+                    totalWeight += weight;
+                }
+                const rms = Math.sqrt(weightedSum / totalWeight);
 
-                // Use max of nearby bins for more dynamic response
-                const maxLevel = Math.max(level1, level2, level3);
+                // Also get peak level for dynamic response
+                const peak = Math.max(...data.levels);
 
-                // Boost the level for visibility
-                const boosted = Math.pow(maxLevel, 0.4) * 2.0;
-                currentAudioLevelRef.current = Math.max(0.1, Math.min(1, boosted));
+                // Blend RMS (sustained volume) with peak (transients) for responsive visualization
+                const blendedLevel = rms * 0.6 + peak * 0.4;
+
+                // Store in rolling buffer for smoothing (keep last 5 readings)
+                recentAudioLevelsRef.current.push(blendedLevel);
+                if (recentAudioLevelsRef.current.length > 5) {
+                    recentAudioLevelsRef.current.shift();
+                }
+
+                // Use the max of recent levels for responsive feel
+                const smoothedLevel = Math.max(...recentAudioLevelsRef.current);
+
+                // Apply gentle compression curve for better visual range
+                // Maps 0-1 input to 0-1 output with boosted low levels
+                const compressed = Math.pow(smoothedLevel, 0.5);
+
+                currentAudioLevelRef.current = Math.max(0.05, Math.min(1, compressed));
             }
         };
 
@@ -154,15 +178,51 @@ export function RecordingWidget(): React.ReactElement {
         };
     }, []);
 
+    // Listen for "start timer" prompt trigger from main process
+    useEffect(() => {
+        console.log('[RecordingWidget] Setting up start-timer prompt listener');
+
+        const handleShowStartPrompt = (data: { meetingApp: MeetingAppInfo | null; timestamp: number }) => {
+            console.log('[RecordingWidget] *** RECEIVED START TIMER PROMPT ***', data);
+            setPromptMeetingApp(data.meetingApp);
+            setWidgetState('prompt');
+        };
+
+        const onFn = window.electron?.ipcRenderer?.on;
+        if (!onFn) {
+            console.error('[RecordingWidget] ipcRenderer.on not available for start prompt listener');
+            return;
+        }
+
+        const unsubscribe = onFn('widget:show-prompt', handleShowStartPrompt);
+        console.log('[RecordingWidget] Start-timer prompt listener registered');
+
+        return () => {
+            console.log('[RecordingWidget] Cleaning up start-timer prompt listener');
+            unsubscribe?.();
+        };
+    }, []);
+
     // Generate bar height based on audio state or real data
     const generateBarHeight = useCallback((): number => {
         // If we have real audio levels, use them
         if (hasRealAudioRef.current) {
             const level = currentAudioLevelRef.current;
-            // Add some random variation to make it more interesting
-            const variation = 0.8 + Math.random() * 0.4; // 0.8 to 1.2
-            const height = MIN_HEIGHT + (MAX_HEIGHT - MIN_HEIGHT) * level * variation;
-            return Math.max(MIN_HEIGHT, Math.min(MAX_HEIGHT, Math.round(height)));
+
+            // Add organic variation that scales with the audio level
+            // Louder audio has more variation (more dynamic), quieter audio is more uniform
+            const variationRange = 0.15 + level * 0.25; // 15-40% variation based on level
+            const variation = 1 + (Math.random() - 0.5) * 2 * variationRange;
+
+            // Calculate base height from audio level
+            const baseHeight = MIN_HEIGHT + (MAX_HEIGHT - MIN_HEIGHT) * level;
+
+            // Apply variation and smooth with previous height for continuity
+            const targetHeight = baseHeight * variation;
+            const smoothed = lastHeightRef.current * 0.3 + targetHeight * 0.7;
+            lastHeightRef.current = smoothed;
+
+            return Math.max(MIN_HEIGHT, Math.min(MAX_HEIGHT, Math.round(smoothed)));
         }
 
         // Fallback to simulated audio
@@ -245,8 +305,25 @@ export function RecordingWidget(): React.ReactElement {
             return;
         }
 
+        // Reset lastTime when starting animation to prevent stale timestamp issues
+        // This is crucial when transitioning from 'prompt' or other states to 'recording'
+        lastTimeRef.current = performance.now();
+
+        // Track if this effect instance is still active (prevents stale callbacks)
+        let isActive = true;
+
         const animate = (currentTime: number) => {
-            const deltaTime = (currentTime - lastTimeRef.current) / 1000;
+            if (!isActive) return; // Guard against stale callbacks after cleanup
+
+            let deltaTime = (currentTime - lastTimeRef.current) / 1000;
+
+            // Cap deltaTime to prevent huge jumps when:
+            // - Browser tab was backgrounded
+            // - Animation frame was delayed
+            // - State transition caused a gap
+            // Max 100ms (0.1s) ensures smooth animation even with missed frames
+            deltaTime = Math.min(deltaTime, 0.1);
+
             lastTimeRef.current = currentTime;
 
             setTrackPosition(prevPos => {
@@ -290,6 +367,7 @@ export function RecordingWidget(): React.ReactElement {
         animationFrameRef.current = requestAnimationFrame(animate);
 
         return () => {
+            isActive = false; // Prevent stale animate callbacks from running
             if (animationFrameRef.current) {
                 cancelAnimationFrame(animationFrameRef.current);
             }
@@ -301,15 +379,25 @@ export function RecordingWidget(): React.ReactElement {
         console.log('[RecordingWidget] *** USER CONFIRMED MEETING ENDED ***');
         setShowMeetingEndedPrompt(false);
 
-        try {
-            await window.electron?.ipcRenderer?.invoke?.('widget:meeting-ended-response', {
-                response: 'yes',
-                entryId: promptEntryId,
-            });
-            console.log('[RecordingWidget] Meeting ended confirmation sent');
-        } catch (error) {
-            console.error('[RecordingWidget] Error sending meeting ended response:', error);
-        }
+        // Trigger the same outro animation as the Stop button
+        setWidgetState('stopped');
+
+        // After showing success state, transition to hiding then send response
+        setTimeout(() => {
+            setWidgetState('hiding');
+
+            setTimeout(async () => {
+                try {
+                    await window.electron?.ipcRenderer?.invoke?.('widget:meeting-ended-response', {
+                        response: 'yes',
+                        entryId: promptEntryId,
+                    });
+                    console.log('[RecordingWidget] Meeting ended confirmation sent');
+                } catch (error) {
+                    console.error('[RecordingWidget] Error sending meeting ended response:', error);
+                }
+            }, 450);
+        }, 2000); // Show "Saved" for 2 seconds
     }, [promptEntryId]);
 
     // Handle "No, continue recording" response
@@ -368,6 +456,35 @@ export function RecordingWidget(): React.ReactElement {
         }, 370);
     }, []);
 
+    // Handle "Yes, Start" button click in prompt mode
+    const handlePromptAccept = useCallback(async () => {
+        console.log('[RecordingWidget] *** PROMPT ACCEPTED - USER WANTS TO START TIMER ***');
+
+        try {
+            await window.electron?.ipcRenderer?.invoke?.('widget:prompt-accepted', { timestamp: Date.now() });
+            console.log('[RecordingWidget] Prompt accepted sent to main');
+            // Widget will be closed by main process, state change will happen when reopened for recording
+        } catch (error) {
+            console.error('[RecordingWidget] Error sending prompt accepted:', error);
+        }
+    }, []);
+
+    // Handle "Dismiss" button click in prompt mode
+    const handlePromptDismiss = useCallback(async () => {
+        console.log('[RecordingWidget] *** PROMPT DISMISSED - USER DOES NOT WANT TO START TIMER ***');
+        setWidgetState('hiding');
+
+        // After animation completes, tell main process
+        setTimeout(async () => {
+            try {
+                await window.electron?.ipcRenderer?.invoke?.('widget:prompt-dismissed', { timestamp: Date.now() });
+                console.log('[RecordingWidget] Prompt dismissed sent to main');
+            } catch (error) {
+                console.error('[RecordingWidget] Error sending prompt dismissed:', error);
+            }
+        }, 370);
+    }, []);
+
     // Determine if a bar is on the left (recorded) or right (buffer) side
     const getBarSide = (barIndex: number): 'left' | 'right' => {
         const barPosition = trackPosition + barIndex * BAR_STEP + BAR_WIDTH / 2;
@@ -377,9 +494,49 @@ export function RecordingWidget(): React.ReactElement {
     // Build class name for widget
     const widgetClassName = [
         'audio-widget',
+        widgetState === 'prompt' ? 'prompt-mode' : '',
         widgetState === 'stopped' ? 'stopped' : '',
         widgetState === 'hiding' ? 'hiding' : ''
     ].filter(Boolean).join(' ');
+
+    // Prompt mode - show different UI
+    if (widgetState === 'prompt') {
+        return (
+            <div className={widgetClassName} id="widget" ref={widgetRef}>
+                <div className="prompt-container">
+                    {/* App Icon */}
+                    <div className="app-icon">
+                        <img src="./icon.png" alt="Clearical" />
+                    </div>
+
+                    {/* Prompt Content */}
+                    <div className="prompt-content">
+                        <div className="prompt-title">
+                            <span className="prompt-meeting-icon">🎤</span>
+                            Meeting Detected
+                        </div>
+                        <div className="prompt-subtitle">
+                            {promptMeetingApp?.appName || 'Video call'} is using your microphone
+                        </div>
+                        <div className="prompt-question">Start timer and record?</div>
+                    </div>
+
+                    {/* Prompt Buttons */}
+                    <div className="prompt-buttons">
+                        <button className="prompt-btn yes-btn" onClick={handlePromptAccept}>
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="prompt-btn-icon">
+                                <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                            </svg>
+                            Yes, Start
+                        </button>
+                        <button className="prompt-btn dismiss-btn" onClick={handlePromptDismiss}>
+                            Dismiss
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className={widgetClassName} id="widget" ref={widgetRef}>
