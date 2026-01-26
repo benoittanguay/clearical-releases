@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import type { TimeEntry, TimeBucket, WindowActivity, WorkAssignment, LinkedJiraIssue } from '../context/StorageContext';
+import type { EntryTranscription } from '../types/shared';
 import { ScreenshotGallery } from './ScreenshotGallery';
 import { DeleteButton } from './DeleteButton';
 import { AssignmentPicker } from './AssignmentPicker';
@@ -713,6 +714,52 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                 duration: 5000
             });
         }
+    };
+
+    /**
+     * Delete a transcription from the entry
+     */
+    const handleDeleteTranscription = async (transcriptionId: string) => {
+        // Get current transcriptions
+        const currentTranscriptions = entry.transcriptions || (entry.transcription ? [entry.transcription] : []);
+
+        // Filter out the deleted transcription
+        const updatedTranscriptions = currentTranscriptions.filter(t => t.transcriptionId !== transcriptionId);
+
+        // Update the entry
+        onUpdate(entry.id, {
+            transcriptions: updatedTranscriptions.length > 0 ? updatedTranscriptions : undefined,
+            // Also update legacy field
+            transcription: updatedTranscriptions.length === 1 ? updatedTranscriptions[0] : undefined,
+        });
+    };
+
+    /**
+     * Split a transcription into a new entry
+     */
+    const handleSplitTranscription = async (transcription: EntryTranscription) => {
+        // Calculate new entry times - use transcription creation time if available
+        const transcriptionStartTime = transcription.createdAt - (transcription.audioDuration * 1000);
+        const transcriptionEndTime = transcription.createdAt;
+
+        // Create new entry with just this transcription
+        const newEntry = {
+            id: `split-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            startTime: transcriptionStartTime,
+            endTime: transcriptionEndTime,
+            duration: transcription.audioDuration * 1000, // Convert to ms
+            transcriptions: [transcription],
+            transcription: transcription, // Legacy field
+            windowActivity: [], // No window activity for split transcription
+        };
+
+        // Insert the new entry via electron API
+        if (window.electron?.ipcRenderer?.db?.insertEntry) {
+            await window.electron.ipcRenderer.db.insertEntry(newEntry);
+        }
+
+        // Remove transcription from current entry
+        await handleDeleteTranscription(transcription.transcriptionId);
     };
 
     const handleDeleteApp = async (appName: string) => {
@@ -2651,6 +2698,8 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                                 appName={meetingApp?.appName || 'Meeting App'}
                                 formatTime={formatTime}
                                 recordingNumber={recordingNumber}
+                                onSplit={() => handleSplitTranscription(transcription)}
+                                onDelete={() => handleDeleteTranscription(transcription.transcriptionId)}
                             />
                         </div>
                     );

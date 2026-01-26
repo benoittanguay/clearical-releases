@@ -7,6 +7,7 @@
 
 import React, { useState } from 'react';
 import type { EntryTranscription, WindowActivity } from '../types/shared';
+import { DeleteButton } from './DeleteButton';
 
 interface TranscriptionActivityEntryProps {
     transcription: EntryTranscription;
@@ -18,6 +19,10 @@ interface TranscriptionActivityEntryProps {
     formatTime: (ms: number) => string;
     /** Recording number when there are multiple recordings (e.g., 1, 2, 3) */
     recordingNumber?: number;
+    /** Callback when user wants to split this recording into a new entry */
+    onSplit?: () => void;
+    /** Callback when user wants to delete this recording */
+    onDelete?: () => void;
 }
 
 /**
@@ -52,6 +57,8 @@ export function TranscriptionActivityEntry({
     appName,
     formatTime,
     recordingNumber,
+    onSplit,
+    onDelete,
 }: TranscriptionActivityEntryProps): React.ReactElement {
     const [isExpanded, setIsExpanded] = useState(false);
     const [showSegments, setShowSegments] = useState(false);
@@ -179,12 +186,61 @@ export function TranscriptionActivityEntry({
                     </div>
                 </div>
 
-                {/* Duration */}
-                <div
-                    className="font-mono font-bold ml-4"
-                    style={{ fontFamily: 'var(--font-mono)', color: 'var(--color-accent)' }}
-                >
-                    {formatTime(transcription.audioDuration * 1000)}
+                {/* Duration and Action Buttons */}
+                <div className="flex items-center gap-2 ml-4">
+                    {/* Duration */}
+                    <div
+                        className="font-mono font-bold"
+                        style={{ fontFamily: 'var(--font-mono)', color: 'var(--color-accent)' }}
+                    >
+                        {formatTime(transcription.audioDuration * 1000)}
+                    </div>
+
+                    {/* Action buttons */}
+                    {(onSplit || onDelete) && (
+                        <div className="flex items-center gap-1">
+                            {onSplit && (
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        onSplit();
+                                    }}
+                                    className="p-1.5 rounded transition-colors"
+                                    style={{
+                                        backgroundColor: 'transparent',
+                                        color: 'var(--color-text-secondary)',
+                                    }}
+                                    onMouseEnter={(e) => {
+                                        e.stopPropagation();
+                                        e.currentTarget.style.backgroundColor = '#FAF5EE';
+                                        e.currentTarget.style.color = 'var(--color-text-primary)';
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        e.stopPropagation();
+                                        e.currentTarget.style.backgroundColor = 'transparent';
+                                        e.currentTarget.style.color = 'var(--color-text-secondary)';
+                                    }}
+                                    title="Create new entry from this recording"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <circle cx="12" cy="18" r="3"/>
+                                        <circle cx="6" cy="6" r="3"/>
+                                        <circle cx="18" cy="6" r="3"/>
+                                        <path d="M18 9v2c0 .6-.4 1-1 1H7c-.6 0-1-.4-1-1V9"/>
+                                        <path d="M12 12v3"/>
+                                    </svg>
+                                </button>
+                            )}
+                            {onDelete && (
+                                <DeleteButton
+                                    onDelete={onDelete}
+                                    confirmMessage="Delete this recording?"
+                                    size="sm"
+                                    variant="subtle"
+                                />
+                            )}
+                        </div>
+                    )}
                 </div>
             </button>
 
