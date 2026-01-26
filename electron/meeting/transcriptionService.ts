@@ -138,39 +138,17 @@ export class TranscriptionService extends EventEmitter {
     /**
      * Determine which transcription engine to use based on tier and usage
      *
-     * Logic:
+     * TEMPORARY: Always use Groq for all users until we integrate a better
+     * on-device solution (e.g., whisper.cpp). Apple's SFSpeechRecognizer
+     * quality is insufficient for meeting transcription.
+     *
+     * Original logic (disabled):
      * - Free users: Always Apple on-device (with 8hr/month limit enforced elsewhere)
      * - Premium/Trial users: Groq for first 20 hours, then Apple
      */
     private shouldUseAppleTranscription(): boolean {
-        const appleTranscriber = getAppleTranscriber();
-        const appleAvailable = appleTranscriber.isAvailable();
-
-        // Free users: always use Apple (if available)
-        if (!this.isPremium) {
-            if (appleAvailable) {
-                console.log('[TranscriptionService] Using Apple (free user)');
-                return true;
-            }
-            // Apple not available for free user - they can't transcribe
-            console.log('[TranscriptionService] Apple not available for free user');
-            return true; // Will fail gracefully in Apple transcriber
-        }
-
-        // Premium/Trial users: check Groq quota
-        if (this.isPremiumGroqQuotaExceeded()) {
-            if (appleAvailable) {
-                console.log('[TranscriptionService] Using Apple (premium user, Groq quota exceeded)');
-                return true;
-            }
-            // Apple not available but Groq quota exceeded - continue with Groq anyway
-            console.log('[TranscriptionService] Groq quota exceeded but Apple not available, continuing with Groq');
-            return false;
-        }
-
-        // Premium user with Groq quota remaining
-        console.log('[TranscriptionService] Using Groq (premium user, quota remaining:',
-            Math.round((TranscriptionService.PREMIUM_GROQ_LIMIT_SECONDS - this.groqUsageSeconds) / 3600 * 10) / 10, 'hours)');
+        // Always use Groq for better transcription quality
+        console.log('[TranscriptionService] Using Groq (Apple transcription disabled due to quality issues)');
         return false;
     }
 
