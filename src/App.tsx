@@ -25,6 +25,7 @@ import { PermissionRequestModal } from './components/PermissionRequestModal';
 import { SplitFlapDisplay, FlipClockContainer } from './components/SplitFlapDisplay';
 import { BucketDetailView } from './components/BucketDetailView';
 import { JiraDetailView } from './components/JiraDetailView';
+import { RecordingControls } from './components/RecordingControls';
 import type { WorkAssignment, TimeBucket, LinkedJiraIssue } from './context/StorageContext';
 import './App.css'
 
@@ -52,6 +53,7 @@ function App() {
   const [isStopping, setIsStopping] = useState(false);
   const [bucketsTab, setBucketsTab] = useState<'buckets' | 'jira'>('buckets');
   const [jiraRefreshFn, setJiraRefreshFn] = useState<(() => void) | null>(null);
+  const [isAudioRecording, setIsAudioRecording] = useState(false);
 
   const { isRunning, isPaused, elapsed, start: startTimer, stop: stopTimer, pause: pauseTimer, resume: resumeTimer, formatTime, checkPermissions, setActiveRecordingEntry } = useTimer();
   const { clearPendingTranscription, waitForTranscriptions, getPendingAudio, clearPendingAudio } = useAudioRecording();
@@ -459,6 +461,7 @@ function App() {
       const sessionId = `session-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
       recordingSessionIdRef.current = sessionId;
       setActiveRecordingEntry(sessionId);
+      setIsAudioRecording(true);
     } else {
       try {
         // Set stopping state to show loading UI
@@ -470,6 +473,7 @@ function App() {
         // Clear recording session - must happen before stopTimer for proper cleanup
         setActiveRecordingEntry(null);
         recordingSessionIdRef.current = null;
+        setIsAudioRecording(false);
 
         // Stop timer and save entry - await to ensure AI analyses complete
         const finalActivity = await stopTimer();
@@ -544,6 +548,7 @@ function App() {
     const sessionId = `session-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
     recordingSessionIdRef.current = sessionId;
     setActiveRecordingEntry(sessionId);
+    setIsAudioRecording(true);
   };
 
   const handlePauseResume = () => {
@@ -551,6 +556,24 @@ function App() {
       resumeTimer();
     } else {
       pauseTimer();
+    }
+  };
+
+  // Toggle audio recording independently of timer
+  const handleToggleRecording = () => {
+    if (recordingSessionIdRef.current) {
+      // Stop recording
+      console.log('[App] Stopping recording from controls');
+      setActiveRecordingEntry(null);
+      recordingSessionIdRef.current = null;
+      setIsAudioRecording(false);
+    } else if (isRunning) {
+      // Start recording (only when timer is running)
+      console.log('[App] Starting recording from controls');
+      const sessionId = `session-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+      recordingSessionIdRef.current = sessionId;
+      setActiveRecordingEntry(sessionId);
+      setIsAudioRecording(true);
     }
   };
 
@@ -619,6 +642,7 @@ function App() {
           // Stop recording
           setActiveRecordingEntry(null);
           recordingSessionIdRef.current = null;
+          setIsAudioRecording(false);
         } else {
           // Start recording - also start timer if not running (same as widget prompt)
           if (!isRunning) {
@@ -637,6 +661,7 @@ function App() {
           const sessionId = `session-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
           recordingSessionIdRef.current = sessionId;
           setActiveRecordingEntry(sessionId);
+          setIsAudioRecording(true);
         }
       });
 
@@ -681,6 +706,7 @@ function App() {
         const sessionId = `session-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
         recordingSessionIdRef.current = sessionId;
         setActiveRecordingEntry(sessionId);
+        setIsAudioRecording(true);
 
         // Navigate to chrono view
         setCurrentView('chrono');
@@ -968,6 +994,15 @@ function App() {
                       </div>
                     </div>
                   )}
+                </div>
+
+                {/* Recording Controls with Waveform */}
+                <div className="flex justify-center">
+                  <RecordingControls
+                    isRecording={isAudioRecording}
+                    onToggleRecording={handleToggleRecording}
+                    disabled={!isRunning || isStopping}
+                  />
                 </div>
 
                 {/* Buttons - Pill style with design system colors - Full width of timer */}

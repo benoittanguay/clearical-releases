@@ -1,0 +1,127 @@
+/**
+ * Waveform Component Styles
+ * Reusable audio waveform visualization
+ */
+
+.waveform-component {
+    border-radius: 14px;
+    position: relative;
+    overflow: hidden;
+}
+
+/* Background halves */
+.waveform-component__bg-left {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 50%;
+    border-radius: 14px 0 0 14px;
+}
+
+.waveform-component__bg-right {
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 50%;
+    border-radius: 0 14px 14px 0;
+}
+
+/* Dark variant (for dark backgrounds like widget) */
+.waveform-component--dark .waveform-component__bg-left {
+    background: #FF4800;
+}
+
+.waveform-component--dark .waveform-component__bg-right {
+    background: #F5EDE0;
+}
+
+.waveform-component--dark .waveform-component__bar-layer--recorded {
+    background: rgba(255, 255, 255, 0.9);
+}
+
+.waveform-component--dark .waveform-component__bar-layer--buffer {
+    background: rgba(90, 80, 70, 0.5);
+}
+
+.waveform-component--dark .waveform-component__playhead {
+    background: #FF4800;
+}
+
+/* Light variant (for light backgrounds like main app) */
+.waveform-component--light .waveform-component__bg-left {
+    background: var(--color-accent, #FF4800);
+}
+
+.waveform-component--light .waveform-component__bg-right {
+    background: var(--color-bg-tertiary, #F5EDE0);
+}
+
+.waveform-component--light .waveform-component__bar-layer--recorded {
+    background: rgba(255, 255, 255, 0.95);
+}
+
+.waveform-component--light .waveform-component__bar-layer--buffer {
+    background: rgba(90, 80, 70, 0.4);
+}
+
+.waveform-component--light .waveform-component__playhead {
+    background: var(--color-accent, #FF4800);
+}
+
+/* Track container */
+.waveform-component__track {
+    display: flex;
+    align-items: center;
+    position: absolute;
+    height: 100%;
+    top: 0;
+    z-index: 10;
+    transition: transform 150ms ease-out;
+    transform-origin: center center;
+}
+
+/* Individual bar */
+.waveform-component__bar {
+    border-radius: 1px;
+    flex-shrink: 0;
+    position: relative;
+}
+
+.waveform-component__bar-layer {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    border-radius: 1px;
+}
+
+/* Playhead */
+.waveform-component__playhead {
+    position: absolute;
+    left: 50%;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    transform: translateX(-50%);
+    z-index: 20;
+}
+
+/* Scanline overlay - retro TV effect */
+.waveform-component__scanlines {
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(
+        to bottom,
+        rgba(255, 255, 255, 0.15) 0px,
+        rgba(255, 255, 255, 0.15) 2px,
+        transparent 2px,
+        transparent 4px
+    );
+    mix-blend-mode: overlay;
+    pointer-events: none;
+    z-index: 15;
+    border-radius: 14px;
+}
