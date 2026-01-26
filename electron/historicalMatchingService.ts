@@ -94,6 +94,10 @@ export class HistoricalMatchingService {
             if (options.requireDescription && !entry.description) continue;
             if (options.requireAssignment && !entry.assignment) continue;
 
+            // Skip AI-selected assignments - only learn from user-confirmed selections
+            // This ensures historical patterns are based on user intent, not AI guesses
+            if (entry.assignmentAutoSelected === true) continue;
+
             const result = this.calculateSimilarity(context, entry);
 
             if (result.score >= minScore) {
@@ -293,6 +297,9 @@ export class HistoricalMatchingService {
         // Find all entries with this issue or project
         for (const entry of historicalEntries) {
             if (!entry.tempoAccount) continue;
+
+            // Skip AI-selected assignments - only learn from user-confirmed selections
+            if (entry.assignmentAutoSelected === true) continue;
 
             // Exact issue match
             const isExactIssueMatch =
