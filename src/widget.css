@@ -587,14 +587,17 @@ body {
 
 .meeting-ended-overlay {
     position: absolute;
-    inset: 0;
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+    height: 48px;
     background: rgba(13, 13, 13, 0.5);
     border-radius: 14px;
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 12px;
-    z-index: 30; /* Above playhead (z-index: 25) */
+    z-index: 50; /* Above playhead (z-index: 25) */
     animation: fadeIn 0.3s ease-out forwards;
 }
 

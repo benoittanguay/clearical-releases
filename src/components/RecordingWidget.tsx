@@ -620,25 +620,25 @@ export function RecordingWidget(): React.ReactElement {
                         </div>
                     ))}
                 </div>
-
-                {/* Meeting Ended Prompt Overlay - Shows on top of waveform */}
-                {showMeetingEndedPrompt && (
-                    <div className="meeting-ended-overlay">
-                        <span className="meeting-ended-text">Meeting ended?</span>
-                        <div className="meeting-ended-buttons">
-                            <button className="meeting-ended-btn yes-btn" onClick={handleMeetingEndedYes}>
-                                Yes, stop
-                            </button>
-                            <button className="meeting-ended-btn no-btn" onClick={handleMeetingEndedNo}>
-                                Continue
-                            </button>
-                        </div>
-                    </div>
-                )}
             </div>
 
             {/* Playhead */}
             <div className="playhead" ref={playheadRef}></div>
+
+            {/* Meeting Ended Prompt Overlay - Positioned above playhead */}
+            {showMeetingEndedPrompt && (
+                <div className="meeting-ended-overlay">
+                    <span className="meeting-ended-text">Meeting ended?</span>
+                    <div className="meeting-ended-buttons">
+                        <button className="meeting-ended-btn yes-btn" onClick={handleMeetingEndedYes}>
+                            Yes, stop
+                        </button>
+                        <button className="meeting-ended-btn no-btn" onClick={handleMeetingEndedNo}>
+                            Continue
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
