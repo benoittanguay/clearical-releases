@@ -17,6 +17,7 @@
  */
 
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
+import { decode as decodeBase64 } from 'https://deno.land/std@0.177.0/encoding/base64.ts';
 import { corsHeaders } from '../_shared/cors.ts';
 import { createSupabaseClient, supabaseAdmin, extractToken } from '../_shared/supabase.ts';
 
@@ -152,13 +153,42 @@ serve(async (req) => {
             );
         }
 
-        // Convert base64 to blob
-        const audioBytes = Uint8Array.from(atob(audioBase64), c => c.charCodeAt(0));
-        const audioBlob = new Blob([audioBytes], { type: mimeType });
+        // Convert base64 to blob (using efficient Deno decoder to stay within CPU limits)
+        const audioBytes = decodeBase64(audioBase64);
+        console.log('[groq-transcribe] Audio data size:', audioBytes.length, 'bytes, mimeType:', mimeType);
+
+        // Validate audio size (minimum ~1KB for any meaningful audio, max 25MB for Whisper)
+        if (audioBytes.length < 1000) {
+            console.error('[groq-transcribe] Audio too small:', audioBytes.length, 'bytes');
+            return new Response(
+                JSON.stringify({
+                    success: false,
+                    error: `Audio file too small (${audioBytes.length} bytes). Minimum meaningful audio is ~1KB.`
+                }),
+                { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+        }
+
+        if (audioBytes.length > 25 * 1024 * 1024) {
+            console.error('[groq-transcribe] Audio too large:', audioBytes.length, 'bytes');
+            return new Response(
+                JSON.stringify({
+                    success: false,
+                    error: `Audio file too large (${Math.round(audioBytes.length / 1024 / 1024)}MB). Maximum is 25MB.`
+                }),
+                { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+        }
+
+        // Clean MIME type by removing codec info (e.g., 'audio/webm;codecs=opus' -> 'audio/webm')
+        const cleanMimeType = mimeType.split(';')[0].trim();
+        const audioBlob = new Blob([audioBytes], { type: cleanMimeType });
+        const fileExtension = getExtension(mimeType);
+        console.log('[groq-transcribe] Using cleanMimeType:', cleanMimeType, 'extension:', fileExtension);
 
         // Prepare form data for Groq API
         const formData = new FormData();
-        formData.append('file', audioBlob, `audio.${getExtension(mimeType)}`);
+        formData.append('file', audioBlob, `audio.${fileExtension}`);
         formData.append('model', GROQ_MODEL);
         formData.append('response_format', 'verbose_json');
         if (language) {
@@ -178,10 +208,27 @@ serve(async (req) => {
         if (!groqResponse.ok) {
             const errorText = await groqResponse.text();
             console.error('[groq-transcribe] Groq API error:', groqResponse.status, errorText);
+
+            // Try to parse Groq error message for better feedback
+            let errorMessage = `Transcription failed: ${groqResponse.status}`;
+            try {
+                const errorJson = JSON.parse(errorText);
+                if (errorJson.error?.message) {
+                    errorMessage = `Groq error: ${errorJson.error.message}`;
+                } else if (errorJson.message) {
+                    errorMessage = `Groq error: ${errorJson.message}`;
+                }
+            } catch {
+                // If not JSON, use raw text if it's short enough
+                if (errorText && errorText.length < 200) {
+                    errorMessage = `Groq error: ${errorText}`;
+                }
+            }
+
             return new Response(
                 JSON.stringify({
                     success: false,
-                    error: `Transcription failed: ${groqResponse.status}`
+                    error: errorMessage
                 }),
                 { status: groqResponse.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
             );
@@ -236,8 +283,12 @@ serve(async (req) => {
 
 /**
  * Get file extension from mime type
+ * Handles MIME types with codec info like 'audio/webm;codecs=opus'
  */
 function getExtension(mimeType: string): string {
+    // Strip codec info if present (e.g., 'audio/webm;codecs=opus' -> 'audio/webm')
+    const baseMimeType = mimeType.split(';')[0].trim();
+
     const mimeToExt: Record<string, string> = {
         'audio/webm': 'webm',
         'audio/mp4': 'm4a',
@@ -246,7 +297,7 @@ function getExtension(mimeType: string): string {
         'audio/ogg': 'ogg',
         'audio/flac': 'flac',
     };
-    return mimeToExt[mimeType] || 'webm';
+    return mimeToExt[baseMimeType] || 'webm';
 }
 
 /**
