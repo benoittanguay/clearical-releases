@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Tray, Menu, screen, nativeImage, ipcMain, systemPreferences, shell, desktopCapturer, dialog } from 'electron';
+import { app, BrowserWindow, Tray, Menu, screen, nativeImage, ipcMain, systemPreferences, shell, desktopCapturer, dialog, powerMonitor } from 'electron';
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
@@ -19,6 +19,7 @@ import { storeCredential, getCredential, deleteCredential, hasCredential, listCr
 import { initializeSubscription, cleanupSubscription } from './subscription/ipcHandlers.js';
 import { requirePremium } from './subscription/premiumGuard.js';
 import { initializeAuth, syncAppVersionOnStartup } from './auth/ipcHandlers.js';
+import { getAuthService } from './auth/supabaseAuth.js';
 import { initializeAnalytics } from './analytics/ipcHandlers.js';
 import { AIAssignmentService, ActivityContext, AssignmentSuggestion } from './aiAssignmentService.js';
 import { AIAccountService, TempoAccount, AccountSelection, HistoricalAccountUsage } from './aiAccountService.js';
@@ -3869,6 +3870,30 @@ app.whenReady().then(() => {
     } catch (error) {
         console.error('[Main] Failed to initialize auth:', error);
     }
+
+    // Set up system wake/unlock detection for token refresh
+    // This ensures auth tokens stay fresh after sleep/hibernate
+    powerMonitor.on('resume', async () => {
+        console.log('[Main] System resumed from sleep, refreshing auth token...');
+        try {
+            const authService = getAuthService();
+            await authService.proactiveRefresh();
+        } catch (error) {
+            console.error('[Main] Failed to refresh auth on resume:', error);
+        }
+    });
+
+    powerMonitor.on('unlock-screen', async () => {
+        console.log('[Main] Screen unlocked, refreshing auth token...');
+        try {
+            const authService = getAuthService();
+            await authService.proactiveRefresh();
+        } catch (error) {
+            console.error('[Main] Failed to refresh auth on unlock:', error);
+        }
+    });
+
+    console.log('[Main] Power monitor listeners registered for auth refresh');
 
     // Initialize analytics system
     try {

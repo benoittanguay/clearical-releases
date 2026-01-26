@@ -47,6 +47,10 @@ export interface AuthResult {
 
 export type { OAuthProvider } from './oauthServer.js';
 
+// Background refresh configuration
+const BACKGROUND_REFRESH_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes
+const REFRESH_BEFORE_EXPIRY_MS = 60 * 60 * 1000; // Refresh if token expires within 1 hour
+
 /**
  * Supabase Auth Service for Electron
  */
@@ -56,6 +60,7 @@ export class SupabaseAuthService {
     private sessionFilePath: string;
     private encryptionKey: Buffer;
     private currentSupabaseUrl: string = '';
+    private backgroundRefreshInterval: NodeJS.Timeout | null = null;
 
     constructor() {
         // Session file stored in app data directory
@@ -87,6 +92,9 @@ export class SupabaseAuthService {
         });
 
         console.log('[SupabaseAuth] Supabase client initialized');
+
+        // Start background token refresh to keep session alive
+        this.startBackgroundRefresh();
     }
 
     /**
@@ -479,11 +487,73 @@ export class SupabaseAuthService {
      * Sign out and clear session
      */
     async signOut(): Promise<void> {
+        this.stopBackgroundRefresh();
         if (this.supabase) {
             await this.supabase.auth.signOut();
         }
         this.clearSession();
         console.log('[SupabaseAuth] User signed out');
+    }
+
+    /**
+     * Start background refresh loop to keep the session alive.
+     * This ensures the refresh token never expires due to inactivity.
+     */
+    startBackgroundRefresh(): void {
+        if (this.backgroundRefreshInterval) {
+            console.log('[SupabaseAuth] Background refresh already running');
+            return;
+        }
+
+        console.log('[SupabaseAuth] Starting background refresh (every 30 minutes)');
+
+        this.backgroundRefreshInterval = setInterval(async () => {
+            await this.proactiveRefresh();
+        }, BACKGROUND_REFRESH_INTERVAL_MS);
+
+        // Also do an immediate check on start
+        this.proactiveRefresh();
+    }
+
+    /**
+     * Stop the background refresh loop
+     */
+    stopBackgroundRefresh(): void {
+        if (this.backgroundRefreshInterval) {
+            clearInterval(this.backgroundRefreshInterval);
+            this.backgroundRefreshInterval = null;
+            console.log('[SupabaseAuth] Background refresh stopped');
+        }
+    }
+
+    /**
+     * Proactively refresh the token if it's expiring soon.
+     * Called periodically by the background refresh loop and on system wake.
+     */
+    async proactiveRefresh(): Promise<void> {
+        if (!this.currentSession) {
+            // Try to load session from disk
+            await this.getSession();
+        }
+
+        if (!this.currentSession) {
+            console.log('[SupabaseAuth] No session to refresh');
+            return;
+        }
+
+        const timeUntilExpiry = this.currentSession.expiresAt - Date.now();
+
+        if (timeUntilExpiry < REFRESH_BEFORE_EXPIRY_MS) {
+            console.log(`[SupabaseAuth] Proactive refresh: token expires in ${Math.round(timeUntilExpiry / 60000)} minutes`);
+            const refreshed = await this.refreshSession();
+            if (refreshed) {
+                console.log('[SupabaseAuth] Proactive refresh successful');
+            } else {
+                console.warn('[SupabaseAuth] Proactive refresh failed, will retry later');
+            }
+        } else {
+            console.log(`[SupabaseAuth] Token still fresh, expires in ${Math.round(timeUntilExpiry / 60000)} minutes`);
+        }
     }
 
     /**
