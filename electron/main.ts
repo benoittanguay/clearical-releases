@@ -2012,6 +2012,24 @@ ipcMain.on(MEETING_IPC_CHANNELS.SEND_AUDIO_LEVELS, async (_event, levels: number
     widgetManager.sendAudioLevels(levels);
 });
 
+// Recording failed to start - close widget and notify user
+ipcMain.on('meeting:recording-failed', async (_event, data: { entryId: string; error: string; timestamp: number }) => {
+    console.error('[Main] *** RECORDING FAILED TO START ***');
+    console.error('[Main] entryId:', data.entryId, 'error:', data.error);
+
+    // Close the widget since recording couldn't start
+    const { getRecordingWidgetManager } = await import('./meeting/recordingWidgetManager.js');
+    const widgetManager = getRecordingWidgetManager();
+    widgetManager.close();
+
+    // Reset recording manager state
+    const recordingManager = getRecordingManager();
+    // Note: The recording manager doesn't have a method to handle failure gracefully yet
+    // For now, we just close the widget - the user can try again
+
+    console.log('[Main] Widget closed due to recording failure');
+});
+
 // Silence detection - meeting may have ended due to extended silence
 ipcMain.on('meeting:silence-detected', async (_event, data: { entryId: string; silenceDuration: number; askConfirmation?: boolean }) => {
     console.log('[Main] *** SILENCE DETECTED ***');

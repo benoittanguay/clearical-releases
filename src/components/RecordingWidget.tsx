@@ -379,25 +379,30 @@ export function RecordingWidget(): React.ReactElement {
         console.log('[RecordingWidget] *** USER CONFIRMED MEETING ENDED ***');
         setShowMeetingEndedPrompt(false);
 
-        // Trigger the same outro animation as the Stop button
-        setWidgetState('stopped');
+        // CRITICAL: Send IPC IMMEDIATELY to stop recording
+        // Don't delay - stop the recording first, then show animation
+        try {
+            await window.electron?.ipcRenderer?.invoke?.('widget:meeting-ended-response', {
+                response: 'yes',
+                entryId: promptEntryId,
+            });
+            console.log('[RecordingWidget] Meeting ended confirmation sent');
 
-        // After showing success state, transition to hiding then send response
-        setTimeout(() => {
-            setWidgetState('hiding');
+            // Now show the success animation after recording has actually stopped
+            setWidgetState('stopped');
 
-            setTimeout(async () => {
-                try {
-                    await window.electron?.ipcRenderer?.invoke?.('widget:meeting-ended-response', {
-                        response: 'yes',
-                        entryId: promptEntryId,
-                    });
-                    console.log('[RecordingWidget] Meeting ended confirmation sent');
-                } catch (error) {
-                    console.error('[RecordingWidget] Error sending meeting ended response:', error);
-                }
-            }, 450);
-        }, 2000); // Show "Saved" for 2 seconds
+            // After showing success state, transition to hiding
+            setTimeout(() => {
+                setWidgetState('hiding');
+            }, 2000); // Show "Saved" for 2 seconds
+        } catch (error) {
+            console.error('[RecordingWidget] Error sending meeting ended response:', error);
+            // Still show stopped state even on error
+            setWidgetState('stopped');
+            setTimeout(() => {
+                setWidgetState('hiding');
+            }, 2000);
+        }
     }, [promptEntryId]);
 
     // Handle "No, continue recording" response
@@ -419,27 +424,35 @@ export function RecordingWidget(): React.ReactElement {
     // Handle stop button click
     const handleStop = useCallback(async () => {
         console.log('[RecordingWidget] *** STOP BUTTON CLICKED ***');
-        setWidgetState('stopped');
 
-        // After showing success state, transition to hiding then stop
-        setTimeout(() => {
-            setWidgetState('hiding');
+        // CRITICAL: Send stop IPC IMMEDIATELY to stop recording
+        // Don't delay - the "Saved" animation should reflect that saving IS complete
+        const hasInvoke = !!window.electron?.ipcRenderer?.invoke;
+        if (!hasInvoke) {
+            console.error('[RecordingWidget] IPC invoke not available');
+            return;
+        }
 
-            setTimeout(async () => {
-                const hasInvoke = !!window.electron?.ipcRenderer?.invoke;
-                if (!hasInvoke) {
-                    console.error('[RecordingWidget] IPC invoke not available');
-                    return;
-                }
+        try {
+            // Stop recording first, then show animation
+            const response = await window.electron.ipcRenderer.invoke('widget:stop-recording', { timestamp: Date.now() });
+            console.log('[RecordingWidget] Stop response:', response);
 
-                try {
-                    const response = await window.electron.ipcRenderer.invoke('widget:stop-recording', { timestamp: Date.now() });
-                    console.log('[RecordingWidget] Stop response:', response);
-                } catch (error) {
-                    console.error('[RecordingWidget] Stop IPC failed:', error);
-                }
-            }, 450);
-        }, 2000); // Show "Saved" for 2 seconds
+            // Now show the success animation after recording has actually stopped
+            setWidgetState('stopped');
+
+            // After showing success state, transition to hiding
+            setTimeout(() => {
+                setWidgetState('hiding');
+            }, 2000); // Show "Saved" for 2 seconds
+        } catch (error) {
+            console.error('[RecordingWidget] Stop IPC failed:', error);
+            // Still show stopped state even on error
+            setWidgetState('stopped');
+            setTimeout(() => {
+                setWidgetState('hiding');
+            }, 2000);
+        }
     }, []);
 
     // Handle hide button click

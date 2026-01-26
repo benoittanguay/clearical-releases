@@ -62,6 +62,9 @@ export class SupabaseAuthService {
     private currentSupabaseUrl: string = '';
     private backgroundRefreshInterval: NodeJS.Timeout | null = null;
 
+    // Callback for notifying dependent services when session is refreshed
+    private onSessionRefreshCallback: ((session: AuthSession) => void) | null = null;
+
     constructor() {
         // Session file stored in app data directory
         const userDataPath = app.getPath('userData');
@@ -69,6 +72,15 @@ export class SupabaseAuthService {
 
         // Generate or load encryption key for session storage
         this.encryptionKey = this.getOrCreateEncryptionKey();
+    }
+
+    /**
+     * Set callback to be notified when session is refreshed
+     * This allows dependent services (like TranscriptionService) to update their session
+     */
+    setOnSessionRefresh(callback: (session: AuthSession) => void): void {
+        this.onSessionRefreshCallback = callback;
+        console.log('[SupabaseAuth] Session refresh callback registered');
     }
 
     /**
@@ -474,6 +486,17 @@ export class SupabaseAuthService {
 
             await this.saveSession(this.currentSession);
             console.log('[SupabaseAuth] Session refreshed successfully');
+
+            // Notify dependent services about the refreshed session
+            if (this.onSessionRefreshCallback && this.currentSession) {
+                try {
+                    this.onSessionRefreshCallback(this.currentSession);
+                    console.log('[SupabaseAuth] Session refresh callback notified');
+                } catch (callbackError) {
+                    console.error('[SupabaseAuth] Session refresh callback error:', callbackError);
+                }
+            }
+
             return true;
         } catch (error) {
             console.error('[SupabaseAuth] Session refresh error:', error);

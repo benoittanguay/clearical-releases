@@ -134,6 +134,10 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
     // Note: Using time domain deviation (< 3) instead of frequency threshold for more reliable silence detection
     const SILENCE_DURATION_FOR_PROMPT = 10000; // 10 seconds of silence = ask user if meeting ended
 
+    // CRITICAL: Synchronous lock to prevent race conditions when multiple START events arrive
+    // This is set immediately (synchronously) before any async operations
+    const isStartingRecordingRef = useRef<boolean>(false);
+
     /**
      * Start audio recording
      * Uses native mic capture (AVFoundation) to bypass getUserMedia limitations
@@ -146,12 +150,23 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
         console.log('[AudioRecordingContext] Current state:', state);
         console.log('[AudioRecordingContext] ========================================');
 
+        // CRITICAL: Synchronous lock check BEFORE any async operations
+        // This prevents race conditions when two START events arrive nearly simultaneously
+        if (isStartingRecordingRef.current) {
+            console.log('[AudioRecordingContext] *** GUARD: Already starting recording, ignoring duplicate start ***');
+            return;
+        }
+
         // CRITICAL: Guard against multiple parallel recordings
         // This prevents corrupted audio when duplicate START events are received
         if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
             console.log('[AudioRecordingContext] *** GUARD: Already recording, ignoring duplicate start ***');
             return;
         }
+
+        // Set lock immediately (synchronously) before any async work
+        isStartingRecordingRef.current = true;
+        console.log('[AudioRecordingContext] Lock acquired, starting recording setup...');
 
         try {
             console.log('[AudioRecordingContext] Setting up native audio capture...');
@@ -595,13 +610,31 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
                 status: 'recording',
             });
 
-            console.log('[AudioRecordingContext] Recording started');
+            console.log('[AudioRecordingContext] Recording started successfully');
+
+            // Release lock after recording has successfully started
+            isStartingRecordingRef.current = false;
         } catch (error) {
             console.error('[AudioRecordingContext] Failed to start recording:', error);
+
+            // CRITICAL: Release lock on error so future attempts can proceed
+            isStartingRecordingRef.current = false;
+
             setState(prev => ({
                 ...prev,
                 error: error instanceof Error ? error.message : 'Failed to access microphone',
             }));
+
+            // Notify main process that recording failed to start
+            try {
+                window.electron?.ipcRenderer?.send?.('meeting:recording-failed', {
+                    entryId,
+                    error: error instanceof Error ? error.message : 'Failed to start recording',
+                    timestamp: Date.now(),
+                });
+            } catch (ipcError) {
+                console.error('[AudioRecordingContext] Failed to notify main process of recording failure:', ipcError);
+            }
         }
     }, []);
 
@@ -615,6 +648,12 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
             console.log('[AudioRecordingContext] No active recording to stop');
             return;
         }
+
+        // CRITICAL: Capture chunks and mimeType BEFORE calling stop() to prevent race condition
+        // If a new recording starts before onstop fires, audioChunksRef would be reset
+        const capturedChunks = [...audioChunksRef.current];
+        const capturedMimeType = mediaRecorderRef.current.mimeType || 'audio/webm';
+        console.log('[AudioRecordingContext] Captured', capturedChunks.length, 'chunks before stop, mimeType:', capturedMimeType);
 
         return new Promise<void>((resolve) => {
             mediaRecorderRef.current!.onstop = async () => {
@@ -671,9 +710,8 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
                 silenceStartTimeRef.current = null;
                 silenceConfirmationShownRef.current = false;
 
-                // Create blob from chunks
-                const mimeType = mediaRecorderRef.current?.mimeType || 'audio/webm';
-                const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
+                // Create blob from captured chunks (captured before stop() to avoid race condition)
+                const audioBlob = new Blob(capturedChunks, { type: capturedMimeType });
 
                 console.log('[AudioRecordingContext] Recording stopped, blob size:', audioBlob.size);
 
@@ -685,7 +723,7 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
                 });
 
                 // Check minimum duration (5 seconds)
-                const duration = audioBlob.size > 0 ? (audioChunksRef.current.length * 1000) : 0;
+                const duration = audioBlob.size > 0 ? (capturedChunks.length * 1000) : 0;
                 if (duration < 5000 || audioBlob.size < 1000) {
                     console.log('[AudioRecordingContext] Recording too short, skipping transcription');
                     setTranscriptionProgress(null);
@@ -713,7 +751,7 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
                     const result = await window.electron.ipcRenderer.meeting.saveAudioAndTranscribe(
                         entryId,
                         audioBase64,
-                        mimeType
+                        capturedMimeType
                     );
 
                     if (result.success && result.transcription) {
@@ -769,7 +807,7 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
                         if (result.audioPath) {
                             const pendingAudio: PendingTranscription = {
                                 audioPath: result.audioPath,
-                                mimeType: result.mimeType || mimeType,
+                                mimeType: result.mimeType || capturedMimeType,
                                 status: 'failed',
                                 error: result.error,
                                 attemptedAt: Date.now(),

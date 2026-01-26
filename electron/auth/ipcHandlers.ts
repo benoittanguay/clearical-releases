@@ -107,6 +107,13 @@ export function initializeAuth(): void {
     const authService = getAuthService();
     authService.initialize(config.supabase.url, config.supabase.anonKey);
 
+    // Register callback to update TranscriptionService when session is refreshed
+    // This ensures the transcription service always has valid tokens
+    authService.setOnSessionRefresh((session) => {
+        console.log('[Auth] Session refreshed, updating TranscriptionService');
+        updateTranscriptionSession(session);
+    });
+
     // Register IPC handlers
     registerIpcHandlers();
 
