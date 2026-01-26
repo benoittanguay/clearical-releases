@@ -455,13 +455,8 @@ function App() {
       }
 
       // Start timer fresh (elapsed should be 0)
+      // Note: Recording is NOT started automatically - user must explicitly start it
       startTimer();
-
-      // Notify recording manager of active session for mic/camera recording
-      const sessionId = `session-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-      recordingSessionIdRef.current = sessionId;
-      setActiveRecordingEntry(sessionId);
-      setIsAudioRecording(true);
     } else {
       try {
         // Set stopping state to show loading UI
@@ -542,13 +537,8 @@ function App() {
 
   const handlePermissionsGranted = () => {
     // Permissions are now granted, start the timer
+    // Note: Recording is NOT started automatically - user must explicitly start it
     startTimer();
-
-    // Notify recording manager of active session for mic/camera recording
-    const sessionId = `session-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-    recordingSessionIdRef.current = sessionId;
-    setActiveRecordingEntry(sessionId);
-    setIsAudioRecording(true);
   };
 
   const handlePauseResume = () => {
