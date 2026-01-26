@@ -69,24 +69,28 @@ export function TranscriptionActivityEntry({
         .replace(/\n---\n\n/g, '\n\n')           // Remove --- separators
         .trim();
 
-    // Truncate text for preview
-    const previewText = cleanText.length > 150
-        ? cleanText.substring(0, 150) + '...'
-        : cleanText;
-
     return (
         <div
-            className="rounded-lg border overflow-hidden"
+            className="border rounded-lg overflow-hidden"
             style={{
                 backgroundColor: 'var(--color-bg-secondary)',
                 borderColor: 'var(--color-border-primary)',
+                borderRadius: 'var(--radius-xl)',
+                boxShadow: 'var(--shadow-sm)',
             }}
         >
             {/* Header - App style entry */}
             <button
                 onClick={() => setIsExpanded(!isExpanded)}
-                className="w-full px-3 py-2.5 flex items-center justify-between transition-colors cursor-pointer"
-                style={{ backgroundColor: 'transparent' }}
+                className="w-full flex items-center justify-between p-3 transition-all"
+                data-hoverable
+                data-default-bg="transparent"
+                data-hover-bg="#FAF5EE"
+                style={{
+                    transitionDuration: 'var(--duration-fast)',
+                    transitionTimingFunction: 'var(--ease-out)',
+                    backgroundColor: 'transparent',
+                }}
                 onMouseEnter={(e) => {
                     e.currentTarget.style.backgroundColor = '#FAF5EE';
                 }}
@@ -187,7 +191,7 @@ export function TranscriptionActivityEntry({
                 </div>
 
                 {/* Duration and Action Buttons */}
-                <div className="flex items-center gap-2 ml-4">
+                <div className="flex items-center gap-3 ml-4">
                     {/* Duration */}
                     <div
                         className="font-mono font-bold"
@@ -197,49 +201,54 @@ export function TranscriptionActivityEntry({
                     </div>
 
                     {/* Action buttons */}
-                    {(onSplit || onDelete) && (
-                        <div className="flex items-center gap-1">
-                            {onSplit && (
-                                <button
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        onSplit();
-                                    }}
-                                    className="p-1.5 rounded transition-colors"
-                                    style={{
-                                        backgroundColor: 'transparent',
-                                        color: 'var(--color-text-secondary)',
-                                    }}
-                                    onMouseEnter={(e) => {
-                                        e.stopPropagation();
-                                        e.currentTarget.style.backgroundColor = '#FAF5EE';
-                                        e.currentTarget.style.color = 'var(--color-text-primary)';
-                                    }}
-                                    onMouseLeave={(e) => {
-                                        e.stopPropagation();
-                                        e.currentTarget.style.backgroundColor = 'transparent';
-                                        e.currentTarget.style.color = 'var(--color-text-secondary)';
-                                    }}
-                                    title="Create new entry from this recording"
-                                >
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                        <circle cx="12" cy="18" r="3"/>
-                                        <circle cx="6" cy="6" r="3"/>
-                                        <circle cx="18" cy="6" r="3"/>
-                                        <path d="M18 9v2c0 .6-.4 1-1 1H7c-.6 0-1-.4-1-1V9"/>
-                                        <path d="M12 12v3"/>
-                                    </svg>
-                                </button>
-                            )}
-                            {onDelete && (
-                                <DeleteButton
-                                    onDelete={onDelete}
-                                    confirmMessage="Delete this recording?"
-                                    size="sm"
-                                    variant="subtle"
-                                />
-                            )}
-                        </div>
+                    {onSplit && (
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onSplit();
+                            }}
+                            className="p-1.5 rounded-lg transition-all active:scale-95"
+                            style={{
+                                color: 'var(--color-text-secondary)',
+                                transitionDuration: 'var(--duration-fast)',
+                                transitionTimingFunction: 'var(--ease-out)',
+                            }}
+                            onMouseEnter={(e) => {
+                                e.stopPropagation();
+                                const parent = e.currentTarget.closest('[data-hoverable]') as HTMLElement;
+                                if (parent) {
+                                    parent.style.backgroundColor = parent.dataset.defaultBg || '';
+                                }
+                                e.currentTarget.style.backgroundColor = '#FAF5EE';
+                                e.currentTarget.style.color = 'var(--color-text-primary)';
+                            }}
+                            onMouseLeave={(e) => {
+                                e.stopPropagation();
+                                e.currentTarget.style.backgroundColor = 'transparent';
+                                e.currentTarget.style.color = 'var(--color-text-secondary)';
+                                const parent = e.currentTarget.closest('[data-hoverable]') as HTMLElement;
+                                if (parent && parent.contains(e.relatedTarget as Node)) {
+                                    parent.style.backgroundColor = parent.dataset.hoverBg || '#FAF5EE';
+                                }
+                            }}
+                            title="Create new entry from this recording"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <circle cx="12" cy="18" r="3"/>
+                                <circle cx="6" cy="6" r="3"/>
+                                <circle cx="18" cy="6" r="3"/>
+                                <path d="M18 9v2c0 .6-.4 1-1 1H7c-.6 0-1-.4-1-1V9"/>
+                                <path d="M12 12v3"/>
+                            </svg>
+                        </button>
+                    )}
+                    {onDelete && (
+                        <DeleteButton
+                            onDelete={onDelete}
+                            confirmMessage="Delete this recording?"
+                            size="sm"
+                            variant="subtle"
+                        />
                     )}
                 </div>
             </button>
@@ -323,20 +332,6 @@ export function TranscriptionActivityEntry({
                 </div>
             )}
 
-            {/* Preview when collapsed */}
-            {!isExpanded && cleanText.length > 0 && (
-                <div
-                    className="px-3 pb-2 pt-0"
-                    style={{ marginLeft: '52px' }}
-                >
-                    <div
-                        className="text-xs line-clamp-2"
-                        style={{ color: 'var(--color-text-tertiary)' }}
-                    >
-                        {previewText}
-                    </div>
-                </div>
-            )}
         </div>
     );
 }
