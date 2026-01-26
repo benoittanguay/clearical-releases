@@ -146,8 +146,10 @@ export interface TimeEntry {
         id: string;
     };
     tempoAccountAutoSelected?: boolean;
-    /** Audio transcription from meeting/call recording */
+    /** Audio transcription from meeting/call recording (legacy - single transcription) */
     transcription?: EntryTranscription;
+    /** Multiple audio transcriptions - each recording session is stored separately */
+    transcriptions?: EntryTranscription[];
     /** Pending transcription when audio was recorded but transcription failed */
     pendingTranscription?: PendingTranscription;
 }

@@ -54,7 +54,7 @@ function App() {
   const [jiraRefreshFn, setJiraRefreshFn] = useState<(() => void) | null>(null);
 
   const { isRunning, isPaused, elapsed, start: startTimer, stop: stopTimer, pause: pauseTimer, resume: resumeTimer, formatTime, checkPermissions, setActiveRecordingEntry } = useTimer();
-  const { clearPendingTranscription, waitForTranscription, getPendingAudio, clearPendingAudio } = useAudioRecording();
+  const { clearPendingTranscription, waitForTranscriptions, getPendingAudio, clearPendingAudio } = useAudioRecording();
   const { roundTime, isRoundingEnabled } = useTimeRounding();
   const recordingSessionIdRef = useRef<string | null>(null);
   const handleStartStopRef = useRef<() => void>(() => {});
@@ -474,12 +474,13 @@ function App() {
         // Stop timer and save entry - await to ensure AI analyses complete
         const finalActivity = await stopTimer();
 
-        // Wait for any pending transcription from the recording session (with timeout)
+        // Wait for any pending transcriptions from the recording session (with timeout)
         // This handles the race condition where transcription may still be in progress
+        // Each recording is stored separately for better navigation
         console.log('[App] Waiting for transcription to complete (if recording was active)...');
-        const pendingTranscription = sessionId ? await waitForTranscription(sessionId, 15000) : null;
-        if (pendingTranscription) {
-          console.log('[App] Found pending transcription from recording session:', pendingTranscription.wordCount, 'words');
+        const pendingTranscriptions = sessionId ? await waitForTranscriptions(sessionId, 15000) : [];
+        if (pendingTranscriptions.length > 0) {
+          console.log('[App] Found', pendingTranscriptions.length, 'transcription(s) from recording session');
         } else {
           console.log('[App] No transcription available (no recording or timed out)');
         }
@@ -496,12 +497,15 @@ function App() {
           duration: elapsed,
           assignment: selectedAssignment || undefined,
           windowActivity: finalActivity,
-          transcription: pendingTranscription || undefined,
+          // Store transcriptions as array for separate display
+          transcriptions: pendingTranscriptions.length > 0 ? pendingTranscriptions : undefined,
+          // Keep legacy field for backwards compatibility
+          transcription: pendingTranscriptions.length === 1 ? pendingTranscriptions[0] : undefined,
           pendingTranscription: pendingAudio || undefined,
         });
 
         // Clear the pending transcription after it's been applied
-        if (sessionId && pendingTranscription) {
+        if (sessionId && pendingTranscriptions.length > 0) {
           clearPendingTranscription(sessionId);
         }
 

@@ -2639,23 +2639,22 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                     </div>
                 )}
 
-                {/* Transcription Section - Displayed as an activity entry */}
-                {entry.transcription && (
-                    <div className="mt-3">
-                        <TranscriptionActivityEntry
-                            transcription={entry.transcription}
-                            appIcon={(() => {
-                                const meetingApp = findMeetingApp(entry.windowActivity || []);
-                                return meetingApp ? appIcons.get(meetingApp.appName) : undefined;
-                            })()}
-                            appName={(() => {
-                                const meetingApp = findMeetingApp(entry.windowActivity || []);
-                                return meetingApp?.appName || 'Meeting App';
-                            })()}
-                            formatTime={formatTime}
-                        />
-                    </div>
-                )}
+                {/* Transcription Section - Each recording displayed as separate activity entry */}
+                {(entry.transcriptions || (entry.transcription ? [entry.transcription] : [])).map((transcription, index) => {
+                    const meetingApp = findMeetingApp(entry.windowActivity || []);
+                    const recordingNumber = (entry.transcriptions?.length || 1) > 1 ? index + 1 : undefined;
+                    return (
+                        <div key={transcription.transcriptionId || index} className="mt-3">
+                            <TranscriptionActivityEntry
+                                transcription={transcription}
+                                appIcon={meetingApp ? appIcons.get(meetingApp.appName) : undefined}
+                                appName={meetingApp?.appName || 'Meeting App'}
+                                formatTime={formatTime}
+                                recordingNumber={recordingNumber}
+                            />
+                        </div>
+                    );
+                })}
                 </div>
             </div>
 

@@ -16,6 +16,8 @@ interface TranscriptionActivityEntryProps {
     appName: string;
     /** Format time function for duration display */
     formatTime: (ms: number) => string;
+    /** Recording number when there are multiple recordings (e.g., 1, 2, 3) */
+    recordingNumber?: number;
 }
 
 /**
@@ -49,14 +51,21 @@ export function TranscriptionActivityEntry({
     appIcon,
     appName,
     formatTime,
+    recordingNumber,
 }: TranscriptionActivityEntryProps): React.ReactElement {
     const [isExpanded, setIsExpanded] = useState(false);
     const [showSegments, setShowSegments] = useState(false);
 
+    // Clean up legacy merged text format (remove [Recording X] prefixes and separators)
+    const cleanText = transcription.fullText
+        .replace(/^\[Recording \d+\]\n?/gm, '')  // Remove [Recording X] prefixes
+        .replace(/\n---\n\n/g, '\n\n')           // Remove --- separators
+        .trim();
+
     // Truncate text for preview
-    const previewText = transcription.fullText.length > 150
-        ? transcription.fullText.substring(0, 150) + '...'
-        : transcription.fullText;
+    const previewText = cleanText.length > 150
+        ? cleanText.substring(0, 150) + '...'
+        : cleanText;
 
     return (
         <div
@@ -162,7 +171,7 @@ export function TranscriptionActivityEntry({
                             className="font-semibold truncate"
                             style={{ color: 'var(--color-text-primary)' }}
                         >
-                            Meeting Recording
+                            {recordingNumber ? `Recording ${recordingNumber}` : 'Meeting Recording'}
                         </div>
                         <div className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
                             {formatDuration(transcription.audioDuration)} · {transcription.wordCount} words · {transcription.language.toUpperCase()}
@@ -191,7 +200,7 @@ export function TranscriptionActivityEntry({
                             className="text-sm leading-relaxed whitespace-pre-wrap"
                             style={{ color: 'var(--color-text-secondary)' }}
                         >
-                            {transcription.fullText}
+                            {cleanText}
                         </div>
                     </div>
 
@@ -259,7 +268,7 @@ export function TranscriptionActivityEntry({
             )}
 
             {/* Preview when collapsed */}
-            {!isExpanded && transcription.fullText.length > 0 && (
+            {!isExpanded && cleanText.length > 0 && (
                 <div
                     className="px-3 pb-2 pt-0"
                     style={{ marginLeft: '52px' }}

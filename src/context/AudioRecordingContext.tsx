@@ -37,10 +37,16 @@ interface AudioRecordingContextValue {
     isAutoRecordEnabled: boolean;
     setAutoRecordEnabled: (enabled: boolean) => void;
     /**
-     * Get pending transcription for a session ID
+     * Get pending transcription for a session ID (merged if multiple)
      * Used to retrieve transcription when entry is created
+     * @deprecated Use getPendingTranscriptions for separate recordings
      */
     getPendingTranscription: (sessionId: string) => EntryTranscription | null;
+    /**
+     * Get all pending transcriptions for a session ID (as separate entries)
+     * Each recording session is returned as a separate transcription
+     */
+    getPendingTranscriptions: (sessionId: string) => EntryTranscription[];
     /**
      * Clear pending transcription after it's been applied
      */
@@ -48,8 +54,14 @@ interface AudioRecordingContextValue {
     /**
      * Wait for transcription to complete for a session ID
      * Returns the transcription if completed successfully within timeout, null otherwise
+     * @deprecated Use waitForTranscriptions for separate recordings
      */
     waitForTranscription: (sessionId: string, timeoutMs?: number) => Promise<EntryTranscription | null>;
+    /**
+     * Wait for transcriptions to complete for a session ID
+     * Returns array of transcriptions (one per recording) if completed successfully within timeout
+     */
+    waitForTranscriptions: (sessionId: string, timeoutMs?: number) => Promise<EntryTranscription[]>;
     /**
      * Get pending audio info for a session/entry ID (when transcription failed but audio was saved)
      */
@@ -133,6 +145,13 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
         console.log('[AudioRecordingContext] entryId:', entryId);
         console.log('[AudioRecordingContext] Current state:', state);
         console.log('[AudioRecordingContext] ========================================');
+
+        // CRITICAL: Guard against multiple parallel recordings
+        // This prevents corrupted audio when duplicate START events are received
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+            console.log('[AudioRecordingContext] *** GUARD: Already recording, ignoring duplicate start ***');
+            return;
+        }
 
         try {
             console.log('[AudioRecordingContext] Setting up native audio capture...');
@@ -843,6 +862,15 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
     }, []);
 
     /**
+     * Get all pending transcriptions for a session ID (as separate entries)
+     * Each recording session is returned as a separate transcription
+     */
+    const getPendingTranscriptions = useCallback((sessionId: string): EntryTranscription[] => {
+        const transcriptions = pendingTranscriptionsRef.current.get(sessionId);
+        return transcriptions || [];
+    }, []);
+
+    /**
      * Clear pending transcription after it's been applied
      */
     const clearPendingTranscription = useCallback((sessionId: string): void => {
@@ -912,6 +940,58 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
         console.log('[AudioRecordingContext] waitForTranscription timed out after', timeoutMs, 'ms');
         return null;
     }, [state.isRecording, transcriptionProgress, getPendingTranscription]);
+
+    /**
+     * Wait for transcriptions to complete for a session ID
+     * Returns array of transcriptions (one per recording) if completed successfully within timeout
+     */
+    const waitForTranscriptions = useCallback(async (sessionId: string, timeoutMs: number = 30000): Promise<EntryTranscription[]> => {
+        console.log('[AudioRecordingContext] waitForTranscriptions called, sessionId:', sessionId, 'timeout:', timeoutMs);
+
+        const startTime = Date.now();
+        const pollInterval = 100;
+        const minWaitTime = 2000;
+
+        while (Date.now() - startTime < timeoutMs) {
+            const transcriptions = pendingTranscriptionsRef.current.get(sessionId);
+            if (transcriptions && transcriptions.length > 0) {
+                if (!state.isRecording && !transcriptionProgress) {
+                    console.log('[AudioRecordingContext] Transcriptions found:', transcriptions.length);
+                    return transcriptions;
+                }
+            }
+
+            const elapsedMs = Date.now() - startTime;
+            if (elapsedMs > minWaitTime) {
+                const existingTranscriptions = pendingTranscriptionsRef.current.get(sessionId);
+                if (existingTranscriptions && existingTranscriptions.length > 0 && !state.isRecording && !transcriptionProgress) {
+                    console.log('[AudioRecordingContext] Returning', existingTranscriptions.length, 'transcription(s) after', elapsedMs, 'ms');
+                    return existingTranscriptions;
+                }
+
+                if (!state.isRecording && !transcriptionProgress && (!existingTranscriptions || existingTranscriptions.length === 0)) {
+                    console.log('[AudioRecordingContext] No transcriptions available after', elapsedMs, 'ms');
+                    return [];
+                }
+
+                if (transcriptionProgress?.status === 'error') {
+                    console.log('[AudioRecordingContext] Transcription errored');
+                    return [];
+                }
+            }
+
+            await new Promise(resolve => setTimeout(resolve, pollInterval));
+        }
+
+        const finalTranscriptions = pendingTranscriptionsRef.current.get(sessionId);
+        if (finalTranscriptions && finalTranscriptions.length > 0) {
+            console.log('[AudioRecordingContext] Timeout reached, returning', finalTranscriptions.length, 'transcription(s)');
+            return finalTranscriptions;
+        }
+
+        console.log('[AudioRecordingContext] waitForTranscriptions timed out after', timeoutMs, 'ms');
+        return [];
+    }, [state.isRecording, transcriptionProgress]);
 
     /**
      * Get pending audio info for a session/entry ID (when transcription failed but audio was saved)
@@ -1116,8 +1196,10 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
         isAutoRecordEnabled,
         setAutoRecordEnabled: handleSetAutoRecordEnabled,
         getPendingTranscription,
+        getPendingTranscriptions,
         clearPendingTranscription,
         waitForTranscription,
+        waitForTranscriptions,
         getPendingAudio,
         retryTranscription,
         clearPendingAudio,
