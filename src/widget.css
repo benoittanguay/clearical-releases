@@ -439,6 +439,26 @@ body {
     }
 }
 
+/* Transition from stopped state to hiding - starts from narrowed state */
+.audio-widget.stopped.hiding {
+    animation: stoppedToHiding 0.35s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+@keyframes stoppedToHiding {
+    0% {
+        transform: translateY(0);
+        clip-path: inset(0 32% 0 32% round 0 0 24px 24px);
+    }
+    40% {
+        transform: translateY(0);
+        clip-path: inset(0 42% 0 42% round 0 0 24px 24px);
+    }
+    100% {
+        transform: translateY(-100%);
+        clip-path: inset(0 42% 0 42% round 0 0 24px 24px);
+    }
+}
+
 .stopped .action-buttons {
     animation: fadeOutStopped 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
@@ -478,7 +498,7 @@ body {
 
 .stopped .recording-pill .recording-dot {
     animation: none;
-    background: #22C55E;
+    background: #FF4800;
     transition: background 0.3s ease;
 }
 
@@ -499,10 +519,21 @@ body {
     }
 }
 
+/* When stopped and hiding, keep icon centered (already there from stopped state) */
+.stopped.hiding .app-icon {
+    animation: none;
+    transform: translateX(232px);
+}
+
+/* Fade out pill when going from stopped to hiding */
+.stopped.hiding .recording-pill {
+    animation: fadeOutEarly 0.35s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
 /* Success checkmark */
 .success-check {
     display: none;
-    color: #22C55E;
+    color: #FF4800;
     font-size: 14px;
     font-weight: 600;
     white-space: nowrap;
@@ -529,6 +560,25 @@ body {
 .success-check svg {
     width: 16px;
     height: 16px;
+}
+
+.success-check svg polyline {
+    stroke-dasharray: 30;
+    stroke-dashoffset: 30;
+}
+
+.stopped .success-check svg polyline {
+    animation: drawCheck 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    animation-delay: 0.35s;
+}
+
+@keyframes drawCheck {
+    0% {
+        stroke-dashoffset: 30;
+    }
+    100% {
+        stroke-dashoffset: 0;
+    }
 }
 
 /* ============================================
