@@ -975,6 +975,14 @@ function App() {
                 <div className="relative flex justify-center">
                   <FlipClockContainer>
                     <SplitFlapDisplay value={formatTime(elapsed)} size="large" />
+                    {/* Recording Controls with Waveform - inside the flip clock container */}
+                    <div className="mt-4">
+                      <RecordingControls
+                        isRecording={isAudioRecording}
+                        onToggleRecording={handleToggleRecording}
+                        disabled={!isRunning || isStopping}
+                      />
+                    </div>
                   </FlipClockContainer>
                   {isPaused && (
                     <div className="absolute -top-10 left-1/2 transform -translate-x-1/2 animate-fade-in">
@@ -995,15 +1003,6 @@ function App() {
                       </div>
                     </div>
                   )}
-                </div>
-
-                {/* Recording Controls with Waveform */}
-                <div className="flex justify-center">
-                  <RecordingControls
-                    isRecording={isAudioRecording}
-                    onToggleRecording={handleToggleRecording}
-                    disabled={!isRunning || isStopping}
-                  />
                 </div>
 
                 {/* Buttons - Pill style with design system colors - Full width of timer */}

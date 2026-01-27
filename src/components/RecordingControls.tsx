@@ -27,12 +27,35 @@ export function RecordingControls({
 }: RecordingControlsProps): React.ReactElement {
     const [audioLevel, setAudioLevel] = useState(0);
     const [isVisible, setIsVisible] = useState(false);
+    const [waveformWidth, setWaveformWidth] = useState(320);
+    const waveformContainerRef = useRef<HTMLDivElement>(null);
     const recentAudioLevelsRef = useRef<number[]>([]);
 
     // Animate in on mount
     useEffect(() => {
         const timer = setTimeout(() => setIsVisible(true), 100);
         return () => clearTimeout(timer);
+    }, []);
+
+    // Measure waveform container width for responsive sizing
+    useEffect(() => {
+        const container = waveformContainerRef.current;
+        if (!container) return;
+
+        const resizeObserver = new ResizeObserver((entries) => {
+            for (const entry of entries) {
+                const width = entry.contentRect.width;
+                if (width > 0) {
+                    setWaveformWidth(Math.floor(width));
+                }
+            }
+        });
+
+        resizeObserver.observe(container);
+        // Initial measurement
+        setWaveformWidth(Math.floor(container.offsetWidth) || 320);
+
+        return () => resizeObserver.disconnect();
     }, []);
 
     // Listen for audio level updates from main process (same as widget)
@@ -116,11 +139,14 @@ export function RecordingControls({
             </button>
 
             {/* Waveform container */}
-            <div className={`recording-controls__waveform ${isRecording ? 'recording-controls__waveform--active' : ''}`}>
+            <div
+                ref={waveformContainerRef}
+                className={`recording-controls__waveform ${isRecording ? 'recording-controls__waveform--active' : ''}`}
+            >
                 <Waveform
                     isRecording={isRecording}
                     audioLevel={audioLevel}
-                    width={320}
+                    width={waveformWidth}
                     height={40}
                     variant="light"
                 />
