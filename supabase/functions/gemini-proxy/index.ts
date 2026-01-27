@@ -770,9 +770,11 @@ Example bad: "Managed notifications while reviewing code changes and checking em
         sections.push(`\nScheduled meeting during this time: "${context.currentCalendarEvent}"`);
     }
 
-    // Screenshot descriptions - filtered and weighted by relevance to primary app
+    // Screenshot descriptions - pre-sampled by client with deduplication and strategic selection
+    // Client sends 15-25 curated descriptions, we filter peripheral activities as safety net
     if (context.screenshotDescriptions.length > 0) {
-        // Filter to prioritize descriptions mentioning the primary app
+        // Filter out peripheral activities (notifications, auth prompts, etc.)
+        // But preserve descriptions mentioning the primary app regardless
         const relevantDescriptions = primaryApp
             ? context.screenshotDescriptions.filter(desc =>
                 desc.toLowerCase().includes(primaryApp!.toLowerCase()) ||
@@ -781,8 +783,10 @@ Example bad: "Managed notifications while reviewing code changes and checking em
             : context.screenshotDescriptions.filter(desc => !isPeripheralActivity(desc));
 
         if (relevantDescriptions.length > 0) {
-            sections.push(`\nKey activities observed:`);
-            relevantDescriptions.slice(0, 5).forEach((desc, i) => {
+            sections.push(`\nKey activities observed (${relevantDescriptions.length} snapshots):`);
+            // Use all curated descriptions (client already sampled to ~20)
+            // Cap at 25 as safety limit
+            relevantDescriptions.slice(0, 25).forEach((desc, i) => {
                 sections.push(`${i + 1}. ${desc}`);
             });
         }

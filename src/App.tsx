@@ -54,6 +54,10 @@ function App() {
   const [bucketsTab, setBucketsTab] = useState<'buckets' | 'jira'>('buckets');
   const [jiraRefreshFn, setJiraRefreshFn] = useState<(() => void) | null>(null);
   const [isAudioRecording, setIsAudioRecording] = useState(false);
+  const [shouldPromptSplitting, setShouldPromptSplitting] = useState(false);
+
+  // Threshold for auto-prompting the Splitting Assistant (45 minutes)
+  const SPLITTING_PROMPT_THRESHOLD_MS = 45 * 60 * 1000;
 
   const { isRunning, isPaused, elapsed, start: startTimer, stop: stopTimer, pause: pauseTimer, resume: resumeTimer, formatTime, checkPermissions, setActiveRecordingEntry } = useTimer();
   const { clearPendingTranscription, waitForTranscriptions, getPendingAudio, clearPendingAudio } = useAudioRecording();
@@ -514,6 +518,13 @@ function App() {
         }
 
         console.log('[App] Activity saved, navigating to details for entry:', newEntry.id);
+
+        // Check if this was a long session that should prompt for splitting
+        const shouldPrompt = elapsed >= SPLITTING_PROMPT_THRESHOLD_MS;
+        if (shouldPrompt) {
+          console.log(`[App] Long session detected (${Math.round(elapsed / 60000)} min), will prompt Splitting Assistant`);
+          setShouldPromptSplitting(true);
+        }
 
         // Navigate to the Activity Details view for the new entry
         // Use setTimeout to ensure state update completes before navigation
@@ -1336,6 +1347,8 @@ function App() {
                 onUpdate={updateEntry}
                 onNavigateToSettings={() => setCurrentView('settings')}
                 formatTime={formatTime}
+                autoPromptSplitting={shouldPromptSplitting}
+                onSplittingPromptHandled={() => setShouldPromptSplitting(false)}
               />
             );
           })()}

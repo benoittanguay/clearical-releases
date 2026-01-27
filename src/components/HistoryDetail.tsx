@@ -48,6 +48,202 @@ function extractWindowTitleFromScreenshot(screenshotPaths?: string[]): string | 
 }
 
 /**
+ * Screenshot description with metadata for smart sampling
+ */
+interface DescriptionWithMetadata {
+    description: string;
+    timestamp: number;
+    appName?: string;
+}
+
+/**
+ * Calculate similarity between two strings (Jaccard similarity on words)
+ * Returns value between 0 (completely different) and 1 (identical)
+ */
+function calculateSimilarity(str1: string, str2: string): number {
+    const words1 = new Set(str1.toLowerCase().split(/\s+/).filter(w => w.length > 2));
+    const words2 = new Set(str2.toLowerCase().split(/\s+/).filter(w => w.length > 2));
+
+    if (words1.size === 0 && words2.size === 0) return 1;
+    if (words1.size === 0 || words2.size === 0) return 0;
+
+    const intersection = new Set([...words1].filter(w => words2.has(w)));
+    const union = new Set([...words1, ...words2]);
+
+    return intersection.size / union.size;
+}
+
+/**
+ * Smart sampling of screenshot descriptions for AI summarization
+ *
+ * Strategy:
+ * 1. Deduplicate consecutive similar descriptions (>70% similarity)
+ * 2. Preserve transition points (when app changes)
+ * 3. Sample at time intervals for long sessions
+ * 4. Weight toward primary app based on appDurations
+ * 5. Always include first and last (bookends)
+ *
+ * Target: 15-25 high-quality descriptions
+ */
+function smartSampleDescriptions(
+    descriptions: DescriptionWithMetadata[],
+    appDurations: Record<string, number>,
+    targetCount: number = 20
+): string[] {
+    if (descriptions.length === 0) return [];
+    if (descriptions.length <= targetCount) {
+        // If we have few enough descriptions, just deduplicate
+        return deduplicateDescriptions(descriptions);
+    }
+
+    // Sort by timestamp
+    const sorted = [...descriptions].sort((a, b) => a.timestamp - b.timestamp);
+
+    // Step 1: Deduplicate consecutive similar descriptions
+    const deduplicated = deduplicateWithCounts(sorted);
+
+    // If deduplication brought us under target, return all
+    if (deduplicated.length <= targetCount) {
+        return deduplicated.map(d => d.text);
+    }
+
+    // Step 2: Identify primary app
+    const primaryApp = Object.entries(appDurations)
+        .sort((a, b) => b[1] - a[1])[0]?.[0];
+
+    // Step 3: Strategic sampling
+    const sampled: Array<{ text: string; priority: number; index: number }> = [];
+
+    deduplicated.forEach((item, index) => {
+        let priority = 0;
+
+        // Bookends get highest priority
+        if (index === 0 || index === deduplicated.length - 1) {
+            priority = 100;
+        }
+        // Transition points (app changed from previous)
+        else if (index > 0 && item.appName !== deduplicated[index - 1].appName) {
+            priority = 80;
+        }
+        // Primary app descriptions
+        else if (primaryApp && item.appName === primaryApp) {
+            priority = 60 + (item.count > 1 ? 10 : 0); // Boost if repeated (indicates focus)
+        }
+        // Other descriptions
+        else {
+            priority = 30;
+        }
+
+        sampled.push({ text: item.text, priority, index });
+    });
+
+    // Sort by priority (descending), then by index (to maintain some temporal order)
+    sampled.sort((a, b) => {
+        if (b.priority !== a.priority) return b.priority - a.priority;
+        return a.index - b.index;
+    });
+
+    // Take top targetCount, then re-sort by original index for temporal order
+    const selected = sampled
+        .slice(0, targetCount)
+        .sort((a, b) => a.index - b.index)
+        .map(s => s.text);
+
+    return selected;
+}
+
+/**
+ * Simple deduplication without counts (for small sets)
+ */
+function deduplicateDescriptions(descriptions: DescriptionWithMetadata[]): string[] {
+    const result: string[] = [];
+    let lastDesc = '';
+
+    for (const item of descriptions) {
+        if (calculateSimilarity(item.description, lastDesc) < 0.7) {
+            result.push(item.description);
+            lastDesc = item.description;
+        }
+    }
+
+    return result;
+}
+
+/**
+ * Deduplicate consecutive similar descriptions and track counts
+ */
+function deduplicateWithCounts(
+    sorted: DescriptionWithMetadata[]
+): Array<{ text: string; count: number; appName?: string; timestamp: number }> {
+    const result: Array<{ text: string; count: number; appName?: string; timestamp: number }> = [];
+
+    for (const item of sorted) {
+        const last = result[result.length - 1];
+
+        if (last && calculateSimilarity(item.description, last.text) >= 0.7) {
+            // Similar to previous - increment count
+            last.count++;
+        } else {
+            // New distinct description
+            result.push({
+                text: item.description,
+                count: 1,
+                appName: item.appName,
+                timestamp: item.timestamp
+            });
+        }
+    }
+
+    // Format descriptions with counts for AI context
+    return result.map(item => ({
+        ...item,
+        text: item.count > 1
+            ? `${item.text} (×${item.count})`
+            : item.text
+    }));
+}
+
+/**
+ * Extract timestamp from screenshot path
+ * Format: {timestamp}|||{app_name}|||{window_title}.png
+ */
+function extractTimestampFromPath(path: string): number {
+    const filename = path.split('/').pop() || path.split('\\').pop() || '';
+
+    if (filename.includes('|||')) {
+        const timestampStr = filename.split('|||')[0];
+        const timestamp = parseInt(timestampStr, 10);
+        if (!isNaN(timestamp)) return timestamp;
+    }
+
+    // Fallback: try to parse as number directly
+    const match = filename.match(/^(\d+)/);
+    if (match) {
+        const timestamp = parseInt(match[1], 10);
+        if (!isNaN(timestamp)) return timestamp;
+    }
+
+    return Date.now(); // Fallback to current time
+}
+
+/**
+ * Extract app name from screenshot path
+ * Format: {timestamp}|||{app_name}|||{window_title}.png
+ */
+function extractAppNameFromPath(path: string): string | undefined {
+    const filename = path.split('/').pop() || path.split('\\').pop() || '';
+
+    if (filename.includes('|||')) {
+        const parts = filename.split('|||');
+        if (parts.length >= 2 && parts[1]) {
+            return parts[1];
+        }
+    }
+
+    return undefined;
+}
+
+/**
  * Get the best available window title for an activity.
  * Priority: activity.windowTitle > extracted from screenshot > fallback message
  */
@@ -74,6 +270,10 @@ interface HistoryDetailProps {
     onUpdate: (id: string, updates: Partial<TimeEntry>) => void;
     onNavigateToSettings: () => void;
     formatTime: (ms: number) => string;
+    /** Auto-prompt the Splitting Assistant for long sessions */
+    autoPromptSplitting?: boolean;
+    /** Callback when the splitting prompt has been handled (shown or dismissed) */
+    onSplittingPromptHandled?: () => void;
 }
 
 interface AppGroup {
@@ -83,7 +283,7 @@ interface AppGroup {
     icon?: string;
 }
 
-export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSettings, formatTime }: HistoryDetailProps) {
+export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSettings, formatTime, autoPromptSplitting, onSplittingPromptHandled }: HistoryDetailProps) {
     const { removeActivityFromEntry, removeAllActivitiesForApp, removeScreenshotFromEntry, addManualActivityToEntry, setEntryAssignment, createEntryFromActivity, entries } = useStorage();
     const { settings, updateSettings } = useSettings();
     const { hasFeature, upgrade } = useSubscription();
@@ -132,6 +332,7 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
     const [showSplittingAssistant, setShowSplittingAssistant] = useState(false);
     const [splitSuggestions, setSplitSuggestions] = useState<SplitSuggestion[]>([]);
     const [isAnalyzingSplits, setIsAnalyzingSplits] = useState(false);
+    const [showNoSplitsModal, setShowNoSplitsModal] = useState(false);
 
     // AI Analysis retry state
     const [isRetryingAnalysis, setIsRetryingAnalysis] = useState(false);
@@ -1167,7 +1368,7 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
 
         try {
             // Collect all context data
-            const screenshotDescriptions: string[] = [];
+            const rawDescriptions: DescriptionWithMetadata[] = [];
             const windowTitles: string[] = [];
             const appNames: string[] = [];
             const appDurations: Record<string, number> = {};
@@ -1187,15 +1388,25 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                     appDurations[activity.appName] = (appDurations[activity.appName] || 0) + activity.duration;
                 }
 
-                // Collect screenshot descriptions
+                // Collect screenshot descriptions with metadata for smart sampling
                 if (activity.screenshotDescriptions) {
-                    Object.values(activity.screenshotDescriptions).forEach(desc => {
+                    Object.entries(activity.screenshotDescriptions).forEach(([path, desc]) => {
                         if (desc && desc.trim()) {
-                            screenshotDescriptions.push(desc);
+                            rawDescriptions.push({
+                                description: desc,
+                                timestamp: extractTimestampFromPath(path),
+                                appName: extractAppNameFromPath(path) || activity.appName
+                            });
                         }
                     });
                 }
             });
+
+            // Smart sample descriptions: deduplicate + strategic selection
+            // Target 15-25 high-quality descriptions instead of raw dump
+            const screenshotDescriptions = smartSampleDescriptions(rawDescriptions, appDurations, 20);
+
+            console.log(`[HistoryDetail] Smart sampling: ${rawDescriptions.length} raw → ${screenshotDescriptions.length} sampled descriptions`);
 
             // Collect transcriptions from meeting recordings
             const transcriptions: Array<{ text: string; duration: number; language: string }> = [];
@@ -1282,7 +1493,8 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
     };
 
     // Handler for suggesting splits
-    const handleSuggestSplits = async () => {
+    // isAutoPrompted: true when triggered automatically for long sessions
+    const handleSuggestSplits = async (isAutoPrompted: boolean = false) => {
         setIsAnalyzingSplits(true);
         try {
             // Gather activity data with screenshots
@@ -1324,8 +1536,39 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                     duration: entry.duration
                 });
             } else {
-                // No splits found - silently do nothing (as per requirements)
+                // No splits found
                 console.log('[HistoryDetail] No splits suggested for entry:', entry.id);
+
+                if (isAutoPrompted) {
+                    // For auto-prompted sessions, inform user and generate summary
+                    showToast({
+                        type: 'success',
+                        title: 'Focused Work Detected',
+                        message: 'This looks like focused work on a single task. Generating summary...',
+                        duration: 4000
+                    });
+
+                    analytics.track('splits_not_needed', {
+                        entry_id: entry.id,
+                        duration: entry.duration,
+                        auto_prompted: true
+                    });
+
+                    // Auto-generate summary since no splitting is needed
+                    // Use setTimeout to let the toast appear first
+                    setTimeout(() => {
+                        handleGenerateSummary(true);
+                    }, 500);
+                } else {
+                    // For manual clicks, show informative modal
+                    setShowNoSplitsModal(true);
+
+                    analytics.track('splits_not_needed', {
+                        entry_id: entry.id,
+                        duration: entry.duration,
+                        auto_prompted: false
+                    });
+                }
             }
         } catch (error) {
             console.error('Failed to analyze splits:', error);
@@ -1339,6 +1582,17 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
             setIsAnalyzingSplits(false);
         }
     };
+
+    // Auto-prompt Splitting Assistant for long sessions
+    useEffect(() => {
+        if (autoPromptSplitting && !showSplittingAssistant && !isAnalyzingSplits) {
+            console.log('[HistoryDetail] Auto-prompting Splitting Assistant for long session');
+            // Trigger the splitting analysis with auto-prompted flag
+            handleSuggestSplits(true);
+            // Clear the prompt flag so it doesn't re-trigger
+            onSplittingPromptHandled?.();
+        }
+    }, [autoPromptSplitting]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Helper to run AI tasks for a split entry (non-blocking - failures don't prevent entry creation)
     const runAITasksForSplit = async (
@@ -1725,7 +1979,7 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                         {/* Splitting Assistant button - only show for activities > 15 minutes */}
                         {entry.duration > 15 * 60 * 1000 && (
                             <button
-                                onClick={handleSuggestSplits}
+                                onClick={() => handleSuggestSplits(false)}
                                 disabled={isAnalyzingSplits}
                                 className={`px-3 py-1.5 text-sm flex items-center justify-center gap-1.5 transition-all active:scale-95`}
                                 style={{
@@ -2850,6 +3104,79 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                     onClose={() => setShowSplittingAssistant(false)}
                     onApply={handleApplySplits}
                 />
+            )}
+
+            {/* No Splits Suggested Modal */}
+            {showNoSplitsModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center">
+                    {/* Backdrop */}
+                    <div
+                        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+                        onClick={() => setShowNoSplitsModal(false)}
+                    />
+
+                    {/* Modal */}
+                    <div
+                        className="relative w-full max-w-md mx-4 rounded-xl shadow-2xl overflow-hidden"
+                        style={{ backgroundColor: 'var(--color-bg-primary)' }}
+                    >
+                        {/* Header */}
+                        <div className="px-6 py-4 border-b" style={{ borderColor: 'var(--color-border-primary)' }}>
+                            <div className="flex items-center gap-3">
+                                <div
+                                    className="w-10 h-10 rounded-full flex items-center justify-center"
+                                    style={{ backgroundColor: 'var(--color-bg-secondary)' }}
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--color-accent)' }}>
+                                        <circle cx="12" cy="12" r="10"/>
+                                        <line x1="12" y1="16" x2="12" y2="12"/>
+                                        <line x1="12" y1="8" x2="12.01" y2="8"/>
+                                    </svg>
+                                </div>
+                                <h3 className="text-lg font-semibold" style={{ color: 'var(--color-text-primary)' }}>
+                                    No Split Suggestions
+                                </h3>
+                            </div>
+                        </div>
+
+                        {/* Content */}
+                        <div className="px-6 py-5">
+                            <p className="text-sm leading-relaxed" style={{ color: 'var(--color-text-secondary)' }}>
+                                The AI didn't detect any clear task boundaries in this session. This typically means you were focused on a single project or task.
+                            </p>
+                            <p className="text-sm leading-relaxed mt-3" style={{ color: 'var(--color-text-secondary)' }}>
+                                You can still manually create a new entry from any activity using the{' '}
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium" style={{ backgroundColor: 'var(--color-bg-secondary)', color: 'var(--color-text-primary)' }}>
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <circle cx="12" cy="18" r="3"/>
+                                        <circle cx="6" cy="6" r="3"/>
+                                        <circle cx="18" cy="6" r="3"/>
+                                        <path d="M18 9v2c0 .6-.4 1-1 1H7c-.6 0-1-.4-1-1V9"/>
+                                        <path d="M12 12v3"/>
+                                    </svg>
+                                    Split
+                                </span>
+                                {' '}button on each activity row.
+                            </p>
+                        </div>
+
+                        {/* Footer */}
+                        <div className="px-6 py-4 border-t" style={{ borderColor: 'var(--color-border-primary)', backgroundColor: 'var(--color-bg-secondary)' }}>
+                            <button
+                                onClick={() => setShowNoSplitsModal(false)}
+                                className="w-full py-2.5 px-4 rounded-lg text-sm font-medium transition-colors"
+                                style={{
+                                    backgroundColor: 'var(--color-accent)',
+                                    color: 'white'
+                                }}
+                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--color-accent-hover)'}
+                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'var(--color-accent)'}
+                            >
+                                Got it
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );
