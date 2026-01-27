@@ -2,6 +2,15 @@
 
 All notable changes to Clearical will be documented in this file.
 
+## [1.7.8] - 2025-01-26
+
+### Improvements
+- Enhanced AI summary generation with smarter context sampling for better accuracy
+- Splitting Assistant now auto-prompts for long sessions (45+ minutes) to help organize your work
+- Recording controls now display directly below the timer digits for a cleaner layout
+
+---
+
 ## [1.7.4] - 2025-01-23
 
 ### New Features
