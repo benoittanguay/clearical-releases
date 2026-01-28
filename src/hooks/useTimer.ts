@@ -90,6 +90,28 @@ function extractStableIdentifier(windowTitle: string): string | null {
 }
 
 /**
+ * Generate entity key for screenshot cooldown tracking.
+ * Browsers: bundleId:stableIdentifier (e.g., "com.google.Chrome:github.com")
+ * Non-browsers: bundleId or appName
+ */
+function getScreenshotCooldownKey(
+    appName: string,
+    windowTitle: string,
+    bundleId?: string
+): string {
+    const isBrowser = BROWSER_BUNDLE_IDS.includes(bundleId || '');
+
+    if (isBrowser) {
+        const stableIdentifier = extractStableIdentifier(windowTitle);
+        if (stableIdentifier) {
+            return `${bundleId || appName}:${stableIdentifier}`;
+        }
+    }
+
+    return bundleId || appName;
+}
+
+/**
  * Determine if a window change is "significant" enough to create a new activity.
  * Returns true if we should create a new activity, false if we should just update the title.
  */
@@ -147,6 +169,7 @@ export function useTimer() {
     const currentActivityScreenshotDescriptions = useRef<{ [path: string]: string }>({});
     const currentActivityScreenshotVisionData = useRef<{ [path: string]: VisionFrameworkRawData }>({});
     const lastScreenshotTime = useRef<number>(0);
+    const entityLastScreenshotTime = useRef<Map<string, number>>(new Map());
     const pollingActiveRef = useRef<boolean>(false);
     const pendingAnalyses = useRef<Map<string, Promise<void>>>(new Map());
 
@@ -206,8 +229,12 @@ export function useTimer() {
         const INTERVAL_SCREENSHOT_TIME = 2 * 60 * 1000; // 2 minutes - screenshot if no window change
         const WINDOW_POLL_INTERVAL = 1 * 1000; // 1 second for better window change detection
         const MIN_SCREENSHOT_INTERVAL = 5 * 1000; // Minimum 5 seconds between screenshots
+        const PER_ENTITY_COOLDOWN = 2 * 60 * 1000; // 2 minutes per-entity cooldown
 
-        const captureScreenshotForCurrentWindow = async (reason: string) => {
+        const captureScreenshotForCurrentWindow = async (
+            reason: string,
+            bypassEntityCooldown: boolean = false
+        ) => {
             const now = Date.now();
             const currentWindow = lastWindowRef.current;
 
@@ -235,6 +262,25 @@ export function useTimer() {
                 return null;
             }
 
+            // Per-entity cooldown check (only for window-change screenshots)
+            if (!bypassEntityCooldown && currentWindow) {
+                const entityKey = getScreenshotCooldownKey(
+                    currentWindow.appName,
+                    currentWindow.windowTitle,
+                    currentWindow.bundleId
+                );
+                const lastEntityScreenshot = entityLastScreenshotTime.current.get(entityKey);
+
+                if (lastEntityScreenshot && (now - lastEntityScreenshot) < PER_ENTITY_COOLDOWN) {
+                    const remainingCooldown = PER_ENTITY_COOLDOWN - (now - lastEntityScreenshot);
+                    console.log(
+                        `[Renderer] ⏱️ Per-entity cooldown active for "${entityKey}" ` +
+                        `(${Math.round(remainingCooldown / 1000)}s remaining), skipping ${reason}`
+                    );
+                    return null;
+                }
+            }
+
             console.log(`[Renderer] 📸 Taking screenshot: ${reason} for ${currentWindow.appName}/${currentWindow.windowTitle}`);
 
             try {
@@ -252,9 +298,19 @@ export function useTimer() {
                     currentActivityScreenshots.current.push(path);
                     lastScreenshotTime.current = now;
                     console.log('[Renderer] 📁 Screenshot added. Total:', currentActivityScreenshots.current.length);
-                    
+
                     // Start AI analysis
                     analyzeScreenshotAsync(path, now);
+
+                    // Update per-entity cooldown timestamp
+                    if (currentWindow) {
+                        const entityKey = getScreenshotCooldownKey(
+                            currentWindow.appName,
+                            currentWindow.windowTitle,
+                            currentWindow.bundleId
+                        );
+                        entityLastScreenshotTime.current.set(entityKey, now);
+                    }
                 } else {
                     console.log('[Renderer] ⚠️ Duplicate screenshot path, skipping');
                 }
@@ -607,7 +663,7 @@ export function useTimer() {
                         clearInterval(screenshotIntervalRef.current);
                     }
                     screenshotIntervalRef.current = setInterval(async () => {
-                        await captureScreenshotForCurrentWindow('interval-2min');
+                        await captureScreenshotForCurrentWindow('interval-2min', true);
                     }, INTERVAL_SCREENSHOT_TIME);
 
                 } else {
@@ -659,15 +715,12 @@ export function useTimer() {
             const screenStatus = await window.electron.ipcRenderer.checkScreenPermission();
             const hasScreenRecording = screenStatus === 'granted';
 
-            // Check accessibility permission by trying to get active window
-            let hasAccessibility = false;
-            try {
-                // @ts-ignore
-                await window.electron.ipcRenderer.getActiveWindow();
-                hasAccessibility = true;
-            } catch {
-                hasAccessibility = false;
-            }
+            // Check accessibility permission using proper macOS API
+            // @ts-ignore
+            const accessibilityStatus = await window.electron.ipcRenderer.checkAccessibilityPermission();
+            const hasAccessibility = accessibilityStatus === 'granted';
+
+            console.log('[Timer] Permission check:', { hasAccessibility, hasScreenRecording, accessibilityStatus, screenStatus });
 
             return {
                 hasAccessibility,
@@ -702,6 +755,7 @@ export function useTimer() {
         currentActivityScreenshotDescriptions.current = {}; // Reset descriptions
         currentActivityScreenshotVisionData.current = {}; // Reset vision data
         lastScreenshotTime.current = 0; // Reset screenshot timing
+        entityLastScreenshotTime.current.clear(); // Clear per-entity cooldowns
         pendingAnalyses.current.clear(); // Clear any pending analyses from previous session
         analysisQueue.current = []; // Clear analysis queue
         activeAnalysisCount.current = 0; // Reset active count
@@ -966,6 +1020,7 @@ export function useTimer() {
         currentActivityScreenshotDescriptions.current = {}; // Reset descriptions
         currentActivityScreenshotVisionData.current = {}; // Reset vision data
         lastScreenshotTime.current = 0; // Reset screenshot timing
+        entityLastScreenshotTime.current.clear(); // Clear per-entity cooldowns
         pendingAnalyses.current.clear(); // Clear pending analyses
         analysisQueue.current = []; // Clear analysis queue
         activeAnalysisCount.current = 0; // Reset active count

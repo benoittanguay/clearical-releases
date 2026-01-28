@@ -1380,9 +1380,10 @@ ipcMain.handle('get-active-window', async () => {
 
 ipcMain.handle('check-accessibility-permission', () => {
     if (process.platform === 'darwin') {
-        // Note: Accessibility permission cannot be checked programmatically
-        // We return 'unknown' and rely on the AppleScript calls to trigger the prompt
-        return 'unknown';
+        // Use Electron's API to check if we have accessibility permission
+        // Pass false to avoid prompting - we just want to check the status
+        const isTrusted = systemPreferences.isTrustedAccessibilityClient(false);
+        return isTrusted ? 'granted' : 'denied';
     }
     return 'granted';
 });
