@@ -260,6 +260,14 @@ export class RecordingWidgetManager {
     public sendMeetingEndedPrompt(entryId: string, silenceDuration: number): void {
         if (this.widgetWindow && !this.widgetWindow.isDestroyed()) {
             console.log('[RecordingWidgetManager] Sending meeting-ended prompt to widget');
+
+            // Show the window if it was hidden (user may have dismissed it during recording)
+            if (!this.widgetWindow.isVisible()) {
+                console.log('[RecordingWidgetManager] Widget was hidden, showing for meeting-ended prompt');
+                this.widgetWindow.show();
+                this.isShowing = true;
+            }
+
             this.widgetWindow.webContents.send('widget:show-meeting-ended-prompt', {
                 entryId,
                 silenceDuration,
