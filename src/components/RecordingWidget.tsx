@@ -473,9 +473,15 @@ export function RecordingWidget(): React.ReactElement {
     const handlePromptAccept = useCallback(async () => {
         console.log('[RecordingWidget] *** PROMPT ACCEPTED - USER WANTS TO START TIMER ***');
 
+        // Verify IPC is available before attempting call
+        if (!window.electron?.ipcRenderer?.invoke) {
+            console.error('[RecordingWidget] IPC not available - cannot send prompt accepted');
+            return;
+        }
+
         try {
-            await window.electron?.ipcRenderer?.invoke?.('widget:prompt-accepted', { timestamp: Date.now() });
-            console.log('[RecordingWidget] Prompt accepted sent to main');
+            const result = await window.electron.ipcRenderer.invoke('widget:prompt-accepted', { timestamp: Date.now() });
+            console.log('[RecordingWidget] Prompt accepted sent to main, result:', result);
             // Widget will be closed by main process, state change will happen when reopened for recording
         } catch (error) {
             console.error('[RecordingWidget] Error sending prompt accepted:', error);
@@ -489,9 +495,15 @@ export function RecordingWidget(): React.ReactElement {
 
         // After animation completes, tell main process
         setTimeout(async () => {
+            // Verify IPC is available before attempting call
+            if (!window.electron?.ipcRenderer?.invoke) {
+                console.error('[RecordingWidget] IPC not available - cannot send prompt dismissed');
+                return;
+            }
+
             try {
-                await window.electron?.ipcRenderer?.invoke?.('widget:prompt-dismissed', { timestamp: Date.now() });
-                console.log('[RecordingWidget] Prompt dismissed sent to main');
+                const result = await window.electron.ipcRenderer.invoke('widget:prompt-dismissed', { timestamp: Date.now() });
+                console.log('[RecordingWidget] Prompt dismissed sent to main, result:', result);
             } catch (error) {
                 console.error('[RecordingWidget] Error sending prompt dismissed:', error);
             }
