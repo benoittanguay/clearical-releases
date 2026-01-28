@@ -168,6 +168,10 @@ export interface ElectronAPI {
         }>;
         getActiveWindow: () => Promise<{ appName: string; windowTitle: string; bundleId: string }>;
         getEnvironmentInfo: () => Promise<{ isDevelopment: boolean; buildEnv: string; isPackaged: boolean; version: string }>;
+        // Main process log file access
+        getMainLogPath: () => Promise<string>;
+        openMainLogFolder: () => Promise<void>;
+        getMainLogContent: () => Promise<string | null>;
         checkAccessibilityPermission: () => Promise<string>;
         checkScreenPermission: () => Promise<string>;
         requestScreenPermission: () => Promise<string>;

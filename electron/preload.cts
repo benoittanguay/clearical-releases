@@ -116,6 +116,13 @@ contextBridge.exposeInMainWorld('electron', {
         // Environment info
         getEnvironmentInfo: () =>
             ipcRenderer.invoke('get-environment-info'),
+        // Main process log file access
+        getMainLogPath: () =>
+            ipcRenderer.invoke('get-main-log-path'),
+        openMainLogFolder: () =>
+            ipcRenderer.invoke('open-main-log-folder'),
+        getMainLogContent: () =>
+            ipcRenderer.invoke('get-main-log-content'),
         // AI features
         suggestAssignment: (request: {
             context: {

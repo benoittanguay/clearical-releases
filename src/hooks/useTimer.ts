@@ -103,6 +103,11 @@ function getScreenshotCooldownKey(
 
     if (isBrowser) {
         const stableIdentifier = extractStableIdentifier(windowTitle);
+        console.log(`[Renderer] 🔑 Browser key generation:`, {
+            windowTitle,
+            extractedIdentifier: stableIdentifier,
+            resultKey: stableIdentifier ? `${bundleId || appName}:${stableIdentifier}` : bundleId || appName
+        });
         if (stableIdentifier) {
             return `${bundleId || appName}:${stableIdentifier}`;
         }
@@ -271,6 +276,16 @@ export function useTimer() {
                 );
                 const lastEntityScreenshot = entityLastScreenshotTime.current.get(entityKey);
 
+                // Debug logging to trace cooldown behavior
+                console.log(`[Renderer] 🔍 Cooldown check for "${entityKey}":`, {
+                    windowTitle: currentWindow.windowTitle,
+                    bundleId: currentWindow.bundleId,
+                    lastEntityScreenshot: lastEntityScreenshot ? new Date(lastEntityScreenshot).toISOString() : 'none',
+                    timeSinceLast: lastEntityScreenshot ? `${Math.round((now - lastEntityScreenshot) / 1000)}s` : 'N/A',
+                    cooldownPeriod: `${PER_ENTITY_COOLDOWN / 1000}s`,
+                    allTrackedEntities: Array.from(entityLastScreenshotTime.current.keys())
+                });
+
                 if (lastEntityScreenshot && (now - lastEntityScreenshot) < PER_ENTITY_COOLDOWN) {
                     const remainingCooldown = PER_ENTITY_COOLDOWN - (now - lastEntityScreenshot);
                     console.log(
@@ -310,6 +325,7 @@ export function useTimer() {
                             currentWindow.bundleId
                         );
                         entityLastScreenshotTime.current.set(entityKey, now);
+                        console.log(`[Renderer] ✅ Cooldown set for "${entityKey}" at ${new Date(now).toISOString()}`);
                     }
                 } else {
                     console.log('[Renderer] ⚠️ Duplicate screenshot path, skipping');
@@ -578,6 +594,19 @@ export function useTimer() {
                     lastWindowRef.current.windowTitle !== result.windowTitle;
 
                 const significantChange = isSignificantWindowChange(lastWindowRef.current, result);
+
+                // Debug: Log window change evaluation
+                if (titleChanged || significantChange) {
+                    console.log('[Renderer] 🔄 Window change evaluation:', {
+                        titleChanged,
+                        significantChange,
+                        lastApp: lastWindowRef.current?.appName || 'none',
+                        lastTitle: lastWindowRef.current?.windowTitle || 'none',
+                        newApp: result.appName,
+                        newTitle: result.windowTitle,
+                        newBundleId: result.bundleId
+                    });
+                }
 
                 if (titleChanged && !significantChange && lastWindowRef.current) {
                     // Minor title change (e.g., "Camera active" suffix in Google Meet)

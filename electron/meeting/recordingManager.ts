@@ -31,9 +31,13 @@ export class RecordingManager extends EventEmitter {
 
     private constructor() {
         super();
+        console.log('[RecordingManager] ========================================');
+        console.log('[RecordingManager] CONSTRUCTOR - Initializing RecordingManager');
+        console.log('[RecordingManager] ========================================');
         this.audioRecorder = getAudioRecorder();
         this.setupMediaMonitorListeners();
         this.setupWidgetCallback();
+        console.log('[RecordingManager] Initialization complete');
     }
 
     /**
@@ -65,10 +69,28 @@ export class RecordingManager extends EventEmitter {
     }
 
     private setupMediaMonitorListeners(): void {
-        mediaMonitor.on('mic-started', () => this.onMediaStarted('microphone'));
-        mediaMonitor.on('mic-stopped', () => this.onMediaStopped('microphone'));
-        mediaMonitor.on('camera-started', () => this.onMediaStarted('camera'));
-        mediaMonitor.on('camera-stopped', () => this.onMediaStopped('camera'));
+        console.log('[RecordingManager] Setting up MediaMonitor listeners...');
+        console.log('[RecordingManager] mediaMonitor available:', !!mediaMonitor);
+        console.log('[RecordingManager] mediaMonitor.on available:', typeof mediaMonitor?.on);
+
+        mediaMonitor.on('mic-started', () => {
+            console.log('[RecordingManager] >>> MIC-STARTED EVENT RECEIVED <<<');
+            this.onMediaStarted('microphone');
+        });
+        mediaMonitor.on('mic-stopped', () => {
+            console.log('[RecordingManager] >>> MIC-STOPPED EVENT RECEIVED <<<');
+            this.onMediaStopped('microphone');
+        });
+        mediaMonitor.on('camera-started', () => {
+            console.log('[RecordingManager] >>> CAMERA-STARTED EVENT RECEIVED <<<');
+            this.onMediaStarted('camera');
+        });
+        mediaMonitor.on('camera-stopped', () => {
+            console.log('[RecordingManager] >>> CAMERA-STOPPED EVENT RECEIVED <<<');
+            this.onMediaStopped('camera');
+        });
+
+        console.log('[RecordingManager] MediaMonitor listeners registered');
     }
 
     /**
@@ -412,15 +434,22 @@ export class RecordingManager extends EventEmitter {
      * Show prompt widget asking user to start timer
      */
     private showPromptWidget(): void {
+        console.log('[RecordingManager] ========================================');
+        console.log('[RecordingManager] showPromptWidget CALLED');
+        console.log('[RecordingManager] isPromptMode:', this.isPromptMode);
+        console.log('[RecordingManager] currentMeetingApp:', this.currentMeetingApp?.appName || 'null');
+        console.log('[RecordingManager] ========================================');
+
         if (this.isPromptMode) {
-            console.log('[RecordingManager] Already in prompt mode');
+            console.log('[RecordingManager] Already in prompt mode, skipping');
             return;
         }
 
         this.isPromptMode = true;
         const widgetManager = getRecordingWidgetManager();
+        console.log('[RecordingManager] Got widgetManager, calling showPrompt...');
         widgetManager.showPrompt(this.currentMeetingApp);
-        console.log('[RecordingManager] Prompt widget shown');
+        console.log('[RecordingManager] Prompt widget shown successfully');
     }
 
     /**

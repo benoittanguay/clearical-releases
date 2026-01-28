@@ -5,6 +5,10 @@ import os from 'os';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { config as dotenvConfig } from 'dotenv';
 
+// Initialize main process file logger FIRST - before any other logging
+import { mainLogger } from './mainLogger.js';
+mainLogger.initialize();
+
 // Load environment variables from .env.local
 const __dirnameTemp = path.dirname(fileURLToPath(import.meta.url));
 const envPath = path.resolve(__dirnameTemp, '../.env.local');
@@ -1180,6 +1184,29 @@ This is a known macOS issue with app updates. Your data is safe.`;
                 buttons: ['OK']
             });
         }
+    }
+});
+
+// Main process log file handlers
+ipcMain.handle('get-main-log-path', async () => {
+    return mainLogger.getLogPath();
+});
+
+ipcMain.handle('open-main-log-folder', async () => {
+    const logPath = mainLogger.getLogPath();
+    shell.showItemInFolder(logPath);
+});
+
+ipcMain.handle('get-main-log-content', async () => {
+    try {
+        const logPath = mainLogger.getLogPath();
+        if (fs.existsSync(logPath)) {
+            return fs.readFileSync(logPath, 'utf-8');
+        }
+        return null;
+    } catch (err) {
+        console.error('[Main] Failed to read log file:', err);
+        return null;
     }
 });
 
