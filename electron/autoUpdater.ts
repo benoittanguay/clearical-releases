@@ -326,14 +326,38 @@ export class AutoUpdater {
         }
 
         log.info('[AutoUpdater] Installing update and restarting...');
+        log.info('[AutoUpdater] Platform:', process.platform);
 
-        // setImmediate ensures the renderer process has time to handle the event
-        setImmediate(() => {
+        // On macOS, we need to be more aggressive about closing windows
+        // to ensure the update can be applied properly
+        const allWindows = BrowserWindow.getAllWindows();
+        log.info('[AutoUpdater] Closing', allWindows.length, 'windows before install...');
+
+        // Force close all windows to prevent them from blocking the update
+        for (const win of allWindows) {
             try {
-                // false = don't force close windows (allows cleanup)
-                // true = quit after install
-                log.info('[AutoUpdater] Calling autoUpdater.quitAndInstall()...');
-                autoUpdater.quitAndInstall(false, true);
+                if (!win.isDestroyed()) {
+                    win.removeAllListeners('close');
+                    win.close();
+                }
+            } catch (err) {
+                log.warn('[AutoUpdater] Failed to close window:', err);
+            }
+        }
+
+        // Small delay to ensure windows are closed, then install
+        setTimeout(() => {
+            try {
+                // isSilent: true = don't show installer window (better for macOS)
+                // isForceRunAfter: true = force app to restart after install
+                log.info('[AutoUpdater] Calling autoUpdater.quitAndInstall(true, true)...');
+                autoUpdater.quitAndInstall(true, true);
+
+                // If quitAndInstall doesn't exit the app (rare), force quit after a delay
+                setTimeout(() => {
+                    log.info('[AutoUpdater] Force quitting app as fallback...');
+                    app.exit(0);
+                }, 1000);
             } catch (error) {
                 // Catch errors that occur during the actual quit and install
                 log.error('[AutoUpdater] Failed to quit and install:', error);
@@ -346,14 +370,14 @@ export class AutoUpdater {
                 };
                 this.sendStatusToRenderer();
 
-                // Show dialog to user if possible
+                // Show dialog to user if possible - though windows are likely closed
                 if (this.mainWindow && !this.mainWindow.isDestroyed()) {
                     this.mainWindow.webContents.send('update-install-failed', {
                         error: error instanceof Error ? error.message : 'Failed to install update'
                     });
                 }
             }
-        });
+        }, 500);
     }
 
     /**
