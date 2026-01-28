@@ -1,6 +1,6 @@
 # Screenshot Capture Optimization Design
 
-**Status**: In Progress - Brainstorming
+**Status**: Completed
 **Date**: 2026-01-27
 **Version**: 1.7.8 QA Feedback
 
@@ -48,7 +48,7 @@ Replace the threshold-based logic with a **per-app/window timer** that tracks ti
 
 **Awaiting user input on this question.**
 
-## Secondary Issue (Noted)
+## Secondary Issue (Fixed)
 
 The user also observed what appeared to be a Jira issue assignment "reverting" from a good match to a less accurate one. From the logs:
 
@@ -58,7 +58,16 @@ The user also observed what appeared to be a Jira issue assignment "reverting" f
 [HistoryDetail] Auto-assigning with confidence: 0.75 → DEM-4
 ```
 
-Multiple AI suggestion requests appear to be firing (possibly due to React effect cleanup/setup cycles - visible in the many `AudioRecordingContext` mount/unmount logs). This may need investigation after the screenshot optimization work.
+**Root cause**: Race condition in `autoAssignWork()` - multiple concurrent calls were proceeding because:
+1. The function only checked `selectedAssignment` (local state) which could be stale in closures
+2. No protection against concurrent calls
+3. Cascading React effects triggered multiple invocations
+
+**Fix applied** (commit pending):
+- Added `isAutoAssigningRef` to prevent concurrent auto-assign calls
+- Added `autoAssignedForEntryRef` to prevent multiple auto-assigns for the same entry
+- Now checks both `selectedAssignment` AND `entry.assignment` to handle stale closures
+- Refs are reset when switching to a different entry
 
 ## Key Files
 

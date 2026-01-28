@@ -328,6 +328,10 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
     const accountsCacheRef = useRef<Map<string, TempoAccount[]>>(new Map());
     const isLoadingAccountsRef = useRef<Map<string, boolean>>(new Map());
 
+    // Race condition prevention for auto-assignment
+    const isAutoAssigningRef = useRef<boolean>(false);
+    const autoAssignedForEntryRef = useRef<string | null>(null); // Track which entry has been auto-assigned
+
     // Splitting Assistant state
     const [showSplittingAssistant, setShowSplittingAssistant] = useState(false);
     const [splitSuggestions, setSplitSuggestions] = useState<SplitSuggestion[]>([]);
@@ -442,6 +446,11 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
     useEffect(() => {
         setDescription(entry.description || '');
         setGenerationFailed(false);  // Reset on entry change to allow retry on new entry
+        // Reset auto-assign tracking for new entry
+        if (autoAssignedForEntryRef.current !== entry.id) {
+            autoAssignedForEntryRef.current = null;
+            isAutoAssigningRef.current = false;
+        }
     }, [entry.id]);
 
     // Update assignment when entry changes (can depend on more fields since it's not auto-saved on keystroke)
@@ -532,7 +541,26 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
             }
 
             // Don't override existing assignment for auto-trigger
-            if (selectedAssignment) return;
+            // Check BOTH local state AND entry prop to handle stale closures
+            if (selectedAssignment || entry.assignment) {
+                console.log('[HistoryDetail] Assignment already exists, skipping auto-assign');
+                return;
+            }
+
+            // Prevent concurrent auto-assign calls (race condition protection)
+            if (isAutoAssigningRef.current) {
+                console.log('[HistoryDetail] Auto-assign already in progress, skipping');
+                return;
+            }
+
+            // Prevent multiple auto-assigns for the same entry
+            if (autoAssignedForEntryRef.current === entry.id) {
+                console.log('[HistoryDetail] Already auto-assigned for this entry, skipping');
+                return;
+            }
+
+            // Mark as in-progress
+            isAutoAssigningRef.current = true;
         }
 
         // Set loading state for manual trigger
@@ -628,8 +656,14 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                 // Store previous assignment for undo
                 previousAssignmentRef.current = selectedAssignment;
 
+                // Mark this entry as auto-assigned to prevent re-triggering
+                if (!manualTrigger) {
+                    autoAssignedForEntryRef.current = entry.id;
+                }
+
                 // Auto-assign with notification
-                console.log('[HistoryDetail] Auto-assigning with confidence:', result.suggestion.confidence);
+                console.log('[HistoryDetail] Auto-assigning with confidence:', result.suggestion.confidence, '→',
+                    result.suggestion.assignment.type === 'jira' ? result.suggestion.assignment.jiraIssue?.key : result.suggestion.assignment.bucket?.name);
                 handleAssignmentChange(result.suggestion.assignment, true);
 
                 // Track AI assignment usage
@@ -639,6 +673,10 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                 console.log('[HistoryDetail] Assignment reason:', result.suggestion.reason);
             } else {
                 console.log('[HistoryDetail] No assignment suggestion available');
+                // Still mark as attempted to prevent retries
+                if (!manualTrigger) {
+                    autoAssignedForEntryRef.current = entry.id;
+                }
                 if (manualTrigger) {
                     showToast({
                         type: 'info',
@@ -659,6 +697,10 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                 });
             }
         } finally {
+            // Clear in-progress flag
+            if (!manualTrigger) {
+                isAutoAssigningRef.current = false;
+            }
             if (manualTrigger) {
                 setIsAssigningBucket(false);
             }
