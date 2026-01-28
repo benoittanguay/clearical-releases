@@ -18,9 +18,6 @@ import { AudioRecorder, getAudioRecorder } from './audioRecorder.js';
 import { MEETING_EVENTS, MEETING_IPC_CHANNELS, MeetingAppInfo } from './types.js';
 import { getRecordingWidgetManager } from './recordingWidgetManager.js';
 
-// Cooldown period after dismissing prompt before re-prompting (30 seconds)
-const PROMPT_COOLDOWN_MS = 30 * 1000;
-
 export class RecordingManager extends EventEmitter {
     private static instance: RecordingManager | null = null;
 
@@ -31,8 +28,6 @@ export class RecordingManager extends EventEmitter {
     private recordingStartTime: number | null = null;
     private currentMeetingApp: MeetingAppInfo | null = null;
     private isPromptMode: boolean = false;  // When widget is showing "Start timer?" prompt
-    private promptDismissedTimestamp: number | null = null;  // Track when prompt was last dismissed
-    private rePromptTimerId: ReturnType<typeof setTimeout> | null = null;  // Timer for re-prompting after cooldown
 
     private constructor() {
         super();
@@ -132,17 +127,6 @@ export class RecordingManager extends EventEmitter {
                 this.isPromptMode = false;
                 const widgetManager = getRecordingWidgetManager();
                 widgetManager.close();
-            }
-
-            // Clear any prompt cooldown state since user manually started recording
-            // This ensures automatic prompts work correctly for future meetings
-            if (this.promptDismissedTimestamp || this.rePromptTimerId) {
-                console.log('[RecordingManager] Clearing prompt cooldown state (manual start)');
-                this.promptDismissedTimestamp = null;
-                if (this.rePromptTimerId) {
-                    clearTimeout(this.rePromptTimerId);
-                    this.rePromptTimerId = null;
-                }
             }
 
             console.log('[RecordingManager] Entry active, checking media:', {
@@ -399,14 +383,6 @@ export class RecordingManager extends EventEmitter {
 
         // Only stop recording if BOTH mic and camera are inactive
         if (!micInUse && !cameraInUse) {
-            // Clear re-prompt timer and dismissal tracking since meeting ended
-            if (this.rePromptTimerId) {
-                clearTimeout(this.rePromptTimerId);
-                this.rePromptTimerId = null;
-                console.log('[RecordingManager] Cleared re-prompt timer (media stopped)');
-            }
-            this.promptDismissedTimestamp = null;
-
             if (this.isRendererRecording) {
                 console.log('[RecordingManager] *** ALL MEDIA STOPPED - STOPPING RECORDING AND CLOSING WIDGET ***');
                 this.notifyRendererToStopRecording();
@@ -441,17 +417,6 @@ export class RecordingManager extends EventEmitter {
             return;
         }
 
-        // Check cooldown - don't re-prompt immediately after dismissal
-        if (this.promptDismissedTimestamp) {
-            const timeSinceDismiss = Date.now() - this.promptDismissedTimestamp;
-            if (timeSinceDismiss < PROMPT_COOLDOWN_MS) {
-                console.log(`[RecordingManager] Prompt cooldown active (${Math.round((PROMPT_COOLDOWN_MS - timeSinceDismiss) / 1000)}s remaining)`);
-                return;
-            }
-            // Cooldown expired, clear the timestamp
-            this.promptDismissedTimestamp = null;
-        }
-
         this.isPromptMode = true;
         const widgetManager = getRecordingWidgetManager();
         widgetManager.showPrompt(this.currentMeetingApp);
@@ -464,13 +429,6 @@ export class RecordingManager extends EventEmitter {
     public handlePromptAccepted(): void {
         console.log('[RecordingManager] *** handlePromptAccepted ***');
         this.isPromptMode = false;
-        this.promptDismissedTimestamp = null; // Clear any dismissal timestamp
-
-        // Clear re-prompt timer if pending
-        if (this.rePromptTimerId) {
-            clearTimeout(this.rePromptTimerId);
-            this.rePromptTimerId = null;
-        }
 
         // Close the prompt widget
         const widgetManager = getRecordingWidgetManager();
@@ -487,56 +445,16 @@ export class RecordingManager extends EventEmitter {
 
     /**
      * Handle user dismissing the prompt (clicked "Dismiss")
+     * User explicitly declined to start recording - respect their choice and don't re-prompt
      */
     public handlePromptDismissed(): void {
-        console.log('[RecordingManager] *** handlePromptDismissed ***');
+        console.log('[RecordingManager] *** handlePromptDismissed - user declined, no re-prompt ***');
         this.isPromptMode = false;
-        this.promptDismissedTimestamp = Date.now();
 
-        // Close the widget
+        // Close the widget - user said no, we respect that
         const widgetManager = getRecordingWidgetManager();
         widgetManager.close();
         console.log('[RecordingManager] Prompt dismissed, widget closed');
-
-        // Clear any existing re-prompt timer
-        if (this.rePromptTimerId) {
-            clearTimeout(this.rePromptTimerId);
-            this.rePromptTimerId = null;
-        }
-
-        // Schedule a re-prompt check after cooldown if mic is still active
-        this.rePromptTimerId = setTimeout(() => {
-            this.rePromptTimerId = null;
-            console.log('[RecordingManager] Re-prompt cooldown expired, checking if should re-prompt');
-
-            // Only re-prompt if:
-            // 1. Still no active entry
-            // 2. Not already in prompt mode
-            // 3. Mic or camera is still active
-            const micInUse = mediaMonitor.isMicrophoneInUse();
-            const cameraInUse = mediaMonitor.isCameraInUse();
-
-            console.log('[RecordingManager] Re-prompt check state:', {
-                activeEntryId: this.activeEntryId,
-                isPromptMode: this.isPromptMode,
-                micInUse,
-                cameraInUse,
-            });
-
-            if (!this.activeEntryId && !this.isPromptMode && (micInUse || cameraInUse)) {
-                // Re-detect meeting app
-                if (micInUse) {
-                    this.currentMeetingApp = mediaMonitor.getLikelyMeetingAppUsingMic();
-                }
-                console.log('[RecordingManager] *** RE-PROMPTING after cooldown ***');
-                this.promptDismissedTimestamp = null; // Clear so we can show prompt
-                this.showPromptWidget();
-            } else {
-                console.log('[RecordingManager] Conditions not met for re-prompt');
-            }
-        }, PROMPT_COOLDOWN_MS);
-
-        console.log(`[RecordingManager] Re-prompt scheduled in ${PROMPT_COOLDOWN_MS / 1000}s if mic still active`);
     }
 
     /**
