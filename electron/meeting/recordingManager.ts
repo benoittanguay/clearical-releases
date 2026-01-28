@@ -134,6 +134,17 @@ export class RecordingManager extends EventEmitter {
                 widgetManager.close();
             }
 
+            // Clear any prompt cooldown state since user manually started recording
+            // This ensures automatic prompts work correctly for future meetings
+            if (this.promptDismissedTimestamp || this.rePromptTimerId) {
+                console.log('[RecordingManager] Clearing prompt cooldown state (manual start)');
+                this.promptDismissedTimestamp = null;
+                if (this.rePromptTimerId) {
+                    clearTimeout(this.rePromptTimerId);
+                    this.rePromptTimerId = null;
+                }
+            }
+
             console.log('[RecordingManager] Entry active, checking media:', {
                 micInUse,
                 cameraInUse,
@@ -143,7 +154,7 @@ export class RecordingManager extends EventEmitter {
             });
 
             if (mediaInUse && !this.isRendererRecording) {
-                console.log('[RecordingManager] Media already in use, starting recording');
+                console.log('[RecordingManager] *** MANUAL START: Media in use, starting recording ***');
                 this.startRecording();
             }
         } else {
