@@ -192,7 +192,7 @@
     "publish": {
       "provider": "github",
       "owner": "benoittanguay",
-      "repo": "clearical-releases",
+      "repo": "clearical-release",
       "releaseType": "release"
     }
   },
