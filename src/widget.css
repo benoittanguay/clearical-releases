@@ -599,6 +599,7 @@ body {
     gap: 12px;
     z-index: 50; /* Above playhead (z-index: 25) */
     animation: fadeIn 0.3s ease-out forwards;
+    -webkit-app-region: no-drag; /* Overlay should not be draggable */
 }
 
 @keyframes fadeIn {
@@ -672,6 +673,7 @@ body {
     align-items: center;
     gap: 12px;
     padding: 4px 4px;
+    -webkit-app-region: no-drag; /* Entire prompt should not be draggable */
 }
 
 .prompt-mode .app-icon {
