@@ -4,6 +4,11 @@ All notable changes to Clearical will be documented in this file.
 
 ## [1.7.15] - 2025-01-28
 
+### New Features
+- **Working Hours Reminder**: Get a gentle daily prompt at your configured start time asking "Ready to start your day?" with options to start tracking, snooze, or take the day off
+- Configure your working hours and days in Settings or during onboarding
+- Time-aware greetings that change based on morning, afternoon, or evening
+
 ### Bug Fixes
 - Fixed recording widget waveform animation speed issue where it appeared to suddenly accelerate after appearing
 
