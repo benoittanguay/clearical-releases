@@ -1,9 +1,12 @@
-import { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, systemPreferences, shell, desktopCapturer, dialog } from 'electron';
+import { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, systemPreferences, shell, desktopCapturer, dialog, powerMonitor } from 'electron';
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
 import { fileURLToPath } from 'url';
 import { config as dotenvConfig } from 'dotenv';
+// Initialize main process file logger FIRST - before any other logging
+import { mainLogger } from './mainLogger.js';
+mainLogger.initialize();
 // Load environment variables from .env.local
 const __dirnameTemp = path.dirname(fileURLToPath(import.meta.url));
 const envPath = path.resolve(__dirnameTemp, '../.env.local');
@@ -19,6 +22,7 @@ import { storeCredential, getCredential, deleteCredential, hasCredential, listCr
 import { initializeSubscription, cleanupSubscription } from './subscription/ipcHandlers.js';
 import { requirePremium } from './subscription/premiumGuard.js';
 import { initializeAuth, syncAppVersionOnStartup } from './auth/ipcHandlers.js';
+import { getAuthService } from './auth/supabaseAuth.js';
 import { initializeAnalytics } from './analytics/ipcHandlers.js';
 import { AIAssignmentService } from './aiAssignmentService.js';
 import { AIAccountService } from './aiAccountService.js';
@@ -29,6 +33,11 @@ import { AppDiscoveryService } from './appDiscoveryService.js';
 import { BlacklistService } from './blacklistService.js';
 import { aiService, signalAggregator, createCalendarSignal, createUserProfileSignal, createTimeContextSignal } from './ai/aiService.js';
 import { getCalendarService, initializeCalendarService } from './calendar/calendarService.js';
+import { getRecordingManager } from './meeting/recordingManager.js';
+import { MEETING_IPC_CHANNELS } from './meeting/types.js';
+import { getAudioRecorder } from './meeting/audioRecorder.js';
+import { mediaMonitor } from './native/index.js';
+import { getWorkingHoursScheduler } from './workingHoursScheduler.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // In production (packaged), app.getAppPath() returns the path to the asar file
 // In development, it returns the project root directory
@@ -134,6 +143,13 @@ let timerState = {
     elapsed: 0
 };
 let timerInterval = null;
+/**
+ * Check if the timer is currently running (not paused)
+ * Exported for use by RecordingManager to avoid showing prompts when timer is already active
+ */
+export function isTimerRunning() {
+    return timerState.isRunning && !timerState.isPaused;
+}
 /**
  * ANSI color codes for tray title styling.
  * Note: Background colors in macOS menu bar have limited support and may not render
@@ -1060,6 +1076,27 @@ This is a known macOS issue with app updates. Your data is safe.`;
         }
     }
 });
+// Main process log file handlers
+ipcMain.handle('get-main-log-path', async () => {
+    return mainLogger.getLogPath();
+});
+ipcMain.handle('open-main-log-folder', async () => {
+    const logPath = mainLogger.getLogPath();
+    shell.showItemInFolder(logPath);
+});
+ipcMain.handle('get-main-log-content', async () => {
+    try {
+        const logPath = mainLogger.getLogPath();
+        if (fs.existsSync(logPath)) {
+            return fs.readFileSync(logPath, 'utf-8');
+        }
+        return null;
+    }
+    catch (err) {
+        console.error('[Main] Failed to read log file:', err);
+        return null;
+    }
+});
 // Get environment information
 ipcMain.handle('get-environment-info', async () => {
     // Check if we're in production mode based on BUILD_ENV or app.isPackaged
@@ -1246,9 +1283,10 @@ ipcMain.handle('get-active-window', async () => {
 });
 ipcMain.handle('check-accessibility-permission', () => {
     if (process.platform === 'darwin') {
-        // Note: Accessibility permission cannot be checked programmatically
-        // We return 'unknown' and rely on the AppleScript calls to trigger the prompt
-        return 'unknown';
+        // Use Electron's API to check if we have accessibility permission
+        // Pass false to avoid prompting - we just want to check the status
+        const isTrusted = systemPreferences.isTrustedAccessibilityClient(false);
+        return isTrusted ? 'granted' : 'denied';
     }
     return 'granted';
 });
@@ -1781,6 +1819,347 @@ ipcMain.handle('secure-is-available', async () => {
         };
     }
 });
+// Recording Manager IPC handlers
+ipcMain.handle(MEETING_IPC_CHANNELS.SET_ACTIVE_ENTRY, (_event, entryId, forceStart = false) => {
+    console.log('[Main] SET_ACTIVE_ENTRY called:', entryId, 'forceStart:', forceStart);
+    const recordingManager = getRecordingManager();
+    recordingManager.setActiveEntry(entryId, forceStart);
+    return { success: true };
+});
+ipcMain.handle(MEETING_IPC_CHANNELS.GET_MEDIA_STATUS, () => {
+    console.log('[Main] GET_MEDIA_STATUS called');
+    const recordingManager = getRecordingManager();
+    return recordingManager.getMediaStatus();
+});
+ipcMain.handle(MEETING_IPC_CHANNELS.GET_RECORDING_STATUS, () => {
+    console.log('[Main] GET_RECORDING_STATUS called');
+    return getAudioRecorder().getStatus();
+});
+ipcMain.handle(MEETING_IPC_CHANNELS.SET_AUTO_RECORD_ENABLED, (_event, enabled) => {
+    console.log('[Main] SET_AUTO_RECORD_ENABLED called:', enabled);
+    const recordingManager = getRecordingManager();
+    recordingManager.setEnabled(enabled);
+    return { success: true };
+});
+// Audio levels forwarding to widget
+let audioLevelsForwardedCount = 0;
+ipcMain.on(MEETING_IPC_CHANNELS.SEND_AUDIO_LEVELS, async (_event, levels) => {
+    audioLevelsForwardedCount++;
+    if (audioLevelsForwardedCount <= 3 || audioLevelsForwardedCount % 100 === 0) {
+        console.log('[Main] Forwarding audio levels to widget, count:', audioLevelsForwardedCount);
+    }
+    const { getRecordingWidgetManager } = await import('./meeting/recordingWidgetManager.js');
+    const widgetManager = getRecordingWidgetManager();
+    widgetManager.sendAudioLevels(levels);
+});
+// Recording failed to start - close widget and notify user
+ipcMain.on('meeting:recording-failed', async (_event, data) => {
+    console.error('[Main] *** RECORDING FAILED TO START ***');
+    console.error('[Main] entryId:', data.entryId, 'error:', data.error);
+    // Close the widget since recording couldn't start
+    const { getRecordingWidgetManager } = await import('./meeting/recordingWidgetManager.js');
+    const widgetManager = getRecordingWidgetManager();
+    widgetManager.close();
+    // Reset recording manager state
+    const recordingManager = getRecordingManager();
+    // Note: The recording manager doesn't have a method to handle failure gracefully yet
+    // For now, we just close the widget - the user can try again
+    console.log('[Main] Widget closed due to recording failure');
+});
+// Silence detection - meeting may have ended due to extended silence
+ipcMain.on('meeting:silence-detected', async (_event, data) => {
+    console.log('[Main] *** SILENCE DETECTED ***');
+    console.log('[Main] entryId:', data.entryId, 'silenceDuration:', data.silenceDuration, 'askConfirmation:', data.askConfirmation);
+    const recordingManager = getRecordingManager();
+    const { getRecordingWidgetManager } = await import('./meeting/recordingWidgetManager.js');
+    const widgetManager = getRecordingWidgetManager();
+    // Check if we're still recording
+    if (recordingManager.getActiveEntry() !== data.entryId && recordingManager.getActiveEntry() !== null) {
+        console.log('[Main] Entry mismatch, ignoring silence detection');
+        return;
+    }
+    if (data.askConfirmation) {
+        // Show confirmation in widget instead of system dialog
+        console.log('[Main] Showing meeting ended prompt in widget');
+        widgetManager.sendMeetingEndedPrompt(data.entryId, data.silenceDuration);
+    }
+});
+// Handle widget meeting-ended response (yes/no from user)
+ipcMain.handle('widget:meeting-ended-response', async (_event, data) => {
+    console.log('[Main] *** WIDGET MEETING ENDED RESPONSE ***');
+    console.log('[Main] response:', data.response, 'entryId:', data.entryId);
+    const recordingManager = getRecordingManager();
+    const { getRecordingWidgetManager } = await import('./meeting/recordingWidgetManager.js');
+    const widgetManager = getRecordingWidgetManager();
+    if (data.response === 'yes') {
+        // User confirmed meeting ended
+        console.log('[Main] User confirmed meeting ended via widget');
+        // Send stop event to renderer to stop the MediaRecorder
+        const windows = BrowserWindow.getAllWindows();
+        for (const win of windows) {
+            if (!win.isDestroyed()) {
+                win.webContents.send(MEETING_IPC_CHANNELS.EVENT_RECORDING_SHOULD_STOP, {
+                    entryId: data.entryId,
+                    duration: 0,
+                    reason: 'user_confirmed_meeting_ended',
+                });
+            }
+        }
+        // Close the widget
+        widgetManager.close();
+        return { success: true };
+    }
+    else {
+        // User wants to continue recording
+        console.log('[Main] User chose to continue recording via widget');
+        // Notify renderer to reset silence timer
+        const windows = BrowserWindow.getAllWindows();
+        for (const win of windows) {
+            if (!win.isDestroyed()) {
+                win.webContents.send('meeting:reset-silence-timer');
+            }
+        }
+        return { success: true };
+    }
+});
+// Audio transcription IPC handlers
+// Audio recordings directory
+const RECORDINGS_DIR = path.join(app.getPath('userData'), 'recordings');
+// Ensure recordings directory exists
+function ensureRecordingsDir() {
+    if (!fs.existsSync(RECORDINGS_DIR)) {
+        fs.mkdirSync(RECORDINGS_DIR, { recursive: true });
+        console.log('[Main] Created recordings directory:', RECORDINGS_DIR);
+    }
+}
+// Get file extension from MIME type
+function getAudioExtension(mimeType) {
+    const mimeToExt = {
+        'audio/webm': 'webm',
+        'audio/mp4': 'm4a',
+        'audio/mpeg': 'mp3',
+        'audio/wav': 'wav',
+        'audio/ogg': 'ogg',
+        'audio/flac': 'flac',
+    };
+    return mimeToExt[mimeType] || 'webm';
+}
+ipcMain.handle(MEETING_IPC_CHANNELS.SAVE_AUDIO_AND_TRANSCRIBE, async (_event, entryId, audioBase64, mimeType) => {
+    console.log('[Main] SAVE_AUDIO_AND_TRANSCRIBE called for entry:', entryId);
+    const actualMimeType = mimeType || 'audio/webm';
+    let audioPath;
+    try {
+        // 1. Save audio file locally first (before transcription)
+        ensureRecordingsDir();
+        const extension = getAudioExtension(actualMimeType);
+        const timestamp = Date.now();
+        const filename = `${entryId}-${timestamp}.${extension}`;
+        audioPath = path.join(RECORDINGS_DIR, filename);
+        // Convert base64 to buffer and save
+        const audioBuffer = Buffer.from(audioBase64, 'base64');
+        fs.writeFileSync(audioPath, audioBuffer);
+        console.log('[Main] Audio file saved:', audioPath, 'size:', audioBuffer.length);
+        // 2. Attempt transcription
+        const { getTranscriptionService } = await import('./meeting/transcriptionService.js');
+        const transcriptionService = getTranscriptionService();
+        const result = await transcriptionService.transcribe(audioBase64, entryId, actualMimeType);
+        if (result.success) {
+            // Transcription succeeded - optionally clean up audio file
+            // For now, keep it for reference
+            console.log('[Main] Transcription succeeded, audio saved at:', audioPath);
+            return {
+                success: true,
+                audioPath,
+                transcription: {
+                    transcriptionId: result.transcriptionId,
+                    fullText: result.fullText,
+                    segments: result.segments,
+                    language: result.language,
+                    duration: result.duration,
+                    wordCount: result.wordCount,
+                },
+            };
+        }
+        else {
+            // Transcription failed but audio file is saved
+            console.log('[Main] Transcription failed but audio saved at:', audioPath);
+            return {
+                success: false,
+                audioPath,
+                mimeType: actualMimeType,
+                error: result.error || 'Transcription failed',
+            };
+        }
+    }
+    catch (error) {
+        console.error('[Main] SAVE_AUDIO_AND_TRANSCRIBE error:', error);
+        return {
+            success: false,
+            audioPath, // May be undefined if save failed
+            mimeType: actualMimeType,
+            error: error instanceof Error ? error.message : 'Unknown error',
+        };
+    }
+});
+// Retry transcription for an entry with saved audio
+ipcMain.handle('meeting:retry-transcription', async (_event, entryId, audioPath, mimeType) => {
+    console.log('[Main] RETRY_TRANSCRIPTION called for entry:', entryId);
+    try {
+        // Read audio file
+        if (!fs.existsSync(audioPath)) {
+            return {
+                success: false,
+                error: 'Audio file not found',
+            };
+        }
+        const audioBuffer = fs.readFileSync(audioPath);
+        const audioBase64 = audioBuffer.toString('base64');
+        console.log('[Main] Loaded audio file for retry:', audioPath, 'size:', audioBuffer.length);
+        // Attempt transcription
+        const { getTranscriptionService } = await import('./meeting/transcriptionService.js');
+        const transcriptionService = getTranscriptionService();
+        const result = await transcriptionService.transcribe(audioBase64, entryId, mimeType);
+        if (result.success) {
+            console.log('[Main] Retry transcription succeeded for:', entryId);
+            return {
+                success: true,
+                transcription: {
+                    transcriptionId: result.transcriptionId,
+                    fullText: result.fullText,
+                    segments: result.segments,
+                    language: result.language,
+                    duration: result.duration,
+                    wordCount: result.wordCount,
+                },
+            };
+        }
+        else {
+            return {
+                success: false,
+                error: result.error || 'Transcription failed',
+            };
+        }
+    }
+    catch (error) {
+        console.error('[Main] RETRY_TRANSCRIPTION error:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error',
+        };
+    }
+});
+ipcMain.handle(MEETING_IPC_CHANNELS.GET_TRANSCRIPTION_USAGE, async () => {
+    console.log('[Main] GET_TRANSCRIPTION_USAGE called');
+    try {
+        const { getTranscriptionService } = await import('./meeting/transcriptionService.js');
+        const transcriptionService = getTranscriptionService();
+        const usage = await transcriptionService.getUsage();
+        if (usage) {
+            return {
+                success: true,
+                usage,
+            };
+        }
+        else {
+            return {
+                success: false,
+                error: 'Failed to get usage information',
+            };
+        }
+    }
+    catch (error) {
+        console.error('[Main] GET_TRANSCRIPTION_USAGE error:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error',
+        };
+    }
+});
+// System Audio Capture IPC handlers
+ipcMain.handle('meeting:is-system-audio-available', () => {
+    console.log('[Main] meeting:is-system-audio-available called');
+    return mediaMonitor.isSystemAudioCaptureAvailable();
+});
+let systemAudioSampleCount = 0;
+ipcMain.handle('meeting:start-system-audio-capture', () => {
+    console.log('[Main] meeting:start-system-audio-capture called');
+    systemAudioSampleCount = 0;
+    try {
+        const result = mediaMonitor.startSystemAudioCapture((info) => {
+            systemAudioSampleCount++;
+            // Log every 100th callback to avoid spam
+            if (systemAudioSampleCount % 100 === 1) {
+                console.log(`[Main] System audio samples received #${systemAudioSampleCount}: sampleCount=${info.sampleCount}, channelCount=${info.channelCount}, sampleRate=${info.sampleRate}`);
+            }
+            // Forward audio samples to all renderer windows
+            const windows = BrowserWindow.getAllWindows();
+            for (const win of windows) {
+                if (!win.isDestroyed()) {
+                    // Convert Float32Array to regular array for IPC
+                    win.webContents.send('meeting:system-audio-samples', {
+                        samples: Array.from(info.samples),
+                        channelCount: info.channelCount,
+                        sampleRate: info.sampleRate,
+                        sampleCount: info.sampleCount,
+                    });
+                }
+            }
+        });
+        console.log('[Main] meeting:start-system-audio-capture result:', result);
+        return result;
+    }
+    catch (error) {
+        console.error('[Main] meeting:start-system-audio-capture error:', error);
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+});
+ipcMain.handle('meeting:stop-system-audio-capture', () => {
+    console.log('[Main] meeting:stop-system-audio-capture called');
+    mediaMonitor.stopSystemAudioCapture();
+    return { success: true };
+});
+// Native microphone capture (bypasses getUserMedia limitations)
+ipcMain.handle('meeting:is-mic-capture-available', () => {
+    console.log('[Main] meeting:is-mic-capture-available called');
+    return mediaMonitor.isMicCaptureAvailable();
+});
+let micSampleCount = 0;
+ipcMain.handle('meeting:start-mic-capture', () => {
+    console.log('[Main] meeting:start-mic-capture called');
+    micSampleCount = 0;
+    try {
+        const result = mediaMonitor.startMicCapture((info) => {
+            micSampleCount++;
+            // Log every 100th callback to avoid spam
+            if (micSampleCount % 100 === 1) {
+                console.log(`[Main] Native mic samples received #${micSampleCount}: sampleCount=${info.sampleCount}, channelCount=${info.channelCount}`);
+            }
+            // Send to all renderer windows
+            const windows = BrowserWindow.getAllWindows();
+            for (const win of windows) {
+                if (!win.isDestroyed()) {
+                    win.webContents.send('meeting:mic-audio-samples', {
+                        samples: Array.from(info.samples),
+                        channelCount: info.channelCount,
+                        sampleRate: info.sampleRate,
+                        sampleCount: info.sampleCount,
+                    });
+                }
+            }
+        });
+        console.log('[Main] meeting:start-mic-capture result:', result);
+        return result;
+    }
+    catch (error) {
+        console.error('[Main] meeting:start-mic-capture error:', error);
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+});
+ipcMain.handle('meeting:stop-mic-capture', () => {
+    console.log('[Main] meeting:stop-mic-capture called');
+    mediaMonitor.stopMicCapture();
+    return { success: true };
+});
 // AI Assignment Suggestion Handler
 ipcMain.handle('suggest-assignment', async (event, request) => {
     console.log('[Main] suggest-assignment requested');
@@ -1820,6 +2199,7 @@ ipcMain.handle('generate-activity-summary', async (event, context) => {
     console.log('[Main] Window titles:', context.windowTitles?.length || 0);
     console.log('[Main] App names:', context.appNames);
     console.log('[Main] App durations:', context.appDurations);
+    console.log('[Main] Transcriptions:', context.transcriptions?.length || 0);
     try {
         // Use signal aggregator to collect and store signals for this entry
         // This centralizes signal management and enables reuse across AI tasks
@@ -1832,6 +2212,24 @@ ipcMain.handle('generate-activity-summary', async (event, context) => {
             (context.windowTitles && context.windowTitles.length > 0)) {
             signalAggregator.setWindowActivity(context.entryId, context.appNames || [], context.windowTitles || [], context.appDurations // Pass app durations for primary task identification
             );
+        }
+        // ACTIVITY signals: Meeting transcriptions
+        if (context.transcriptions && context.transcriptions.length > 0) {
+            // Combine all transcription texts
+            const combinedText = context.transcriptions
+                .map(t => t.text)
+                .filter(text => text && text.trim())
+                .join('\n\n---\n\n');
+            const totalDuration = context.transcriptions.reduce((sum, t) => sum + (t.duration || 0), 0);
+            const languages = [...new Set(context.transcriptions.map(t => t.language).filter(Boolean))];
+            if (combinedText.trim()) {
+                signalAggregator.setMeetingTranscription(context.entryId, combinedText, context.transcriptions.length, totalDuration, languages);
+                console.log('[Main] Added meeting transcription signal:', {
+                    recordingCount: context.transcriptions.length,
+                    totalDuration,
+                    textLength: combinedText.length
+                });
+            }
         }
         // TEMPORAL signals: Calendar events
         const calendarService = getCalendarService();
@@ -2751,20 +3149,48 @@ If no meaningful splits are detected, return an empty array.
 Respond with ONLY valid JSON (no markdown, no explanation):`;
     return prompt;
 }
-function parseSplitSuggestions(rawSuggestions) {
+function parseSplitSuggestions(rawSuggestions, activityStartTime, activityEndTime) {
     try {
         if (!Array.isArray(rawSuggestions)) {
             console.warn('[Main] parseSplitSuggestions: expected array, got:', typeof rawSuggestions);
             return [];
         }
-        return rawSuggestions.map((suggestion) => ({
-            startTime: suggestion.startTime || 0,
-            endTime: suggestion.endTime || 0,
-            description: suggestion.description || '',
-            suggestedBucket: suggestion.suggestedBucket || null,
-            suggestedJiraKey: suggestion.suggestedJiraKey || null,
-            confidence: typeof suggestion.confidence === 'number' ? suggestion.confidence : 0.5
-        }));
+        return rawSuggestions
+            .map((suggestion) => {
+            let startTime = suggestion.startTime || 0;
+            let endTime = suggestion.endTime || 0;
+            // Validate timestamps fall within activity range if provided
+            if (activityStartTime !== undefined && activityEndTime !== undefined) {
+                // Check if timestamps are completely outside the valid range
+                if (endTime < activityStartTime || startTime > activityEndTime) {
+                    console.warn('[Main] parseSplitSuggestions: suggestion outside valid range, discarding:', {
+                        suggestionStart: startTime,
+                        suggestionEnd: endTime,
+                        activityStart: activityStartTime,
+                        activityEnd: activityEndTime
+                    });
+                    return null; // Will be filtered out
+                }
+                // Clamp timestamps to valid range
+                if (startTime < activityStartTime) {
+                    console.warn('[Main] parseSplitSuggestions: clamping startTime from', startTime, 'to', activityStartTime);
+                    startTime = activityStartTime;
+                }
+                if (endTime > activityEndTime) {
+                    console.warn('[Main] parseSplitSuggestions: clamping endTime from', endTime, 'to', activityEndTime);
+                    endTime = activityEndTime;
+                }
+            }
+            return {
+                startTime,
+                endTime,
+                description: suggestion.description || '',
+                suggestedBucket: suggestion.suggestedBucket || null,
+                suggestedJiraKey: suggestion.suggestedJiraKey || null,
+                confidence: typeof suggestion.confidence === 'number' ? suggestion.confidence : 0.5
+            };
+        })
+            .filter((suggestion) => suggestion !== null);
     }
     catch (error) {
         console.error('[Main] parseSplitSuggestions error:', error);
@@ -2823,7 +3249,7 @@ ipcMain.handle('ai:analyze-splits', async (_, activityData) => {
                 jsonText = jsonMatch[1].trim();
             }
             const parsed = JSON.parse(jsonText);
-            suggestions = parseSplitSuggestions(Array.isArray(parsed) ? parsed : []);
+            suggestions = parseSplitSuggestions(Array.isArray(parsed) ? parsed : [], activityData.startTime, activityData.endTime);
         }
         catch (parseError) {
             console.error('[Main] ai:analyze-splits: Failed to parse AI response:', parseError);
@@ -2899,7 +3325,35 @@ function createTray() {
     });
     // Right-click shows context menu
     tray.on('right-click', () => {
+        // Get current recording state
+        const recordingManager = getRecordingManager();
+        const mediaStatus = recordingManager.getMediaStatus();
         const contextMenu = Menu.buildFromTemplate([
+            {
+                label: timerState.isRunning ? (timerState.isPaused ? '▶ Resume Chrono' : '⏹ Stop Chrono') : '▶ Start Chrono',
+                click: () => {
+                    // Send toggle command to renderer
+                    const windows = BrowserWindow.getAllWindows();
+                    for (const window of windows) {
+                        if (!window.isDestroyed()) {
+                            window.webContents.send('tray:toggle-chrono');
+                        }
+                    }
+                }
+            },
+            {
+                label: mediaStatus.isRecording ? '⏹ Stop Recording' : '🎙 Start Recording',
+                click: () => {
+                    // Send toggle command to renderer
+                    const windows = BrowserWindow.getAllWindows();
+                    for (const window of windows) {
+                        if (!window.isDestroyed()) {
+                            window.webContents.send('tray:toggle-recording');
+                        }
+                    }
+                }
+            },
+            { type: 'separator' },
             { label: 'Quit', click: () => {
                     // Use comprehensive cleanup instead of simple quit
                     cleanupAndQuit();
@@ -2980,7 +3434,7 @@ function createWindow() {
             contextIsolation: true,
             webSecurity: true,
             sandbox: false,
-            devTools: false // Disable devTools
+            devTools: true // Enable for debugging
         },
     });
     // Position window off-screen initially to prevent flash at (0,0)
@@ -2989,6 +3443,13 @@ function createWindow() {
     // In test mode or production, load from built files
     // In development (not test), load from Vite dev server
     const isTestMode = process.env.NODE_ENV === 'test';
+    // Add keyboard shortcut to open DevTools (Cmd+Option+I on Mac, Ctrl+Shift+I on Windows/Linux)
+    win.webContents.on('before-input-event', (event, input) => {
+        if ((input.meta || input.control) && input.alt && input.key.toLowerCase() === 'i') {
+            win?.webContents.toggleDevTools();
+            event.preventDefault();
+        }
+    });
     if (!app.isPackaged && !isTestMode) {
         win.loadURL('http://127.0.0.1:5173');
         // win.webContents.openDevTools({ mode: 'detach' });
@@ -3069,6 +3530,29 @@ app.whenReady().then(() => {
     catch (error) {
         console.error('[Main] Failed to initialize auth:', error);
     }
+    // Set up system wake/unlock detection for token refresh
+    // This ensures auth tokens stay fresh after sleep/hibernate
+    powerMonitor.on('resume', async () => {
+        console.log('[Main] System resumed from sleep, refreshing auth token...');
+        try {
+            const authService = getAuthService();
+            await authService.proactiveRefresh();
+        }
+        catch (error) {
+            console.error('[Main] Failed to refresh auth on resume:', error);
+        }
+    });
+    powerMonitor.on('unlock-screen', async () => {
+        console.log('[Main] Screen unlocked, refreshing auth token...');
+        try {
+            const authService = getAuthService();
+            await authService.proactiveRefresh();
+        }
+        catch (error) {
+            console.error('[Main] Failed to refresh auth on unlock:', error);
+        }
+    });
+    console.log('[Main] Power monitor listeners registered for auth refresh');
     // Initialize analytics system
     try {
         initializeAnalytics();
@@ -3097,6 +3581,20 @@ app.whenReady().then(() => {
     // AI service uses cloud-based Gemini API via Supabase Edge Function
     // No local server needed - requests are made on-demand
     console.log('[Main] AI service configured (Gemini cloud via Supabase)');
+    // Initialize recording manager for mic/camera detection
+    try {
+        const recordingManager = getRecordingManager();
+        // Set up callback for recording manager to check timer state
+        // This prevents showing prompts when timer is already running
+        recordingManager.setIsTimerRunningCallback(() => {
+            return timerState.isRunning;
+        });
+        recordingManager.start();
+        console.log('[Main] Recording manager initialized (mic/camera detection)');
+    }
+    catch (error) {
+        console.error('[Main] Failed to initialize recording manager:', error);
+    }
     // Create tray first to ensure it's fully initialized before window positioning
     createTray();
     // Create window (it will be positioned off-screen initially)
@@ -3106,6 +3604,30 @@ app.whenReady().then(() => {
     // We use a small delay to ensure the tray icon is fully rendered by the OS
     setTimeout(() => {
         showWindowBelowTray();
+        // Initialize working hours scheduler after window is ready
+        // This allows the scheduler to use the main window for IPC
+        try {
+            const workingHoursScheduler = getWorkingHoursScheduler();
+            workingHoursScheduler.setMainWindow(win);
+            // Set up callback for when user accepts the prompt
+            workingHoursScheduler.setOnStartTimerCallback(() => {
+                console.log('[Main] Working hours: User wants to start timer');
+                // Send IPC to renderer to start timer
+                if (win && !win.isDestroyed()) {
+                    win.webContents.send('working-hours:start-timer');
+                }
+            });
+            // Set up callback to check if timer is already running
+            // This prevents showing the "Ready to start?" prompt when user already has an active timer
+            workingHoursScheduler.setIsTimerRunningCallback(() => {
+                return timerState.isRunning;
+            });
+            workingHoursScheduler.start();
+            console.log('[Main] Working hours scheduler initialized');
+        }
+        catch (error) {
+            console.error('[Main] Failed to initialize working hours scheduler:', error);
+        }
     }, 150);
     // Initialize auto-updater
     // Set main window reference so updater can send status updates

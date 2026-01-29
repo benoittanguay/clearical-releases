@@ -68,6 +68,10 @@ electron_1.contextBridge.exposeInMainWorld('electron', {
         subscriptionCancel: () => electron_1.ipcRenderer.invoke('subscription:cancel'),
         // Environment info
         getEnvironmentInfo: () => electron_1.ipcRenderer.invoke('get-environment-info'),
+        // Main process log file access
+        getMainLogPath: () => electron_1.ipcRenderer.invoke('get-main-log-path'),
+        openMainLogFolder: () => electron_1.ipcRenderer.invoke('open-main-log-folder'),
+        getMainLogContent: () => electron_1.ipcRenderer.invoke('get-main-log-content'),
         // AI features
         suggestAssignment: (request) => electron_1.ipcRenderer.invoke('suggest-assignment', request),
         selectTempoAccount: (request) => electron_1.ipcRenderer.invoke('select-tempo-account', request),
@@ -156,6 +160,69 @@ electron_1.contextBridge.exposeInMainWorld('electron', {
             sync: () => electron_1.ipcRenderer.invoke('calendar:sync'),
             getContext: (timestamp) => electron_1.ipcRenderer.invoke('calendar:get-context', timestamp),
             createFocusTime: (input) => electron_1.ipcRenderer.invoke('calendar:create-focus-time', input),
+        },
+        // Meeting/Recording operations (mic/camera detection)
+        meeting: {
+            setActiveEntry: (entryId, forceStart = false) => electron_1.ipcRenderer.invoke('meeting:set-active-entry', entryId, forceStart),
+            getMediaStatus: () => electron_1.ipcRenderer.invoke('meeting:get-media-status'),
+            getRecordingStatus: () => electron_1.ipcRenderer.invoke('meeting:get-recording-status'),
+            setAutoRecordEnabled: (enabled) => electron_1.ipcRenderer.invoke('meeting:set-auto-record-enabled', enabled),
+            // Audio capture and transcription
+            saveAudioAndTranscribe: (entryId, audioBase64, mimeType) => electron_1.ipcRenderer.invoke('meeting:save-audio-and-transcribe', entryId, audioBase64, mimeType),
+            retryTranscription: (entryId, audioPath, mimeType) => electron_1.ipcRenderer.invoke('meeting:retry-transcription', entryId, audioPath, mimeType),
+            getTranscriptionUsage: () => electron_1.ipcRenderer.invoke('meeting:get-transcription-usage'),
+            // System audio capture (for capturing what others say in meetings)
+            isSystemAudioAvailable: () => electron_1.ipcRenderer.invoke('meeting:is-system-audio-available'),
+            startSystemAudioCapture: () => electron_1.ipcRenderer.invoke('meeting:start-system-audio-capture'),
+            stopSystemAudioCapture: () => electron_1.ipcRenderer.invoke('meeting:stop-system-audio-capture'),
+            onSystemAudioSamples: (callback) => {
+                const subscription = (_event, data) => {
+                    // Convert the samples array back to Float32Array if needed
+                    const samples = data.samples instanceof Float32Array
+                        ? data.samples
+                        : new Float32Array(data.samples);
+                    callback({ ...data, samples });
+                };
+                electron_1.ipcRenderer.on('meeting:system-audio-samples', subscription);
+                return () => electron_1.ipcRenderer.removeListener('meeting:system-audio-samples', subscription);
+            },
+            // Native microphone capture (bypasses getUserMedia limitations when Chrome has exclusive mic access)
+            isMicCaptureAvailable: () => electron_1.ipcRenderer.invoke('meeting:is-mic-capture-available'),
+            startMicCapture: () => electron_1.ipcRenderer.invoke('meeting:start-mic-capture'),
+            stopMicCapture: () => electron_1.ipcRenderer.invoke('meeting:stop-mic-capture'),
+            onMicAudioSamples: (callback) => {
+                const subscription = (_event, data) => {
+                    // Convert the samples array back to Float32Array if needed
+                    const samples = data.samples instanceof Float32Array
+                        ? data.samples
+                        : new Float32Array(data.samples);
+                    callback({ ...data, samples });
+                };
+                electron_1.ipcRenderer.on('meeting:mic-audio-samples', subscription);
+                return () => electron_1.ipcRenderer.removeListener('meeting:mic-audio-samples', subscription);
+            },
+            // Event subscriptions for automatic recording
+            onRecordingShouldStart: (callback) => {
+                const subscription = (_event, data) => callback(data);
+                electron_1.ipcRenderer.on('meeting:event-recording-should-start', subscription);
+                return () => electron_1.ipcRenderer.removeListener('meeting:event-recording-should-start', subscription);
+            },
+            onRecordingShouldStop: (callback) => {
+                const subscription = (_event, data) => callback(data);
+                electron_1.ipcRenderer.on('meeting:event-recording-should-stop', subscription);
+                return () => electron_1.ipcRenderer.removeListener('meeting:event-recording-should-stop', subscription);
+            },
+            // Send audio levels to widget for visualization
+            sendAudioLevels: (levels) => electron_1.ipcRenderer.send('meeting:send-audio-levels', levels),
+        },
+        // Working hours operations
+        workingHours: {
+            // Listen for start timer event from working hours prompt
+            onStartTimer: (callback) => {
+                const subscription = (_event) => callback();
+                electron_1.ipcRenderer.on('working-hours:start-timer', subscription);
+                return () => electron_1.ipcRenderer.removeListener('working-hours:start-timer', subscription);
+            },
         },
     },
     // Analytics (top-level, not inside ipcRenderer)

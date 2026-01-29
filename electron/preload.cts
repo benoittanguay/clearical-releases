@@ -251,8 +251,8 @@ contextBridge.exposeInMainWorld('electron', {
         },
         // Meeting/Recording operations (mic/camera detection)
         meeting: {
-            setActiveEntry: (entryId: string | null) =>
-                ipcRenderer.invoke('meeting:set-active-entry', entryId),
+            setActiveEntry: (entryId: string | null, forceStart: boolean = false) =>
+                ipcRenderer.invoke('meeting:set-active-entry', entryId, forceStart),
             getMediaStatus: () =>
                 ipcRenderer.invoke('meeting:get-media-status'),
             getRecordingStatus: () =>

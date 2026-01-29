@@ -1068,12 +1068,14 @@ export function useTimer() {
     /**
      * Notify main process of active time entry for recording purposes.
      * Call this when a time entry is created/becomes active.
-     * Recording will only happen when there's an active entry AND mic/camera is in use.
+     * @param entryId The entry ID to set as active, or null to clear
+     * @param forceStart If true, start recording immediately regardless of media detection (used for manual recording button)
      */
-    const setActiveRecordingEntry = (entryId: string | null) => {
+    const setActiveRecordingEntry = (entryId: string | null, forceStart: boolean = false) => {
         console.log('[Timer] ========================================');
         console.log('[Timer] setActiveRecordingEntry CALLED');
         console.log('[Timer] entryId:', entryId);
+        console.log('[Timer] forceStart:', forceStart);
         console.log('[Timer] window.electron available:', !!window.electron);
         console.log('[Timer] meeting API available:', !!window.electron?.ipcRenderer?.meeting);
         console.log('[Timer] setActiveEntry function available:', !!window.electron?.ipcRenderer?.meeting?.setActiveEntry);
@@ -1082,7 +1084,7 @@ export function useTimer() {
         // @ts-ignore
         if (window.electron?.ipcRenderer?.meeting?.setActiveEntry) {
             // @ts-ignore
-            window.electron.ipcRenderer.meeting.setActiveEntry(entryId)
+            window.electron.ipcRenderer.meeting.setActiveEntry(entryId, forceStart)
                 .then((result: { success: boolean; error?: string }) => {
                     console.log('[Timer] setActiveEntry IPC response:', result);
                 })

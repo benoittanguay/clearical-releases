@@ -2,6 +2,13 @@
 
 All notable changes to Clearical will be documented in this file.
 
+## [1.7.18] - 2025-01-29
+
+### Bug Fixes
+- **Manual Recording Button**: Fixed issue where clicking the record button in the Chrono tab would show the recording UI but not actually start audio capture. Recording now starts immediately when manually triggered, regardless of mic/camera detection status.
+
+---
+
 ## [1.7.17] - 2025-01-29
 
 ### Bug Fixes
