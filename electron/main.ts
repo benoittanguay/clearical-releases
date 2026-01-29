@@ -172,6 +172,14 @@ let timerState: {
 let timerInterval: NodeJS.Timeout | null = null;
 
 /**
+ * Check if the timer is currently running (not paused)
+ * Exported for use by RecordingManager to avoid showing prompts when timer is already active
+ */
+export function isTimerRunning(): boolean {
+    return timerState.isRunning && !timerState.isPaused;
+}
+
+/**
  * ANSI color codes for tray title styling.
  * Note: Background colors in macOS menu bar have limited support and may not render
  * as expected due to system-level constraints. macOS typically only allows the system
@@ -4008,6 +4016,13 @@ app.whenReady().then(() => {
     // Initialize recording manager for mic/camera detection
     try {
         const recordingManager = getRecordingManager();
+
+        // Set up callback for recording manager to check timer state
+        // This prevents showing prompts when timer is already running
+        recordingManager.setIsTimerRunningCallback(() => {
+            return timerState.isRunning;
+        });
+
         recordingManager.start();
         console.log('[Main] Recording manager initialized (mic/camera detection)');
     } catch (error) {

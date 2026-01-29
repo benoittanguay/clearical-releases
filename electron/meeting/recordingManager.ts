@@ -28,6 +28,7 @@ export class RecordingManager extends EventEmitter {
     private recordingStartTime: number | null = null;
     private currentMeetingApp: MeetingAppInfo | null = null;
     private isPromptMode: boolean = false;  // When widget is showing "Start timer?" prompt
+    private isTimerRunningCallback: (() => boolean) | null = null;  // Callback to check if timer is running
 
     private constructor() {
         super();
@@ -206,6 +207,14 @@ export class RecordingManager extends EventEmitter {
      */
     public isAutoRecordingEnabled(): boolean {
         return this.isEnabled;
+    }
+
+    /**
+     * Set callback to check if timer is currently running
+     * Used to avoid showing prompt when timer is already active
+     */
+    public setIsTimerRunningCallback(callback: () => boolean): void {
+        this.isTimerRunningCallback = callback;
     }
 
     /**

@@ -683,12 +683,6 @@ function App() {
       const unsubscribe = window.electron.ipcRenderer.on('meeting:request-start-timer', async (data: { meetingApp: { appName: string; bundleId: string } | null; timestamp: number }) => {
         console.log('[Renderer] Received request-start-timer from widget prompt:', data);
 
-        // Don't start if timer is already running
-        if (isRunning) {
-          console.log('[Renderer] Timer already running, ignoring request');
-          return;
-        }
-
         // Check permissions before starting
         const permissions = await checkPermissions();
 
@@ -699,15 +693,25 @@ function App() {
           return;
         }
 
-        // Start timer
-        console.log('[Renderer] Starting timer from widget prompt');
-        startTimer();
+        // If timer is not running, start it first
+        if (!isRunning) {
+          console.log('[Renderer] Starting timer from widget prompt');
+          startTimer();
+        } else {
+          console.log('[Renderer] Timer already running, just starting recording');
+        }
 
-        // Notify recording manager of active session for mic/camera recording
-        const sessionId = `session-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-        recordingSessionIdRef.current = sessionId;
-        setActiveRecordingEntry(sessionId);
-        setIsAudioRecording(true);
+        // Always start recording when meeting prompt is accepted
+        // This handles both cases: new timer + recording, or just adding recording to existing timer
+        if (!recordingSessionIdRef.current) {
+          const sessionId = `session-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+          recordingSessionIdRef.current = sessionId;
+          setActiveRecordingEntry(sessionId);
+          setIsAudioRecording(true);
+          console.log('[Renderer] Started recording session:', sessionId);
+        } else {
+          console.log('[Renderer] Recording session already active:', recordingSessionIdRef.current);
+        }
 
         // Navigate to chrono view
         setCurrentView('chrono');
