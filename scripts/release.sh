@@ -147,10 +147,9 @@ codesign -dvvv "$APP_PATH" 2>&1 | grep -E "(Identifier|Authority|TeamIdentifier|
 DMG_PATH="dist/Clearical-arm64.dmg"
 ZIP_PATH="dist/Clearical-arm64.zip"
 
-# Step 4: Notarize (if credentials available)
-# Optimized: Skip archive creation before notarization - create only once after stapling
+# Step 4: Notarize App (if credentials available)
 echo ""
-echo -e "${BLUE}Step 4: Notarization...${NC}"
+echo -e "${BLUE}Step 4: Notarizing app bundle...${NC}"
 
 # Check if signed with Developer ID
 if ! codesign -dvvv "$APP_PATH" 2>&1 | grep -q "Authority=Developer ID"; then
@@ -158,15 +157,16 @@ if ! codesign -dvvv "$APP_PATH" 2>&1 | grep -q "Authority=Developer ID"; then
     CAN_NOTARIZE=false
 fi
 
+APP_NOTARIZED=false
 if [ "$CAN_NOTARIZE" = true ]; then
     # Create ZIP for notarization (required format)
-    echo "  Creating ZIP for notarization..."
+    echo "  Creating ZIP for app notarization..."
     rm -f "$ZIP_PATH"
     cd dist
     ditto -c -k --sequesterRsrc --keepParent mac-arm64/Clearical.app Clearical-arm64.zip
     cd "$PROJECT_ROOT"
 
-    echo "  Submitting for notarization..."
+    echo "  Submitting app for notarization..."
     NOTARIZE_OUTPUT=$(xcrun notarytool submit "$ZIP_PATH" $NOTARY_CREDS --wait 2>&1)
 
     # Extract submission ID for potential log retrieval
@@ -175,14 +175,15 @@ if [ "$CAN_NOTARIZE" = true ]; then
     echo "$NOTARIZE_OUTPUT" | tail -8
 
     if echo "$NOTARIZE_OUTPUT" | grep -q "status: Accepted"; then
-        echo "  ✓ Notarization successful!"
+        echo "  ✓ App notarization successful!"
+        APP_NOTARIZED=true
 
         # Staple the ticket to the app
         echo "  Stapling ticket to app..."
-        xcrun stapler staple "$APP_PATH" 2>&1 | grep -E "(staple|Processing)" || true
-        echo "  ✓ Ticket stapled"
+        xcrun stapler staple "$APP_PATH" 2>&1 | grep -E "(staple|Processing|worked)" || true
+        echo "  ✓ Ticket stapled to app"
     else
-        echo -e "${RED}  ✗ Notarization failed${NC}"
+        echo -e "${RED}  ✗ App notarization failed${NC}"
 
         # Fetch detailed log if we have a submission ID
         if [ -n "$SUBMISSION_ID" ]; then
@@ -198,24 +199,50 @@ else
     echo "  Skipping notarization (no credentials or not Developer ID signed)"
 fi
 
-# Step 5: Staple notarization tickets and create final ZIP
+# Step 5: Create and notarize DMG
+# IMPORTANT: We create a fresh DMG from the stapled app, sign it, and notarize it separately
+# This ensures the DMG itself passes Gatekeeper checks
 echo ""
-echo -e "${BLUE}Step 5: Finalizing release archives...${NC}"
+echo -e "${BLUE}Step 5: Creating and notarizing DMG...${NC}"
 
-# electron-builder already created a proper DMG with background and Applications shortcut
-# We just need to staple the notarization ticket to it
-
-# Clean up blockmaps (not needed for GitHub releases)
+# Clean up electron-builder artifacts we don't need
 rm -f "dist/Clearical-arm64.dmg.blockmap" "dist/Clearical-arm64.zip.blockmap"
+rm -f "$DMG_PATH"  # Remove electron-builder's DMG, we'll create our own
 
-# Staple DMG if notarization succeeded
-if [ "$CAN_NOTARIZE" = true ] && xcrun stapler validate "$APP_PATH" &>/dev/null; then
-    echo "  Stapling notarization ticket to DMG..."
-    xcrun stapler staple "$DMG_PATH" 2>&1 | grep -E "(staple|Processing|worked)" || true
-    echo "  ✓ DMG stapled"
-else
-    echo "  ⚠ Skipping DMG stapling (app not notarized)"
+# Create fresh DMG from the stapled app
+echo "  Creating DMG from stapled app..."
+hdiutil create -volname "Clearical" -srcfolder "$APP_PATH" -ov -format UDZO "$DMG_PATH" 2>&1 | grep -v "^$" | tail -2
+echo "  ✓ DMG created"
+
+# Sign the DMG
+echo "  Signing DMG..."
+codesign --force --sign "$IDENTITY" "$DMG_PATH"
+echo "  ✓ DMG signed"
+
+# Notarize the DMG (separate from app notarization)
+DMG_NOTARIZED=false
+if [ "$APP_NOTARIZED" = true ]; then
+    echo "  Submitting DMG for notarization..."
+    DMG_NOTARIZE_OUTPUT=$(xcrun notarytool submit "$DMG_PATH" $NOTARY_CREDS --wait 2>&1)
+
+    echo "$DMG_NOTARIZE_OUTPUT" | tail -5
+
+    if echo "$DMG_NOTARIZE_OUTPUT" | grep -q "status: Accepted"; then
+        echo "  ✓ DMG notarization successful!"
+        DMG_NOTARIZED=true
+
+        # Staple the ticket to the DMG
+        echo "  Stapling ticket to DMG..."
+        xcrun stapler staple "$DMG_PATH" 2>&1 | grep -E "(staple|Processing|worked)" || true
+        echo "  ✓ Ticket stapled to DMG"
+    else
+        echo -e "${YELLOW}  ⚠ DMG notarization failed, continuing...${NC}"
+    fi
 fi
+
+# Step 6: Finalize release archives
+echo ""
+echo -e "${BLUE}Step 6: Finalizing release archives...${NC}"
 
 # Create fresh ZIP with the stapled app (for auto-updater)
 echo "  Creating ZIP archive..."
@@ -226,9 +253,9 @@ rm -f "$ZIP_PATH"
 )
 echo "  ✓ ZIP created"
 
-# Verify notarization with Gatekeeper (if notarized)
-if [ "$CAN_NOTARIZE" = true ] && xcrun stapler validate "$APP_PATH" &>/dev/null; then
-    echo "  Verifying notarization with Gatekeeper..."
+# Verify notarization with Gatekeeper
+if [ "$DMG_NOTARIZED" = true ]; then
+    echo "  Verifying DMG with Gatekeeper..."
     VERIFY_OUTPUT=$(xcrun spctl --assess --type open --context context:primary-signature --verbose=2 "$DMG_PATH" 2>&1)
     if echo "$VERIFY_OUTPUT" | grep -q "accepted"; then
         echo "  ✓ Gatekeeper verification passed: $(echo "$VERIFY_OUTPUT" | grep -o 'source=.*')"
@@ -243,9 +270,9 @@ echo ""
 echo -e "${BLUE}Build artifacts:${NC}"
 ls -lh dist/Clearical-arm64.dmg dist/Clearical-arm64.zip 2>/dev/null | awk '{print "  " $9 ": " $5}'
 
-# Step 5b: Generate latest-mac.yml for electron-updater
+# Step 6b: Generate latest-mac.yml for electron-updater
 echo ""
-echo -e "${BLUE}Step 5b: Generating update manifest (latest-mac.yml)...${NC}"
+echo -e "${BLUE}Step 6b: Generating update manifest (latest-mac.yml)...${NC}"
 
 # Calculate SHA512 hash and file size for the ZIP (electron-updater uses ZIP on macOS)
 ZIP_SHA512=$(shasum -a 512 "$ZIP_PATH" | awk '{print $1}' | xxd -r -p | base64)
@@ -267,10 +294,10 @@ EOF
 echo "  ✓ Generated latest-mac.yml"
 cat dist/latest-mac.yml | sed 's/^/    /'
 
-# Step 6: Publish to GitHub (if --publish flag)
+# Step 7: Publish to GitHub (if --publish flag)
 if [ "$PUBLISH" = true ]; then
     echo ""
-    echo -e "${BLUE}Step 6: Publishing to GitHub...${NC}"
+    echo -e "${BLUE}Step 7: Publishing to GitHub...${NC}"
 
     # Check if gh CLI is available
     if ! command -v gh &> /dev/null; then
