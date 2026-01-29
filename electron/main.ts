@@ -2012,10 +2012,10 @@ ipcMain.handle('secure-is-available', async () => {
 });
 
 // Recording Manager IPC handlers
-ipcMain.handle(MEETING_IPC_CHANNELS.SET_ACTIVE_ENTRY, (_event, entryId: string | null) => {
-    console.log('[Main] SET_ACTIVE_ENTRY called:', entryId);
+ipcMain.handle(MEETING_IPC_CHANNELS.SET_ACTIVE_ENTRY, (_event, entryId: string | null, forceStart: boolean = false) => {
+    console.log('[Main] SET_ACTIVE_ENTRY called:', entryId, 'forceStart:', forceStart);
     const recordingManager = getRecordingManager();
-    recordingManager.setActiveEntry(entryId);
+    recordingManager.setActiveEntry(entryId, forceStart);
     return { success: true };
 });
 

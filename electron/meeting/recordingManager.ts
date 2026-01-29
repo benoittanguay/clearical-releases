@@ -119,8 +119,10 @@ export class RecordingManager extends EventEmitter {
     /**
      * Set the active time entry ID
      * Recording will only happen when an entry is active
+     * @param entryId The entry ID to set as active, or null to clear
+     * @param forceStart If true, start recording immediately regardless of media detection (used for manual recording button)
      */
-    public setActiveEntry(entryId: string | null): void {
+    public setActiveEntry(entryId: string | null, forceStart: boolean = false): void {
         console.log('[RecordingManager] *** setActiveEntry CALLED ***');
         const wasActive = this.activeEntryId !== null;
         const previousEntryId = this.activeEntryId;
@@ -130,6 +132,7 @@ export class RecordingManager extends EventEmitter {
             from: wasActive ? previousEntryId : 'none',
             to: entryId ? entryId : 'none',
             isRendererRecording: this.isRendererRecording,
+            forceStart,
         });
 
         if (entryId) {
@@ -157,11 +160,16 @@ export class RecordingManager extends EventEmitter {
                 cameraInUse,
                 mediaInUse,
                 meetingApp: this.currentMeetingApp?.appName || null,
-                isRendererRecording: this.isRendererRecording
+                isRendererRecording: this.isRendererRecording,
+                forceStart,
             });
 
-            if (mediaInUse && !this.isRendererRecording) {
-                console.log('[RecordingManager] *** MANUAL START: Media in use, starting recording ***');
+            // Start recording if:
+            // 1. forceStart is true (manual recording button clicked), OR
+            // 2. Media is in use (auto-detection)
+            // AND not already recording
+            if ((forceStart || mediaInUse) && !this.isRendererRecording) {
+                console.log('[RecordingManager] *** STARTING RECORDING ***', forceStart ? '(forced by manual button)' : '(media in use)');
                 this.startRecording();
             }
         } else {

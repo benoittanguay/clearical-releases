@@ -740,17 +740,18 @@ function buildSummarizationPrompt(context: AggregatedContext, duration?: number)
         ? Math.round((primaryAppDuration / totalTrackedDuration) * 100)
         : 0;
 
-    // Introduction - emphasize PRIMARY task focus
-    sections.push(`Write a timesheet entry (1-2 sentences) describing the PRIMARY work task.
+    // Introduction - emphasize PRIMARY task focus with sufficient detail
+    sections.push(`Write a detailed timesheet entry (3-5 sentences) describing what was accomplished during this work session.
 
 CRITICAL RULES:
-- Focus ONLY on the main productive task where most time was spent
-- IGNORE peripheral activities: checking emails, notifications, security alerts, app switching
-- IGNORE brief interruptions or context switches
+- Focus on the main productive tasks where most time was spent
+- Include specific details: file names, features worked on, issues fixed, documents reviewed
+- Mention secondary tasks if they were significant (5+ minutes)
+- IGNORE peripheral activities: checking emails, notifications, security alerts, brief app switching
 - Start with an action verb (Developed, Fixed, Reviewed, Implemented, Debugged, etc.)
-- Be specific about WHAT was accomplished, not what apps were open
+- Be specific about WHAT was accomplished, not just what apps were open
 
-Example good: "Debugged Apple Developer notarization issue for Clearical application."
+Example good: "Debugged Apple Developer notarization issue for Clearical application, investigating code signing certificates and entitlements configuration. Updated the release script to properly sign and staple the DMG. Also reviewed pull request feedback and addressed code review comments."
 Example bad: "Managed notifications while reviewing code changes and checking emails."`);
 
     // Primary app focus signal (this is the key context)
@@ -771,7 +772,7 @@ Example bad: "Managed notifications while reviewing code changes and checking em
     }
 
     // Screenshot descriptions - pre-sampled by client with deduplication and strategic selection
-    // Client sends 15-25 curated descriptions, we filter peripheral activities as safety net
+    // Client sends 30-40 curated descriptions, we filter peripheral activities as safety net
     if (context.screenshotDescriptions.length > 0) {
         // Filter out peripheral activities (notifications, auth prompts, etc.)
         // But preserve descriptions mentioning the primary app regardless
@@ -784,9 +785,9 @@ Example bad: "Managed notifications while reviewing code changes and checking em
 
         if (relevantDescriptions.length > 0) {
             sections.push(`\nKey activities observed (${relevantDescriptions.length} snapshots):`);
-            // Use all curated descriptions (client already sampled to ~20)
-            // Cap at 25 as safety limit
-            relevantDescriptions.slice(0, 25).forEach((desc, i) => {
+            // Use all curated descriptions (client already sampled to ~35)
+            // Cap at 40 as safety limit
+            relevantDescriptions.slice(0, 40).forEach((desc, i) => {
                 sections.push(`${i + 1}. ${desc}`);
             });
         }

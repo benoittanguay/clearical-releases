@@ -83,7 +83,7 @@ function calculateSimilarity(str1: string, str2: string): number {
  * 4. Weight toward primary app based on appDurations
  * 5. Always include first and last (bookends)
  *
- * Target: 15-25 high-quality descriptions
+ * Target: 30-40 high-quality descriptions for detailed summaries
  */
 function smartSampleDescriptions(
     descriptions: DescriptionWithMetadata[],
@@ -1445,8 +1445,8 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
             });
 
             // Smart sample descriptions: deduplicate + strategic selection
-            // Target 15-25 high-quality descriptions instead of raw dump
-            const screenshotDescriptions = smartSampleDescriptions(rawDescriptions, appDurations, 20);
+            // Target 30-40 high-quality descriptions for richer context
+            const screenshotDescriptions = smartSampleDescriptions(rawDescriptions, appDurations, 35);
 
             console.log(`[HistoryDetail] Smart sampling: ${rawDescriptions.length} raw → ${screenshotDescriptions.length} sampled descriptions`);
 

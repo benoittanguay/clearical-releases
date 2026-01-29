@@ -407,7 +407,7 @@ export interface ElectronAPI {
         };
         // Meeting/Recording operations (mic/camera detection)
         meeting: {
-            setActiveEntry: (entryId: string | null) => Promise<{ success: boolean; error?: string }>;
+            setActiveEntry: (entryId: string | null, forceStart?: boolean) => Promise<{ success: boolean; error?: string }>;
             getMediaStatus: () => Promise<{ success: boolean; micInUse: boolean; cameraInUse: boolean; error?: string }>;
             getRecordingStatus: () => Promise<{ success: boolean; isRecording: boolean; entryId: string | null; platform: string | null; error?: string }>;
             setAutoRecordEnabled: (enabled: boolean) => Promise<{ success: boolean; error?: string }>;
