@@ -41,6 +41,12 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
     const [selectedRole, setSelectedRole] = useState<string>('');
     const [customRoleDescription, setCustomRoleDescription] = useState('');
 
+    // Working hours state
+    const [workingHoursEnabled, setWorkingHoursEnabled] = useState(false);
+    const [workingHoursStartTime, setWorkingHoursStartTime] = useState('09:00');
+    const [workingHoursEndTime, setWorkingHoursEndTime] = useState('17:00');
+    const [workingHoursDays, setWorkingHoursDays] = useState<number[]>([1, 2, 3, 4, 5]); // Mon-Fri
+
     // Calendar states - TEMPORARILY DISABLED
     // const [isConnectingCalendar, setIsConnectingCalendar] = useState(false);
     // const [calendarConnected, setCalendarConnected] = useState(false);
@@ -108,9 +114,9 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
         }
     }, [isOpen, settings.jira]);
 
-    // Periodically recheck permissions when on the permissions step (now step 3)
+    // Periodically recheck permissions when on the permissions step (now step 4)
     useEffect(() => {
-        if (isOpen && currentStep === 3) {
+        if (isOpen && currentStep === 4) {
             const interval = setInterval(checkPermissions, 2000);
             return () => clearInterval(interval);
         }
@@ -172,7 +178,7 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
     if (!isOpen) return null;
 
     // Calendar step temporarily disabled - will be re-enabled when feature is complete
-    const stepNames = ['work_role', 'bucket', 'jira', 'permissions'];
+    const stepNames = ['work_role', 'working_hours', 'bucket', 'jira', 'permissions'];
 
     const scrollToTop = () => {
         scrollContainerRef.current?.scrollTo({ top: 0, behavior: 'instant' });
@@ -228,6 +234,38 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
             analytics.track('onboarding.role_selected', { role: selectedRole });
         }
         handleNext();
+    };
+
+    // Save working hours and continue
+    const handleSaveWorkingHoursAndContinue = async () => {
+        if (workingHoursEnabled) {
+            await updateSettings({
+                workingHours: {
+                    enabled: true,
+                    startTime: workingHoursStartTime,
+                    endTime: workingHoursEndTime,
+                    daysOfWeek: workingHoursDays,
+                    reminderSnoozeDuration: 30,
+                    lastPromptDate: null,
+                    snoozedUntil: null,
+                }
+            });
+            analytics.track('onboarding.working_hours_configured', {
+                startTime: workingHoursStartTime,
+                endTime: workingHoursEndTime,
+                daysCount: workingHoursDays.length,
+            });
+        }
+        handleNext();
+    };
+
+    // Toggle working hours day
+    const toggleWorkingHoursDay = (day: number) => {
+        setWorkingHoursDays(prev =>
+            prev.includes(day)
+                ? prev.filter(d => d !== day)
+                : [...prev, day].sort((a, b) => a - b)
+        );
     };
 
     const handleFinish = () => {
@@ -346,7 +384,7 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
         onClose();
     };
 
-    const totalSteps = 5;
+    const totalSteps = stepNames.length;
 
     return (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 animate-fade-in">
@@ -390,8 +428,8 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                             isTransitioning ? 'opacity-0 scale-95' : 'opacity-100 scale-100'
                         }`}
                     >
-                        {/* Step 3: System Permissions (was step 4) */}
-                        {currentStep === 3 && (
+                        {/* Step 4: System Permissions */}
+                        {currentStep === 4 && (
                             <div className="p-6 sm:p-8">
                                 {/* Header */}
                                 <div className="text-center mb-5">
@@ -646,8 +684,114 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                             </div>
                         )}
 
-                        {/* Step 1: Create First Bucket */}
+                        {/* Step 1: Working Hours */}
                         {currentStep === 1 && (
+                            <div className="p-6 sm:p-8">
+                                {/* Header */}
+                                <div className="text-center mb-5">
+                                    <div className="inline-flex items-center justify-center w-16 h-16 bg-[var(--color-success-muted)] rounded-2xl mb-4 shadow-lg">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--color-success)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                            <circle cx="12" cy="12" r="10"/>
+                                            <polyline points="12 6 12 12 16 14"/>
+                                        </svg>
+                                    </div>
+                                    <h2 className="text-2xl font-bold text-[var(--color-text-primary)] mb-1 font-display tracking-tight">Working Hours</h2>
+                                    <p className="text-[var(--color-text-secondary)] text-lg">Get a daily reminder to start tracking</p>
+                                </div>
+
+                                {/* Enable Toggle */}
+                                <div className="bg-[var(--color-bg-tertiary)] border border-[var(--color-border-primary)] rounded-xl p-4 mb-4">
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <div className="text-sm font-medium text-[var(--color-text-primary)]">Enable Daily Reminder</div>
+                                            <div className="text-xs text-[var(--color-text-secondary)]">Get prompted at the start of your workday</div>
+                                        </div>
+                                        <label className="relative inline-flex items-center cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                checked={workingHoursEnabled}
+                                                onChange={(e) => setWorkingHoursEnabled(e.target.checked)}
+                                                className="sr-only peer"
+                                            />
+                                            <div className="w-11 h-6 bg-[var(--color-border-primary)] peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-[var(--color-success)] rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-[var(--color-border-primary)] after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[var(--color-success)]"></div>
+                                        </label>
+                                    </div>
+                                </div>
+
+                                {/* Time Settings - Only shown when enabled */}
+                                {workingHoursEnabled && (
+                                    <div className="space-y-4 animate-fade-in">
+                                        {/* Time Pickers */}
+                                        <div className="flex gap-4">
+                                            <div className="flex-1">
+                                                <label className="block text-sm text-[var(--color-text-secondary)] mb-2 font-display">
+                                                    Start Time
+                                                </label>
+                                                <input
+                                                    type="time"
+                                                    value={workingHoursStartTime}
+                                                    onChange={(e) => setWorkingHoursStartTime(e.target.value)}
+                                                    className="w-full bg-[var(--color-bg-primary)] border text-[var(--color-text-primary)] text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:border-[var(--color-accent)] transition-all"
+                                                    style={{ fontFamily: 'var(--font-body)', borderColor: 'var(--color-border-primary)' }}
+                                                />
+                                            </div>
+                                            <div className="flex-1">
+                                                <label className="block text-sm text-[var(--color-text-secondary)] mb-2 font-display">
+                                                    End Time
+                                                </label>
+                                                <input
+                                                    type="time"
+                                                    value={workingHoursEndTime}
+                                                    onChange={(e) => setWorkingHoursEndTime(e.target.value)}
+                                                    className="w-full bg-[var(--color-bg-primary)] border text-[var(--color-text-primary)] text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:border-[var(--color-accent)] transition-all"
+                                                    style={{ fontFamily: 'var(--font-body)', borderColor: 'var(--color-border-primary)' }}
+                                                />
+                                            </div>
+                                        </div>
+
+                                        {/* Working Days */}
+                                        <div>
+                                            <label className="block text-sm text-[var(--color-text-secondary)] mb-2 font-display">
+                                                Working Days
+                                            </label>
+                                            <div className="flex gap-2 justify-center">
+                                                {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, index) => {
+                                                    const isSelected = workingHoursDays.includes(index);
+                                                    return (
+                                                        <button
+                                                            key={index}
+                                                            onClick={() => toggleWorkingHoursDay(index)}
+                                                            className={`w-10 h-10 rounded-full text-sm font-medium transition-all ${
+                                                                isSelected
+                                                                    ? 'bg-[var(--color-accent)] text-white'
+                                                                    : 'bg-[var(--color-bg-primary)] text-[var(--color-text-secondary)] border border-[var(--color-border-primary)] hover:border-[var(--color-accent)]'
+                                                            }`}
+                                                        >
+                                                            {day}
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+
+                                        {/* Info Box */}
+                                        <div className="bg-[var(--color-accent-muted)] border border-[var(--color-accent)]/30 rounded-lg px-4 py-3">
+                                            <div className="flex items-start gap-2 text-sm text-[var(--color-text-secondary)]">
+                                                <svg className="w-4 h-4 flex-shrink-0 mt-0.5 text-[var(--color-accent)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                </svg>
+                                                <span>
+                                                    You'll see a gentle reminder at your start time. You can snooze or skip any day.
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {/* Step 2: Create First Bucket */}
+                        {currentStep === 2 && (
                             <div className="p-6 sm:p-8">
                                 {/* Header */}
                                 <div className="text-center mb-5">
@@ -720,8 +864,8 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
 
                             </div>
                         )}
-                        {/* Step 2: Jira Integration (was step 3) */}
-                        {currentStep === 2 && (
+                        {/* Step 3: Jira Integration */}
+                        {currentStep === 3 && (
                             <div className="p-6 sm:p-8">
                                 {/* Header */}
                                 <div className="text-center mb-6">
@@ -1018,16 +1162,8 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                                 Skip
                             </button>
                         )}
+                        {/* Step 1: Working Hours - skip available */}
                         {currentStep === 1 && (
-                            <button
-                                onClick={handleSkipBucket}
-                                className="px-5 py-2.5 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] text-sm font-medium transition-colors rounded-lg hover:bg-[#FAF5EE]"
-                            >
-                                Skip
-                            </button>
-                        )}
-                        {/* Step 2 is now Jira */}
-                        {currentStep === 2 && (
                             <button
                                 onClick={handleNext}
                                 className="px-5 py-2.5 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] text-sm font-medium transition-colors rounded-lg hover:bg-[#FAF5EE]"
@@ -1035,7 +1171,25 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                                 Skip
                             </button>
                         )}
-                        {/* Step 3 is now Permissions - no skip button */}
+                        {/* Step 2: Bucket - skip available */}
+                        {currentStep === 2 && (
+                            <button
+                                onClick={handleSkipBucket}
+                                className="px-5 py-2.5 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] text-sm font-medium transition-colors rounded-lg hover:bg-[#FAF5EE]"
+                            >
+                                Skip
+                            </button>
+                        )}
+                        {/* Step 3: Jira - skip available */}
+                        {currentStep === 3 && (
+                            <button
+                                onClick={handleNext}
+                                className="px-5 py-2.5 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] text-sm font-medium transition-colors rounded-lg hover:bg-[#FAF5EE]"
+                            >
+                                Skip
+                            </button>
+                        )}
+                        {/* Step 4: Permissions - no skip button */}
 
                         {/* Primary Action Button */}
                         {currentStep === 0 && (
@@ -1047,7 +1201,17 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                                 Continue
                             </button>
                         )}
+                        {/* Step 1: Working Hours */}
                         {currentStep === 1 && (
+                            <button
+                                onClick={handleSaveWorkingHoursAndContinue}
+                                className="px-6 py-2.5 bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white text-sm font-semibold rounded-full transition-all transform hover:scale-105 active:scale-95 shadow-lg"
+                            >
+                                {workingHoursEnabled ? 'Save & Continue' : 'Continue'}
+                            </button>
+                        )}
+                        {/* Step 2: Bucket */}
+                        {currentStep === 2 && (
                             <button
                                 onClick={handleCreateBucket}
                                 disabled={!bucketName.trim()}
@@ -1056,8 +1220,8 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                                 Create & Continue
                             </button>
                         )}
-                        {/* Step 2 is now Jira */}
-                        {currentStep === 2 && (
+                        {/* Step 3: Jira */}
+                        {currentStep === 3 && (
                             <button
                                 onClick={handleSaveJiraAndContinue}
                                 disabled={!jiraConnected}
@@ -1066,8 +1230,8 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                                 Continue
                             </button>
                         )}
-                        {/* Step 3 is now Permissions */}
-                        {currentStep === 3 && (
+                        {/* Step 4: Permissions */}
+                        {currentStep === 4 && (
                             <button
                                 onClick={handleFinish}
                                 disabled={!accessibilityGranted}

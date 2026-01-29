@@ -317,6 +317,15 @@ contextBridge.exposeInMainWorld('electron', {
             sendAudioLevels: (levels: number[]) =>
                 ipcRenderer.send('meeting:send-audio-levels', levels),
         },
+        // Working hours operations
+        workingHours: {
+            // Listen for start timer event from working hours prompt
+            onStartTimer: (callback: () => void) => {
+                const subscription = (_event: any) => callback();
+                ipcRenderer.on('working-hours:start-timer', subscription);
+                return () => ipcRenderer.removeListener('working-hours:start-timer', subscription);
+            },
+        },
     },
     // Analytics (top-level, not inside ipcRenderer)
     analytics: {

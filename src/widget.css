@@ -788,3 +788,50 @@ body {
 .hiding .prompt-container {
     animation: fadeOutEarly 0.35s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
+
+/* ============================================
+   WORKING HOURS PROMPT MODE
+   ============================================ */
+
+.audio-widget.working-hours-mode {
+    /* Same entrance animation as prompt mode */
+    animation: slideAndRevealIn 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.working-hours-mode .app-icon {
+    animation: iconFadeIn 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    transform: translateX(0);
+}
+
+.working-hours-container {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 4px 4px;
+    -webkit-app-region: no-drag;
+}
+
+.working-hours-buttons {
+    display: flex;
+    gap: 6px;
+}
+
+.prompt-btn.snooze-btn {
+    background: #2A2A2A;
+    color: #FFFFFF;
+    border: 1px solid #4A4A4A;
+}
+
+.prompt-btn.snooze-btn:hover {
+    background: #353535;
+    border-color: #5A5A5A;
+}
+
+/* Hiding animation for working hours mode */
+.audio-widget.working-hours-mode.hiding {
+    animation: slideAndRevealOut 0.35s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.hiding .working-hours-container {
+    animation: fadeOutEarly 0.35s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}

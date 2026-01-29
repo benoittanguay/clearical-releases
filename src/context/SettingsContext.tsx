@@ -32,6 +32,16 @@ export interface AISettings {
     userRole?: string;                 // User's job role for AI context
 }
 
+export interface WorkingHoursSettings {
+    enabled: boolean;                  // Master toggle
+    startTime: string;                 // "HH:mm" format, e.g., "09:00"
+    endTime: string;                   // "HH:mm" format, e.g., "17:00"
+    daysOfWeek: number[];              // 0=Sun, 1=Mon, ..., 6=Sat
+    reminderSnoozeDuration: number;    // Minutes (default: 30)
+    lastPromptDate: string | null;     // "YYYY-MM-DD" - tracks if shown today
+    snoozedUntil: number | null;       // Timestamp for snooze
+}
+
 export interface AppSettings {
     minActivityDuration: number; // milliseconds - activities shorter than this get filtered
     activityGapThreshold: number; // milliseconds - max gap between same-app activities to keep short ones
@@ -39,6 +49,7 @@ export interface AppSettings {
     tempo: TempoSettings;
     jira: JiraSettings;
     ai?: AISettings;
+    workingHours?: WorkingHoursSettings;
 }
 
 interface SettingsContextType {
@@ -74,6 +85,15 @@ const defaultSettings: AppSettings = {
         autoSelectAccount: true,
         autoRecordMeetings: true,
     },
+    workingHours: {
+        enabled: false,
+        startTime: '09:00',
+        endTime: '17:00',
+        daysOfWeek: [1, 2, 3, 4, 5], // Mon-Fri
+        reminderSnoozeDuration: 30,
+        lastPromptDate: null,
+        snoozedUntil: null,
+    },
 };
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
@@ -93,6 +113,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             await window.electron.ipcRenderer.db.setSetting('tempo', settingsToSave.tempo);
             await window.electron.ipcRenderer.db.setSetting('jira', settingsToSave.jira);
             await window.electron.ipcRenderer.db.setSetting('ai', settingsToSave.ai);
+            await window.electron.ipcRenderer.db.setSetting('workingHours', settingsToSave.workingHours);
             console.log('[SettingsContext] Settings saved to database');
         } catch (error) {
             console.error('[SettingsContext] Failed to save settings to database:', error);
@@ -147,6 +168,10 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
                             ai: {
                                 ...defaultSettings.ai,
                                 ...(dbSettings.ai || {})
+                            },
+                            workingHours: {
+                                ...defaultSettings.workingHours,
+                                ...(dbSettings.workingHours || {})
                             }
                         };
                         console.log('[SettingsContext] Loaded settings from database');
@@ -351,6 +376,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             await window.electron.ipcRenderer.db.deleteSetting('tempo');
             await window.electron.ipcRenderer.db.deleteSetting('jira');
             await window.electron.ipcRenderer.db.deleteSetting('ai');
+            await window.electron.ipcRenderer.db.deleteSetting('workingHours');
             console.log('[SettingsContext] Settings deleted from database');
         } catch (error) {
             console.error('[SettingsContext] Failed to delete settings from database:', error);

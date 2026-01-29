@@ -719,6 +719,46 @@ function App() {
     }
   }, [isRunning, checkPermissions, startTimer, setActiveRecordingEntry]);
 
+  // Listen for working hours prompt to start timer (daily reminder)
+  useEffect(() => {
+    // @ts-ignore
+    if (window.electron?.ipcRenderer?.workingHours?.onStartTimer) {
+      console.log('[Renderer] Setting up working-hours:start-timer listener');
+
+      // @ts-ignore
+      const unsubscribe = window.electron.ipcRenderer.workingHours.onStartTimer(async () => {
+        console.log('[Renderer] Received working-hours:start-timer request');
+
+        // Don't start if timer is already running
+        if (isRunning) {
+          console.log('[Renderer] Timer already running, ignoring request');
+          return;
+        }
+
+        // Check permissions before starting
+        const permissions = await checkPermissions();
+
+        // Show permission modal if ANY permission is missing
+        if (!permissions.requiredGranted || !permissions.hasScreenRecording) {
+          console.log('[Renderer] Missing permissions, showing modal');
+          setShowPermissionModal(true);
+          return;
+        }
+
+        // Start timer
+        console.log('[Renderer] Starting timer from working hours prompt');
+        startTimer();
+
+        // Navigate to chrono view
+        setCurrentView('chrono');
+      });
+
+      return () => {
+        if (unsubscribe) unsubscribe();
+      };
+    }
+  }, [isRunning, checkPermissions, startTimer, setCurrentView, setShowPermissionModal]);
+
   return (
     <div className="flex h-screen overflow-hidden font-sans w-full flex-col" style={{ backgroundColor: 'var(--color-bg-primary)', color: 'var(--color-text-primary)' }}>
       {/* Main app content */}

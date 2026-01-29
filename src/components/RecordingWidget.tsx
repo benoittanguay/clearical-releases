@@ -26,13 +26,27 @@ const MIN_HEIGHT = 6;
 const MAX_HEIGHT = 36;
 const CONTAINER_WIDTH = 520 - 24; // Widget width minus padding
 
+// Get time-appropriate greeting
+function getTimeGreeting(): { text: string; icon: string } {
+    const hour = new Date().getHours();
+    if (hour >= 5 && hour < 12) {
+        return { text: 'Good morning!', icon: '☀️' };
+    } else if (hour >= 12 && hour < 17) {
+        return { text: 'Good afternoon!', icon: '🌤️' };
+    } else if (hour >= 17 && hour < 21) {
+        return { text: 'Good evening!', icon: '🌅' };
+    } else {
+        return { text: 'Ready to work?', icon: '🌙' };
+    }
+}
+
 interface MeetingAppInfo {
     appName: string;
     bundleId: string;
 }
 
 export function RecordingWidget(): React.ReactElement {
-    const [widgetState, setWidgetState] = useState<'prompt' | 'recording' | 'stopped' | 'hiding'>('recording');
+    const [widgetState, setWidgetState] = useState<'prompt' | 'recording' | 'stopped' | 'hiding' | 'working-hours-prompt'>('recording');
     const [showMeetingEndedPrompt, setShowMeetingEndedPrompt] = useState(false);
     const [promptEntryId, setPromptEntryId] = useState<string | null>(null);
     const [promptMeetingApp, setPromptMeetingApp] = useState<MeetingAppInfo | null>(null);
@@ -199,6 +213,30 @@ export function RecordingWidget(): React.ReactElement {
 
         return () => {
             console.log('[RecordingWidget] Cleaning up start-timer prompt listener');
+            unsubscribe?.();
+        };
+    }, []);
+
+    // Listen for "working hours" prompt trigger from main process
+    useEffect(() => {
+        console.log('[RecordingWidget] Setting up working-hours prompt listener');
+
+        const handleShowWorkingHoursPrompt = (data: { timestamp: number }) => {
+            console.log('[RecordingWidget] *** RECEIVED WORKING HOURS PROMPT ***', data);
+            setWidgetState('working-hours-prompt');
+        };
+
+        const onFn = window.electron?.ipcRenderer?.on;
+        if (!onFn) {
+            console.error('[RecordingWidget] ipcRenderer.on not available for working hours prompt listener');
+            return;
+        }
+
+        const unsubscribe = onFn('widget:show-working-hours-prompt', handleShowWorkingHoursPrompt);
+        console.log('[RecordingWidget] Working-hours prompt listener registered');
+
+        return () => {
+            console.log('[RecordingWidget] Cleaning up working-hours prompt listener');
             unsubscribe?.();
         };
     }, []);
@@ -518,6 +556,64 @@ export function RecordingWidget(): React.ReactElement {
         }, 370);
     }, []);
 
+    // Handle "Yes, Start" button click in working hours prompt mode
+    const handleWorkingHoursStart = useCallback(async () => {
+        console.log('[RecordingWidget] *** WORKING HOURS - USER WANTS TO START ***');
+
+        if (!window.electron?.ipcRenderer?.invoke) {
+            console.error('[RecordingWidget] IPC not available - cannot send working hours accepted');
+            return;
+        }
+
+        try {
+            const result = await window.electron.ipcRenderer.invoke('widget:working-hours-accepted', { timestamp: Date.now() });
+            console.log('[RecordingWidget] Working hours accepted sent to main, result:', result);
+            // Widget will be hidden/switched to recording by main process
+        } catch (error) {
+            console.error('[RecordingWidget] Error sending working hours accepted:', error);
+        }
+    }, []);
+
+    // Handle "Snooze" button click in working hours prompt mode
+    const handleWorkingHoursSnooze = useCallback(async () => {
+        console.log('[RecordingWidget] *** WORKING HOURS - USER WANTS TO SNOOZE ***');
+        setWidgetState('hiding');
+
+        setTimeout(async () => {
+            if (!window.electron?.ipcRenderer?.invoke) {
+                console.error('[RecordingWidget] IPC not available - cannot send working hours snoozed');
+                return;
+            }
+
+            try {
+                const result = await window.electron.ipcRenderer.invoke('widget:working-hours-snoozed', { timestamp: Date.now() });
+                console.log('[RecordingWidget] Working hours snoozed sent to main, result:', result);
+            } catch (error) {
+                console.error('[RecordingWidget] Error sending working hours snoozed:', error);
+            }
+        }, 370);
+    }, []);
+
+    // Handle "Day Off" button click in working hours prompt mode
+    const handleWorkingHoursDayOff = useCallback(async () => {
+        console.log('[RecordingWidget] *** WORKING HOURS - USER TAKING DAY OFF ***');
+        setWidgetState('hiding');
+
+        setTimeout(async () => {
+            if (!window.electron?.ipcRenderer?.invoke) {
+                console.error('[RecordingWidget] IPC not available - cannot send working hours day off');
+                return;
+            }
+
+            try {
+                const result = await window.electron.ipcRenderer.invoke('widget:working-hours-day-off', { timestamp: Date.now() });
+                console.log('[RecordingWidget] Working hours day off sent to main, result:', result);
+            } catch (error) {
+                console.error('[RecordingWidget] Error sending working hours day off:', error);
+            }
+        }, 370);
+    }, []);
+
     // Determine if a bar is on the left (recorded) or right (buffer) side
     const getBarSide = (barIndex: number): 'left' | 'right' => {
         const barPosition = trackPosition + barIndex * BAR_STEP + BAR_WIDTH / 2;
@@ -528,9 +624,49 @@ export function RecordingWidget(): React.ReactElement {
     const widgetClassName = [
         'audio-widget',
         widgetState === 'prompt' ? 'prompt-mode' : '',
+        widgetState === 'working-hours-prompt' ? 'working-hours-mode' : '',
         widgetState === 'stopped' ? 'stopped' : '',
         widgetState === 'hiding' ? 'hiding' : ''
     ].filter(Boolean).join(' ');
+
+    // Working hours prompt mode - show start-your-day UI
+    if (widgetState === 'working-hours-prompt') {
+        return (
+            <div className={widgetClassName} id="widget" ref={widgetRef}>
+                <div className="prompt-container working-hours-container">
+                    {/* App Icon */}
+                    <div className="app-icon">
+                        <img src="./icon.png" alt="Clearical" />
+                    </div>
+
+                    {/* Prompt Content */}
+                    <div className="prompt-content">
+                        <div className="prompt-title">
+                            <span className="prompt-meeting-icon">{getTimeGreeting().icon}</span>
+                            {getTimeGreeting().text}
+                        </div>
+                        <div className="prompt-question">Ready to start your day?</div>
+                    </div>
+
+                    {/* Prompt Buttons */}
+                    <div className="prompt-buttons working-hours-buttons">
+                        <button className="prompt-btn yes-btn" onClick={handleWorkingHoursStart}>
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="prompt-btn-icon">
+                                <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                            </svg>
+                            Yes, Start
+                        </button>
+                        <button className="prompt-btn snooze-btn" onClick={handleWorkingHoursSnooze}>
+                            Snooze
+                        </button>
+                        <button className="prompt-btn dismiss-btn" onClick={handleWorkingHoursDayOff}>
+                            Day Off
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     // Prompt mode - show different UI
     if (widgetState === 'prompt') {

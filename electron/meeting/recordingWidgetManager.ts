@@ -29,6 +29,9 @@ export class RecordingWidgetManager {
     private onStopCallback: (() => void) | null = null;
     private onPromptAcceptedCallback: (() => void) | null = null;
     private onPromptDismissedCallback: (() => void) | null = null;
+    private onWorkingHoursAcceptedCallback: (() => void) | null = null;
+    private onWorkingHoursSnoozedCallback: (() => void) | null = null;
+    private onWorkingHoursDayOffCallback: (() => void) | null = null;
 
     private constructor() {
         this.registerIpcHandlers();
@@ -117,6 +120,51 @@ export class RecordingWidgetManager {
             return { success: false, error: 'No callback registered' };
         });
 
+        // Handle working hours prompt accepted from widget
+        ipcMain.handle('widget:working-hours-accepted', async () => {
+            console.log('[RecordingWidgetManager] Working hours accepted from widget');
+            if (this.onWorkingHoursAcceptedCallback) {
+                try {
+                    this.onWorkingHoursAcceptedCallback();
+                    return { success: true };
+                } catch (error) {
+                    console.error('[RecordingWidgetManager] Error in working hours accepted callback:', error);
+                    return { success: false, error: String(error) };
+                }
+            }
+            return { success: false, error: 'No callback registered' };
+        });
+
+        // Handle working hours prompt snoozed from widget
+        ipcMain.handle('widget:working-hours-snoozed', async () => {
+            console.log('[RecordingWidgetManager] Working hours snoozed from widget');
+            if (this.onWorkingHoursSnoozedCallback) {
+                try {
+                    this.onWorkingHoursSnoozedCallback();
+                    return { success: true };
+                } catch (error) {
+                    console.error('[RecordingWidgetManager] Error in working hours snoozed callback:', error);
+                    return { success: false, error: String(error) };
+                }
+            }
+            return { success: false, error: 'No callback registered' };
+        });
+
+        // Handle working hours day off from widget
+        ipcMain.handle('widget:working-hours-day-off', async () => {
+            console.log('[RecordingWidgetManager] Working hours day off from widget');
+            if (this.onWorkingHoursDayOffCallback) {
+                try {
+                    this.onWorkingHoursDayOffCallback();
+                    return { success: true };
+                } catch (error) {
+                    console.error('[RecordingWidgetManager] Error in working hours day off callback:', error);
+                    return { success: false, error: String(error) };
+                }
+            }
+            return { success: false, error: 'No callback registered' };
+        });
+
         console.log('[RecordingWidgetManager] IPC handlers registered');
     }
 
@@ -139,6 +187,62 @@ export class RecordingWidgetManager {
      */
     public setOnPromptDismissedCallback(callback: () => void): void {
         this.onPromptDismissedCallback = callback;
+    }
+
+    /**
+     * Set callback for when user accepts working hours prompt (clicks "Yes, Start")
+     */
+    public setOnWorkingHoursAcceptedCallback(callback: () => void): void {
+        this.onWorkingHoursAcceptedCallback = callback;
+    }
+
+    /**
+     * Set callback for when user snoozes working hours prompt (clicks "Snooze")
+     */
+    public setOnWorkingHoursSnoozedCallback(callback: () => void): void {
+        this.onWorkingHoursSnoozedCallback = callback;
+    }
+
+    /**
+     * Set callback for when user takes day off (clicks "Day Off")
+     */
+    public setOnWorkingHoursDayOffCallback(callback: () => void): void {
+        this.onWorkingHoursDayOffCallback = callback;
+    }
+
+    /**
+     * Show the widget in working hours prompt mode (asking to start the day)
+     */
+    public showWorkingHoursPrompt(): void {
+        console.log('[RecordingWidgetManager] showWorkingHoursPrompt() called');
+
+        // Create window if needed
+        if (!this.widgetWindow || this.widgetWindow.isDestroyed()) {
+            console.log('[RecordingWidgetManager] Creating widget window for working hours prompt mode');
+            this.audioLevelsSentCount = 0;
+            this.createWindow();
+        }
+
+        // Send working hours prompt mode message to widget after it's ready
+        const sendWorkingHoursPromptMessage = () => {
+            if (this.widgetWindow && !this.widgetWindow.isDestroyed()) {
+                console.log('[RecordingWidgetManager] Sending show-working-hours-prompt message to widget');
+                this.widgetWindow.webContents.send('widget:show-working-hours-prompt', {
+                    timestamp: Date.now(),
+                });
+            }
+        };
+
+        // Wait for window to be ready
+        if (this.widgetWindow) {
+            if (this.widgetWindow.webContents.isLoading()) {
+                this.widgetWindow.webContents.once('did-finish-load', sendWorkingHoursPromptMessage);
+            } else {
+                sendWorkingHoursPromptMessage();
+            }
+        }
+
+        this.isShowing = true;
     }
 
     /**

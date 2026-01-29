@@ -46,6 +46,7 @@ import { getRecordingManager } from './meeting/recordingManager.js';
 import { MEETING_IPC_CHANNELS } from './meeting/types.js';
 import { getAudioRecorder } from './meeting/audioRecorder.js';
 import { mediaMonitor } from './native/index.js';
+import { getWorkingHoursScheduler } from './workingHoursScheduler.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -4024,6 +4025,27 @@ app.whenReady().then(() => {
     // We use a small delay to ensure the tray icon is fully rendered by the OS
     setTimeout(() => {
         showWindowBelowTray();
+
+        // Initialize working hours scheduler after window is ready
+        // This allows the scheduler to use the main window for IPC
+        try {
+            const workingHoursScheduler = getWorkingHoursScheduler();
+            workingHoursScheduler.setMainWindow(win);
+
+            // Set up callback for when user accepts the prompt
+            workingHoursScheduler.setOnStartTimerCallback(() => {
+                console.log('[Main] Working hours: User wants to start timer');
+                // Send IPC to renderer to start timer
+                if (win && !win.isDestroyed()) {
+                    win.webContents.send('working-hours:start-timer');
+                }
+            });
+
+            workingHoursScheduler.start();
+            console.log('[Main] Working hours scheduler initialized');
+        } catch (error) {
+            console.error('[Main] Failed to initialize working hours scheduler:', error);
+        }
     }, 150);
 
     // Initialize auto-updater

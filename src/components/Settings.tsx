@@ -535,6 +535,146 @@ export function Settings({ onOpenJiraModal, onOpenTempoModal }: SettingsProps = 
                 </div>
             </div>
 
+            {/* Working Hours Settings */}
+            <div className="bg-[var(--color-bg-secondary)] p-4 rounded-2xl mb-3 border border-[var(--color-border-primary)]">
+                <h3 className="text-[10px] font-bold text-[var(--color-text-secondary)] uppercase tracking-wider mb-3 font-display">Working Hours</h3>
+
+                <div className="space-y-3">
+                    {/* Enable/Disable Toggle */}
+                    <div className="flex items-center justify-between bg-[var(--color-bg-tertiary)] p-2.5 rounded-lg border border-[var(--color-border-primary)]">
+                        <div>
+                            <div className="text-sm font-medium text-[var(--color-text-primary)]">Daily Reminder</div>
+                            <div className="text-xs text-[var(--color-text-secondary)]">Get prompted to start your day at a set time</div>
+                        </div>
+                        <label className="relative inline-flex items-center cursor-pointer">
+                            <input
+                                type="checkbox"
+                                checked={tempSettings.workingHours?.enabled ?? false}
+                                onChange={(e) => {
+                                    setTempSettings(prev => ({
+                                        ...prev,
+                                        workingHours: {
+                                            ...prev.workingHours,
+                                            enabled: e.target.checked,
+                                            startTime: prev.workingHours?.startTime ?? '09:00',
+                                            endTime: prev.workingHours?.endTime ?? '17:00',
+                                            daysOfWeek: prev.workingHours?.daysOfWeek ?? [1, 2, 3, 4, 5],
+                                            reminderSnoozeDuration: prev.workingHours?.reminderSnoozeDuration ?? 30,
+                                            lastPromptDate: prev.workingHours?.lastPromptDate ?? null,
+                                            snoozedUntil: prev.workingHours?.snoozedUntil ?? null,
+                                        }
+                                    }));
+                                }}
+                                className="sr-only peer"
+                            />
+                            <div className="w-11 h-6 bg-[var(--color-border-primary)] peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-[var(--color-success)] rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-[var(--color-border-primary)] after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[var(--color-success)]"></div>
+                        </label>
+                    </div>
+
+                    {/* Time Settings - Only shown when enabled */}
+                    {tempSettings.workingHours?.enabled && (
+                        <>
+                            {/* Start Time */}
+                            <div className="bg-[var(--color-bg-tertiary)] p-2.5 rounded-lg border border-[var(--color-border-primary)]">
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <div className="text-sm font-medium text-[var(--color-text-primary)]">Start Time</div>
+                                        <div className="text-xs text-[var(--color-text-secondary)]">When to prompt you each working day</div>
+                                    </div>
+                                    <input
+                                        type="time"
+                                        value={tempSettings.workingHours?.startTime ?? '09:00'}
+                                        onChange={(e) => {
+                                            setTempSettings(prev => ({
+                                                ...prev,
+                                                workingHours: {
+                                                    ...prev.workingHours!,
+                                                    startTime: e.target.value,
+                                                }
+                                            }));
+                                        }}
+                                        className="border text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:border-[var(--color-accent)] transition-all"
+                                        style={{
+                                            backgroundColor: 'var(--color-bg-primary)',
+                                            borderColor: 'var(--color-border-primary)',
+                                            color: 'var(--color-text-primary)',
+                                            fontFamily: 'var(--font-body)'
+                                        }}
+                                    />
+                                </div>
+                            </div>
+
+                            {/* End Time */}
+                            <div className="bg-[var(--color-bg-tertiary)] p-2.5 rounded-lg border border-[var(--color-border-primary)]">
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <div className="text-sm font-medium text-[var(--color-text-primary)]">End Time</div>
+                                        <div className="text-xs text-[var(--color-text-secondary)]">Grace period ends (for late launches)</div>
+                                    </div>
+                                    <input
+                                        type="time"
+                                        value={tempSettings.workingHours?.endTime ?? '17:00'}
+                                        onChange={(e) => {
+                                            setTempSettings(prev => ({
+                                                ...prev,
+                                                workingHours: {
+                                                    ...prev.workingHours!,
+                                                    endTime: e.target.value,
+                                                }
+                                            }));
+                                        }}
+                                        className="border text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:border-[var(--color-accent)] transition-all"
+                                        style={{
+                                            backgroundColor: 'var(--color-bg-primary)',
+                                            borderColor: 'var(--color-border-primary)',
+                                            color: 'var(--color-text-primary)',
+                                            fontFamily: 'var(--font-body)'
+                                        }}
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Working Days */}
+                            <div className="bg-[var(--color-bg-tertiary)] p-2.5 rounded-lg border border-[var(--color-border-primary)]">
+                                <div className="text-sm font-medium text-[var(--color-text-primary)] mb-2">Working Days</div>
+                                <div className="flex gap-2">
+                                    {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, index) => {
+                                        const isSelected = tempSettings.workingHours?.daysOfWeek?.includes(index) ?? false;
+                                        return (
+                                            <button
+                                                key={index}
+                                                onClick={() => {
+                                                    setTempSettings(prev => {
+                                                        const currentDays = prev.workingHours?.daysOfWeek ?? [1, 2, 3, 4, 5];
+                                                        const newDays = isSelected
+                                                            ? currentDays.filter(d => d !== index)
+                                                            : [...currentDays, index].sort((a, b) => a - b);
+                                                        return {
+                                                            ...prev,
+                                                            workingHours: {
+                                                                ...prev.workingHours!,
+                                                                daysOfWeek: newDays,
+                                                            }
+                                                        };
+                                                    });
+                                                }}
+                                                className={`w-8 h-8 rounded-full text-xs font-medium transition-all ${
+                                                    isSelected
+                                                        ? 'bg-[var(--color-accent)] text-white'
+                                                        : 'bg-[var(--color-bg-primary)] text-[var(--color-text-secondary)] border border-[var(--color-border-primary)] hover:border-[var(--color-accent)]'
+                                                }`}
+                                            >
+                                                {day}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        </>
+                    )}
+                </div>
+            </div>
+
             {/* Time Rounding Settings */}
             <div className="bg-[var(--color-bg-secondary)] p-4 rounded-2xl mb-3 border border-[var(--color-border-primary)]">
                 <h3 className="text-[10px] font-bold text-[var(--color-text-secondary)] uppercase tracking-wider mb-3 font-display">Time Rounding</h3>
