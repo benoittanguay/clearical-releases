@@ -78,7 +78,7 @@
     height: 100%;
     top: 0;
     z-index: 10;
-    transition: transform 150ms ease-out;
+    /* Removed transition - was fighting with JS animation causing perceived speed changes */
     transform-origin: center center;
 }
 

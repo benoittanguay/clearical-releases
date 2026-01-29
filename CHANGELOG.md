@@ -2,6 +2,16 @@
 
 All notable changes to Clearical will be documented in this file.
 
+## [1.7.15] - 2025-01-28
+
+### Bug Fixes
+- Fixed recording widget waveform animation speed issue where it appeared to suddenly accelerate after appearing
+
+### Improvements
+- Smoother waveform animation with reduced scroll speed for a calmer visual experience
+
+---
+
 ## [1.7.8] - 2025-01-26
 
 ### Improvements

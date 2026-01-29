@@ -21,7 +21,7 @@ interface WaveformBar {
 const BAR_WIDTH = 2;
 const BAR_GAP = 4;
 const BAR_STEP = BAR_WIDTH + BAR_GAP;
-const SCROLL_SPEED = 30;
+const SCROLL_SPEED = 12; // 12px/s with 6px bars = 2 bars/second
 const MIN_HEIGHT = 6;
 const MAX_HEIGHT = 36;
 const CONTAINER_WIDTH = 520 - 24; // Widget width minus padding
@@ -305,12 +305,9 @@ export function RecordingWidget(): React.ReactElement {
             return;
         }
 
-        // Reset lastTime when starting animation to prevent stale timestamp issues
-        // This is crucial when transitioning from 'prompt' or other states to 'recording'
-        lastTimeRef.current = performance.now();
-
         // Track if this effect instance is still active (prevents stale callbacks)
         let isActive = true;
+        let animationStarted = false;
 
         const animate = (currentTime: number) => {
             if (!isActive) return; // Guard against stale callbacks after cleanup
@@ -364,10 +361,21 @@ export function RecordingWidget(): React.ReactElement {
             animationFrameRef.current = requestAnimationFrame(animate);
         };
 
-        animationFrameRef.current = requestAnimationFrame(animate);
+        const startAnimation = () => {
+            if (!isActive || animationStarted) return;
+            animationStarted = true;
+            // Reset lastTime right before starting to ensure accurate first frame
+            lastTimeRef.current = performance.now();
+            animationFrameRef.current = requestAnimationFrame(animate);
+        };
+
+        // Delay animation start until after entrance animation completes (500ms)
+        // This prevents perceived speed change when waveform clip-path expands
+        const delayTimer = setTimeout(startAnimation, 520);
 
         return () => {
             isActive = false; // Prevent stale animate callbacks from running
+            clearTimeout(delayTimer);
             if (animationFrameRef.current) {
                 cancelAnimationFrame(animationFrameRef.current);
             }

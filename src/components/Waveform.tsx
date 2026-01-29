@@ -25,7 +25,7 @@ interface WaveformProps {
 const BAR_WIDTH = 2;
 const BAR_GAP = 4;
 const BAR_STEP = BAR_WIDTH + BAR_GAP;
-const SCROLL_SPEED = 30;
+const SCROLL_SPEED = 12; // 12px/s with 6px bars = 2 bars/second
 const MIN_HEIGHT = 6;
 const MAX_HEIGHT_RATIO = 0.75; // Max bar height as ratio of container
 
