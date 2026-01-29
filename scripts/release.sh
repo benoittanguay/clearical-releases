@@ -75,9 +75,18 @@ if [ "$SKIP_NOTARIZATION" = "true" ] || [ "$SKIP_NOTARIZATION" = "1" ]; then
     echo -e "${YELLOW}  ⚠ Notarization skipped via SKIP_NOTARIZATION env var${NC}"
 fi
 
-# Step 2: Build the app with electron-builder (without publishing)
+# Step 2: Clean and rebuild everything fresh
 echo ""
-echo -e "${BLUE}Step 2: Building Electron app...${NC}"
+echo -e "${BLUE}Step 2: Clean rebuild...${NC}"
+echo "  Cleaning dist folders..."
+rm -rf dist dist-electron
+echo "  ✓ Cleaned dist and dist-electron"
+
+echo "  Building frontend..."
+npm run build 2>&1 | tail -5
+echo "  ✓ Frontend build complete"
+
+echo "  Building Electron app..."
 npm run build:electron 2>&1 | tail -20
 echo "  ✓ Electron build complete"
 
@@ -276,9 +285,16 @@ if [ "$PUBLISH" = true ]; then
             dist/Clearical-arm64.dmg \
             dist/Clearical-arm64.zip \
             dist/latest-mac.yml \
+            CHANGELOG.md \
             --repo benoittanguay/clearical-releases \
             --clobber
         echo "  ✓ Artifacts uploaded to existing release"
+
+        # Delete auto-generated source archives (GitHub adds these automatically)
+        echo "  Removing auto-generated source archives..."
+        gh release delete-asset "v${VERSION}" "v${VERSION}.zip" --repo benoittanguay/clearical-releases -y 2>/dev/null || true
+        gh release delete-asset "v${VERSION}" "v${VERSION}.tar.gz" --repo benoittanguay/clearical-releases -y 2>/dev/null || true
+        echo "  ✓ Source archives removed"
     else
         echo "  Creating new release v${VERSION}..."
 
@@ -311,6 +327,7 @@ if [ "$PUBLISH" = true ]; then
             dist/Clearical-arm64.dmg \
             dist/Clearical-arm64.zip \
             dist/latest-mac.yml \
+            CHANGELOG.md \
             --repo benoittanguay/clearical-releases \
             --title "v${VERSION}" \
             --notes "## What's New
@@ -325,6 +342,12 @@ Download the DMG, open it, and drag Clearical to your Applications folder.
 
 The app is **signed and notarized** by Apple for your security."
         echo "  ✓ Release created and artifacts uploaded"
+
+        # Delete auto-generated source archives (GitHub adds these automatically)
+        echo "  Removing auto-generated source archives..."
+        gh release delete-asset "v${VERSION}" "v${VERSION}.zip" --repo benoittanguay/clearical-releases -y 2>/dev/null || true
+        gh release delete-asset "v${VERSION}" "v${VERSION}.tar.gz" --repo benoittanguay/clearical-releases -y 2>/dev/null || true
+        echo "  ✓ Source archives removed"
     fi
 
     echo ""
@@ -343,4 +366,5 @@ echo "Artifacts ready in dist/"
 echo "  - Clearical-arm64.dmg"
 echo "  - Clearical-arm64.zip"
 echo "  - latest-mac.yml (update manifest)"
+echo "  - CHANGELOG.md (included in GitHub release)"
 echo ""
