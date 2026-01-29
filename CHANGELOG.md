@@ -2,6 +2,17 @@
 
 All notable changes to Clearical will be documented in this file.
 
+## [1.7.17] - 2025-01-29
+
+### Bug Fixes
+- **Meeting Detection Prompt**: Fixed issue where clicking "Yes, Start" did nothing when the timer was already running - now correctly starts audio recording
+- **IPC Message Order**: Fixed race condition where meeting prompt response wasn't reaching the main window
+
+### Improvements
+- **Release Script**: Improved DMG signing and notarization workflow to properly sign, notarize, and staple DMG separately from app bundle
+
+---
+
 ## [1.7.16] - 2025-01-29
 
 ### Bug Fixes
