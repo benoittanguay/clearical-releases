@@ -31,6 +31,7 @@ export class WorkingHoursScheduler {
     private checkInterval: NodeJS.Timeout | null = null;
     private mainWindow: BrowserWindow | null = null;
     private onStartTimerCallback: (() => void) | null = null;
+    private isTimerRunningCallback: (() => boolean) | null = null;
     private isPromptShowing = false;
 
     private constructor() {
@@ -57,6 +58,14 @@ export class WorkingHoursScheduler {
      */
     public setOnStartTimerCallback(callback: () => void): void {
         this.onStartTimerCallback = callback;
+    }
+
+    /**
+     * Set callback to check if timer is currently running
+     * Used to skip showing the prompt if user already has an active timer
+     */
+    public setIsTimerRunningCallback(callback: () => boolean): void {
+        this.isTimerRunningCallback = callback;
     }
 
     /**
@@ -151,6 +160,11 @@ export class WorkingHoursScheduler {
         try {
             // Don't show if a prompt is already visible
             if (this.isPromptShowing) {
+                return;
+            }
+
+            // Don't show if timer is already running - user has already started their day
+            if (this.isTimerRunningCallback && this.isTimerRunningCallback()) {
                 return;
             }
 

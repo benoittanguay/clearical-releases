@@ -46,7 +46,10 @@ interface MeetingAppInfo {
 }
 
 export function RecordingWidget(): React.ReactElement {
-    const [widgetState, setWidgetState] = useState<'prompt' | 'recording' | 'stopped' | 'hiding' | 'working-hours-prompt'>('recording');
+    // Content mode determines WHAT to render (which UI)
+    const [contentMode, setContentMode] = useState<'prompt' | 'recording' | 'stopped' | 'working-hours-prompt'>('recording');
+    // Animation state determines HOW to render (animation classes)
+    const [isHiding, setIsHiding] = useState(false);
     const [showMeetingEndedPrompt, setShowMeetingEndedPrompt] = useState(false);
     const [promptEntryId, setPromptEntryId] = useState<string | null>(null);
     const [promptMeetingApp, setPromptMeetingApp] = useState<MeetingAppInfo | null>(null);
@@ -199,7 +202,8 @@ export function RecordingWidget(): React.ReactElement {
         const handleShowStartPrompt = (data: { meetingApp: MeetingAppInfo | null; timestamp: number }) => {
             console.log('[RecordingWidget] *** RECEIVED START TIMER PROMPT ***', data);
             setPromptMeetingApp(data.meetingApp);
-            setWidgetState('prompt');
+            setContentMode('prompt');
+            setIsHiding(false);
         };
 
         const onFn = window.electron?.ipcRenderer?.on;
@@ -223,7 +227,8 @@ export function RecordingWidget(): React.ReactElement {
 
         const handleShowWorkingHoursPrompt = (data: { timestamp: number }) => {
             console.log('[RecordingWidget] *** RECEIVED WORKING HOURS PROMPT ***', data);
-            setWidgetState('working-hours-prompt');
+            setContentMode('working-hours-prompt');
+            setIsHiding(false);
         };
 
         const onFn = window.electron?.ipcRenderer?.on;
@@ -339,7 +344,7 @@ export function RecordingWidget(): React.ReactElement {
 
     // Waveform animation loop
     useEffect(() => {
-        if (widgetState !== 'recording') {
+        if (contentMode !== 'recording' || isHiding) {
             return;
         }
 
@@ -418,7 +423,7 @@ export function RecordingWidget(): React.ReactElement {
                 cancelAnimationFrame(animationFrameRef.current);
             }
         };
-    }, [widgetState, generateBarHeight]);
+    }, [contentMode, isHiding, generateBarHeight]);
 
     // Handle "Yes, meeting ended" response
     const handleMeetingEndedYes = useCallback(async () => {
@@ -435,18 +440,18 @@ export function RecordingWidget(): React.ReactElement {
             console.log('[RecordingWidget] Meeting ended confirmation sent');
 
             // Now show the success animation after recording has actually stopped
-            setWidgetState('stopped');
+            setContentMode('stopped');
 
             // After showing success state, transition to hiding
             setTimeout(() => {
-                setWidgetState('hiding');
+                setIsHiding(true);
             }, 2000); // Show "Saved" for 2 seconds
         } catch (error) {
             console.error('[RecordingWidget] Error sending meeting ended response:', error);
             // Still show stopped state even on error
-            setWidgetState('stopped');
+            setContentMode('stopped');
             setTimeout(() => {
-                setWidgetState('hiding');
+                setIsHiding(true);
             }, 2000);
         }
     }, [promptEntryId]);
@@ -485,18 +490,18 @@ export function RecordingWidget(): React.ReactElement {
             console.log('[RecordingWidget] Stop response:', response);
 
             // Now show the success animation after recording has actually stopped
-            setWidgetState('stopped');
+            setContentMode('stopped');
 
             // After showing success state, transition to hiding
             setTimeout(() => {
-                setWidgetState('hiding');
+                setIsHiding(true);
             }, 2000); // Show "Saved" for 2 seconds
         } catch (error) {
             console.error('[RecordingWidget] Stop IPC failed:', error);
             // Still show stopped state even on error
-            setWidgetState('stopped');
+            setContentMode('stopped');
             setTimeout(() => {
-                setWidgetState('hiding');
+                setIsHiding(true);
             }, 2000);
         }
     }, []);
@@ -504,7 +509,7 @@ export function RecordingWidget(): React.ReactElement {
     // Handle hide button click
     const handleHide = useCallback(() => {
         console.log('[RecordingWidget] *** HIDE BUTTON CLICKED ***');
-        setWidgetState('hiding');
+        setIsHiding(true);
 
         // After animation completes, tell main process to hide window
         setTimeout(() => {
@@ -537,7 +542,7 @@ export function RecordingWidget(): React.ReactElement {
     // Handle "Dismiss" button click in prompt mode
     const handlePromptDismiss = useCallback(async () => {
         console.log('[RecordingWidget] *** PROMPT DISMISSED - USER DOES NOT WANT TO START TIMER ***');
-        setWidgetState('hiding');
+        setIsHiding(true);
 
         // After animation completes, tell main process
         setTimeout(async () => {
@@ -577,7 +582,7 @@ export function RecordingWidget(): React.ReactElement {
     // Handle "Snooze" button click in working hours prompt mode
     const handleWorkingHoursSnooze = useCallback(async () => {
         console.log('[RecordingWidget] *** WORKING HOURS - USER WANTS TO SNOOZE ***');
-        setWidgetState('hiding');
+        setIsHiding(true);
 
         setTimeout(async () => {
             if (!window.electron?.ipcRenderer?.invoke) {
@@ -597,7 +602,7 @@ export function RecordingWidget(): React.ReactElement {
     // Handle "Day Off" button click in working hours prompt mode
     const handleWorkingHoursDayOff = useCallback(async () => {
         console.log('[RecordingWidget] *** WORKING HOURS - USER TAKING DAY OFF ***');
-        setWidgetState('hiding');
+        setIsHiding(true);
 
         setTimeout(async () => {
             if (!window.electron?.ipcRenderer?.invoke) {
@@ -623,14 +628,14 @@ export function RecordingWidget(): React.ReactElement {
     // Build class name for widget
     const widgetClassName = [
         'audio-widget',
-        widgetState === 'prompt' ? 'prompt-mode' : '',
-        widgetState === 'working-hours-prompt' ? 'working-hours-mode' : '',
-        widgetState === 'stopped' ? 'stopped' : '',
-        widgetState === 'hiding' ? 'hiding' : ''
+        contentMode === 'prompt' ? 'prompt-mode' : '',
+        contentMode === 'working-hours-prompt' ? 'working-hours-mode' : '',
+        contentMode === 'stopped' ? 'stopped' : '',
+        isHiding ? 'hiding' : ''
     ].filter(Boolean).join(' ');
 
     // Working hours prompt mode - show start-your-day UI
-    if (widgetState === 'working-hours-prompt') {
+    if (contentMode === 'working-hours-prompt') {
         return (
             <div className={widgetClassName} id="widget" ref={widgetRef}>
                 <div className="prompt-container working-hours-container">
@@ -669,7 +674,7 @@ export function RecordingWidget(): React.ReactElement {
     }
 
     // Prompt mode - show different UI
-    if (widgetState === 'prompt') {
+    if (contentMode === 'prompt') {
         return (
             <div className={widgetClassName} id="widget" ref={widgetRef}>
                 <div className="prompt-container">

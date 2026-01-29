@@ -662,8 +662,15 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
                     clearInterval(audioLevelIntervalRef.current);
                     audioLevelIntervalRef.current = null;
                 }
+                // Fully close AudioContext to release audio resources
+                // This is critical for Bluetooth headsets to switch back to A2DP codec
                 if (audioContextRef.current) {
-                    audioContextRef.current.close();
+                    try {
+                        await audioContextRef.current.close();
+                        console.log('[AudioRecordingContext] AudioContext closed successfully');
+                    } catch (e) {
+                        console.warn('[AudioRecordingContext] Error closing AudioContext:', e);
+                    }
                     audioContextRef.current = null;
                 }
                 analyserRef.current = null;
@@ -1183,7 +1190,7 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
         console.log('[AudioRecordingContext] *** Event listeners REGISTERED successfully ***');
 
         return () => {
-            console.log('[AudioRecordingContext] Cleaning up event listeners');
+            console.log('[AudioRecordingContext] Cleaning up event listeners and audio resources');
             unsubscribeStart?.();
             unsubscribeStop?.();
             unsubscribeResetSilence?.();
@@ -1191,10 +1198,18 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
             // Stop audio level analysis
             if (audioLevelIntervalRef.current) {
                 clearInterval(audioLevelIntervalRef.current);
+                audioLevelIntervalRef.current = null;
             }
+
+            // Close AudioContext to release audio resources
+            // Critical for Bluetooth headsets to switch back to A2DP codec
             if (audioContextRef.current) {
-                audioContextRef.current.close();
+                audioContextRef.current.close().catch(e => {
+                    console.warn('[AudioRecordingContext] Error closing AudioContext during cleanup:', e);
+                });
+                audioContextRef.current = null;
             }
+            analyserRef.current = null;
 
             // Stop any active recording
             if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
@@ -1202,29 +1217,34 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
             }
             if (streamRef.current) {
                 streamRef.current.getTracks().forEach(track => track.stop());
+                streamRef.current = null;
             }
 
-            // Stop native mic capture
-            if (isNativeMicActiveRef.current) {
-                isNativeMicActiveRef.current = false;
-                nativeMicBufferRef.current = [];
-                if (nativeMicUnsubscribeRef.current) {
-                    nativeMicUnsubscribeRef.current();
-                    nativeMicUnsubscribeRef.current = null;
-                }
-                window.electron?.ipcRenderer?.meeting?.stopMicCapture?.();
+            // Always stop native mic capture to ensure device is released
+            // This is critical for Bluetooth headsets to switch back to A2DP codec
+            isNativeMicActiveRef.current = false;
+            nativeMicBufferRef.current = [];
+            if (nativeMicUnsubscribeRef.current) {
+                nativeMicUnsubscribeRef.current();
+                nativeMicUnsubscribeRef.current = null;
             }
+            // Always call stopMicCapture to ensure the native capture session is fully released
+            window.electron?.ipcRenderer?.meeting?.stopMicCapture?.().catch(e => {
+                console.warn('[AudioRecordingContext] Error stopping mic capture during cleanup:', e);
+            });
 
-            // Stop system audio capture
-            if (isSystemAudioActiveRef.current) {
-                isSystemAudioActiveRef.current = false;
-                systemAudioBufferRef.current = [];
-                if (systemAudioUnsubscribeRef.current) {
-                    systemAudioUnsubscribeRef.current();
-                    systemAudioUnsubscribeRef.current = null;
-                }
-                window.electron?.ipcRenderer?.meeting?.stopSystemAudioCapture?.();
+            // Always stop system audio capture
+            isSystemAudioActiveRef.current = false;
+            systemAudioBufferRef.current = [];
+            if (systemAudioUnsubscribeRef.current) {
+                systemAudioUnsubscribeRef.current();
+                systemAudioUnsubscribeRef.current = null;
             }
+            window.electron?.ipcRenderer?.meeting?.stopSystemAudioCapture?.().catch(e => {
+                console.warn('[AudioRecordingContext] Error stopping system audio capture during cleanup:', e);
+            });
+
+            console.log('[AudioRecordingContext] Cleanup complete - all audio resources released');
         };
     }, [isAutoRecordEnabled, startRecording, stopRecordingAndTranscribe]);
 

@@ -195,15 +195,31 @@
 
     NSLog(@"[MicCapture] Stopping microphone capture...");
 
-    if (_captureSession && [_captureSession isRunning]) {
-        [_captureSession stopRunning];
+    if (_captureSession) {
+        // Stop the session first
+        if ([_captureSession isRunning]) {
+            [_captureSession stopRunning];
+        }
+
+        // Remove all inputs to fully release audio devices
+        // This is critical for Bluetooth headsets to switch back to A2DP codec
+        for (AVCaptureInput *input in [_captureSession.inputs copy]) {
+            [_captureSession removeInput:input];
+            NSLog(@"[MicCapture] Removed input: %@", input);
+        }
+
+        // Remove all outputs
+        for (AVCaptureOutput *output in [_captureSession.outputs copy]) {
+            [_captureSession removeOutput:output];
+            NSLog(@"[MicCapture] Removed output: %@", output);
+        }
     }
 
     _captureSession = nil;
     _audioOutput = nil;
     _isCapturing = NO;
 
-    NSLog(@"[MicCapture] Microphone capture stopped");
+    NSLog(@"[MicCapture] Microphone capture stopped and all inputs/outputs released");
 }
 
 #pragma mark - AVCaptureAudioDataOutputSampleBufferDelegate

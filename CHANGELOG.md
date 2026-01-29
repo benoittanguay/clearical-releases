@@ -2,6 +2,19 @@
 
 All notable changes to Clearical will be documented in this file.
 
+## [1.7.16] - 2025-01-29
+
+### Bug Fixes
+- **Working Hours Prompt**: Fixed edge case where "Ready to start your day?" prompt would appear even when timer was already running
+- **Widget Animation**: Fixed issue where prompt widgets showed recording elements during exit animation instead of keeping the current prompt UI visible throughout
+- **Audio Cleanup**: Improved microphone release when stopping recording to help Bluetooth headsets switch back to high-quality codec faster
+
+### Improvements
+- **Standardized Widget Buttons**: All widget buttons now have consistent sizing and typography
+- **Working Hours Prompt Layout**: Improved text spacing and layout for better readability
+
+---
+
 ## [1.7.15] - 2025-01-28
 
 ### New Features

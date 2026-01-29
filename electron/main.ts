@@ -4041,6 +4041,12 @@ app.whenReady().then(() => {
                 }
             });
 
+            // Set up callback to check if timer is already running
+            // This prevents showing the "Ready to start?" prompt when user already has an active timer
+            workingHoursScheduler.setIsTimerRunningCallback(() => {
+                return timerState.isRunning;
+            });
+
             workingHoursScheduler.start();
             console.log('[Main] Working hours scheduler initialized');
         } catch (error) {
