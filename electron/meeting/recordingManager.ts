@@ -242,14 +242,23 @@ export class RecordingManager extends EventEmitter {
         console.log(`[RecordingManager] sendToRenderer: channel=${channel}, args=`, args);
         console.log(`[RecordingManager] Found ${windows.length} windows`);
 
+        let sentCount = 0;
         for (const win of windows) {
             if (!win.isDestroyed()) {
                 const title = win.getTitle();
                 const url = win.webContents.getURL();
-                console.log(`[RecordingManager] Sending to window: title="${title}", url="${url}"`);
+                const isWidget = url.includes('widget.html');
+                console.log(`[RecordingManager] Window: title="${title}", url="${url}", isWidget=${isWidget}`);
+
+                // Send to all windows, but log which ones receive it
                 win.webContents.send(channel, ...args);
+                sentCount++;
+                console.log(`[RecordingManager] Sent ${channel} to window "${title}"`);
+            } else {
+                console.log(`[RecordingManager] Skipping destroyed window`);
             }
         }
+        console.log(`[RecordingManager] Total messages sent: ${sentCount}`);
     }
 
     /**
@@ -459,17 +468,17 @@ export class RecordingManager extends EventEmitter {
         console.log('[RecordingManager] *** handlePromptAccepted ***');
         this.isPromptMode = false;
 
-        // Close the prompt widget
-        const widgetManager = getRecordingWidgetManager();
-        widgetManager.close();
-
-        // Send request to main app to start timer
-        // The main app will then call setActiveEntry which will trigger recording
+        // IMPORTANT: Send request to main app BEFORE closing the widget
+        // This ensures the main window receives the message before any window state changes
         console.log('[RecordingManager] Sending request-start-timer to renderer');
         this.sendToRenderer(MEETING_IPC_CHANNELS.REQUEST_START_TIMER, {
             meetingApp: this.currentMeetingApp,
             timestamp: Date.now(),
         });
+
+        // Close the prompt widget after sending the message
+        const widgetManager = getRecordingWidgetManager();
+        widgetManager.close();
     }
 
     /**
