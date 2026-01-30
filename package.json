@@ -1,7 +1,7 @@
 {
   "name": "clearical",
   "private": true,
-  "version": "1.7.18",
+  "version": "1.7.19",
   "type": "module",
   "build": {
     "appId": "com.clearical.app",
@@ -230,7 +230,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",
-    "@playwright/test": "^1.57.0",
+    "@playwright/test": "^1.58.0",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^25.0.8",
     "@types/react": "^19.2.8",
