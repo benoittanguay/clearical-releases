@@ -1,10 +1,8 @@
 /**
  * Transcription Service
  *
- * Routes transcription requests based on user tier:
- * - Premium/Trial users → Groq Whisper (cloud, higher quality)
- * - Free users → Apple Speech (on-device, free)
- * - Free users (Apple unavailable) → Groq Whisper (with 10hr/month limit)
+ * Handles audio transcription via Groq Whisper API.
+ * Automatically chunks large files (>24MB) using ffmpeg for transcription.
  */
 
 import { createClient, SupabaseClient, Session } from '@supabase/supabase-js';
@@ -14,7 +12,15 @@ import * as path from 'path';
 import { TranscriptionResult, TranscriptionSegment, MEETING_EVENTS } from './types.js';
 import { EventEmitter } from 'events';
 import { getConfig } from '../config.js';
-import { getAppleTranscriber } from './appleTranscriber.js';
+import {
+    splitAudioFile,
+    cleanupChunks,
+    needsChunking,
+    getFileSizeBytes,
+    MAX_CHUNK_SIZE_BYTES,
+    isFfmpegAvailable,
+    AudioChunk
+} from './audioChunker.js';
 
 /**
  * Transcription usage information
@@ -107,10 +113,9 @@ export class TranscriptionService extends EventEmitter {
     }
 
     /**
-     * Groq usage tracking for premium users (20 hour limit before Apple fallback)
+     * Groq usage tracking (for display purposes)
      */
     private groqUsageSeconds: number = 0;
-    private static readonly PREMIUM_GROQ_LIMIT_SECONDS = 20 * 60 * 60; // 20 hours
 
     /**
      * Set the current Groq usage (loaded from database on startup)
@@ -118,38 +123,6 @@ export class TranscriptionService extends EventEmitter {
     public setGroqUsage(usageSeconds: number): void {
         this.groqUsageSeconds = usageSeconds;
         console.log('[TranscriptionService] Groq usage set:', Math.round(usageSeconds / 3600 * 10) / 10, 'hours');
-    }
-
-    /**
-     * Add to Groq usage tracking
-     */
-    private addGroqUsage(durationSeconds: number): void {
-        this.groqUsageSeconds += durationSeconds;
-        console.log('[TranscriptionService] Groq usage updated:', Math.round(this.groqUsageSeconds / 3600 * 10) / 10, 'hours');
-    }
-
-    /**
-     * Check if premium user has exceeded Groq quota (20 hours)
-     */
-    private isPremiumGroqQuotaExceeded(): boolean {
-        return this.groqUsageSeconds >= TranscriptionService.PREMIUM_GROQ_LIMIT_SECONDS;
-    }
-
-    /**
-     * Determine which transcription engine to use based on tier and usage
-     *
-     * TEMPORARY: Always use Groq for all users until we integrate a better
-     * on-device solution (e.g., whisper.cpp). Apple's SFSpeechRecognizer
-     * quality is insufficient for meeting transcription.
-     *
-     * Original logic (disabled):
-     * - Free users: Always Apple on-device (with 8hr/month limit enforced elsewhere)
-     * - Premium/Trial users: Groq for first 20 hours, then Apple
-     */
-    private shouldUseAppleTranscription(): boolean {
-        // Always use Groq for better transcription quality
-        console.log('[TranscriptionService] Using Groq (Apple transcription disabled due to quality issues)');
-        return false;
     }
 
     /**
@@ -181,12 +154,17 @@ export class TranscriptionService extends EventEmitter {
             };
         }
 
-        // Route based on user tier
-        if (this.shouldUseAppleTranscription()) {
-            return this.transcribeWithApple(filePath, entryId, language);
+        // Check if file is too large for Groq (25MB limit)
+        const fileSize = getFileSizeBytes(filePath);
+        const fileSizeMB = Math.round(fileSize / 1024 / 1024);
+        console.log('[TranscriptionService] File size:', fileSizeMB, 'MB');
+
+        if (needsChunking(filePath)) {
+            console.log('[TranscriptionService] File exceeds 24MB, attempting chunked transcription');
+            return this.transcribeFileWithChunking(filePath, entryId, language);
         }
 
-        // Use Groq (premium users or Apple not available)
+        // Use Groq for transcription
         const audioBuffer = await fs.promises.readFile(filePath);
         const audioBase64 = audioBuffer.toString('base64');
 
@@ -198,47 +176,172 @@ export class TranscriptionService extends EventEmitter {
     }
 
     /**
-     * Transcribe using Apple's on-device Speech Recognition
+     * Transcribe a large audio file by splitting into chunks
+     *
+     * @param filePath - Path to the large audio file
+     * @param entryId - ID of the time entry
+     * @param language - Optional language hint
+     * @returns Combined transcription result from all chunks
      */
-    private async transcribeWithApple(
+    private async transcribeFileWithChunking(
         filePath: string,
         entryId: string,
         language?: string
     ): Promise<TranscriptionResult> {
-        console.log('[TranscriptionService] Using Apple transcription for:', filePath);
+        console.log('[TranscriptionService] Starting chunked transcription for:', filePath);
 
-        const appleTranscriber = getAppleTranscriber();
-        const result = await appleTranscriber.transcribeFile(filePath, entryId, language);
+        // Check if ffmpeg is available for chunking
+        const ffmpegAvailable = await isFfmpegAvailable();
+        if (!ffmpegAvailable) {
+            console.log('[TranscriptionService] ffmpeg not available for chunking large files');
 
-        if (result.success) {
-            this.emit(MEETING_EVENTS.TRANSCRIPTION_COMPLETE, {
-                entryId,
-                transcription: result,
-                usage: null, // Apple transcription doesn't have usage tracking
-            });
-        } else {
-            // Apple failed, try Groq as fallback
-            console.warn('[TranscriptionService] Apple transcription failed, falling back to Groq:', result.error);
-
-            // Check if we have session for Groq fallback
-            if (!this.session?.access_token) {
-                this.emit(MEETING_EVENTS.TRANSCRIPTION_ERROR, {
-                    entryId,
-                    error: result.error || 'Apple transcription failed and Groq fallback unavailable (not signed in)',
-                });
-                return result;
-            }
-
-            // Try Groq fallback
-            const audioBuffer = await fs.promises.readFile(filePath);
-            const audioBase64 = audioBuffer.toString('base64');
-            const ext = path.extname(filePath).toLowerCase();
-            const mimeType = this.getMimeType(ext);
-
-            return this.transcribeWithGroq(audioBase64, entryId, mimeType, language);
+            // No options available without ffmpeg
+            const fileSizeMB = Math.round(getFileSizeBytes(filePath) / 1024 / 1024);
+            return {
+                success: false,
+                transcriptionId: '',
+                segments: [],
+                fullText: '',
+                language: '',
+                duration: 0,
+                wordCount: 0,
+                error: `Audio file too large (${fileSizeMB}MB). Maximum is 25MB. Install ffmpeg (brew install ffmpeg) for automatic splitting, or use shorter recordings.`,
+            };
         }
 
-        return result;
+        // Split the audio file into chunks
+        const chunkingResult = await splitAudioFile(filePath);
+        if (!chunkingResult.success || !chunkingResult.chunks) {
+            console.error('[TranscriptionService] Failed to split audio:', chunkingResult.error);
+            return {
+                success: false,
+                transcriptionId: '',
+                segments: [],
+                fullText: '',
+                language: '',
+                duration: 0,
+                wordCount: 0,
+                error: chunkingResult.error || 'Failed to split audio file',
+            };
+        }
+
+        const chunks = chunkingResult.chunks;
+        console.log('[TranscriptionService] Split into', chunks.length, 'chunks');
+
+        // Determine MIME type from extension
+        const ext = path.extname(filePath).toLowerCase();
+        const mimeType = this.getMimeType(ext);
+
+        // Transcribe each chunk
+        const chunkResults: TranscriptionResult[] = [];
+        let lastDetectedLanguage = language || 'en';
+
+        for (let i = 0; i < chunks.length; i++) {
+            const chunk = chunks[i];
+            console.log(`[TranscriptionService] Transcribing chunk ${i + 1}/${chunks.length}: ${chunk.filePath}`);
+
+            // Read chunk and convert to base64
+            const chunkBuffer = await fs.promises.readFile(chunk.filePath);
+            const chunkBase64 = chunkBuffer.toString('base64');
+
+            // Transcribe chunk
+            const chunkResult = await this.transcribeWithGroq(
+                chunkBase64,
+                `${entryId}-chunk-${i}`,
+                mimeType,
+                lastDetectedLanguage
+            );
+
+            if (chunkResult.success) {
+                // Use detected language for subsequent chunks
+                if (chunkResult.language) {
+                    lastDetectedLanguage = chunkResult.language;
+                }
+                chunkResults.push(chunkResult);
+            } else {
+                console.error(`[TranscriptionService] Chunk ${i + 1} failed:`, chunkResult.error);
+                // Continue with remaining chunks - partial transcription is better than none
+            }
+        }
+
+        // Clean up chunk files
+        cleanupChunks(chunks);
+
+        // Merge results
+        if (chunkResults.length === 0) {
+            return {
+                success: false,
+                transcriptionId: '',
+                segments: [],
+                fullText: '',
+                language: '',
+                duration: 0,
+                wordCount: 0,
+                error: 'All chunks failed to transcribe',
+            };
+        }
+
+        const mergedResult = this.mergeChunkResults(chunkResults, chunks, entryId);
+
+        this.emit(MEETING_EVENTS.TRANSCRIPTION_COMPLETE, {
+            entryId,
+            transcription: mergedResult,
+            usage: null, // Usage tracking happens per-chunk
+        });
+
+        return mergedResult;
+    }
+
+    /**
+     * Merge transcription results from multiple chunks
+     */
+    private mergeChunkResults(
+        results: TranscriptionResult[],
+        chunks: AudioChunk[],
+        entryId: string
+    ): TranscriptionResult {
+        console.log('[TranscriptionService] Merging', results.length, 'chunk results');
+
+        // Build merged text
+        const mergedText = results.map(r => r.fullText).join(' ');
+
+        // Build merged segments with time offset adjustments
+        const mergedSegments: TranscriptionSegment[] = [];
+        let segmentIdOffset = 0;
+
+        for (let i = 0; i < results.length; i++) {
+            const result = results[i];
+            const chunk = chunks[i];
+            const timeOffset = chunk?.startTime || 0;
+
+            for (const segment of result.segments) {
+                mergedSegments.push({
+                    id: segment.id + segmentIdOffset,
+                    start: segment.start + timeOffset,
+                    end: segment.end + timeOffset,
+                    text: segment.text,
+                });
+            }
+
+            segmentIdOffset += result.segments.length;
+        }
+
+        // Calculate totals
+        const totalDuration = results.reduce((sum, r) => sum + r.duration, 0);
+        const totalWordCount = results.reduce((sum, r) => sum + r.wordCount, 0);
+
+        // Use language from first successful result
+        const language = results.find(r => r.language)?.language || 'en';
+
+        return {
+            success: true,
+            transcriptionId: `${entryId}-merged-${Date.now()}`,
+            segments: mergedSegments,
+            fullText: mergedText,
+            language,
+            duration: totalDuration,
+            wordCount: totalWordCount,
+        };
     }
 
     /**
@@ -258,35 +361,44 @@ export class TranscriptionService extends EventEmitter {
     ): Promise<TranscriptionResult> {
         console.log('[TranscriptionService] Starting transcription for entry:', entryId);
 
-        // Route based on user tier
-        if (this.shouldUseAppleTranscription()) {
-            // Apple needs a file, so save to temp file first
-            return this.transcribeBase64WithApple(audioBase64, entryId, mimeType, language);
+        // Calculate approximate file size from base64 (base64 adds ~37% overhead)
+        const estimatedSizeBytes = Math.round(audioBase64.length * 0.73);
+        const estimatedSizeMB = Math.round(estimatedSizeBytes / 1024 / 1024);
+        console.log('[TranscriptionService] Estimated audio size:', estimatedSizeMB, 'MB');
+
+        // Check if file is too large for Groq (25MB limit)
+        if (estimatedSizeBytes > MAX_CHUNK_SIZE_BYTES) {
+            console.log('[TranscriptionService] Audio exceeds 24MB, using chunked transcription');
+            return this.transcribeBase64WithChunking(audioBase64, entryId, mimeType, language);
         }
 
-        // Use Groq
+        // Use Groq for transcription
         return this.transcribeWithGroq(audioBase64, entryId, mimeType, language);
     }
 
     /**
-     * Transcribe base64 audio using Apple (saves to temp file first)
+     * Transcribe large base64 audio by saving to file and chunking
      */
-    private async transcribeBase64WithApple(
+    private async transcribeBase64WithChunking(
         audioBase64: string,
         entryId: string,
         mimeType: string,
         language?: string
     ): Promise<TranscriptionResult> {
-        // Save to temp file
+        console.log('[TranscriptionService] Saving large audio to temp file for chunking');
+
+        // Save to temp file first
         const ext = this.getExtensionFromMimeType(mimeType);
         const tempDir = app.getPath('temp');
-        const tempFile = path.join(tempDir, `transcribe-${entryId}-${Date.now()}.${ext}`);
+        const tempFile = path.join(tempDir, `transcribe-large-${entryId}-${Date.now()}.${ext}`);
 
         try {
             const audioBuffer = Buffer.from(audioBase64, 'base64');
             await fs.promises.writeFile(tempFile, audioBuffer);
+            console.log('[TranscriptionService] Saved temp file:', tempFile, 'size:', Math.round(audioBuffer.length / 1024 / 1024), 'MB');
 
-            const result = await this.transcribeWithApple(tempFile, entryId, language);
+            // Use the file-based chunking transcription
+            const result = await this.transcribeFileWithChunking(tempFile, entryId, language);
 
             // Clean up temp file
             fs.promises.unlink(tempFile).catch(() => {});
@@ -296,9 +408,17 @@ export class TranscriptionService extends EventEmitter {
             // Clean up on error
             fs.promises.unlink(tempFile).catch(() => {});
 
-            console.error('[TranscriptionService] Failed to write temp file for Apple transcription:', error);
-            // Fall back to Groq
-            return this.transcribeWithGroq(audioBase64, entryId, mimeType, language);
+            console.error('[TranscriptionService] Failed to process large audio:', error);
+            return {
+                success: false,
+                transcriptionId: '',
+                segments: [],
+                fullText: '',
+                language: '',
+                duration: 0,
+                wordCount: 0,
+                error: error instanceof Error ? error.message : 'Failed to process large audio file',
+            };
         }
     }
 

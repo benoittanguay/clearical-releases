@@ -128,6 +128,9 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
     const nativeMicUnsubscribeRef = useRef<(() => void) | null>(null);
     const isNativeMicActiveRef = useRef<boolean>(false);
 
+    // AudioWorklet node ref for mixing audio on dedicated thread
+    const audioWorkletNodeRef = useRef<AudioWorkletNode | null>(null);
+
     // Silence detection for meeting end
     const silenceStartTimeRef = useRef<number | null>(null);
     const silenceConfirmationShownRef = useRef<boolean>(false);
@@ -188,12 +191,42 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
                 console.log('[AudioRecordingContext] AudioContext state after resume:', audioContext.state);
             }
 
+            // Load AudioWorklet module for glitch-free audio mixing
+            // The worklet runs on a dedicated audio thread, avoiding main thread timing issues
+            try {
+                await audioContext.audioWorklet.addModule('/audio-mixer-worklet.js');
+                console.log('[AudioRecordingContext] AudioWorklet module loaded successfully');
+            } catch (workletError) {
+                console.error('[AudioRecordingContext] Failed to load AudioWorklet module:', workletError);
+                throw new Error('Failed to load audio mixer worklet');
+            }
+
             const analyser = audioContext.createAnalyser();
             analyser.fftSize = 64;
             analyser.smoothingTimeConstant = 0.4;
 
             // Create a destination for the mixed audio
             const destination = audioContext.createMediaStreamDestination();
+
+            // Create AudioWorkletNode for mixing mic + system audio
+            const mixerNode = new AudioWorkletNode(audioContext, 'audio-mixer-processor', {
+                numberOfInputs: 0,  // We'll push samples via port.postMessage
+                numberOfOutputs: 1,
+                outputChannelCount: [2],  // Stereo output
+            });
+
+            // Listen for stats from the worklet
+            mixerNode.port.onmessage = (event) => {
+                if (event.data.type === 'stats') {
+                    console.log('[AudioRecordingContext] Worklet stats:', event.data);
+                }
+            };
+
+            // Connect worklet to analyser and destination
+            mixerNode.connect(analyser);
+            mixerNode.connect(destination);
+            audioWorkletNodeRef.current = mixerNode;
+            console.log('[AudioRecordingContext] AudioWorkletNode created and connected');
 
             // ============================================================
             // NATIVE MICROPHONE CAPTURE (via AVFoundation)
@@ -209,7 +242,7 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
                     nativeMicBufferRef.current = [];
                     isNativeMicActiveRef.current = true;
 
-                    // Subscribe to native mic audio samples
+                    // Subscribe to native mic audio samples and forward to AudioWorklet
                     let nativeMicReceivedCount = 0;
                     const unsubscribeMic = window.electron?.ipcRenderer?.meeting?.onMicAudioSamples?.(
                         (data: { samples: Float32Array; channelCount: number; sampleRate: number; sampleCount: number }) => {
@@ -229,7 +262,14 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
                                 }
                                 console.log(`[AudioRecordingContext] NATIVE MIC #${nativeMicReceivedCount}: sampleCount=${data.sampleCount}, rms=${micRms.toFixed(6)}, peak=${micPeak.toFixed(6)}, samples[0-3]=[${samples?.[0]?.toFixed(6)}, ${samples?.[1]?.toFixed(6)}, ${samples?.[2]?.toFixed(6)}, ${samples?.[3]?.toFixed(6)}]`);
                             }
-                            // Buffer the incoming samples
+                            // Forward samples to AudioWorklet for mixing
+                            if (isNativeMicActiveRef.current && audioWorkletNodeRef.current) {
+                                audioWorkletNodeRef.current.port.postMessage({
+                                    type: 'mic',
+                                    samples: data.samples
+                                });
+                            }
+                            // Also keep buffer ref updated for silence detection RMS check
                             if (isNativeMicActiveRef.current) {
                                 nativeMicBufferRef.current.push(data.samples);
                                 // Keep buffer limited to ~1 second of audio
@@ -247,59 +287,7 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
                     console.log('[AudioRecordingContext] Native mic capture started:', nativeMicStarted, micResult?.error || '');
 
                     if (nativeMicStarted) {
-                        // Create a ScriptProcessorNode to inject native mic audio into the mix
-                        const micBufferSize = 4096;
-                        const micScriptProcessor = audioContext.createScriptProcessor(micBufferSize, 1, 1);
-
-                        let micScriptProcessorCallCount = 0;
-                        let micSamplesProcessedCount = 0;
-                        // Accumulator buffer to collect multiple small chunks into one 4096-sample output
-                        let micAccumulator: number[] = [];
-
-                        micScriptProcessor.onaudioprocess = (e) => {
-                            micScriptProcessorCallCount++;
-                            const output = e.outputBuffer.getChannelData(0);
-
-                            // Collect samples from buffer until we have enough for the output
-                            while (micAccumulator.length < micBufferSize && nativeMicBufferRef.current.length > 0) {
-                                const chunk = nativeMicBufferRef.current.shift();
-                                if (chunk) {
-                                    // Add all samples from chunk to accumulator
-                                    for (let i = 0; i < chunk.length; i++) {
-                                        micAccumulator.push(chunk[i]);
-                                    }
-                                }
-                            }
-
-                            if (micAccumulator.length > 0) {
-                                micSamplesProcessedCount++;
-                                // Log every 100th time we have samples
-                                if (micSamplesProcessedCount % 100 === 1) {
-                                    console.log(`[AudioRecordingContext] MicScriptProcessor processing #${micSamplesProcessedCount}: accumulated=${micAccumulator.length}, bufferSize=${micBufferSize}, bufferQueue=${nativeMicBufferRef.current.length}`);
-                                }
-
-                                // Copy accumulated samples to output
-                                const samplesToUse = Math.min(micAccumulator.length, micBufferSize);
-                                for (let i = 0; i < micBufferSize; i++) {
-                                    output[i] = i < samplesToUse ? micAccumulator[i] : 0;
-                                }
-                                // Remove used samples from accumulator
-                                micAccumulator = micAccumulator.slice(samplesToUse);
-                            } else {
-                                // No mic audio available, output silence
-                                if (micScriptProcessorCallCount % 500 === 1) {
-                                    console.log(`[AudioRecordingContext] MicScriptProcessor: no native mic in buffer (call #${micScriptProcessorCallCount}, processed ${micSamplesProcessedCount} samples so far)`);
-                                }
-                                for (let i = 0; i < micBufferSize; i++) {
-                                    output[i] = 0;
-                                }
-                            }
-                        };
-
-                        // Connect mic processor to analyser (for visualization) and destination
-                        micScriptProcessor.connect(analyser);
-                        micScriptProcessor.connect(destination);
-                        console.log('[AudioRecordingContext] Native mic ScriptProcessor connected to destination');
+                        console.log('[AudioRecordingContext] Native mic audio will be forwarded to AudioWorklet');
                     }
                 } else {
                     console.warn('[AudioRecordingContext] Native mic capture not available - recording may not capture user voice');
@@ -360,65 +348,52 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
                     console.log('[AudioRecordingContext] System audio capture started:', systemAudioStarted);
 
                     if (systemAudioStarted) {
-                        // Create a ScriptProcessorNode to inject system audio into the mix
-                        const bufferSize = 4096;
-                        const scriptProcessor = audioContext.createScriptProcessor(bufferSize, 2, 2);
+                        // Update the system audio callback to forward samples to AudioWorklet
+                        // The worklet handles mixing on a dedicated audio thread for glitch-free playback
+                        let sysAudioForwardedCount = 0;
 
-                        let scriptProcessorCallCount = 0;
-                        let samplesProcessedCount = 0;
-                        // Accumulator buffers for left and right channels
-                        let sysAccumulatorL: number[] = [];
-                        let sysAccumulatorR: number[] = [];
+                        // Replace the existing callback with one that forwards to the worklet
+                        systemAudioUnsubscribeRef.current?.();
+                        const unsubscribeSystem = window.electron?.ipcRenderer?.meeting?.onSystemAudioSamples?.(
+                            (data: { samples: Float32Array; channelCount: number; sampleRate: number; sampleCount: number }) => {
+                                sysAudioForwardedCount++;
+                                // Log every 100th callback
+                                if (sysAudioForwardedCount % 100 === 1) {
+                                    let sysRms = 0;
+                                    let sysPeak = 0;
+                                    const samples = data.samples;
+                                    if (samples && samples.length > 0) {
+                                        for (let i = 0; i < samples.length; i++) {
+                                            sysRms += samples[i] * samples[i];
+                                            const absVal = Math.abs(samples[i]);
+                                            if (absVal > sysPeak) sysPeak = absVal;
+                                        }
+                                        sysRms = Math.sqrt(sysRms / samples.length);
+                                    }
+                                    console.log(`[AudioRecordingContext] SYSTEM AUDIO FORWARDED #${sysAudioForwardedCount}: sampleCount=${data.sampleCount}, rms=${sysRms.toFixed(6)}, peak=${sysPeak.toFixed(6)}`);
+                                }
 
-                        scriptProcessor.onaudioprocess = (e) => {
-                            scriptProcessorCallCount++;
-                            const outputL = e.outputBuffer.getChannelData(0);
-                            const outputR = e.outputBuffer.getChannelData(1);
+                                // Forward samples to AudioWorklet for mixing
+                                if (isSystemAudioActiveRef.current && audioWorkletNodeRef.current) {
+                                    audioWorkletNodeRef.current.port.postMessage({
+                                        type: 'system',
+                                        samples: data.samples,
+                                        channelCount: data.channelCount
+                                    });
+                                }
 
-                            // Collect samples from buffer until we have enough for the output
-                            while (sysAccumulatorL.length < bufferSize && systemAudioBufferRef.current.length > 0) {
-                                const chunk = systemAudioBufferRef.current.shift();
-                                if (chunk && chunk.length > 0) {
-                                    // System audio is stereo interleaved (L, R, L, R, ...)
-                                    for (let i = 0; i < chunk.length; i += 2) {
-                                        sysAccumulatorL.push(chunk[i] || 0);
-                                        sysAccumulatorR.push(chunk[i + 1] || 0);
+                                // Also keep buffer ref updated for silence detection RMS check
+                                if (isSystemAudioActiveRef.current) {
+                                    systemAudioBufferRef.current.push(data.samples);
+                                    // Keep buffer limited to ~1 second of audio
+                                    while (systemAudioBufferRef.current.length > 50) {
+                                        systemAudioBufferRef.current.shift();
                                     }
                                 }
                             }
-
-                            if (sysAccumulatorL.length > 0) {
-                                samplesProcessedCount++;
-                                // Log every 100th time we have samples
-                                if (samplesProcessedCount % 100 === 1) {
-                                    console.log(`[AudioRecordingContext] SysAudioProcessor processing #${samplesProcessedCount}: accumulated=${sysAccumulatorL.length}, bufferSize=${bufferSize}, bufferQueue=${systemAudioBufferRef.current.length}`);
-                                }
-
-                                // Copy accumulated samples to output
-                                const samplesToUse = Math.min(sysAccumulatorL.length, bufferSize);
-                                for (let i = 0; i < bufferSize; i++) {
-                                    outputL[i] = i < samplesToUse ? sysAccumulatorL[i] : 0;
-                                    outputR[i] = i < samplesToUse ? sysAccumulatorR[i] : 0;
-                                }
-                                // Remove used samples from accumulators
-                                sysAccumulatorL = sysAccumulatorL.slice(samplesToUse);
-                                sysAccumulatorR = sysAccumulatorR.slice(samplesToUse);
-                            } else {
-                                // No system audio available, output silence
-                                if (scriptProcessorCallCount % 500 === 1) {
-                                    console.log(`[AudioRecordingContext] SysAudioProcessor: no system audio in buffer (call #${scriptProcessorCallCount}, processed ${samplesProcessedCount} samples so far)`);
-                                }
-                                for (let i = 0; i < bufferSize; i++) {
-                                    outputL[i] = 0;
-                                    outputR[i] = 0;
-                                }
-                            }
-                        };
-
-                        // Connect script processor to analyser (for silence detection) and destination
-                        scriptProcessor.connect(analyser);
-                        scriptProcessor.connect(destination);
-                        console.log('[AudioRecordingContext] System audio ScriptProcessor connected to analyser and destination');
+                        );
+                        systemAudioUnsubscribeRef.current = unsubscribeSystem || null;
+                        console.log('[AudioRecordingContext] System audio forwarding to AudioWorklet configured');
                     }
                 }
             } catch (sysAudioError) {
@@ -674,6 +649,19 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
                     audioContextRef.current = null;
                 }
                 analyserRef.current = null;
+
+                // Clean up AudioWorkletNode
+                if (audioWorkletNodeRef.current) {
+                    try {
+                        // Tell worklet to clear its buffers
+                        audioWorkletNodeRef.current.port.postMessage({ type: 'clear' });
+                        audioWorkletNodeRef.current.disconnect();
+                        console.log('[AudioRecordingContext] AudioWorkletNode disconnected');
+                    } catch (e) {
+                        console.warn('[AudioRecordingContext] Error disconnecting AudioWorkletNode:', e);
+                    }
+                    audioWorkletNodeRef.current = null;
+                }
 
                 // Stop all tracks
                 if (streamRef.current) {
@@ -1210,6 +1198,17 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
                 audioContextRef.current = null;
             }
             analyserRef.current = null;
+
+            // Clean up AudioWorkletNode
+            if (audioWorkletNodeRef.current) {
+                try {
+                    audioWorkletNodeRef.current.port.postMessage({ type: 'clear' });
+                    audioWorkletNodeRef.current.disconnect();
+                } catch (e) {
+                    console.warn('[AudioRecordingContext] Error disconnecting AudioWorkletNode during cleanup:', e);
+                }
+                audioWorkletNodeRef.current = null;
+            }
 
             // Stop any active recording
             if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
