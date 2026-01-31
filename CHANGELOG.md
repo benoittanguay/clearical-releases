@@ -2,6 +2,14 @@
 
 All notable changes to Clearical will be documented in this file.
 
+## [1.7.22] - 2025-01-31
+
+### Improvements
+- **Smarter Assignment Suggestions**: AI now prioritizes matching based on activity content rather than historical patterns, leading to more accurate and varied bucket/issue suggestions
+- **Reduced Historical Bias**: Rebalanced scoring weights to favor semantic relevance (keywords, technologies, project context) over past manual selections
+
+---
+
 ## [1.7.21] - 2025-01-31
 
 ### Bug Fixes
