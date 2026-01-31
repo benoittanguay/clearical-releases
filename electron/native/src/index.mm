@@ -30,13 +30,20 @@ void mediaStateChanged(bool isActive, const char* deviceType) {
 
     auto* data = new CallbackData{isActive, std::string(deviceType)};
 
-    tsfn.BlockingCall(data, [](Napi::Env env, Napi::Function jsCallback, CallbackData* data) {
+    // Use NonBlockingCall to avoid potential deadlocks
+    napi_status status = tsfn.NonBlockingCall(data, [](Napi::Env env, Napi::Function jsCallback, CallbackData* data) {
         jsCallback.Call({
             Napi::Boolean::New(env, data->isActive),
             Napi::String::New(env, data->deviceType)
         });
         delete data;
     });
+
+    // Clean up if call failed
+    if (status != napi_ok) {
+        delete data;
+        NSLog(@"[MediaMonitor] Warning: Failed to deliver media state change callback");
+    }
 }
 
 Napi::Value Start(const Napi::CallbackInfo& info) {
@@ -201,7 +208,9 @@ void audioSamplesReceived(const float* samples, size_t sampleCount, int channelC
         sampleRate
     };
 
-    audioTsfn.BlockingCall(data, [](Napi::Env env, Napi::Function jsCallback, AudioData* data) {
+    // Use NonBlockingCall to avoid blocking the audio thread
+    // This prevents memory pressure and potential deadlocks during long recording sessions
+    napi_status status = audioTsfn.NonBlockingCall(data, [](Napi::Env env, Napi::Function jsCallback, AudioData* data) {
         // Create Float32Array for the samples
         Napi::Float32Array samplesArray = Napi::Float32Array::New(env, data->samples.size());
         for (size_t i = 0; i < data->samples.size(); i++) {
@@ -218,6 +227,15 @@ void audioSamplesReceived(const float* samples, size_t sampleCount, int channelC
         jsCallback.Call({info});
         delete data;
     });
+
+    // If queue is full, clean up the data we allocated
+    if (status != napi_ok) {
+        delete data;
+        static int dropCount = 0;
+        if (++dropCount % 100 == 1) {
+            NSLog(@"[SystemAudioCapture] Warning: Dropped audio samples (queue full), total dropped: %d", dropCount);
+        }
+    }
 }
 
 Napi::Value IsSystemAudioCaptureAvailable(const Napi::CallbackInfo& info) {
@@ -375,7 +393,9 @@ void micSamplesReceived(const float* samples, size_t sampleCount, int channelCou
         sampleRate
     };
 
-    micTsfn.BlockingCall(data, [](Napi::Env env, Napi::Function jsCallback, MicAudioData* data) {
+    // Use NonBlockingCall to avoid blocking the audio thread
+    // This prevents memory pressure and potential deadlocks during long recording sessions
+    napi_status status = micTsfn.NonBlockingCall(data, [](Napi::Env env, Napi::Function jsCallback, MicAudioData* data) {
         // Create Float32Array for the samples
         Napi::Float32Array samplesArray = Napi::Float32Array::New(env, data->samples.size());
         for (size_t i = 0; i < data->samples.size(); i++) {
@@ -392,6 +412,15 @@ void micSamplesReceived(const float* samples, size_t sampleCount, int channelCou
         jsCallback.Call({info});
         delete data;
     });
+
+    // If queue is full, clean up the data we allocated
+    if (status != napi_ok) {
+        delete data;
+        static int micDropCount = 0;
+        if (++micDropCount % 100 == 1) {
+            NSLog(@"[MicCapture] Warning: Dropped mic samples (queue full), total dropped: %d", micDropCount);
+        }
+    }
 }
 
 Napi::Value IsMicCaptureAvailable(const Napi::CallbackInfo& info) {
