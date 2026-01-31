@@ -83,6 +83,13 @@ export class RecordingWidgetManager {
             return { success: true };
         });
 
+        // Handle close request from widget (after animation completes)
+        ipcMain.handle('widget:request-close', async () => {
+            console.log('[RecordingWidgetManager] Close requested from widget (after animation)');
+            this.close();
+            return { success: true };
+        });
+
         // Handle ping from widget to verify IPC is working - use handle for response
         ipcMain.handle('widget:ping', async (_event, data) => {
             console.log('[RecordingWidgetManager] *** WIDGET PING RECEIVED ***', data);

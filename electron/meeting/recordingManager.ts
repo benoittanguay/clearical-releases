@@ -49,8 +49,9 @@ export class RecordingManager extends EventEmitter {
         widgetManager.setOnStopCallback(() => {
             console.log('[RecordingManager] Stop requested from widget');
             // Stop recording when user clicks stop in widget
-            this.notifyRendererToStopRecording();
-            widgetManager.close();
+            // Note: Don't close widget here - let the widget show its animation first
+            // and then request close via widget:request-close IPC
+            this.notifyRendererToStopRecordingWithoutClosingWidget();
         });
         widgetManager.setOnPromptAcceptedCallback(() => {
             console.log('[RecordingManager] Prompt accepted from widget');
@@ -358,6 +359,42 @@ export class RecordingManager extends EventEmitter {
             meetingApp,
         });
         console.log('[RecordingManager] Recording stopped, state reset');
+    }
+
+    /**
+     * Notify renderer that recording should stop, but don't close widget
+     * Used when the widget itself initiated the stop and will handle its own animation/close
+     */
+    private notifyRendererToStopRecordingWithoutClosingWidget(): void {
+        console.log('[RecordingManager] *** notifyRendererToStopRecordingWithoutClosingWidget CALLED ***');
+
+        if (!this.isRendererRecording) {
+            console.log('[RecordingManager] Not recording, nothing to stop');
+            return;
+        }
+
+        const duration = this.recordingStartTime ? Date.now() - this.recordingStartTime : 0;
+        const entryId = this.activeEntryId;
+        const meetingApp = this.currentMeetingApp;
+
+        console.log('[RecordingManager] Sending stop event to renderer:', { entryId, duration, meetingApp: meetingApp?.appName });
+        this.sendToRenderer(MEETING_IPC_CHANNELS.EVENT_RECORDING_SHOULD_STOP, {
+            entryId,
+            duration,
+            meetingApp,
+        });
+
+        // Don't close widget here - let it handle its own animation and close
+
+        this.isRendererRecording = false;
+        this.recordingStartTime = null;
+
+        this.emit(MEETING_EVENTS.RECORDING_STOPPED, {
+            entryId,
+            duration,
+            meetingApp,
+        });
+        console.log('[RecordingManager] Recording stopped (widget will close itself)');
     }
 
     private onMediaStarted(device: 'microphone' | 'camera'): void {

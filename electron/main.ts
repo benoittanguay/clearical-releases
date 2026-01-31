@@ -2114,8 +2114,8 @@ ipcMain.handle('widget:meeting-ended-response', async (_event, data: { response:
             }
         }
 
-        // Close the widget
-        widgetManager.close();
+        // Don't close the widget here - let it show its animation first
+        // Widget will send widget:request-close when animation completes
 
         return { success: true };
     } else {

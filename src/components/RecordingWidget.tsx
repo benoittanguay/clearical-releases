@@ -445,6 +445,14 @@ export function RecordingWidget(): React.ReactElement {
             // After showing success state, transition to hiding
             setTimeout(() => {
                 setIsHiding(true);
+
+                // After exit animation completes, request window close
+                setTimeout(() => {
+                    window.electron?.ipcRenderer?.invoke?.('widget:request-close', { timestamp: Date.now() })
+                        .catch((error: Error) => {
+                            console.error('[RecordingWidget] Close request failed:', error);
+                        });
+                }, 370); // Exit animation duration
             }, 2000); // Show "Saved" for 2 seconds
         } catch (error) {
             console.error('[RecordingWidget] Error sending meeting ended response:', error);
@@ -452,6 +460,12 @@ export function RecordingWidget(): React.ReactElement {
             setContentMode('stopped');
             setTimeout(() => {
                 setIsHiding(true);
+
+                // After exit animation completes, request window close
+                setTimeout(() => {
+                    window.electron?.ipcRenderer?.invoke?.('widget:request-close', { timestamp: Date.now() })
+                        .catch(() => {}); // Ignore errors on error path
+                }, 370);
             }, 2000);
         }
     }, [promptEntryId]);
@@ -495,6 +509,14 @@ export function RecordingWidget(): React.ReactElement {
             // After showing success state, transition to hiding
             setTimeout(() => {
                 setIsHiding(true);
+
+                // After exit animation completes, request window close
+                setTimeout(() => {
+                    window.electron?.ipcRenderer?.invoke?.('widget:request-close', { timestamp: Date.now() })
+                        .catch((error: Error) => {
+                            console.error('[RecordingWidget] Close request failed:', error);
+                        });
+                }, 370); // Exit animation duration
             }, 2000); // Show "Saved" for 2 seconds
         } catch (error) {
             console.error('[RecordingWidget] Stop IPC failed:', error);
@@ -502,6 +524,12 @@ export function RecordingWidget(): React.ReactElement {
             setContentMode('stopped');
             setTimeout(() => {
                 setIsHiding(true);
+
+                // After exit animation completes, request window close
+                setTimeout(() => {
+                    window.electron?.ipcRenderer?.invoke?.('widget:request-close', { timestamp: Date.now() })
+                        .catch(() => {}); // Ignore errors on error path
+                }, 370);
             }, 2000);
         }
     }, []);
