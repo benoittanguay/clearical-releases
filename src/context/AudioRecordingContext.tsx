@@ -135,7 +135,11 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
     const silenceStartTimeRef = useRef<number | null>(null);
     const silenceConfirmationShownRef = useRef<boolean>(false);
     // Note: Using time domain deviation (< 3) instead of frequency threshold for more reliable silence detection
-    const SILENCE_DURATION_FOR_PROMPT = 10000; // 10 seconds of silence = ask user if meeting ended
+    // 20 seconds is conservative to avoid false positives during:
+    // - Presentation pauses (speaker switching slides)
+    // - Participant muting/unmuting
+    // - Brief network interruptions in video calls
+    const SILENCE_DURATION_FOR_PROMPT = 20000; // 20 seconds of silence = ask user if meeting ended
 
     // CRITICAL: Synchronous lock to prevent race conditions when multiple START events arrive
     // This is set immediately (synchronously) before any async operations
