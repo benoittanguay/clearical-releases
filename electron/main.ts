@@ -2061,10 +2061,25 @@ ipcMain.on('meeting:recording-failed', async (_event, data: { entryId: string; e
 
     // Reset recording manager state
     const recordingManager = getRecordingManager();
-    // Note: The recording manager doesn't have a method to handle failure gracefully yet
-    // For now, we just close the widget - the user can try again
+    recordingManager.setActiveEntry(null);
 
-    console.log('[Main] Widget closed due to recording failure');
+    // Show user-friendly error dialog
+    const { dialog } = await import('electron');
+    const userFriendlyMessage = data.error.includes('audio mixer worklet')
+        ? 'Could not initialize audio recording. Please try again or restart the app.'
+        : data.error.includes('No audio capture')
+            ? 'No audio source available. Please check your microphone permissions in System Preferences.'
+            : `Recording could not start: ${data.error}`;
+
+    dialog.showMessageBox({
+        type: 'warning',
+        title: 'Recording Failed',
+        message: 'Unable to Start Recording',
+        detail: userFriendlyMessage,
+        buttons: ['OK'],
+    });
+
+    console.log('[Main] Widget closed and user notified of recording failure');
 });
 
 // Silence detection - meeting may have ended due to extended silence
