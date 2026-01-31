@@ -141,6 +141,12 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
     // This is set immediately (synchronously) before any async operations
     const isStartingRecordingRef = useRef<boolean>(false);
 
+    // CRITICAL: Refs to hold current callbacks to avoid useEffect re-registration race condition
+    // When stopRecordingAndTranscribe changes (due to updateEntry dependency), we don't want
+    // to re-register event listeners as this creates a window where START events are missed
+    const startRecordingRef = useRef<((entryId: string) => Promise<void>) | null>(null);
+    const stopRecordingAndTranscribeRef = useRef<((entryId: string) => Promise<void>) | null>(null);
+
     /**
      * Start audio recording
      * Uses native mic capture (AVFoundation) to bypass getUserMedia limitations
@@ -841,6 +847,16 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
         window.electron.ipcRenderer.meeting.setAutoRecordEnabled(enabled);
     }, []);
 
+    // Keep callback refs updated without triggering useEffect re-registration
+    // This prevents the race condition where START events are missed during cleanup/re-registration
+    useEffect(() => {
+        startRecordingRef.current = startRecording;
+    }, [startRecording]);
+
+    useEffect(() => {
+        stopRecordingAndTranscribeRef.current = stopRecordingAndTranscribe;
+    }, [stopRecordingAndTranscribe]);
+
     /**
      * Get pending transcription for a session ID
      * Merges multiple transcriptions if multiple recordings occurred during the session
@@ -1116,6 +1132,8 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
     }, []);
 
     // Subscribe to recording events from main process
+    // CRITICAL: This effect only depends on isAutoRecordEnabled to prevent race conditions
+    // The callback refs are used to access current callbacks without re-registering listeners
     useEffect(() => {
         console.log('[AudioRecordingContext] ========================================');
         console.log('[AudioRecordingContext] EFFECT RUNNING - Setting up event listeners');
@@ -1150,7 +1168,8 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
                 console.log('[AudioRecordingContext] entryId:', data.entryId);
                 console.log('[AudioRecordingContext] timestamp:', data.timestamp);
                 console.log('[AudioRecordingContext] ========================================');
-                startRecording(data.entryId);
+                // Use ref to access current callback without causing effect re-registration
+                startRecordingRef.current?.(data.entryId);
             }
         );
 
@@ -1161,7 +1180,8 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
                 console.log('[AudioRecordingContext] entryId:', data.entryId);
                 console.log('[AudioRecordingContext] duration:', data.duration);
                 console.log('[AudioRecordingContext] ========================================');
-                stopRecordingAndTranscribe(data.entryId);
+                // Use ref to access current callback without causing effect re-registration
+                stopRecordingAndTranscribeRef.current?.(data.entryId);
             }
         );
 
@@ -1245,7 +1265,10 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
 
             console.log('[AudioRecordingContext] Cleanup complete - all audio resources released');
         };
-    }, [isAutoRecordEnabled, startRecording, stopRecordingAndTranscribe]);
+    // CRITICAL: Only depend on isAutoRecordEnabled to prevent race condition
+    // Callbacks are accessed via refs (startRecordingRef, stopRecordingAndTranscribeRef)
+    // which are kept updated by separate effects without triggering listener re-registration
+    }, [isAutoRecordEnabled]);
 
     const value: AudioRecordingContextValue = {
         state,
