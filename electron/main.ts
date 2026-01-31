@@ -3834,7 +3834,7 @@ function createWindow() {
     console.log('[Main] Preload Path:', preloadPath);
 
     win = new BrowserWindow({
-        width: 520,
+        width: 570,
         height: 660,
         show: false, // Don't show immediately - we'll position and show after tray is ready
         frame: false,

@@ -1635,7 +1635,7 @@ function App() {
                                       style={{
                                         backgroundColor: 'var(--color-bg-secondary)',
                                         borderBottom: '1px solid var(--color-border-primary)',
-                                        top: '37px',
+                                        top: '35px',
                                         marginTop: dayIndex === 0 ? '-1px' : undefined
                                       }}
                                     >
