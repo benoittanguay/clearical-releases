@@ -428,6 +428,10 @@ function buildSignalContextForAnalysis(signals: ContextSignal[]): string {
 
 /**
  * Handle activity classification operation
+ *
+ * IMPORTANT: The prompt is designed to focus on semantic content matching
+ * rather than historical patterns or default choices. This ensures the AI
+ * makes fresh assessments based on the actual activity description.
  */
 async function handleClassify(body: RequestBody): Promise<ClassifyResponse> {
     const { description, options, context } = body;
@@ -441,18 +445,26 @@ async function handleClassify(body: RequestBody): Promise<ClassifyResponse> {
     }
 
     // Build the prompt for classification
-    let prompt = `Given the following work activity description, select the most appropriate category from the options below.
+    // Note: Prompt emphasizes semantic matching over patterns to avoid repetitive selections
+    let prompt = `You are classifying a work activity to the most semantically appropriate category.
 
-Activity: "${description}"
+CRITICAL: Base your selection ONLY on the semantic content of the activity description below. Do NOT default to commonly selected options or make assumptions about what the user "usually" picks. Each activity should be evaluated independently based on its actual content.
+
+Activity to classify: "${description}"
 
 ${context ? `Additional context: ${context}\n` : ''}
-Available options:
+Available categories:
 ${options.map((opt, i) => `${i + 1}. [ID: ${opt.id}] ${opt.name}`).join('\n')}
 
-Respond with ONLY a JSON object in this exact format (no markdown, no explanation):
-{"selectedId": "the_id_value", "selectedName": "the name", "confidence": 0.85}
+Instructions:
+- Analyze the specific keywords, technologies, and tasks mentioned in the activity
+- Match to the category whose name or scope most closely describes THIS activity
+- Do not favor any category by default - let the activity content drive the selection
+- If the activity clearly matches multiple categories, pick the most specific one
+- Set confidence based on how clearly the activity matches (0.5 = borderline, 0.9 = clear match)
 
-Select the option that best matches the work activity. If unsure, pick the closest match with lower confidence.`;
+Respond with ONLY a JSON object (no markdown, no explanation):
+{"selectedId": "the_id_value", "selectedName": "the name", "confidence": 0.85}`;
 
     const result = await generateText(prompt);
 
