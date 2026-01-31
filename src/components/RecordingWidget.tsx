@@ -26,6 +26,12 @@ const MIN_HEIGHT = 6;
 const MAX_HEIGHT = 36;
 const CONTAINER_WIDTH = 520 - 24; // Widget width minus padding
 
+// Animation timing constants (in milliseconds)
+// Keep in sync with CSS animations in RecordingWidget styles
+const ANIMATION_ENTER_DURATION = 520;   // Time for widget to animate in
+const ANIMATION_EXIT_DURATION = 370;    // Time for widget to animate out
+const SAVED_MESSAGE_DURATION = 2000;    // How long to show "Saved" before closing
+
 // Get time-appropriate greeting
 function getTimeGreeting(): { text: string; icon: string } {
     const hour = new Date().getHours();
@@ -292,7 +298,7 @@ export function RecordingWidget(): React.ReactElement {
 
     // Position playhead after initial render
     useEffect(() => {
-        const timer = setTimeout(positionPlayhead, 520);
+        const timer = setTimeout(positionPlayhead, ANIMATION_ENTER_DURATION);
         window.addEventListener('resize', positionPlayhead);
 
         return () => {
@@ -373,7 +379,7 @@ export function RecordingWidget(): React.ReactElement {
 
         // Delay animation start until after entrance animation completes (500ms)
         // This prevents perceived speed change when waveform clip-path expands
-        const delayTimer = setTimeout(startAnimation, 520);
+        const delayTimer = setTimeout(startAnimation, ANIMATION_ENTER_DURATION);
 
         return () => {
             isActive = false; // Prevent stale animate callbacks from running
@@ -411,8 +417,8 @@ export function RecordingWidget(): React.ReactElement {
                         .catch((error: Error) => {
                             console.error('[RecordingWidget] Close request failed:', error);
                         });
-                }, 370); // Exit animation duration
-            }, 2000); // Show "Saved" for 2 seconds
+                }, ANIMATION_EXIT_DURATION);
+            }, SAVED_MESSAGE_DURATION);
         } catch (error) {
             console.error('[RecordingWidget] Error sending meeting ended response:', error);
             // Still show stopped state even on error
@@ -424,8 +430,8 @@ export function RecordingWidget(): React.ReactElement {
                 setTimeout(() => {
                     window.electron?.ipcRenderer?.invoke?.('widget:request-close', { timestamp: Date.now() })
                         .catch(() => {}); // Ignore errors on error path
-                }, 370);
-            }, 2000);
+                }, ANIMATION_EXIT_DURATION);
+            }, SAVED_MESSAGE_DURATION);
         }
     }, [promptEntryId]);
 
@@ -475,8 +481,8 @@ export function RecordingWidget(): React.ReactElement {
                         .catch((error: Error) => {
                             console.error('[RecordingWidget] Close request failed:', error);
                         });
-                }, 370); // Exit animation duration
-            }, 2000); // Show "Saved" for 2 seconds
+                }, ANIMATION_EXIT_DURATION);
+            }, SAVED_MESSAGE_DURATION);
         } catch (error) {
             console.error('[RecordingWidget] Stop IPC failed:', error);
             // Still show stopped state even on error
@@ -488,8 +494,8 @@ export function RecordingWidget(): React.ReactElement {
                 setTimeout(() => {
                     window.electron?.ipcRenderer?.invoke?.('widget:request-close', { timestamp: Date.now() })
                         .catch(() => {}); // Ignore errors on error path
-                }, 370);
-            }, 2000);
+                }, ANIMATION_EXIT_DURATION);
+            }, SAVED_MESSAGE_DURATION);
         }
     }, []);
 
@@ -504,7 +510,7 @@ export function RecordingWidget(): React.ReactElement {
                 .catch((error: Error) => {
                     console.error('[RecordingWidget] Hide IPC failed:', error);
                 });
-        }, 370);
+        }, ANIMATION_EXIT_DURATION);
     }, []);
 
     // Handle "Yes, Start" button click in prompt mode
@@ -545,7 +551,7 @@ export function RecordingWidget(): React.ReactElement {
             } catch (error) {
                 console.error('[RecordingWidget] Error sending prompt dismissed:', error);
             }
-        }, 370);
+        }, ANIMATION_EXIT_DURATION);
     }, []);
 
     // Handle "Yes, Start" button click in working hours prompt mode
@@ -583,7 +589,7 @@ export function RecordingWidget(): React.ReactElement {
             } catch (error) {
                 console.error('[RecordingWidget] Error sending working hours snoozed:', error);
             }
-        }, 370);
+        }, ANIMATION_EXIT_DURATION);
     }, []);
 
     // Handle "Day Off" button click in working hours prompt mode
@@ -603,7 +609,7 @@ export function RecordingWidget(): React.ReactElement {
             } catch (error) {
                 console.error('[RecordingWidget] Error sending working hours day off:', error);
             }
-        }, 370);
+        }, ANIMATION_EXIT_DURATION);
     }, []);
 
     // Determine if a bar is on the left (recorded) or right (buffer) side

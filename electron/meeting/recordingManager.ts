@@ -262,7 +262,8 @@ export class RecordingManager extends EventEmitter {
     }
 
     /**
-     * Send event to all renderer windows
+     * Send event to main app window only (not widgets)
+     * Recording events should only go to the main app, not floating widgets
      */
     private sendToRenderer(channel: string, ...args: any[]): void {
         const windows = BrowserWindow.getAllWindows();
@@ -277,7 +278,12 @@ export class RecordingManager extends EventEmitter {
                 const isWidget = url.includes('widget.html');
                 console.log(`[RecordingManager] Window: title="${title}", url="${url}", isWidget=${isWidget}`);
 
-                // Send to all windows, but log which ones receive it
+                // Skip widget windows - recording events should only go to main app
+                if (isWidget) {
+                    console.log(`[RecordingManager] Skipping widget window for recording event`);
+                    continue;
+                }
+
                 win.webContents.send(channel, ...args);
                 sentCount++;
                 console.log(`[RecordingManager] Sent ${channel} to window "${title}"`);

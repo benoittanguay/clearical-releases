@@ -1,12 +1,26 @@
 /**
  * Audio Recorder Service
  *
- * Coordinates audio recording between main and renderer processes.
- * Uses ScreenCaptureKit (via desktopCapturer) for system audio
- * and getUserMedia for microphone audio.
+ * Originally designed to coordinate audio recording with file storage in main process.
+ * However, the actual implementation evolved to do all recording in the renderer
+ * via AudioRecordingContext (using MediaRecorder + native audio capture).
  *
- * Note: Actual MediaRecorder runs in renderer; this service manages
- * the recording lifecycle and file storage.
+ * CURRENTLY USED METHODS (by RecordingManager):
+ * - isRecording() - Check if recording is active
+ * - stopRecording() - Reset recording state
+ * - getStatus() - Get current recording status (used by IPC handler)
+ *
+ * LEGACY/UNUSED METHODS (kept for potential future use):
+ * - startRecording() - Not called; renderer handles this
+ * - saveAudioChunk() - Not called; renderer handles file storage
+ * - writeAudioFile() - Not called; renderer handles file storage
+ * - getConfig/setConfig() - Not called
+ * - permission check methods - Handled elsewhere
+ * - getSystemAudioSourceId() - Not called; using native capture instead
+ * - deleteRecording() - Not called
+ * - cleanupOldRecordings() - Not called
+ *
+ * TODO: Consider removing legacy methods in a future cleanup pass.
  */
 
 import { app, desktopCapturer, systemPreferences } from 'electron';
