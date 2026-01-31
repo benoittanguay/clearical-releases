@@ -2,6 +2,14 @@
 
 All notable changes to Clearical will be documented in this file.
 
+## [1.7.23] - 2025-01-31
+
+### Bug Fixes
+- **Recording Start**: Fixed "Unable to Start Recording" error caused by AudioWorklet failing to load in production builds
+- **Performance**: Fixed issue where IPC event listeners were being re-registered hundreds of times per second, causing UI lag
+
+---
+
 ## [1.7.22] - 2025-01-31
 
 ### Improvements
