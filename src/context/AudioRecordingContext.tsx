@@ -108,6 +108,40 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
     // Store pending audio files (when transcription failed) for later retry
     const pendingAudioRef = useRef<Map<string, PendingTranscription>>(new Map());
 
+    // Cleanup old pending transcriptions to prevent memory leaks
+    // Transcriptions older than 5 minutes are likely orphaned (entry was never created)
+    const PENDING_TRANSCRIPTION_MAX_AGE_MS = 5 * 60 * 1000; // 5 minutes
+    useEffect(() => {
+        const cleanupInterval = setInterval(() => {
+            const now = Date.now();
+            let cleanedCount = 0;
+
+            // Clean up old transcriptions
+            for (const [sessionId, transcriptions] of pendingTranscriptionsRef.current.entries()) {
+                // Check if all transcriptions for this session are old
+                const allOld = transcriptions.every(t => now - t.createdAt > PENDING_TRANSCRIPTION_MAX_AGE_MS);
+                if (allOld) {
+                    pendingTranscriptionsRef.current.delete(sessionId);
+                    cleanedCount++;
+                }
+            }
+
+            // Clean up old pending audio
+            for (const [sessionId, pending] of pendingAudioRef.current.entries()) {
+                if (now - pending.attemptedAt > PENDING_TRANSCRIPTION_MAX_AGE_MS) {
+                    pendingAudioRef.current.delete(sessionId);
+                    cleanedCount++;
+                }
+            }
+
+            if (cleanedCount > 0) {
+                console.log(`[AudioRecordingContext] Cleaned up ${cleanedCount} old pending transcriptions/audio`);
+            }
+        }, 60000); // Check every minute
+
+        return () => clearInterval(cleanupInterval);
+    }, []);
+
     // MediaRecorder refs
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const audioChunksRef = useRef<Blob[]>([]);
