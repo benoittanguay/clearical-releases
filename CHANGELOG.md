@@ -2,6 +2,14 @@
 
 All notable changes to Clearical will be documented in this file.
 
+## [1.7.20] - 2025-01-31
+
+### Bug Fixes
+- **Crash Prevention**: Fixed potential crash during long recording sessions (4+ hours) by switching native audio callbacks from BlockingCall to NonBlockingCall, preventing thread contention and memory pressure
+- **Widget Animation**: Fixed issue where the recording widget would linger after exit animation, blocking mouse clicks in that screen area. Widget now properly closes after animation completes
+
+---
+
 ## [1.7.18] - 2025-01-29
 
 ### Bug Fixes
