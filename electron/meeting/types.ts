@@ -197,6 +197,7 @@ export const MEETING_IPC_CHANNELS = {
     SEND_AUDIO_LEVELS: 'meeting:send-audio-levels',
     // Prompt mode for when meeting detected but no timer running
     REQUEST_START_TIMER: 'meeting:request-start-timer',   // Main→Renderer: ask to start timer
+    START_TIMER_ACK: 'meeting:start-timer-ack',           // Renderer→Main: acknowledge timer started
     PROMPT_ACCEPTED: 'meeting:prompt-accepted',            // Widget→Main: user clicked "Yes"
     PROMPT_DISMISSED: 'meeting:prompt-dismissed',          // Widget→Main: user clicked "Dismiss"
     SHOW_PROMPT: 'meeting:show-prompt',                    // Main→Widget: show prompt UI
