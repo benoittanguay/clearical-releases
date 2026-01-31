@@ -29,6 +29,7 @@ export class RecordingManager extends EventEmitter {
     private currentMeetingApp: MeetingAppInfo | null = null;
     private isPromptMode: boolean = false;  // When widget is showing "Start timer?" prompt
     private isTimerRunningCallback: (() => boolean) | null = null;  // Callback to check if timer is running
+    private recordingGracePeriodUntil: number = 0;  // Timestamp until which to ignore media-stopped events
 
     private constructor() {
         super();
@@ -171,6 +172,14 @@ export class RecordingManager extends EventEmitter {
             // AND not already recording
             if ((forceStart || mediaInUse) && !this.isRendererRecording) {
                 console.log('[RecordingManager] *** STARTING RECORDING ***', forceStart ? '(forced by manual button)' : '(media in use)');
+
+                // If force starting, set a grace period to ignore media-stopped events
+                // This prevents the widget from closing immediately if mic detection is flaky
+                if (forceStart) {
+                    this.recordingGracePeriodUntil = Date.now() + 10000; // 10 second grace period
+                    console.log('[RecordingManager] Force start - grace period set until:', this.recordingGracePeriodUntil);
+                }
+
                 this.startRecording();
             }
         } else {
@@ -351,6 +360,7 @@ export class RecordingManager extends EventEmitter {
 
         this.isRendererRecording = false;
         this.recordingStartTime = null;
+        this.recordingGracePeriodUntil = 0;  // Clear grace period
         // Keep currentMeetingApp until next meeting starts (for reference)
 
         this.emit(MEETING_EVENTS.RECORDING_STOPPED, {
@@ -388,6 +398,7 @@ export class RecordingManager extends EventEmitter {
 
         this.isRendererRecording = false;
         this.recordingStartTime = null;
+        this.recordingGracePeriodUntil = 0;  // Clear grace period
 
         this.emit(MEETING_EVENTS.RECORDING_STOPPED, {
             entryId,
@@ -468,6 +479,13 @@ export class RecordingManager extends EventEmitter {
 
         // Only stop recording if BOTH mic and camera are inactive
         if (!micInUse && !cameraInUse) {
+            // Check if we're in a grace period (ignore media-stopped events right after force start)
+            if (this.recordingGracePeriodUntil > Date.now()) {
+                console.log('[RecordingManager] *** IGNORING MEDIA STOPPED - Still in grace period ***');
+                console.log('[RecordingManager] Grace period remaining:', this.recordingGracePeriodUntil - Date.now(), 'ms');
+                return;
+            }
+
             if (this.isRendererRecording) {
                 console.log('[RecordingManager] *** ALL MEDIA STOPPED - STOPPING RECORDING AND CLOSING WIDGET ***');
                 this.notifyRendererToStopRecording();
