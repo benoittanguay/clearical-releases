@@ -1071,7 +1071,7 @@ export function useTimer() {
      * @param entryId The entry ID to set as active, or null to clear
      * @param forceStart If true, start recording immediately regardless of media detection (used for manual recording button)
      */
-    const setActiveRecordingEntry = (entryId: string | null, forceStart: boolean = false) => {
+    const setActiveRecordingEntry = async (entryId: string | null, forceStart: boolean = false): Promise<{ success: boolean; error?: string }> => {
         console.log('[Timer] ========================================');
         console.log('[Timer] setActiveRecordingEntry CALLED');
         console.log('[Timer] entryId:', entryId);
@@ -1083,17 +1083,18 @@ export function useTimer() {
 
         // @ts-ignore
         if (window.electron?.ipcRenderer?.meeting?.setActiveEntry) {
-            // @ts-ignore
-            window.electron.ipcRenderer.meeting.setActiveEntry(entryId, forceStart)
-                .then((result: { success: boolean; error?: string }) => {
-                    console.log('[Timer] setActiveEntry IPC response:', result);
-                })
-                .catch((error: Error) => {
-                    console.error('[Timer] setActiveEntry IPC error:', error);
-                });
-            console.log('[Timer] Active recording entry request sent');
+            try {
+                // @ts-ignore
+                const result: { success: boolean; error?: string } = await window.electron.ipcRenderer.meeting.setActiveEntry(entryId, forceStart);
+                console.log('[Timer] setActiveEntry IPC response:', result);
+                return result;
+            } catch (error) {
+                console.error('[Timer] setActiveEntry IPC error:', error);
+                return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+            }
         } else {
             console.error('[Timer] *** CRITICAL: setActiveEntry function not available! ***');
+            return { success: false, error: 'setActiveEntry function not available' };
         }
     };
 

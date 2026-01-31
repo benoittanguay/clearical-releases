@@ -470,7 +470,8 @@ function App() {
         const sessionId = recordingSessionIdRef.current;
 
         // Clear recording session - must happen before stopTimer for proper cleanup
-        setActiveRecordingEntry(null);
+        // Await to ensure main process receives the stop signal before we proceed
+        await setActiveRecordingEntry(null);
         recordingSessionIdRef.current = null;
         setIsAudioRecording(false);
 
@@ -561,21 +562,33 @@ function App() {
   };
 
   // Toggle audio recording independently of timer
-  const handleToggleRecording = () => {
+  const handleToggleRecording = async () => {
     if (recordingSessionIdRef.current) {
       // Stop recording
       console.log('[App] Stopping recording from controls');
-      setActiveRecordingEntry(null);
-      recordingSessionIdRef.current = null;
-      setIsAudioRecording(false);
+      const result = await setActiveRecordingEntry(null);
+      if (result.success) {
+        recordingSessionIdRef.current = null;
+        setIsAudioRecording(false);
+      } else {
+        console.error('[App] Failed to stop recording:', result.error);
+        // Still update UI state since we initiated the stop
+        recordingSessionIdRef.current = null;
+        setIsAudioRecording(false);
+      }
     } else if (isRunning) {
       // Start recording (only when timer is running)
       // forceStart=true ensures recording starts even if media detection doesn't see mic in use
       console.log('[App] Starting recording from controls (forceStart=true)');
       const sessionId = `session-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-      recordingSessionIdRef.current = sessionId;
-      setActiveRecordingEntry(sessionId, true);
-      setIsAudioRecording(true);
+      const result = await setActiveRecordingEntry(sessionId, true);
+      if (result.success) {
+        recordingSessionIdRef.current = sessionId;
+        setIsAudioRecording(true);
+      } else {
+        console.error('[App] Failed to start recording:', result.error);
+        // Don't update state if recording failed to start
+      }
     }
   };
 
@@ -642,7 +655,8 @@ function App() {
         // Toggle recording state
         if (recordingSessionIdRef.current) {
           // Stop recording
-          setActiveRecordingEntry(null);
+          const result = await setActiveRecordingEntry(null);
+          console.log('[Renderer] Stop recording result:', result);
           recordingSessionIdRef.current = null;
           setIsAudioRecording(false);
         } else {
@@ -661,9 +675,13 @@ function App() {
           }
           // Start recording session (forceStart=true since user explicitly requested)
           const sessionId = `session-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-          recordingSessionIdRef.current = sessionId;
-          setActiveRecordingEntry(sessionId, true);
-          setIsAudioRecording(true);
+          const result = await setActiveRecordingEntry(sessionId, true);
+          if (result.success) {
+            recordingSessionIdRef.current = sessionId;
+            setIsAudioRecording(true);
+          } else {
+            console.error('[Renderer] Failed to start recording from tray:', result.error);
+          }
         }
       });
 
@@ -709,10 +727,15 @@ function App() {
         // forceStart=true ensures recording starts even if media detection briefly missed the mic
         if (!recordingSessionIdRef.current) {
           const sessionId = `session-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-          recordingSessionIdRef.current = sessionId;
-          setActiveRecordingEntry(sessionId, true);
-          setIsAudioRecording(true);
-          console.log('[Renderer] Started recording session:', sessionId);
+          const result = await setActiveRecordingEntry(sessionId, true);
+          if (result.success) {
+            recordingSessionIdRef.current = sessionId;
+            setIsAudioRecording(true);
+            console.log('[Renderer] Started recording session:', sessionId);
+          } else {
+            console.error('[Renderer] Failed to start recording from widget prompt:', result.error);
+            // Still navigate and send ack, but recording didn't start
+          }
         } else {
           console.log('[Renderer] Recording session already active:', recordingSessionIdRef.current);
         }

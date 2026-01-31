@@ -104,12 +104,22 @@ export function RecordingWidget(): React.ReactElement {
             });
     }, []);
 
-    // Listen for audio level updates from main process
+    // Consolidated IPC listeners for atomic cleanup
+    // This ensures all listeners are registered and cleaned up together,
+    // preventing potential race conditions on rapid remounts
     useEffect(() => {
-        console.log('[RecordingWidget] Setting up audio levels listener');
+        console.log('[RecordingWidget] Setting up all IPC listeners');
 
+        const onFn = window.electron?.ipcRenderer?.on;
+        if (!onFn) {
+            console.error('[RecordingWidget] ipcRenderer.on not available');
+            return;
+        }
+
+        // Audio levels tracking
         let audioLevelsReceivedCount = 0;
 
+        // Handler for audio level updates
         const handleAudioLevels = (data: AudioLevelData) => {
             audioLevelsReceivedCount++;
             if (audioLevelsReceivedCount <= 3 || audioLevelsReceivedCount % 100 === 0) {
@@ -155,50 +165,14 @@ export function RecordingWidget(): React.ReactElement {
             }
         };
 
-        const onFn = window.electron?.ipcRenderer?.on;
-        if (!onFn) {
-            console.error('[RecordingWidget] ipcRenderer.on not available');
-            return;
-        }
-
-        const unsubscribe = onFn('widget:audio-levels', handleAudioLevels);
-        console.log('[RecordingWidget] Audio levels listener registered');
-
-        return () => {
-            console.log('[RecordingWidget] Cleaning up audio levels listener');
-            unsubscribe?.();
-        };
-    }, []);
-
-    // Listen for meeting-ended prompt trigger from main process
-    useEffect(() => {
-        console.log('[RecordingWidget] Setting up meeting-ended prompt listener');
-
-        const handleShowPrompt = (data: { entryId: string; silenceDuration: number }) => {
+        // Handler for meeting-ended prompt
+        const handleShowMeetingEndedPrompt = (data: { entryId: string; silenceDuration: number }) => {
             console.log('[RecordingWidget] *** RECEIVED MEETING ENDED PROMPT ***', data);
             setPromptEntryId(data.entryId);
             setShowMeetingEndedPrompt(true);
         };
 
-        const onFn = window.electron?.ipcRenderer?.on;
-        if (!onFn) {
-            console.error('[RecordingWidget] ipcRenderer.on not available for prompt listener');
-            return;
-        }
-
-        const unsubscribe = onFn('widget:show-meeting-ended-prompt', handleShowPrompt);
-        console.log('[RecordingWidget] Meeting-ended prompt listener registered');
-
-        return () => {
-            console.log('[RecordingWidget] Cleaning up meeting-ended prompt listener');
-            unsubscribe?.();
-        };
-    }, []);
-
-    // Listen for "start timer" prompt trigger from main process
-    useEffect(() => {
-        console.log('[RecordingWidget] Setting up start-timer prompt listener');
-
+        // Handler for start-timer prompt
         const handleShowStartPrompt = (data: { meetingApp: MeetingAppInfo | null; timestamp: number }) => {
             console.log('[RecordingWidget] *** RECEIVED START TIMER PROMPT ***', data);
             setPromptMeetingApp(data.meetingApp);
@@ -206,43 +180,28 @@ export function RecordingWidget(): React.ReactElement {
             setIsHiding(false);
         };
 
-        const onFn = window.electron?.ipcRenderer?.on;
-        if (!onFn) {
-            console.error('[RecordingWidget] ipcRenderer.on not available for start prompt listener');
-            return;
-        }
-
-        const unsubscribe = onFn('widget:show-prompt', handleShowStartPrompt);
-        console.log('[RecordingWidget] Start-timer prompt listener registered');
-
-        return () => {
-            console.log('[RecordingWidget] Cleaning up start-timer prompt listener');
-            unsubscribe?.();
-        };
-    }, []);
-
-    // Listen for "working hours" prompt trigger from main process
-    useEffect(() => {
-        console.log('[RecordingWidget] Setting up working-hours prompt listener');
-
+        // Handler for working-hours prompt
         const handleShowWorkingHoursPrompt = (data: { timestamp: number }) => {
             console.log('[RecordingWidget] *** RECEIVED WORKING HOURS PROMPT ***', data);
             setContentMode('working-hours-prompt');
             setIsHiding(false);
         };
 
-        const onFn = window.electron?.ipcRenderer?.on;
-        if (!onFn) {
-            console.error('[RecordingWidget] ipcRenderer.on not available for working hours prompt listener');
-            return;
-        }
+        // Register all listeners
+        const unsubscribeAudioLevels = onFn('widget:audio-levels', handleAudioLevels);
+        const unsubscribeMeetingEnded = onFn('widget:show-meeting-ended-prompt', handleShowMeetingEndedPrompt);
+        const unsubscribeStartPrompt = onFn('widget:show-prompt', handleShowStartPrompt);
+        const unsubscribeWorkingHours = onFn('widget:show-working-hours-prompt', handleShowWorkingHoursPrompt);
 
-        const unsubscribe = onFn('widget:show-working-hours-prompt', handleShowWorkingHoursPrompt);
-        console.log('[RecordingWidget] Working-hours prompt listener registered');
+        console.log('[RecordingWidget] All IPC listeners registered');
 
+        // Atomic cleanup - all listeners removed together
         return () => {
-            console.log('[RecordingWidget] Cleaning up working-hours prompt listener');
-            unsubscribe?.();
+            console.log('[RecordingWidget] Cleaning up all IPC listeners');
+            unsubscribeAudioLevels?.();
+            unsubscribeMeetingEnded?.();
+            unsubscribeStartPrompt?.();
+            unsubscribeWorkingHours?.();
         };
     }, []);
 
