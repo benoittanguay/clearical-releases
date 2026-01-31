@@ -242,8 +242,9 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
 
             // Load AudioWorklet module for glitch-free audio mixing
             // The worklet runs on a dedicated audio thread, avoiding main thread timing issues
+            // Use relative path './' for compatibility with Electron production builds (file:// protocol)
             try {
-                await audioContext.audioWorklet.addModule('/audio-mixer-worklet.js');
+                await audioContext.audioWorklet.addModule('./audio-mixer-worklet.js');
                 console.log('[AudioRecordingContext] AudioWorklet module loaded successfully');
             } catch (workletError) {
                 console.error('[AudioRecordingContext] Failed to load AudioWorklet module:', workletError);
