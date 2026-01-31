@@ -141,6 +141,10 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
     // This is set immediately (synchronously) before any async operations
     const isStartingRecordingRef = useRef<boolean>(false);
 
+    // CRITICAL: Synchronous lock to prevent race conditions when multiple STOP events arrive
+    // Prevents duplicate transcriptions if stop is called twice before onstop fires
+    const isStoppingRecordingRef = useRef<boolean>(false);
+
     // CRITICAL: Refs to hold current callbacks to avoid useEffect re-registration race condition
     // When stopRecordingAndTranscribe changes (due to updateEntry dependency), we don't want
     // to re-register event listeners as this creates a window where START events are missed
@@ -625,10 +629,22 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
     const stopRecordingAndTranscribe = useCallback(async (entryId: string) => {
         console.log('[AudioRecordingContext] Stopping recording for entry:', entryId);
 
+        // CRITICAL: Synchronous lock check BEFORE any async operations
+        // This prevents race conditions when two STOP events arrive nearly simultaneously
+        // Without this guard, both calls would capture the same chunks and create duplicate transcriptions
+        if (isStoppingRecordingRef.current) {
+            console.log('[AudioRecordingContext] *** GUARD: Already stopping recording, ignoring duplicate stop ***');
+            return;
+        }
+
         if (!mediaRecorderRef.current || mediaRecorderRef.current.state === 'inactive') {
             console.log('[AudioRecordingContext] No active recording to stop');
             return;
         }
+
+        // Set lock immediately (synchronously) before any async work
+        isStoppingRecordingRef.current = true;
+        console.log('[AudioRecordingContext] Stop lock acquired, stopping recording...');
 
         // CRITICAL: Capture chunks and mimeType BEFORE calling stop() to prevent race condition
         // If a new recording starts before onstop fires, audioChunksRef would be reset
@@ -831,6 +847,10 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
                         error: error instanceof Error ? error.message : 'Transcription failed',
                     });
                 }
+
+                // CRITICAL: Release stop lock after all processing is complete
+                isStoppingRecordingRef.current = false;
+                console.log('[AudioRecordingContext] Stop lock released');
 
                 resolve();
             };

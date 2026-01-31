@@ -12,7 +12,7 @@
  */
 
 import { EventEmitter } from 'events';
-import { BrowserWindow } from 'electron';
+import { BrowserWindow, ipcMain } from 'electron';
 import { mediaMonitor } from '../native/index.js';
 import { AudioRecorder, getAudioRecorder } from './audioRecorder.js';
 import { MEETING_EVENTS, MEETING_IPC_CHANNELS, MeetingAppInfo } from './types.js';
@@ -535,22 +535,35 @@ export class RecordingManager extends EventEmitter {
 
     /**
      * Handle user accepting the prompt (clicked "Yes, Start")
+     * Waits for renderer acknowledgment before closing widget to prevent race conditions
      */
     public handlePromptAccepted(): void {
         console.log('[RecordingManager] *** handlePromptAccepted ***');
         this.isPromptMode = false;
 
-        // IMPORTANT: Send request to main app BEFORE closing the widget
-        // This ensures the main window receives the message before any window state changes
-        console.log('[RecordingManager] Sending request-start-timer to renderer');
+        const widgetManager = getRecordingWidgetManager();
+
+        // Set up one-time listener for acknowledgment from renderer
+        // This ensures the renderer has processed the start request before we close the widget
+        const ackTimeout = setTimeout(() => {
+            console.log('[RecordingManager] Timed out waiting for start-timer-ack, closing widget anyway');
+            ipcMain.removeAllListeners(MEETING_IPC_CHANNELS.START_TIMER_ACK);
+            widgetManager.close();
+        }, 3000); // 3 second timeout
+
+        ipcMain.once(MEETING_IPC_CHANNELS.START_TIMER_ACK, (_event, data: { success: boolean; reason?: string }) => {
+            clearTimeout(ackTimeout);
+            console.log('[RecordingManager] Received start-timer-ack:', data);
+            // Close the widget regardless of success - the renderer has processed the message
+            widgetManager.close();
+        });
+
+        // Send request to main app
+        console.log('[RecordingManager] Sending request-start-timer to renderer, waiting for ack...');
         this.sendToRenderer(MEETING_IPC_CHANNELS.REQUEST_START_TIMER, {
             meetingApp: this.currentMeetingApp,
             timestamp: Date.now(),
         });
-
-        // Close the prompt widget after sending the message
-        const widgetManager = getRecordingWidgetManager();
-        widgetManager.close();
     }
 
     /**

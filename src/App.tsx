@@ -691,6 +691,8 @@ function App() {
         if (!permissions.requiredGranted || !permissions.hasScreenRecording) {
           console.log('[Renderer] Missing permissions, showing modal');
           setShowPermissionModal(true);
+          // Still send acknowledgment so widget can close, but with failure
+          window.electron.ipcRenderer.send('meeting:start-timer-ack', { success: false, reason: 'permissions' });
           return;
         }
 
@@ -717,6 +719,11 @@ function App() {
 
         // Navigate to chrono view
         setCurrentView('chrono');
+
+        // Send acknowledgment that timer/recording started successfully
+        // This allows the main process to safely close the prompt widget
+        console.log('[Renderer] Sending start-timer-ack to main process');
+        window.electron.ipcRenderer.send('meeting:start-timer-ack', { success: true });
       });
 
       return () => {
