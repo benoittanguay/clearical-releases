@@ -128,7 +128,8 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
 
             // Clean up old pending audio
             for (const [sessionId, pending] of pendingAudioRef.current.entries()) {
-                if (now - pending.attemptedAt > PENDING_TRANSCRIPTION_MAX_AGE_MS) {
+                const attemptedAt = pending.attemptedAt ?? 0;
+                if (now - attemptedAt > PENDING_TRANSCRIPTION_MAX_AGE_MS) {
                     pendingAudioRef.current.delete(sessionId);
                     cleanedCount++;
                 }

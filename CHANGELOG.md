@@ -2,6 +2,22 @@
 
 All notable changes to Clearical will be documented in this file.
 
+## [1.7.21] - 2025-01-31
+
+### Bug Fixes
+- **Recording Reliability**: Fixed multiple race conditions that could cause recording to fail to start or create duplicate transcriptions
+- **Meeting Prompt**: Fixed race condition where clicking "Yes, Start" on meeting detection prompt could fail to start recording properly
+- **Widget Stability**: Fixed issue where recording widget could disappear immediately after accepting meeting prompt
+- **Silence Detection**: Increased silence threshold from 10 to 20 seconds to reduce false "Is the meeting over?" prompts during presentation pauses
+- **Recording State**: Fixed UI showing recording active when main process failed to start capture
+
+### Improvements
+- **Error Feedback**: Recording failures now show a user-friendly dialog explaining the issue
+- **Memory Management**: Added automatic cleanup of orphaned transcription data after 5 minutes
+- **Widget Performance**: Consolidated IPC listeners for more reliable widget behavior
+
+---
+
 ## [1.7.20] - 2025-01-31
 
 ### Bug Fixes
