@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { useSettings } from '../context/SettingsContext';
 import { useScreenshotAnalysis } from '../context/ScreenshotAnalysisContext';
 import { FALLBACK_SCREENSHOT_DESCRIPTION } from '../constants';
@@ -737,7 +737,7 @@ export function useTimer() {
         };
     }, [isRunning, isPaused, startTime]); // Note: windowActivity intentionally excluded to prevent interval thrashing
 
-    const checkPermissions = async (): Promise<PermissionCheckResult> => {
+    const checkPermissions = useCallback(async (): Promise<PermissionCheckResult> => {
         try {
             // Check screen recording permission
             // @ts-ignore
@@ -766,18 +766,22 @@ export function useTimer() {
                 allGranted: false
             };
         }
-    };
+    }, []);
 
-    const start = () => {
+    const start = useCallback(() => {
         setIsRunning(true);
         setIsPaused(false);
-        // If starting fresh (not resuming), start from 0
-        if (elapsed === 0) {
-            setStartTime(Date.now());
-        } else {
-            // Resuming - adjust start time to account for elapsed
-            setStartTime(Date.now() - elapsed);
-        }
+        // Use callback form to get current elapsed value without it being a dependency
+        setElapsed(currentElapsed => {
+            // If starting fresh (not resuming), start from 0
+            if (currentElapsed === 0) {
+                setStartTime(Date.now());
+            } else {
+                // Resuming - adjust start time to account for elapsed
+                setStartTime(Date.now() - currentElapsed);
+            }
+            return currentElapsed;
+        });
         setWindowActivity([]); // Clear previous activity
         lastWindowRef.current = null;
         currentActivityScreenshots.current = []; // Reset screenshots
@@ -790,27 +794,47 @@ export function useTimer() {
         activeAnalysisCount.current = 0; // Reset active count
         consecutiveFailures.current = 0; // Reset failure tracking
         queuePausedUntil.current = 0; // Clear any queue pause
-    };
+    }, []);
 
-    const pause = () => {
-        if (!isRunning || isPaused) return;
+    // Store state values in refs for use in memoized callbacks without dependencies
+    const startTimeRef = useRef<number | null>(null);
+    const windowActivityRef = useRef<WindowActivity[]>([]);
+    useEffect(() => {
+        startTimeRef.current = startTime;
+    }, [startTime]);
+    useEffect(() => {
+        windowActivityRef.current = windowActivity;
+    }, [windowActivity]);
+
+    // Store isRunning and isPaused in refs for callbacks
+    const isRunningRef = useRef(false);
+    const isPausedRef = useRef(false);
+    useEffect(() => {
+        isRunningRef.current = isRunning;
+        isPausedRef.current = isPaused;
+    }, [isRunning, isPaused]);
+
+    const pause = useCallback(() => {
+        if (!isRunningRef.current || isPausedRef.current) return;
         setIsPaused(true);
         // Update elapsed time to current value when pausing
-        if (startTime) {
-            setElapsed(Date.now() - startTime);
+        const currentStartTime = startTimeRef.current;
+        if (currentStartTime) {
+            setElapsed(Date.now() - currentStartTime);
         }
-    };
+    }, []);
 
-    const resume = () => {
-        if (!isRunning || !isPaused) return;
+    const resume = useCallback(() => {
+        if (!isRunningRef.current || !isPausedRef.current) return;
         setIsPaused(false);
         // Adjust start time to account for elapsed time when resuming
-        if (startTime) {
-            setStartTime(Date.now() - elapsed);
-        }
-    };
+        setElapsed(currentElapsed => {
+            setStartTime(Date.now() - currentElapsed);
+            return currentElapsed;
+        });
+    }, []);
 
-    const stop = async () => {
+    const stop = useCallback(async () => {
         setIsRunning(false);
         setIsPaused(false);
         const now = Date.now();
@@ -845,7 +869,7 @@ export function useTimer() {
         setStartTime(null);
 
         return finalActivity;
-    };
+    }, []);
 
     const filterShortActivities = (activities: WindowActivity[]): WindowActivity[] => {
         const { minActivityDuration, activityGapThreshold } = settings;
@@ -888,13 +912,16 @@ export function useTimer() {
     };
     
     const calculateFinalActivities = (now: number) => {
-        if (!startTime) {
+        const currentStartTime = startTimeRef.current;
+        const currentWindowActivity = windowActivityRef.current;
+
+        if (!currentStartTime) {
             console.log('[Renderer] No start time available for activity calculation');
-            return windowActivity;
+            return currentWindowActivity;
         }
 
         // Build complete timeline of activities
-        let activities: WindowActivity[] = [...windowActivity];
+        let activities: WindowActivity[] = [...currentWindowActivity];
 
         // Add the current/final activity if it exists
         if (lastWindowRef.current) {
@@ -1000,30 +1027,30 @@ export function useTimer() {
             if (finalActivity.length > 0) {
                 const firstActivity = finalActivity[0];
                 const firstActivityOriginalStart = firstActivity.timestamp;
-                
-                if (firstActivityOriginalStart > startTime) {
+
+                if (firstActivityOriginalStart > currentStartTime) {
                     // There was time before first activity was detected - extend backward
-                    const preActivityTime = firstActivityOriginalStart - startTime;
+                    const preActivityTime = firstActivityOriginalStart - currentStartTime;
                     finalActivity[0] = {
                         ...firstActivity,
-                        timestamp: startTime,
+                        timestamp: currentStartTime,
                         duration: firstActivity.duration + preActivityTime
                     };
                     console.log(`[Renderer] Extended first activity backward by ${preActivityTime}ms to cover full timer duration`);
-                } else if (firstActivityOriginalStart < startTime) {
+                } else if (firstActivityOriginalStart < currentStartTime) {
                     // First activity started before timer (shouldn't happen but handle it)
                     finalActivity[0] = {
                         ...firstActivity,
-                        timestamp: startTime,
-                        duration: Math.max(0, firstActivity.duration - (startTime - firstActivityOriginalStart))
+                        timestamp: currentStartTime,
+                        duration: Math.max(0, firstActivity.duration - (currentStartTime - firstActivityOriginalStart))
                     };
                     console.log('[Renderer] Adjusted first activity to start at timer start time');
                 }
             }
         }
-        
+
         const totalCalculated = finalActivity.reduce((sum, act) => sum + act.duration, 0);
-        const totalExpected = now - startTime;
+        const totalExpected = now - currentStartTime;
         console.log(`[Renderer] Timer stop - Expected duration: ${totalExpected}ms, Calculated duration: ${totalCalculated}ms, Difference: ${Math.abs(totalExpected - totalCalculated)}ms`);
         
         // Apply activity filtering
@@ -1038,7 +1065,7 @@ export function useTimer() {
         return filteredActivity;
     };
 
-    const reset = () => {
+    const reset = useCallback(() => {
         setIsRunning(false);
         setIsPaused(false);
         setElapsed(0);
@@ -1055,7 +1082,7 @@ export function useTimer() {
         activeAnalysisCount.current = 0; // Reset active count
         consecutiveFailures.current = 0; // Reset failure tracking
         queuePausedUntil.current = 0; // Clear any queue pause
-    };
+    }, []);
 
     const formatTime = (ms: number) => {
         const totalSeconds = Math.floor(ms / 1000);
@@ -1071,7 +1098,7 @@ export function useTimer() {
      * @param entryId The entry ID to set as active, or null to clear
      * @param forceStart If true, start recording immediately regardless of media detection (used for manual recording button)
      */
-    const setActiveRecordingEntry = async (entryId: string | null, forceStart: boolean = false): Promise<{ success: boolean; error?: string }> => {
+    const setActiveRecordingEntry = useCallback(async (entryId: string | null, forceStart: boolean = false): Promise<{ success: boolean; error?: string }> => {
         console.log('[Timer] ========================================');
         console.log('[Timer] setActiveRecordingEntry CALLED');
         console.log('[Timer] entryId:', entryId);
@@ -1096,7 +1123,7 @@ export function useTimer() {
             console.error('[Timer] *** CRITICAL: setActiveEntry function not available! ***');
             return { success: false, error: 'setActiveEntry function not available' };
         }
-    };
+    }, []);
 
     return { isRunning, isPaused, elapsed, windowActivity, start, stop, pause, resume, reset, formatTime, checkPermissions, setActiveRecordingEntry };
 }
