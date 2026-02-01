@@ -541,7 +541,9 @@ export class RecordingManager extends EventEmitter {
 
     /**
      * Handle user accepting the prompt (clicked "Yes, Start")
-     * Waits for renderer acknowledgment before closing widget to prevent race conditions
+     * Waits for renderer acknowledgment, then widget transitions to recording mode
+     * NOTE: The widget transitions from prompt mode to recording mode via widgetManager.show()
+     * which is called in notifyRendererToStartRecording - we don't close it if recording started
      */
     public handlePromptAccepted(): void {
         console.log('[RecordingManager] *** handlePromptAccepted ***');
@@ -550,18 +552,28 @@ export class RecordingManager extends EventEmitter {
         const widgetManager = getRecordingWidgetManager();
 
         // Set up one-time listener for acknowledgment from renderer
-        // This ensures the renderer has processed the start request before we close the widget
+        // This ensures the renderer has processed the start request
         const ackTimeout = setTimeout(() => {
-            console.log('[RecordingManager] Timed out waiting for start-timer-ack, closing widget anyway');
+            console.log('[RecordingManager] Timed out waiting for start-timer-ack');
             ipcMain.removeAllListeners(MEETING_IPC_CHANNELS.START_TIMER_ACK);
-            widgetManager.close();
+            // If recording didn't start (e.g., permissions issue), close the widget
+            if (!this.isRendererRecording) {
+                console.log('[RecordingManager] Recording not started, closing widget');
+                widgetManager.close();
+            }
         }, 3000); // 3 second timeout
 
         ipcMain.once(MEETING_IPC_CHANNELS.START_TIMER_ACK, (_event, data: { success: boolean; reason?: string }) => {
             clearTimeout(ackTimeout);
             console.log('[RecordingManager] Received start-timer-ack:', data);
-            // Close the widget regardless of success - the renderer has processed the message
-            widgetManager.close();
+            // Widget transitions to recording mode via notifyRendererToStartRecording -> widgetManager.show()
+            // Only close if recording didn't start successfully
+            if (!data.success || !this.isRendererRecording) {
+                console.log('[RecordingManager] Recording not started, closing widget');
+                widgetManager.close();
+            } else {
+                console.log('[RecordingManager] Recording started, widget transitioned to recording mode');
+            }
         });
 
         // Send request to main app

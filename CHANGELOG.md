@@ -2,6 +2,13 @@
 
 All notable changes to Clearical will be documented in this file.
 
+## [1.7.24] - 2025-01-31
+
+### Bug Fixes
+- **Recording Widget**: Fixed issue where clicking "Yes, Start" on meeting detection prompt would start recording but not show the recording widget
+
+---
+
 ## [1.7.23] - 2025-01-31
 
 ### Bug Fixes
