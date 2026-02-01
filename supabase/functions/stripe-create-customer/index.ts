@@ -64,15 +64,30 @@ serve(async (req) => {
             );
         }
 
-        // If customer already exists, return it
+        // If customer ID exists in profile, verify it still exists in Stripe
         if (profile?.stripe_customer_id) {
-            return new Response(
-                JSON.stringify({
-                    customerId: profile.stripe_customer_id,
-                    created: false,
-                }),
-                { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-            );
+            try {
+                const existingCustomer = await stripe.customers.retrieve(profile.stripe_customer_id);
+
+                // Check if customer was deleted in Stripe
+                if (existingCustomer.deleted) {
+                    console.log(`Stripe customer ${profile.stripe_customer_id} was deleted, creating new customer`);
+                    // Fall through to create a new customer
+                } else {
+                    // Customer exists and is active, return it
+                    return new Response(
+                        JSON.stringify({
+                            customerId: profile.stripe_customer_id,
+                            created: false,
+                        }),
+                        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+                    );
+                }
+            } catch (stripeError) {
+                // Customer doesn't exist in Stripe (404) or other error
+                console.log(`Stripe customer ${profile.stripe_customer_id} not found or error, creating new customer:`, stripeError.message);
+                // Fall through to create a new customer
+            }
         }
 
         // Create new Stripe customer
