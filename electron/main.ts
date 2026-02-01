@@ -2375,7 +2375,7 @@ ipcMain.handle('meeting:start-mic-capture', () => {
             micSampleCount++;
             // Log every 100th callback to avoid spam
             if (micSampleCount % 100 === 1) {
-                console.log(`[Main] Native mic samples received #${micSampleCount}: sampleCount=${info.sampleCount}, channelCount=${info.channelCount}`);
+                console.log(`[Main] Native mic samples received #${micSampleCount}: sampleRate=${info.sampleRate}, sampleCount=${info.sampleCount}, channelCount=${info.channelCount}`);
             }
             // Send to all renderer windows
             const windows = BrowserWindow.getAllWindows();

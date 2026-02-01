@@ -310,7 +310,7 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
                                     }
                                     micRms = Math.sqrt(micRms / samples.length);
                                 }
-                                console.log(`[AudioRecordingContext] NATIVE MIC #${nativeMicReceivedCount}: sampleCount=${data.sampleCount}, rms=${micRms.toFixed(6)}, peak=${micPeak.toFixed(6)}, samples[0-3]=[${samples?.[0]?.toFixed(6)}, ${samples?.[1]?.toFixed(6)}, ${samples?.[2]?.toFixed(6)}, ${samples?.[3]?.toFixed(6)}]`);
+                                console.log(`[AudioRecordingContext] NATIVE MIC #${nativeMicReceivedCount}: sampleRate=${data.sampleRate}, sampleCount=${data.sampleCount}, channels=${data.channelCount}, rms=${micRms.toFixed(6)}, peak=${micPeak.toFixed(6)}`);
                             }
                             // Forward samples to AudioWorklet for mixing
                             if (isNativeMicActiveRef.current && audioWorkletNodeRef.current) {
@@ -420,7 +420,7 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
                                         }
                                         sysRms = Math.sqrt(sysRms / samples.length);
                                     }
-                                    console.log(`[AudioRecordingContext] SYSTEM AUDIO FORWARDED #${sysAudioForwardedCount}: sampleCount=${data.sampleCount}, rms=${sysRms.toFixed(6)}, peak=${sysPeak.toFixed(6)}`);
+                                    console.log(`[AudioRecordingContext] SYSTEM AUDIO FORWARDED #${sysAudioForwardedCount}: sampleRate=${data.sampleRate}, sampleCount=${data.sampleCount}, channels=${data.channelCount}, rms=${sysRms.toFixed(6)}, peak=${sysPeak.toFixed(6)}`);
                                 }
 
                                 // Forward samples to AudioWorklet for mixing

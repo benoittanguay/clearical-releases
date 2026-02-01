@@ -2,6 +2,13 @@
 
 All notable changes to Clearical will be documented in this file.
 
+## [1.7.29] - 2025-01-31
+
+### Bug Fixes
+- **Audio Diagnostics**: Added sample rate logging to help diagnose recording quality issues
+
+---
+
 ## [1.7.28] - 2025-01-31
 
 ### Bug Fixes
