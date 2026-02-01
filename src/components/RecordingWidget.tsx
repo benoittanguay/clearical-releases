@@ -509,9 +509,6 @@ export function RecordingWidget(): React.ReactElement {
                             <span className="prompt-meeting-icon">🎤</span>
                             Meeting Detected
                         </div>
-                        <div className="prompt-subtitle">
-                            {promptMeetingApp?.appName || 'Video call'} is using your microphone
-                        </div>
                         <div className="prompt-question">Start timer and record?</div>
                     </div>
 

@@ -35,9 +35,10 @@ body {
 
 .audio-widget {
     width: 520px;
-    background: #0D0D0D;
+    background: #000000;
     border-radius: 0 0 24px 24px;
-    padding: 10px 12px 12px 12px;
+    /* Account for MacBook notch with safe-area-inset-top */
+    padding: calc(10px + env(safe-area-inset-top, 0px)) 12px 12px 12px;
     position: relative;
     box-shadow:
         0 8px 32px rgba(0, 0, 0, 0.4),
@@ -77,12 +78,12 @@ body {
     }
     60% {
         transform: translateY(0);
-        /* Curtain to center - clip from both sides and bottom, keep top corners square */
-        clip-path: inset(0 calc(50% - 30px) calc(100% - 56px) calc(50% - 30px) round 0 0 24px 24px);
+        /* Curtain to center - clip from both sides and bottom, account for notch */
+        clip-path: inset(0 calc(50% - 30px) calc(100% - 56px - env(safe-area-inset-top, 0px)) calc(50% - 30px) round 0 0 24px 24px);
     }
     100% {
         transform: translateY(-100%);
-        clip-path: inset(0 calc(50% - 30px) calc(100% - 56px) calc(50% - 30px) round 0 0 24px 24px);
+        clip-path: inset(0 calc(50% - 30px) calc(100% - 56px - env(safe-area-inset-top, 0px)) calc(50% - 30px) round 0 0 24px 24px);
     }
 }
 
