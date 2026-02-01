@@ -1098,6 +1098,7 @@ function App() {
                         isRecording={isAudioRecording}
                         onToggleRecording={handleToggleRecording}
                         disabled={!isRunning || isStopping}
+                        elapsedMs={elapsed}
                       />
                     </div>
                   </FlipClockContainer>

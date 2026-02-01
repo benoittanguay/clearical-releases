@@ -511,8 +511,8 @@ export interface ElectronAPI {
             // Event subscriptions for automatic recording
             onRecordingShouldStart: (callback: (data: { entryId: string; timestamp: number }) => void) => (() => void) | undefined;
             onRecordingShouldStop: (callback: (data: { entryId: string; duration: number }) => void) => (() => void) | undefined;
-            // Audio levels for widget visualization
-            sendAudioLevels: (levels: number[]) => void;
+            // Audio levels for widget visualization (elapsedMs for waveform sync)
+            sendAudioLevels: (levels: number[], elapsedMs?: number) => void;
         };
     };
     // Analytics (top-level, not inside ipcRenderer)

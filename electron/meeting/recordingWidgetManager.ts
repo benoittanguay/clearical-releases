@@ -352,7 +352,7 @@ export class RecordingWidgetManager {
      * Send audio level data to the widget for visualization
      */
     private audioLevelsSentCount = 0;
-    public sendAudioLevels(levels: number[]): void {
+    public sendAudioLevels(levels: number[], elapsedMs?: number): void {
         if (this.widgetWindow && !this.widgetWindow.isDestroyed()) {
             this.audioLevelsSentCount++;
             if (this.audioLevelsSentCount <= 3 || this.audioLevelsSentCount % 100 === 0) {
@@ -360,6 +360,7 @@ export class RecordingWidgetManager {
             }
             this.widgetWindow.webContents.send('widget:audio-levels', {
                 levels,
+                elapsedMs,
                 timestamp: Date.now(),
             });
         } else {
@@ -461,9 +462,9 @@ export class RecordingWidgetManager {
         }
 
         // Load the widget HTML
-        if (process.env.VITE_DEV_SERVER_URL) {
+        if (!app.isPackaged) {
             // Development: load from Vite dev server
-            this.widgetWindow.loadURL(`${process.env.VITE_DEV_SERVER_URL}widget.html`);
+            this.widgetWindow.loadURL('http://127.0.0.1:5173/widget.html');
         } else {
             // Production: load from built files
             const widgetPath = path.join(process.env.DIST || '', 'widget.html');
@@ -485,10 +486,6 @@ export class RecordingWidgetManager {
                     }
                 }, 100);
 
-                // Open devtools in dev mode to see widget console logs
-                if (process.env.VITE_DEV_SERVER_URL) {
-                    this.widgetWindow.webContents.openDevTools({ mode: 'detach' });
-                }
             }
         });
 

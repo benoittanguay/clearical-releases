@@ -6,25 +6,17 @@
  */
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Waveform } from './Waveform';
 
 interface AudioLevelData {
     levels: number[];
+    elapsedMs?: number;
     timestamp: number;
 }
 
-interface WaveformBar {
-    height: number;
-    id: number;
-}
-
-// Waveform configuration
-const BAR_WIDTH = 2;
-const BAR_GAP = 4;
-const BAR_STEP = BAR_WIDTH + BAR_GAP;
-const SCROLL_SPEED = 12; // 12px/s with 6px bars = 2 bars/second
-const MIN_HEIGHT = 6;
-const MAX_HEIGHT = 36;
-const CONTAINER_WIDTH = 520 - 24; // Widget width minus padding
+// Widget layout constants
+const WAVEFORM_WIDTH = 520 - 24; // Widget width minus padding
+const WAVEFORM_HEIGHT = 48;
 
 // Animation timing constants (in milliseconds)
 // Keep in sync with CSS animations in RecordingWidget styles
@@ -60,28 +52,16 @@ export function RecordingWidget(): React.ReactElement {
     const [promptEntryId, setPromptEntryId] = useState<string | null>(null);
     const [promptMeetingApp, setPromptMeetingApp] = useState<MeetingAppInfo | null>(null);
 
-    // Waveform state
-    const [bars, setBars] = useState<WaveformBar[]>([]);
-    const [trackPosition, setTrackPosition] = useState(CONTAINER_WIDTH / 2);
-    const [trackScale, setTrackScale] = useState(1);
+    // Audio level state for waveform component
+    const [audioLevel, setAudioLevel] = useState(0);
+    const [elapsedMs, setElapsedMs] = useState(0);
 
     // Refs
-    const animationFrameRef = useRef<number>(0);
-    const lastTimeRef = useRef<number>(performance.now());
-    const barIdCounterRef = useRef<number>(0);
-    const audioStateRef = useRef<'normal' | 'loud' | 'quiet'>('normal');
-    const stateCounterRef = useRef<number>(0);
-    const lastHeightRef = useRef<number>(20);
-    const currentIntensityRef = useRef<number>(0);
     const playheadRef = useRef<HTMLDivElement>(null);
     const waveformContainerRef = useRef<HTMLDivElement>(null);
     const widgetRef = useRef<HTMLDivElement>(null);
     const recordingPillRef = useRef<HTMLDivElement>(null);
-
-    // Track real audio levels for waveform - store recent levels for smoothing
-    const currentAudioLevelRef = useRef<number>(0);
-    const recentAudioLevelsRef = useRef<number[]>([]); // Rolling buffer of recent peak levels
-    const hasRealAudioRef = useRef<boolean>(false);
+    const recentAudioLevelsRef = useRef<number[]>([]); // Rolling buffer for smoothing
 
     // Verify IPC connection on mount
     useEffect(() => {
@@ -133,8 +113,6 @@ export function RecordingWidget(): React.ReactElement {
             }
 
             if (data && data.levels && data.levels.length > 0) {
-                hasRealAudioRef.current = true;
-
                 // Calculate a weighted RMS across frequency bins
                 // Weight mid frequencies (speech range) higher for voice visualization
                 let weightedSum = 0;
@@ -160,14 +138,18 @@ export function RecordingWidget(): React.ReactElement {
                     recentAudioLevelsRef.current.shift();
                 }
 
-                // Use the max of recent levels for responsive feel
-                const smoothedLevel = Math.max(...recentAudioLevelsRef.current);
+                // Use average for more natural variation (max tends to flatten dynamics)
+                const smoothedLevel = recentAudioLevelsRef.current.reduce((a, b) => a + b, 0) / recentAudioLevelsRef.current.length;
 
-                // Apply gentle compression curve for better visual range
-                // Maps 0-1 input to 0-1 output with boosted low levels
-                const compressed = Math.pow(smoothedLevel, 0.5);
+                // Light compression to preserve dynamic range while avoiding clipping
+                const compressed = Math.pow(smoothedLevel, 0.7);
 
-                currentAudioLevelRef.current = Math.max(0.05, Math.min(1, compressed));
+                setAudioLevel(Math.max(0.02, Math.min(1, compressed)));
+            }
+
+            // Update elapsed time for waveform sync
+            if (data.elapsedMs !== undefined) {
+                setElapsedMs(data.elapsedMs);
             }
         };
 
@@ -220,73 +202,6 @@ export function RecordingWidget(): React.ReactElement {
         };
     }, []);
 
-    // Generate bar height based on audio state or real data
-    const generateBarHeight = useCallback((): number => {
-        // If we have real audio levels, use them
-        if (hasRealAudioRef.current) {
-            const level = currentAudioLevelRef.current;
-
-            // Add organic variation that scales with the audio level
-            // Louder audio has more variation (more dynamic), quieter audio is more uniform
-            const variationRange = 0.15 + level * 0.25; // 15-40% variation based on level
-            const variation = 1 + (Math.random() - 0.5) * 2 * variationRange;
-
-            // Calculate base height from audio level
-            const baseHeight = MIN_HEIGHT + (MAX_HEIGHT - MIN_HEIGHT) * level;
-
-            // Apply variation and smooth with previous height for continuity
-            const targetHeight = baseHeight * variation;
-            const smoothed = lastHeightRef.current * 0.3 + targetHeight * 0.7;
-            lastHeightRef.current = smoothed;
-
-            return Math.max(MIN_HEIGHT, Math.min(MAX_HEIGHT, Math.round(smoothed)));
-        }
-
-        // Fallback to simulated audio
-        stateCounterRef.current--;
-        if (stateCounterRef.current <= 0) {
-            const rand = Math.random();
-            if (rand < 0.15) {
-                audioStateRef.current = 'loud';
-                stateCounterRef.current = 3 + Math.floor(Math.random() * 8);
-            } else if (rand < 0.3) {
-                audioStateRef.current = 'quiet';
-                stateCounterRef.current = 5 + Math.floor(Math.random() * 10);
-            } else {
-                audioStateRef.current = 'normal';
-                stateCounterRef.current = 2 + Math.floor(Math.random() * 5);
-            }
-        }
-
-        let targetHeight;
-        if (audioStateRef.current === 'loud') {
-            targetHeight = MAX_HEIGHT * (0.7 + Math.random() * 0.3);
-        } else if (audioStateRef.current === 'quiet') {
-            targetHeight = MIN_HEIGHT + Math.random() * 8;
-        } else {
-            targetHeight = MIN_HEIGHT + (MAX_HEIGHT - MIN_HEIGHT) * (0.3 + Math.random() * 0.4);
-        }
-
-        lastHeightRef.current = lastHeightRef.current * 0.3 + targetHeight * 0.7;
-        return Math.round(lastHeightRef.current);
-    }, []);
-
-    // Initialize waveform bars
-    useEffect(() => {
-        const barsNeeded = Math.ceil(CONTAINER_WIDTH / BAR_STEP) + 25;
-        const initialBars: WaveformBar[] = [];
-
-        for (let i = 0; i < barsNeeded; i++) {
-            initialBars.push({
-                height: generateBarHeight(),
-                id: barIdCounterRef.current++
-            });
-        }
-
-        setBars(initialBars);
-        setTrackPosition(CONTAINER_WIDTH / 2);
-    }, [generateBarHeight]);
-
     // Position playhead after animation completes
     const positionPlayhead = useCallback(() => {
         if (!playheadRef.current || !waveformContainerRef.current || !widgetRef.current || !recordingPillRef.current) {
@@ -315,89 +230,6 @@ export function RecordingWidget(): React.ReactElement {
             window.removeEventListener('resize', positionPlayhead);
         };
     }, [positionPlayhead]);
-
-    // Waveform animation loop
-    useEffect(() => {
-        if (contentMode !== 'recording' || isHiding) {
-            return;
-        }
-
-        // Track if this effect instance is still active (prevents stale callbacks)
-        let isActive = true;
-        let animationStarted = false;
-
-        const animate = (currentTime: number) => {
-            if (!isActive) return; // Guard against stale callbacks after cleanup
-
-            let deltaTime = (currentTime - lastTimeRef.current) / 1000;
-
-            // Cap deltaTime to prevent huge jumps when:
-            // - Browser tab was backgrounded
-            // - Animation frame was delayed
-            // - State transition caused a gap
-            // Max 100ms (0.1s) ensures smooth animation even with missed frames
-            deltaTime = Math.min(deltaTime, 0.1);
-
-            lastTimeRef.current = currentTime;
-
-            setTrackPosition(prevPos => {
-                let newPos = prevPos - SCROLL_SPEED * deltaTime;
-
-                // Check if we need to add a new bar
-                setBars(prevBars => {
-                    const trackWidth = prevBars.length * BAR_STEP;
-                    const rightEdge = newPos + trackWidth;
-
-                    if (rightEdge < CONTAINER_WIDTH + BAR_STEP * 5) {
-                        const height = generateBarHeight();
-                        const newIntensity = (height - MIN_HEIGHT) / (MAX_HEIGHT - MIN_HEIGHT);
-                        currentIntensityRef.current = currentIntensityRef.current * 0.2 + newIntensity * 0.8;
-
-                        return [...prevBars, { height, id: barIdCounterRef.current++ }];
-                    }
-
-                    // Check if we need to remove the first bar
-                    if (prevBars.length > 0) {
-                        const barRight = newPos + BAR_STEP;
-                        if (barRight < -BAR_STEP) {
-                            newPos += BAR_STEP;
-                            return prevBars.slice(1);
-                        }
-                    }
-
-                    return prevBars;
-                });
-
-                return newPos;
-            });
-
-            // Update track scale based on intensity
-            const pulseScale = 0.85 + (currentIntensityRef.current * 0.3);
-            setTrackScale(pulseScale);
-
-            animationFrameRef.current = requestAnimationFrame(animate);
-        };
-
-        const startAnimation = () => {
-            if (!isActive || animationStarted) return;
-            animationStarted = true;
-            // Reset lastTime right before starting to ensure accurate first frame
-            lastTimeRef.current = performance.now();
-            animationFrameRef.current = requestAnimationFrame(animate);
-        };
-
-        // Delay animation start until after entrance animation completes (500ms)
-        // This prevents perceived speed change when waveform clip-path expands
-        const delayTimer = setTimeout(startAnimation, ANIMATION_ENTER_DURATION);
-
-        return () => {
-            isActive = false; // Prevent stale animate callbacks from running
-            clearTimeout(delayTimer);
-            if (animationFrameRef.current) {
-                cancelAnimationFrame(animationFrameRef.current);
-            }
-        };
-    }, [contentMode, isHiding, generateBarHeight]);
 
     // Handle "Yes, meeting ended" response
     const handleMeetingEndedYes = useCallback(async () => {
@@ -621,12 +453,6 @@ export function RecordingWidget(): React.ReactElement {
         }, ANIMATION_EXIT_DURATION);
     }, []);
 
-    // Determine if a bar is on the left (recorded) or right (buffer) side
-    const getBarSide = (barIndex: number): 'left' | 'right' => {
-        const barPosition = trackPosition + barIndex * BAR_STEP + BAR_WIDTH / 2;
-        return barPosition < CONTAINER_WIDTH / 2 ? 'left' : 'right';
-    };
-
     // Build class name for widget
     const widgetClassName = [
         'audio-widget',
@@ -752,37 +578,16 @@ export function RecordingWidget(): React.ReactElement {
 
             {/* Waveform */}
             <div className="waveform-container" ref={waveformContainerRef}>
-                <div className="waveform-bg-left"></div>
-                <div className="waveform-bg-right"></div>
-                <div
-                    className="waveform-track"
-                    style={{
-                        left: `${trackPosition}px`,
-                        transform: `scaleY(${trackScale})`
-                    }}
-                >
-                    {bars.map((bar, index) => (
-                        <div
-                            key={bar.id}
-                            className="waveform-bar"
-                            style={{
-                                width: `${BAR_WIDTH}px`,
-                                minWidth: `${BAR_WIDTH}px`,
-                                height: `${bar.height}px`,
-                                marginRight: `${BAR_GAP}px`
-                            }}
-                        >
-                            <div
-                                className="bar-layer-recorded"
-                                style={{ opacity: getBarSide(index) === 'left' ? 1 : 0 }}
-                            />
-                            <div
-                                className="bar-layer-buffer"
-                                style={{ opacity: getBarSide(index) === 'right' ? 1 : 0 }}
-                            />
-                        </div>
-                    ))}
-                </div>
+                <Waveform
+                    isRecording={contentMode === 'recording' && !isHiding}
+                    audioLevel={audioLevel}
+                    elapsedMs={elapsedMs}
+                    width={WAVEFORM_WIDTH}
+                    height={WAVEFORM_HEIGHT}
+                    variant="dark"
+                    showPlayhead={false}
+                    showScanlines={false}
+                />
             </div>
 
             {/* Playhead */}
