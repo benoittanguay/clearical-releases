@@ -1,17 +1,1023 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Clearical</title>
-    <!-- Google Fonts: Inter (body), DM Sans (display), JetBrains Mono (code) -->
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clearical - Interactive Demo</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Syne:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --color-bg-primary: #F2F0ED;
+            --color-bg-secondary: #FFFFFF;
+            --color-bg-tertiary: #E8E6E3;
+            --color-bg-quaternary: #DAD8D5;
+            --color-surface-dark: #0D0C0C;
+            --color-surface-dark-secondary: #1A1A1C;
+            --color-accent: #FF4800;
+            --color-accent-hover: #E54100;
+            --color-accent-light: #FF6B35;
+            --color-accent-muted: rgba(255, 72, 0, 0.08);
+            --color-success: #16A34A;
+            --color-success-muted: rgba(22, 163, 74, 0.1);
+            --color-warning: #CA8A04;
+            --color-warning-muted: rgba(202, 138, 4, 0.1);
+            --color-error: #DC2626;
+            --color-error-muted: rgba(220, 38, 38, 0.1);
+            --color-info: #2563EB;
+            --color-info-muted: rgba(37, 99, 235, 0.1);
+            --color-text-primary: #0D0C0C;
+            --color-text-secondary: #6B6560;
+            --color-text-tertiary: #8C877D;
+            --color-text-inverse: #F2F0ED;
+            --color-border-primary: #E4E0DC;
+            --color-border-secondary: #D4D0CC;
+            --font-display: 'Syne', system-ui, sans-serif;
+            --font-mono: 'JetBrains Mono', monospace;
+            --shadow-sm: 0 2px 4px rgba(0,0,0,0.06);
+            --shadow-md: 0 4px 8px -2px rgba(0,0,0,0.08);
+            --shadow-lg: 0 8px 16px -4px rgba(0,0,0,0.1);
+            --shadow-xl: 0 16px 32px -8px rgba(0,0,0,0.12);
+            --shadow-accent: 0 4px 16px -4px rgba(255,72,0,0.25);
+            --glow-accent: 0 0 24px rgba(255,72,0,0.2);
+            --radius-sm: 4px;
+            --radius-md: 8px;
+            --radius-lg: 12px;
+            --radius-xl: 16px;
+            --radius-2xl: 24px;
+            --radius-full: 9999px;
+            --sidebar-width: 80px;
+        }
+        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { height: 100%; font-family: var(--font-mono); font-size: 14px; color: var(--color-text-primary); background: var(--color-bg-primary); -webkit-font-smoothing: antialiased; }
+        .app { display: flex; height: 100vh; overflow: hidden; }
+
+        /* Sidebar */
+        .sidebar { width: var(--sidebar-width); background: var(--color-surface-dark); display: flex; flex-direction: column; align-items: center; padding: 16px 0; flex-shrink: 0; }
+        .sidebar-logo { width: 40px; height: 40px; margin-bottom: 32px; border-radius: var(--radius-md); overflow: hidden; }
+        .sidebar-logo img { width: 100%; height: 100%; object-fit: contain; }
+        .sidebar-nav { display: flex; flex-direction: column; gap: 8px; width: 100%; padding: 0 8px; }
+        .nav-item { display: flex; flex-direction: column; align-items: center; padding: 12px 8px; border-radius: var(--radius-lg); cursor: pointer; transition: all 0.2s ease; background: transparent; border: none; }
+        .nav-item svg { width: 20px; height: 20px; stroke: var(--color-text-secondary); stroke-width: 2; fill: none; margin-bottom: 6px; transition: all 0.2s ease; }
+        .nav-item span { font-family: var(--font-display); font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--color-text-secondary); transition: all 0.2s ease; }
+        .nav-item:hover { background: rgba(255,255,255,0.05); }
+        .nav-item:hover svg { stroke: var(--color-text-inverse); }
+        .nav-item:hover span { color: var(--color-text-inverse); }
+        .nav-item.active { background: var(--color-accent-muted); box-shadow: var(--glow-accent); }
+        .nav-item.active svg { stroke: var(--color-accent); }
+        .nav-item.active span { color: var(--color-accent); }
+
+        /* Crawler Bar */
+        .crawler-bar { position: fixed; top: 0; left: var(--sidebar-width); right: 0; height: 36px; background: var(--color-bg-secondary); border-bottom: 1px solid var(--color-border-primary); display: flex; align-items: center; padding: 0 16px; z-index: 100; cursor: pointer; }
+        .crawler-bar:hover { background: var(--color-bg-tertiary); }
+        .crawler-bar .sync-icon { width: 16px; height: 16px; margin-right: 8px; animation: spin 2s linear infinite; color: var(--color-accent); }
+        .crawler-bar .status { font-size: 12px; color: var(--color-text-secondary); flex: 1; }
+        .crawler-bar .progress { width: 120px; height: 4px; background: var(--color-bg-tertiary); border-radius: var(--radius-full); overflow: hidden; }
+        .crawler-bar .progress-fill { height: 100%; width: 65%; background: linear-gradient(90deg, var(--color-accent), var(--color-accent-light)); border-radius: var(--radius-full); position: relative; }
+        .crawler-bar .progress-fill::after { content: ''; position: absolute; top: 0; left: -100%; width: 100%; height: 100%; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent); animation: shimmer 1.5s infinite; }
+        @keyframes shimmer { 100% { left: 100%; } }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* Main Content */
+        .main { flex: 1; height: 100%; overflow-y: auto; padding-top: 36px; }
+        .view { display: none; min-height: calc(100vh - 36px); }
+        .view.active { display: block; }
+
+        /* Chrono View */
+        .chrono { display: none; flex-direction: column; align-items: center; justify-content: center; padding: 48px 24px; min-height: calc(100vh - 36px); }
+        .chrono.active { display: flex; }
+        .paused-badge { display: none; padding: 6px 16px; background: var(--color-warning); color: white; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; border-radius: var(--radius-full); margin-bottom: 16px; box-shadow: 0 0 16px rgba(202, 138, 4, 0.4); }
+        .paused-badge.visible { display: block; }
+
+        /* Split-Flap Display */
+        .flip-bezel { padding: 6px; background: linear-gradient(135deg, #FF4800 0%, #FF6B35 50%, #FF4800 100%); border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.5), 0 4px 8px rgba(0,0,0,0.3), 0 0 16px rgba(255,72,0,0.4), inset 0 1px 2px rgba(255,255,255,0.3), inset 0 -1px 2px rgba(0,0,0,0.5); }
+        .flip-inner { background: linear-gradient(180deg, #0a0a0a 0%, #141414 100%); padding: 24px 32px; border-radius: 8px; }
+        .flip-display { display: flex; align-items: center; gap: 8px; }
+        .digit-group { display: flex; gap: 4px; }
+        .flip-sep { font-family: var(--font-mono); font-size: 42px; font-weight: 600; color: #f5f5f5; text-shadow: 0 2px 4px rgba(0,0,0,0.5); padding: 0 4px; }
+        .flip-digit { position: relative; width: 48px; height: 72px; background: #1a1a1a; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-family: var(--font-mono); font-size: 42px; font-weight: 600; color: #f5f5f5; text-shadow: 0 1px 2px rgba(0,0,0,0.8); box-shadow: 0 2px 4px rgba(0,0,0,0.3), inset 0 1px 2px rgba(255,255,255,0.1), inset 0 -1px 2px rgba(0,0,0,0.5); overflow: hidden; perspective: 400px; }
+        .flip-digit::after { content: ''; position: absolute; left: 0; right: 0; top: 50%; height: 2px; background: linear-gradient(90deg, rgba(0,0,0,0.4), rgba(0,0,0,0.6), rgba(0,0,0,0.4)); transform: translateY(-50%); z-index: 10; }
+        .flip-digit .digit-value { position: relative; z-index: 5; }
+        .flip-digit.flipping .flip-top { animation: flipTop 0.3s ease-in forwards; }
+        .flip-digit.flipping .flip-bottom { animation: flipBottom 0.3s ease-out 0.15s forwards; }
+        @keyframes flipTop { 0% { transform: rotateX(0deg); } 100% { transform: rotateX(-90deg); } }
+        @keyframes flipBottom { 0% { transform: rotateX(90deg); } 100% { transform: rotateX(0deg); } }
+
+        /* Timer Controls */
+        .timer-controls { display: flex; gap: 12px; margin-top: 32px; width: 100%; max-width: 320px; }
+        .timer-btn { flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 14px 24px; border: none; border-radius: var(--radius-full); font-family: var(--font-display); font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; cursor: pointer; transition: all 0.15s ease-out; }
+        .timer-btn:hover { transform: translateY(-2px); }
+        .timer-btn:active { transform: scale(0.95); }
+        .timer-btn svg { width: 16px; height: 16px; fill: currentColor; }
+        .btn-start { background: var(--color-accent); color: white; box-shadow: var(--shadow-accent); }
+        .btn-start:hover { background: var(--color-accent-hover); box-shadow: 0 8px 24px -8px rgba(255,72,0,0.5); }
+        .btn-stop { background: var(--color-error); color: white; box-shadow: 0 4px 16px -4px rgba(220,38,38,0.25); }
+        .btn-pause { background: var(--color-warning); color: white; box-shadow: 0 4px 16px -4px rgba(202,138,4,0.25); }
+        .btn-resume { background: var(--color-accent); color: white; box-shadow: var(--shadow-accent); }
+        .hidden { display: none !important; }
+
+        /* Stopping Overlay */
+        .stopping { position: fixed; inset: 0; background: rgba(242,240,237,0.95); backdrop-filter: blur(8px); display: none; flex-direction: column; align-items: center; justify-content: center; z-index: 1000; }
+        .stopping.visible { display: flex; }
+        .stopping-spinner { width: 48px; height: 48px; border: 3px solid var(--color-bg-tertiary); border-top-color: var(--color-accent); border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 24px; }
+        .stopping-text { font-family: var(--font-display); font-size: 18px; font-weight: 600; margin-bottom: 8px; }
+        .stopping-sub { font-size: 13px; color: var(--color-text-secondary); }
+
+        /* Worklog View */
+        .worklog { padding: 24px; }
+        .worklog-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
+        .page-title { font-family: var(--font-display); font-size: 28px; font-weight: 700; }
+        .btn-export { display: flex; align-items: center; gap: 8px; padding: 10px 16px; background: var(--color-success); color: white; border: none; border-radius: var(--radius-full); font-family: var(--font-mono); font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.15s ease; }
+        .btn-export:hover { transform: translateY(-2px); box-shadow: 0 4px 16px -4px rgba(22,163,74,0.4); }
+        .btn-export svg { width: 14px; height: 14px; }
+
+        /* Week/Date Groups */
+        .week-group { margin-bottom: 32px; }
+        .week-header { position: sticky; top: 0; background: rgba(242,240,237,0.95); backdrop-filter: blur(8px); padding: 12px 0; border-bottom: 2px solid var(--color-border-secondary); display: flex; align-items: center; justify-content: space-between; z-index: 10; }
+        .week-label { font-family: var(--font-display); font-size: 14px; font-weight: 600; color: var(--color-text-secondary); }
+        .week-duration { font-family: var(--font-mono); font-size: 14px; font-weight: 600; color: var(--color-accent); }
+        .date-group { margin-top: 16px; }
+        .date-header { position: sticky; top: 52px; background: var(--color-bg-secondary); padding: 10px 16px; border-radius: var(--radius-lg); display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; z-index: 5; }
+        .date-label { font-family: var(--font-display); font-size: 13px; font-weight: 600; }
+        .date-duration { font-family: var(--font-mono); font-size: 13px; font-weight: 500; color: var(--color-accent); }
+
+        /* Entry Card */
+        .entry { background: var(--color-bg-secondary); border: 1px solid var(--color-border-primary); border-radius: var(--radius-lg); padding: 16px 20px; margin-bottom: 8px; cursor: pointer; transition: all 0.2s ease; display: flex; align-items: center; justify-content: space-between; }
+        .entry:hover { border-color: var(--color-accent); box-shadow: var(--shadow-md); background: var(--color-bg-tertiary); }
+        .entry-left { display: flex; flex-direction: column; gap: 6px; }
+        .entry-assign { display: flex; align-items: center; gap: 8px; }
+        .entry-assign .dot { width: 10px; height: 10px; border-radius: 50%; }
+        .entry-assign .jira-icon { width: 14px; height: 14px; color: var(--color-info); }
+        .entry-assign .name { font-weight: 600; font-size: 13px; }
+        .entry-assign .key { font-weight: 700; font-size: 12px; color: var(--color-info); }
+        .entry-assign .summary { font-size: 12px; color: var(--color-text-secondary); max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .entry-time { font-size: 12px; color: var(--color-text-secondary); }
+        .entry-desc { font-size: 12px; color: var(--color-text-tertiary); max-width: 400px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .entry-right { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+        .entry-dur { font-family: var(--font-mono); font-size: 16px; font-weight: 700; color: var(--color-accent); }
+        .entry-acts { font-size: 11px; color: var(--color-text-tertiary); }
+
+        /* Activity Details View */
+        .activity-details { padding: 24px; }
+        .activity-details-header { position: sticky; top: 0; background: rgba(242,240,237,0.95); backdrop-filter: blur(8px); display: flex; align-items: center; gap: 16px; padding: 12px 0; margin-bottom: 24px; z-index: 10; }
+        .btn-back { width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; background: var(--color-bg-secondary); border: 1px solid var(--color-border-primary); border-radius: var(--radius-lg); cursor: pointer; color: var(--color-text-secondary); transition: all 0.15s ease; }
+        .btn-back:hover { border-color: var(--color-accent); color: var(--color-accent); background: var(--color-bg-tertiary); }
+        .btn-back svg { width: 20px; height: 20px; }
+        .activity-details-title { flex: 1; font-family: var(--font-display); font-size: 24px; font-weight: 700; }
+        .btn-tempo { display: flex; align-items: center; gap: 8px; padding: 10px 20px; background: var(--color-accent); color: white; border: none; border-radius: var(--radius-full); font-family: var(--font-display); font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.15s ease; }
+        .btn-tempo:hover { background: var(--color-accent-hover); transform: translateY(-2px); box-shadow: var(--shadow-accent); }
+        .btn-tempo svg { width: 16px; height: 16px; }
+
+        /* Entry Summary Card */
+        .summary-card { background: var(--color-bg-secondary); border: 1px solid var(--color-border-primary); border-radius: var(--radius-2xl); padding: 24px; margin-bottom: 24px; }
+        .summary-row { display: flex; gap: 32px; padding-bottom: 20px; margin-bottom: 20px; border-bottom: 1px solid var(--color-border-primary); }
+        .summary-row:last-child { border-bottom: none; padding-bottom: 0; margin-bottom: 0; }
+        .summary-times { display: flex; flex-direction: column; gap: 8px; }
+        .summary-time-item { display: flex; align-items: center; gap: 12px; }
+        .summary-time-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--color-text-tertiary); width: 60px; }
+        .summary-time-value { font-family: var(--font-mono); font-size: 14px; font-weight: 500; }
+        .summary-duration { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+        .duration-value { font-family: var(--font-mono); font-size: 28px; font-weight: 700; color: var(--color-accent); }
+        .duration-edit { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; background: var(--color-bg-tertiary); border: none; border-radius: var(--radius-md); cursor: pointer; color: var(--color-text-secondary); transition: all 0.15s ease; }
+        .duration-edit:hover { background: var(--color-accent-muted); color: var(--color-accent); }
+        .duration-edit svg { width: 14px; height: 14px; }
+
+        /* Summary Sections */
+        .summary-section { margin-bottom: 20px; }
+        .summary-section:last-child { margin-bottom: 0; }
+        .summary-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--color-text-tertiary); margin-bottom: 8px; }
+        .bucket-display { display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: var(--color-bg-tertiary); border-radius: var(--radius-lg); cursor: pointer; transition: all 0.15s ease; }
+        .bucket-display:hover { background: var(--color-bg-quaternary); }
+        .bucket-display .dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+        .bucket-display .name { font-size: 14px; font-weight: 500; flex: 1; }
+        .bucket-display .chevron { width: 16px; height: 16px; color: var(--color-text-tertiary); }
+        .ai-badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; background: var(--color-info-muted); border-radius: var(--radius-full); font-size: 10px; font-weight: 600; color: var(--color-info); margin-left: 12px; }
+        .ai-badge svg { width: 12px; height: 12px; }
+
+        /* Tempo Account Section */
+        .tempo-section { display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: var(--color-bg-tertiary); border-radius: var(--radius-lg); }
+        .tempo-info { flex: 1; }
+        .tempo-name { font-size: 13px; font-weight: 500; }
+        .tempo-key { font-family: var(--font-mono); font-size: 11px; color: var(--color-text-secondary); }
+        .btn-change { padding: 6px 12px; background: transparent; border: 1px solid var(--color-border-primary); border-radius: var(--radius-full); font-family: var(--font-mono); font-size: 11px; font-weight: 500; color: var(--color-text-secondary); cursor: pointer; transition: all 0.15s ease; }
+        .btn-change:hover { border-color: var(--color-accent); color: var(--color-accent); }
+
+        /* Description Section */
+        .desc-wrapper { position: relative; }
+        .desc-textarea { width: 100%; padding: 12px 16px; background: var(--color-bg-tertiary); border: 2px solid transparent; border-radius: var(--radius-lg); font-family: var(--font-mono); font-size: 13px; line-height: 1.6; resize: none; transition: all 0.15s ease; }
+        .desc-textarea:focus { outline: none; border-color: var(--color-accent); background: var(--color-bg-secondary); }
+        .desc-textarea::placeholder { color: var(--color-text-tertiary); }
+        .btn-generate { position: absolute; top: 12px; right: 12px; display: flex; align-items: center; gap: 6px; padding: 6px 12px; background: var(--color-accent); color: white; border: none; border-radius: var(--radius-full); font-family: var(--font-mono); font-size: 11px; font-weight: 600; cursor: pointer; transition: all 0.15s ease; }
+        .btn-generate:hover { background: var(--color-accent-hover); }
+        .btn-generate svg { width: 12px; height: 12px; }
+
+        /* Window Activity Section */
+        .activity-section { background: var(--color-bg-secondary); border: 1px solid var(--color-border-primary); border-radius: var(--radius-2xl); padding: 24px; }
+        .activity-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+        .activity-title { font-family: var(--font-display); font-size: 16px; font-weight: 600; }
+        .btn-manual { display: flex; align-items: center; gap: 6px; padding: 8px 14px; background: transparent; border: 1px solid var(--color-border-primary); border-radius: var(--radius-full); font-family: var(--font-mono); font-size: 11px; font-weight: 500; color: var(--color-text-secondary); cursor: pointer; transition: all 0.15s ease; }
+        .btn-manual:hover { border-color: var(--color-accent); color: var(--color-accent); }
+        .btn-manual svg { width: 12px; height: 12px; }
+
+        /* App Groups */
+        .app-group { border: 1px solid var(--color-border-primary); border-radius: var(--radius-lg); margin-bottom: 12px; overflow: hidden; }
+        .app-group:last-child { margin-bottom: 0; }
+        .app-group-header { display: flex; align-items: center; gap: 12px; padding: 14px 16px; background: var(--color-bg-tertiary); cursor: pointer; transition: all 0.15s ease; }
+        .app-group-header:hover { background: var(--color-bg-quaternary); }
+        .app-group.expanded .app-group-header { border-bottom: 1px solid var(--color-border-primary); }
+        .app-icon { width: 32px; height: 32px; background: var(--color-bg-quaternary); border-radius: var(--radius-md); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: var(--color-text-secondary); flex-shrink: 0; }
+        .app-info { flex: 1; }
+        .app-name { font-size: 13px; font-weight: 600; }
+        .app-count { font-size: 11px; color: var(--color-text-tertiary); }
+        .app-duration { font-family: var(--font-mono); font-size: 14px; font-weight: 600; color: var(--color-accent); margin-right: 8px; }
+        .expand-arrow { width: 20px; height: 20px; color: var(--color-text-tertiary); transition: transform 0.2s ease; }
+        .app-group.expanded .expand-arrow { transform: rotate(180deg); }
+
+        /* Activity List */
+        .activity-list { display: none; padding: 8px; background: var(--color-bg-secondary); }
+        .app-group.expanded .activity-list { display: block; }
+        .activity-row { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: var(--radius-md); transition: background 0.15s ease; }
+        .activity-row:hover { background: var(--color-bg-tertiary); }
+        .activity-info { flex: 1; }
+        .activity-window { font-size: 12px; font-weight: 500; margin-bottom: 2px; }
+        .activity-timestamp { font-family: var(--font-mono); font-size: 10px; color: var(--color-text-tertiary); }
+        .screenshot-btn { display: flex; align-items: center; gap: 6px; padding: 4px 10px; background: var(--color-accent-muted); border: none; border-radius: var(--radius-full); font-size: 10px; font-weight: 600; color: var(--color-accent); cursor: pointer; transition: all 0.15s ease; }
+        .screenshot-btn:hover { background: var(--color-accent); color: white; }
+        .screenshot-btn svg { width: 12px; height: 12px; }
+        .activity-dur { font-family: var(--font-mono); font-size: 12px; font-weight: 600; color: var(--color-accent); }
+
+        /* Buckets View */
+        .buckets { padding: 24px; }
+        .buckets-tabs { display: flex; gap: 8px; margin-bottom: 24px; }
+        .bucket-tab { padding: 10px 20px; background: transparent; border: 1px solid var(--color-border-primary); border-radius: var(--radius-full); font-family: var(--font-display); font-size: 13px; font-weight: 600; color: var(--color-text-secondary); cursor: pointer; transition: all 0.2s ease; }
+        .bucket-tab:hover { border-color: var(--color-accent); color: var(--color-text-primary); }
+        .bucket-tab.active { background: var(--color-accent); border-color: var(--color-accent); color: white; box-shadow: var(--shadow-accent); }
+        .bucket-actions { display: flex; gap: 12px; margin-bottom: 24px; }
+        .btn-new { display: flex; align-items: center; gap: 8px; padding: 10px 20px; border-radius: var(--radius-full); font-family: var(--font-display); font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.15s ease; }
+        .btn-new:hover { transform: translateY(-2px); }
+        .btn-new svg { width: 14px; height: 14px; }
+        .btn-new.primary { background: var(--color-accent); color: white; border: none; box-shadow: var(--shadow-accent); }
+        .btn-new.secondary { background: transparent; color: var(--color-warning); border: 2px solid var(--color-warning); }
+        .btn-new.secondary:hover { background: var(--color-warning-muted); }
+
+        /* Bucket Tree */
+        .bucket-tree { display: flex; flex-direction: column; gap: 8px; }
+        .bucket-item { background: var(--color-bg-secondary); border: 1px solid var(--color-border-primary); border-radius: var(--radius-lg); padding: 14px 16px; display: flex; align-items: center; gap: 12px; cursor: pointer; transition: all 0.2s ease; }
+        .bucket-item:hover { border-color: var(--color-accent); box-shadow: var(--shadow-sm); }
+        .bucket-color { width: 14px; height: 14px; border-radius: 50%; flex-shrink: 0; }
+        .bucket-name { flex: 1; font-size: 14px; font-weight: 500; }
+        .bucket-btns { display: flex; gap: 4px; opacity: 0; transition: opacity 0.15s ease; }
+        .bucket-item:hover .bucket-btns { opacity: 1; }
+        .bucket-btns button { width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; background: transparent; border: none; border-radius: var(--radius-md); cursor: pointer; color: var(--color-text-secondary); transition: all 0.15s ease; }
+        .bucket-btns button:hover { background: var(--color-bg-tertiary); color: var(--color-text-primary); }
+        .bucket-btns button.delete:hover { background: var(--color-error-muted); color: var(--color-error); }
+        .bucket-btns button svg { width: 14px; height: 14px; }
+
+        /* Jira Section */
+        .jira-section { display: none; }
+        .jira-section.active { display: block; }
+        .jira-tabs { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+        .jira-tab { padding: 8px 16px; background: transparent; border: 1px solid var(--color-border-primary); border-radius: var(--radius-full); font-size: 12px; font-weight: 500; color: var(--color-text-secondary); cursor: pointer; transition: all 0.15s ease; }
+        .jira-tab:hover { border-color: var(--color-info); color: var(--color-info); }
+        .jira-tab.active { background: var(--color-info); border-color: var(--color-info); color: white; }
+        .jira-list { display: flex; flex-direction: column; gap: 8px; }
+        .jira-card { background: var(--color-bg-secondary); border: 1px solid var(--color-border-primary); border-radius: var(--radius-lg); padding: 14px 16px; cursor: pointer; transition: all 0.2s ease; }
+        .jira-card:hover { border-color: var(--color-info); box-shadow: var(--shadow-sm); }
+        .jira-card .header { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+        .jira-card .key { font-family: var(--font-mono); font-weight: 700; font-size: 13px; color: var(--color-info); }
+        .jira-card .type { padding: 2px 8px; background: var(--color-surface-dark); color: var(--color-text-inverse); border-radius: var(--radius-sm); font-size: 10px; font-weight: 600; text-transform: uppercase; }
+        .jira-card .project { font-size: 11px; color: var(--color-text-tertiary); }
+        .jira-card .summary { font-size: 13px; line-height: 1.4; }
+
+        /* Settings View */
+        .settings { padding: 24px; max-width: 640px; }
+        .settings-section { margin-bottom: 32px; }
+        .settings-section-title { font-family: var(--font-display); font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--color-text-secondary); margin-bottom: 16px; padding-bottom: 8px; border-bottom: 1px solid var(--color-border-primary); }
+        .settings-card { background: var(--color-bg-secondary); border: 1px solid var(--color-border-primary); border-radius: var(--radius-lg); padding: 20px; margin-bottom: 12px; }
+        .settings-row { display: flex; align-items: center; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid var(--color-border-primary); }
+        .settings-row:last-child { border-bottom: none; }
+        .settings-label { font-size: 13px; font-weight: 500; }
+        .settings-desc { font-size: 12px; color: var(--color-text-secondary); margin-top: 4px; }
+
+        /* Account Card */
+        .account-card { display: flex; align-items: center; gap: 16px; }
+        .account-avatar { width: 48px; height: 48px; background: var(--color-accent-muted); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-family: var(--font-display); font-size: 18px; font-weight: 700; color: var(--color-accent); }
+        .account-info { flex: 1; }
+        .account-email { font-weight: 600; margin-bottom: 4px; }
+        .account-plan { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; background: var(--color-warning-muted); border-radius: var(--radius-full); font-size: 11px; font-weight: 700; color: var(--color-warning); }
+        .account-btns { display: flex; gap: 8px; }
+        .btn-settings { padding: 8px 16px; border-radius: var(--radius-full); font-family: var(--font-mono); font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.15s ease; }
+        .btn-settings.primary { background: var(--color-accent); color: white; border: none; }
+        .btn-settings.primary:hover { background: var(--color-accent-hover); }
+        .btn-settings.secondary { background: transparent; color: var(--color-text-secondary); border: 1px solid var(--color-border-primary); }
+        .btn-settings.secondary:hover { border-color: var(--color-text-secondary); color: var(--color-text-primary); }
+
+        /* Toggle Switch */
+        .toggle { position: relative; width: 44px; height: 24px; background: var(--color-bg-tertiary); border-radius: var(--radius-full); cursor: pointer; transition: all 0.2s ease; }
+        .toggle.active { background: var(--color-accent); }
+        .toggle::after { content: ''; position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; background: white; border-radius: 50%; box-shadow: var(--shadow-sm); transition: all 0.2s ease; }
+        .toggle.active::after { left: 22px; }
+
+        /* Select */
+        .settings-select { padding: 8px 12px; background: var(--color-bg-tertiary); border: 1px solid var(--color-border-primary); border-radius: var(--radius-md); font-family: var(--font-mono); font-size: 13px; cursor: pointer; min-width: 120px; }
+        .settings-select:focus { outline: none; border-color: var(--color-accent); }
+
+        /* Integration Card */
+        .integration { display: flex; align-items: center; gap: 16px; padding: 16px; background: var(--color-bg-secondary); border: 1px solid var(--color-border-primary); border-radius: var(--radius-lg); margin-bottom: 12px; }
+        .integration-icon { width: 40px; height: 40px; background: var(--color-info-muted); border-radius: var(--radius-md); display: flex; align-items: center; justify-content: center; }
+        .integration-icon svg { width: 20px; height: 20px; color: var(--color-info); }
+        .integration-info { flex: 1; }
+        .integration-name { font-weight: 600; margin-bottom: 4px; display: flex; align-items: center; gap: 8px; }
+        .integration-status { padding: 2px 8px; border-radius: var(--radius-sm); font-size: 10px; font-weight: 700; text-transform: uppercase; }
+        .integration-status.connected { background: var(--color-success-muted); color: var(--color-success); }
+        .integration-status.disabled { background: var(--color-bg-tertiary); color: var(--color-text-tertiary); }
+        .integration-detail { font-size: 12px; color: var(--color-text-secondary); }
+        .btn-configure { padding: 8px 16px; background: transparent; border: 1px solid var(--color-border-primary); border-radius: var(--radius-full); font-family: var(--font-mono); font-size: 12px; font-weight: 500; color: var(--color-text-secondary); cursor: pointer; transition: all 0.15s ease; }
+        .btn-configure:hover { border-color: var(--color-accent); color: var(--color-accent); }
+
+        /* Permission Card */
+        .permission { display: flex; align-items: center; gap: 12px; padding: 12px; background: var(--color-bg-tertiary); border-radius: var(--radius-md); margin-bottom: 8px; }
+        .permission-icon { width: 32px; height: 32px; background: var(--color-success-muted); border-radius: var(--radius-md); display: flex; align-items: center; justify-content: center; }
+        .permission-icon svg { width: 16px; height: 16px; color: var(--color-success); }
+        .permission-info { flex: 1; }
+        .permission-name { font-size: 13px; font-weight: 500; }
+        .permission-status { font-size: 11px; color: var(--color-success); }
+
+        /* Modals */
+        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); display: none; align-items: center; justify-content: center; z-index: 1000; padding: 24px; }
+        .modal-overlay.visible { display: flex; }
+        .modal { background: var(--color-bg-secondary); border-radius: var(--radius-2xl); width: 100%; max-width: 420px; max-height: 80vh; overflow: hidden; animation: modalIn 0.2s ease-out; }
+        @keyframes modalIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+        .modal-header { display: flex; align-items: center; justify-content: space-between; padding: 20px 24px; border-bottom: 1px solid var(--color-border-primary); }
+        .modal-title { font-family: var(--font-display); font-size: 18px; font-weight: 700; }
+        .modal-close { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; background: transparent; border: none; border-radius: var(--radius-md); cursor: pointer; color: var(--color-text-secondary); transition: all 0.15s ease; }
+        .modal-close:hover { background: var(--color-bg-tertiary); color: var(--color-text-primary); }
+        .modal-close svg { width: 18px; height: 18px; }
+        .modal-body { padding: 24px; overflow-y: auto; max-height: calc(80vh - 140px); }
+        .modal-footer { display: flex; justify-content: flex-end; gap: 12px; padding: 16px 24px; border-top: 1px solid var(--color-border-primary); }
+        .btn-modal { padding: 10px 20px; border-radius: var(--radius-full); font-family: var(--font-display); font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.15s ease; }
+        .btn-modal.cancel { background: transparent; border: 1px solid var(--color-border-primary); color: var(--color-text-secondary); }
+        .btn-modal.cancel:hover { border-color: var(--color-text-secondary); color: var(--color-text-primary); }
+        .btn-modal.confirm { background: var(--color-accent); border: none; color: white; }
+        .btn-modal.confirm:hover { background: var(--color-accent-hover); }
+
+        /* Form Elements */
+        .form-group { margin-bottom: 20px; }
+        .form-label { display: block; font-size: 12px; font-weight: 600; color: var(--color-text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+        .form-input { width: 100%; padding: 12px 16px; background: var(--color-bg-tertiary); border: 2px solid transparent; border-radius: var(--radius-lg); font-family: var(--font-mono); font-size: 14px; transition: all 0.15s ease; }
+        .form-input:focus { outline: none; border-color: var(--color-accent); background: var(--color-bg-secondary); }
+
+        /* Color Picker */
+        .color-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
+        .color-swatch { aspect-ratio: 1; border-radius: var(--radius-md); cursor: pointer; transition: all 0.15s ease; border: 3px solid transparent; }
+        .color-swatch:hover { transform: scale(1.1); }
+        .color-swatch.selected { border-color: var(--color-text-primary); transform: scale(1.1); box-shadow: var(--shadow-md); }
+
+        /* Assignment Picker */
+        .assign-search { margin-bottom: 16px; }
+        .assign-search input { width: 100%; padding: 12px 16px; background: var(--color-bg-tertiary); border: 1px solid var(--color-border-primary); border-radius: var(--radius-lg); font-family: var(--font-mono); font-size: 14px; }
+        .assign-search input:focus { outline: none; border-color: var(--color-accent); }
+        .assign-section { margin-bottom: 20px; }
+        .assign-section-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--color-text-tertiary); margin-bottom: 8px; }
+        .assign-option { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: var(--radius-md); cursor: pointer; transition: all 0.15s ease; }
+        .assign-option:hover { background: var(--color-bg-tertiary); }
+        .assign-option.selected { background: var(--color-accent-muted); }
+        .assign-option .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+        .assign-option .name { font-size: 13px; flex: 1; }
+        .no-assign { color: var(--color-text-secondary); font-style: italic; }
+
+        /* Toasts */
+        .toast-container { position: fixed; bottom: 24px; right: 24px; z-index: 2000; display: flex; flex-direction: column; gap: 8px; }
+        .toast { display: flex; align-items: center; gap: 12px; padding: 14px 18px; background: var(--color-bg-secondary); border: 1px solid var(--color-border-primary); border-radius: var(--radius-lg); box-shadow: var(--shadow-xl); animation: toastIn 0.3s ease-out; min-width: 280px; }
+        @keyframes toastIn { from { opacity: 0; transform: translateX(100%); } to { opacity: 1; transform: translateX(0); } }
+        .toast.hiding { animation: toastOut 0.2s ease-out forwards; }
+        @keyframes toastOut { to { opacity: 0; transform: translateX(100%); } }
+        .toast-icon { width: 20px; height: 20px; flex-shrink: 0; }
+        .toast.success .toast-icon { color: var(--color-success); }
+        .toast.error .toast-icon { color: var(--color-error); }
+        .toast.warning .toast-icon { color: var(--color-warning); }
+        .toast.info .toast-icon { color: var(--color-info); }
+        .toast-msg { flex: 1; font-size: 13px; }
+        .toast-close { width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; background: transparent; border: none; border-radius: var(--radius-sm); cursor: pointer; color: var(--color-text-tertiary); transition: all 0.15s ease; }
+        .toast-close:hover { background: var(--color-bg-tertiary); color: var(--color-text-primary); }
+        .toast-close svg { width: 14px; height: 14px; }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: var(--color-border-secondary); border-radius: var(--radius-full); }
+        ::-webkit-scrollbar-thumb:hover { background: var(--color-text-tertiary); }
+    </style>
+</head>
+<body>
+    <div class="app">
+        <!-- Sidebar -->
+        <nav class="sidebar">
+            <div class="sidebar-logo">
+                <img src="https://cdn.prod.website-files.com/6757397e5ab5da97c081588c/6967024c5448af39076c525c_ClearicalIcon.png" alt="Clearical">
+            </div>
+            <div class="sidebar-nav">
+                <button class="nav-item active" data-view="chrono">
+                    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                    <span>Chrono</span>
+                </button>
+                <button class="nav-item" data-view="worklog">
+                    <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                    <span>Worklog</span>
+                </button>
+                <button class="nav-item" data-view="buckets">
+                    <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+                    <span>Buckets</span>
+                </button>
+                <button class="nav-item" data-view="settings">
+                    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                    <span>Settings</span>
+                </button>
+            </div>
+        </nav>
+
+        <!-- Crawler Bar -->
+        <div class="crawler-bar">
+            <svg class="sync-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M23 4v6h-6"/><path d="M1 20v-6h6"/>
+                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+            </svg>
+            <span class="status">Syncing Jira issues... 65%</span>
+            <div class="progress"><div class="progress-fill"></div></div>
+        </div>
+
+        <!-- Main Content -->
+        <main class="main">
+            <!-- Chrono View -->
+            <div class="view chrono active" id="chronoView">
+                <div class="paused-badge" id="pausedBadge">Paused</div>
+                <div class="flip-bezel">
+                    <div class="flip-inner">
+                        <div class="flip-display" id="timerDisplay">
+                            <div class="digit-group"><div class="flip-digit">0</div><div class="flip-digit">0</div></div>
+                            <span class="flip-sep">:</span>
+                            <div class="digit-group"><div class="flip-digit">0</div><div class="flip-digit">0</div></div>
+                            <span class="flip-sep">:</span>
+                            <div class="digit-group"><div class="flip-digit">0</div><div class="flip-digit">0</div></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="timer-controls">
+                    <button class="timer-btn btn-start" id="btnStart"><svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>Start</button>
+                    <button class="timer-btn btn-stop hidden" id="btnStop"><svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12"/></svg>Stop</button>
+                    <button class="timer-btn btn-pause hidden" id="btnPause"><svg viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>Pause</button>
+                    <button class="timer-btn btn-resume hidden" id="btnResume"><svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>Resume</button>
+                </div>
+            </div>
+
+            <!-- Worklog View -->
+            <div class="view worklog" id="worklogView">
+                <div class="worklog-header">
+                    <h1 class="page-title">Worklog</h1>
+                    <button class="btn-export"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Export CSV</button>
+                </div>
+                <div id="worklogContent"></div>
+            </div>
+
+            <!-- Activity Details View -->
+            <div class="view activity-details" id="activityDetailsView">
+                <div class="activity-details-header">
+                    <button class="btn-back" onclick="goBackToWorklog()">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+                    </button>
+                    <h1 class="activity-details-title">Activity Details</h1>
+                    <button class="btn-tempo" onclick="showToast('info', 'Opening Tempo...')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                        Log to Tempo
+                    </button>
+                </div>
+                <div id="activityDetailsContent"></div>
+            </div>
+
+            <!-- Buckets View -->
+            <div class="view buckets" id="bucketsView">
+                <h1 class="page-title" style="margin-bottom: 16px;">Manage Buckets</h1>
+                <div class="buckets-tabs">
+                    <button class="bucket-tab active" data-tab="buckets">My Buckets</button>
+                    <button class="bucket-tab" data-tab="jira">Jira Issues</button>
+                </div>
+                <div id="bucketsSection">
+                    <div class="bucket-actions">
+                        <button class="btn-new primary" id="btnNewBucket"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>New Bucket</button>
+                        <button class="btn-new secondary"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>New Folder</button>
+                    </div>
+                    <div class="bucket-tree" id="bucketTree"></div>
+                </div>
+                <div class="jira-section" id="jiraSection">
+                    <div class="jira-tabs">
+                        <button class="jira-tab active">Assigned to Me</button>
+                        <button class="jira-tab">PROJ</button>
+                        <button class="jira-tab">DEV</button>
+                        <button class="jira-tab">Search</button>
+                    </div>
+                    <div class="jira-list" id="jiraList"></div>
+                </div>
+            </div>
+
+            <!-- Settings View -->
+            <div class="view settings" id="settingsView">
+                <h1 class="page-title" style="margin-bottom: 32px;">Settings</h1>
+
+                <div class="settings-section">
+                    <h2 class="settings-section-title">Account</h2>
+                    <div class="settings-card">
+                        <div class="account-card">
+                            <div class="account-avatar">JD</div>
+                            <div class="account-info">
+                                <div class="account-email">john.doe@company.com</div>
+                                <span class="account-plan"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>Trial · 12 days left</span>
+                            </div>
+                            <div class="account-btns">
+                                <button class="btn-settings primary">Upgrade</button>
+                                <button class="btn-settings secondary">Sign Out</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="settings-section">
+                    <h2 class="settings-section-title">Time Rounding</h2>
+                    <div class="settings-card">
+                        <div class="settings-row">
+                            <div><div class="settings-label">Round Time Entries</div><div class="settings-desc">Automatically round duration to nearest interval</div></div>
+                            <select class="settings-select"><option>1 minute</option><option>5 minutes</option><option selected>15 minutes</option><option>30 minutes</option></select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="settings-section">
+                    <h2 class="settings-section-title">Activity Filtering</h2>
+                    <div class="settings-card">
+                        <div class="settings-row">
+                            <div><div class="settings-label">Minimum Activity Duration</div><div class="settings-desc">Ignore activities shorter than this</div></div>
+                            <div style="display: flex; align-items: center; gap: 8px;"><input type="number" value="5" min="0" max="60" style="width: 60px; padding: 8px; background: var(--color-bg-tertiary); border: 1px solid var(--color-border-primary); border-radius: var(--radius-md); font-family: var(--font-mono); font-size: 13px; text-align: center;"><span style="font-size: 12px; color: var(--color-text-secondary);">seconds</span></div>
+                        </div>
+                        <div class="settings-row">
+                            <div><div class="settings-label">Gap Threshold</div><div class="settings-desc">Merge activities separated by less than</div></div>
+                            <div style="display: flex; align-items: center; gap: 8px;"><input type="number" value="30" min="0" max="300" style="width: 60px; padding: 8px; background: var(--color-bg-tertiary); border: 1px solid var(--color-border-primary); border-radius: var(--radius-md); font-family: var(--font-mono); font-size: 13px; text-align: center;"><span style="font-size: 12px; color: var(--color-text-secondary);">seconds</span></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="settings-section">
+                    <h2 class="settings-section-title">AI Features</h2>
+                    <div class="settings-card">
+                        <div class="settings-row">
+                            <div><div class="settings-label">Auto-generate Descriptions</div><div class="settings-desc">AI creates activity summaries from screenshots</div></div>
+                            <div class="toggle active" data-toggle="ai-desc"></div>
+                        </div>
+                        <div class="settings-row">
+                            <div><div class="settings-label">Auto-assign Work</div><div class="settings-desc">AI suggests bucket assignments based on activity</div></div>
+                            <div class="toggle active" data-toggle="ai-assign"></div>
+                        </div>
+                        <div class="settings-row">
+                            <div><div class="settings-label">Auto-select Tempo Accounts</div><div class="settings-desc">AI matches activities to Tempo accounts</div></div>
+                            <div class="toggle" data-toggle="ai-tempo"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="settings-section">
+                    <h2 class="settings-section-title">Integrations</h2>
+                    <div class="integration">
+                        <div class="integration-icon"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M11.571 11.513H0a5.218 5.218 0 0 0 5.232 5.215h2.13v2.057A5.215 5.215 0 0 0 12.575 24V12.518a1.005 1.005 0 0 0-1.005-1.005z"/><path d="M5.024 5.758a5.218 5.218 0 0 0 5.232 5.215h2.13v2.057a5.215 5.215 0 0 0 5.213 5.214V7.759a1.005 1.005 0 0 0-1.005-1.005H5.024z" fill-opacity=".85"/></svg></div>
+                        <div class="integration-info"><div class="integration-name">Jira<span class="integration-status connected">Connected</span></div><div class="integration-detail">company.atlassian.net</div></div>
+                        <button class="btn-configure">Configure</button>
+                    </div>
+                    <div class="integration">
+                        <div class="integration-icon" style="background: var(--color-accent-muted)"><svg viewBox="0 0 24 24" fill="none" stroke="var(--color-accent)" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
+                        <div class="integration-info"><div class="integration-name">Tempo<span class="integration-status connected">Connected</span></div><div class="integration-detail">US Region</div></div>
+                        <button class="btn-configure">Configure</button>
+                    </div>
+                </div>
+
+                <div class="settings-section">
+                    <h2 class="settings-section-title">Permissions</h2>
+                    <div class="settings-card">
+                        <div class="permission">
+                            <div class="permission-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></div>
+                            <div class="permission-info"><div class="permission-name">Screen Recording</div><div class="permission-status">Granted</div></div>
+                        </div>
+                        <div class="permission">
+                            <div class="permission-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg></div>
+                            <div class="permission-info"><div class="permission-name">Accessibility</div><div class="permission-status">Granted</div></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="settings-section">
+                    <h2 class="settings-section-title">About</h2>
+                    <div class="settings-card">
+                        <div style="display: flex; align-items: center; gap: 16px;">
+                            <span style="font-family: var(--font-mono); font-size: 14px; font-weight: 600;">Clearical v1.3.0</span>
+                            <button class="btn-configure">Check for Updates</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Stopping Overlay -->
+    <div class="stopping" id="stoppingOverlay">
+        <div class="stopping-spinner"></div>
+        <div class="stopping-text">Finalizing activity</div>
+        <div class="stopping-sub">Processing screenshots and analysis...</div>
+    </div>
+
+    <!-- Create Bucket Modal -->
+    <div class="modal-overlay" id="createBucketModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 class="modal-title">Create Bucket</h3>
+                <button class="modal-close" onclick="closeModal('createBucketModal')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group"><label class="form-label">Bucket Name</label><input type="text" class="form-input" id="newBucketName" placeholder="Enter bucket name..."></div>
+                <div class="form-group">
+                    <label class="form-label">Color</label>
+                    <div class="color-grid" id="colorPicker">
+                        <div class="color-swatch selected" style="background: #3B82F6" data-color="#3B82F6"></div>
+                        <div class="color-swatch" style="background: #22C55E" data-color="#22C55E"></div>
+                        <div class="color-swatch" style="background: #EAB308" data-color="#EAB308"></div>
+                        <div class="color-swatch" style="background: #F97316" data-color="#F97316"></div>
+                        <div class="color-swatch" style="background: #EF4444" data-color="#EF4444"></div>
+                        <div class="color-swatch" style="background: #A855F7" data-color="#A855F7"></div>
+                        <div class="color-swatch" style="background: #EC4899" data-color="#EC4899"></div>
+                        <div class="color-swatch" style="background: #06B6D4" data-color="#06B6D4"></div>
+                        <div class="color-swatch" style="background: #14B8A6" data-color="#14B8A6"></div>
+                        <div class="color-swatch" style="background: #6366F1" data-color="#6366F1"></div>
+                        <div class="color-swatch" style="background: #84CC16" data-color="#84CC16"></div>
+                        <div class="color-swatch" style="background: #F59E0B" data-color="#F59E0B"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-modal cancel" onclick="closeModal('createBucketModal')">Cancel</button>
+                <button class="btn-modal confirm" onclick="createBucket()">Create Bucket</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <script>
+        // Data
+        const data = {
+            buckets: [
+                { id: 1, name: 'Development', color: '#3B82F6' },
+                { id: 2, name: 'Meetings', color: '#EAB308' },
+                { id: 3, name: 'Code Review', color: '#22C55E' },
+                { id: 4, name: 'Research', color: '#A855F7' }
+            ],
+            jiraIssues: [
+                { key: 'PROJ-123', summary: 'Implement user authentication flow', type: 'Story', project: 'Project Alpha' },
+                { key: 'PROJ-456', summary: 'Fix dashboard loading performance', type: 'Bug', project: 'Project Alpha' },
+                { key: 'PROJ-789', summary: 'Add export functionality', type: 'Task', project: 'Project Alpha' },
+                { key: 'DEV-101', summary: 'Refactor API endpoints', type: 'Story', project: 'Development' },
+                { key: 'DEV-202', summary: 'Update documentation', type: 'Task', project: 'Development' }
+            ],
+            entries: []
+        };
+
+        // Generate entries
+        const now = new Date();
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
+
+        data.entries = [
+            { id: 1, date: today, startTime: new Date(today.getTime() + 9*3600000), endTime: new Date(today.getTime() + 11.5*3600000), duration: 2.5*3600000, assignment: { type: 'bucket', bucket: data.buckets[0], jira: data.jiraIssues[0] }, description: 'Implemented login form validation and error handling for the authentication flow', activities: 12, aiAssigned: true },
+            { id: 2, date: today, startTime: new Date(today.getTime() + 13*3600000), endTime: new Date(today.getTime() + 14.75*3600000), duration: 1.75*3600000, assignment: { type: 'bucket', bucket: data.buckets[2] }, description: 'Reviewed PR #342 - Database optimization changes', activities: 8, aiAssigned: false },
+            { id: 3, date: yesterday, startTime: new Date(yesterday.getTime() + 10*3600000), endTime: new Date(yesterday.getTime() + 12*3600000), duration: 2*3600000, assignment: { type: 'bucket', bucket: data.buckets[1] }, description: 'Sprint planning and backlog refinement session', activities: 4, aiAssigned: false },
+            { id: 4, date: yesterday, startTime: new Date(yesterday.getTime() + 14*3600000), endTime: new Date(yesterday.getTime() + 17.5*3600000), duration: 3.5*3600000, assignment: { type: 'bucket', bucket: data.buckets[0], jira: data.jiraIssues[3] }, description: 'Refactored user service to improve maintainability and added unit tests', activities: 18, aiAssigned: true }
+        ];
+
+        // State
+        let timer = { running: false, paused: false, seconds: 0, interval: null, startTime: null };
+        let selectedColor = '#3B82F6';
+        let selectedEntry = null;
+        let expandedApps = new Set();
+
+        // Navigation
+        document.querySelectorAll('.nav-item').forEach(item => {
+            item.addEventListener('click', () => {
+                document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+                item.classList.add('active');
+                document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+                document.getElementById(item.dataset.view + 'View').classList.add('active');
+            });
+        });
+
+        // Timer
+        function updateTimerDisplay() {
+            const h = Math.floor(timer.seconds / 3600);
+            const m = Math.floor((timer.seconds % 3600) / 60);
+            const s = timer.seconds % 60;
+            const digits = document.querySelectorAll('.flip-digit');
+            const vals = [Math.floor(h/10), h%10, Math.floor(m/10), m%10, Math.floor(s/10), s%10];
+            digits.forEach((d, i) => {
+                if (d.textContent !== String(vals[i])) {
+                    d.classList.add('flipping');
+                    setTimeout(() => {
+                        d.textContent = vals[i];
+                        d.classList.remove('flipping');
+                    }, 150);
+                }
+            });
+        }
+
+        function startTimer() {
+            timer.running = true; timer.paused = false; timer.startTime = new Date();
+            document.getElementById('btnStart').classList.add('hidden');
+            document.getElementById('btnStop').classList.remove('hidden');
+            document.getElementById('btnPause').classList.remove('hidden');
+            document.getElementById('btnResume').classList.add('hidden');
+            document.getElementById('pausedBadge').classList.remove('visible');
+            timer.interval = setInterval(() => { timer.seconds++; updateTimerDisplay(); }, 1000);
+            showToast('success', 'Timer started');
+        }
+
+        function stopTimer() {
+            document.getElementById('stoppingOverlay').classList.add('visible');
+            setTimeout(() => {
+                clearInterval(timer.interval);
+                const entry = { id: data.entries.length + 1, date: today, startTime: timer.startTime, endTime: new Date(), duration: timer.seconds * 1000, assignment: { type: 'bucket', bucket: data.buckets[0] }, description: 'Working on task', activities: Math.floor(Math.random() * 10) + 5, aiAssigned: false };
+                data.entries.unshift(entry);
+                timer.running = false; timer.paused = false; timer.seconds = 0; updateTimerDisplay();
+                document.getElementById('btnStart').classList.remove('hidden');
+                document.getElementById('btnStop').classList.add('hidden');
+                document.getElementById('btnPause').classList.add('hidden');
+                document.getElementById('btnResume').classList.add('hidden');
+                document.getElementById('pausedBadge').classList.remove('visible');
+                document.getElementById('stoppingOverlay').classList.remove('visible');
+                renderWorklog();
+                showToast('success', 'Activity saved');
+            }, 1500);
+        }
+
+        function pauseTimer() {
+            timer.paused = true; clearInterval(timer.interval);
+            document.getElementById('btnPause').classList.add('hidden');
+            document.getElementById('btnResume').classList.remove('hidden');
+            document.getElementById('pausedBadge').classList.add('visible');
+            showToast('info', 'Timer paused');
+        }
+
+        function resumeTimer() {
+            timer.paused = false;
+            document.getElementById('btnPause').classList.remove('hidden');
+            document.getElementById('btnResume').classList.add('hidden');
+            document.getElementById('pausedBadge').classList.remove('visible');
+            timer.interval = setInterval(() => { timer.seconds++; updateTimerDisplay(); }, 1000);
+            showToast('success', 'Timer resumed');
+        }
+
+        document.getElementById('btnStart').addEventListener('click', startTimer);
+        document.getElementById('btnStop').addEventListener('click', stopTimer);
+        document.getElementById('btnPause').addEventListener('click', pauseTimer);
+        document.getElementById('btnResume').addEventListener('click', resumeTimer);
+
+        // Worklog
+        function formatTime(date) { return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }); }
+        function formatDuration(ms) { const h = Math.floor(ms / 3600000); const m = Math.floor((ms % 3600000) / 60000); return h > 0 ? `${h}h ${m}m` : `${m}m`; }
+        function formatElapsed(ms) { const h = Math.floor(ms / 3600000); const m = Math.floor((ms % 3600000) / 60000); const s = Math.floor((ms % 60000) / 1000); return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`; }
+        function formatDateLabel(date) { if (date.toDateString() === today.toDateString()) return 'Today'; if (date.toDateString() === yesterday.toDateString()) return 'Yesterday'; return date.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' }); }
+
+        function openActivityDetails(id) {
+            selectedEntry = data.entries.find(e => e.id === id);
+            expandedApps = new Set(['VS Code']);
+            document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+            document.getElementById('activityDetailsView').classList.add('active');
+            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+            document.querySelector('[data-view="worklog"]').classList.add('active');
+            renderActivityDetails();
+        }
+
+        function goBackToWorklog() {
+            selectedEntry = null;
+            document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+            document.getElementById('worklogView').classList.add('active');
+        }
+
+        function toggleAppGroup(appName) {
+            if (expandedApps.has(appName)) {
+                expandedApps.delete(appName);
+            } else {
+                expandedApps.add(appName);
+            }
+            renderActivityDetails();
+        }
+
+        function renderActivityDetails() {
+            if (!selectedEntry) return;
+            const e = selectedEntry;
+            const assignName = e.assignment.jira ? e.assignment.jira.summary : e.assignment.bucket ? e.assignment.bucket.name : 'No assignment';
+            const bucketColor = e.assignment.bucket ? e.assignment.bucket.color : '#8C877D';
+            const bucketName = e.assignment.bucket ? e.assignment.bucket.name : 'No bucket';
+
+            const apps = [
+                { name: 'VS Code', icon: 'VS', time: Math.floor(e.duration * 0.6), activities: [
+                    { window: 'src/components/Auth.tsx', time: '9:15 AM', duration: Math.floor(e.duration * 0.3), screenshots: 4 },
+                    { window: 'src/services/api.ts', time: '9:45 AM', duration: Math.floor(e.duration * 0.2), screenshots: 3 },
+                    { window: 'package.json', time: '10:30 AM', duration: Math.floor(e.duration * 0.1), screenshots: 1 }
+                ]},
+                { name: 'Chrome', icon: 'CR', time: Math.floor(e.duration * 0.25), activities: [
+                    { window: 'Stack Overflow - React hooks', time: '9:20 AM', duration: Math.floor(e.duration * 0.15), screenshots: 2 },
+                    { window: 'GitHub - Pull Request #342', time: '10:00 AM', duration: Math.floor(e.duration * 0.1), screenshots: 2 }
+                ]},
+                { name: 'Terminal', icon: 'TM', time: Math.floor(e.duration * 0.15), activities: [
+                    { window: 'npm run dev', time: '9:10 AM', duration: Math.floor(e.duration * 0.15), screenshots: 0 }
+                ]}
+            ];
+
+            const html = `
+                <div class="summary-card">
+                    <div class="summary-row">
+                        <div class="summary-times">
+                            <div class="summary-time-item">
+                                <span class="summary-time-label">Start</span>
+                                <span class="summary-time-value">${formatTime(e.startTime)}</span>
+                            </div>
+                            <div class="summary-time-item">
+                                <span class="summary-time-label">End</span>
+                                <span class="summary-time-value">${formatTime(e.endTime)}</span>
+                            </div>
+                            <div class="summary-time-item">
+                                <span class="summary-time-label">Elapsed</span>
+                                <span class="summary-time-value">${formatElapsed(e.duration)}</span>
+                            </div>
+                        </div>
+                        <div class="summary-duration">
+                            <span class="duration-value">${formatDuration(e.duration)}</span>
+                            <button class="duration-edit" onclick="showToast('info', 'Edit duration')">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="summary-section">
+                        <div class="summary-label">Bucket</div>
+                        <div class="bucket-display" onclick="showToast('info', 'Open bucket picker')">
+                            <div class="dot" style="background: ${bucketColor}"></div>
+                            <span class="name">${bucketName}</span>
+                            ${e.aiAssigned ? `<span class="ai-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>AI Selected</span>` : ''}
+                            <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                        </div>
+                    </div>
+
+                    ${e.assignment.jira ? `
+                    <div class="summary-section">
+                        <div class="summary-label">Tempo Account</div>
+                        <div class="tempo-section">
+                            <div class="tempo-info">
+                                <div class="tempo-name">Engineering - Development</div>
+                                <div class="tempo-key">ENG-DEV-001</div>
+                            </div>
+                            <button class="btn-change" onclick="showToast('info', 'Change account')">Change</button>
+                        </div>
+                    </div>
+                    ` : ''}
+
+                    <div class="summary-section">
+                        <div class="summary-label">Description</div>
+                        <div class="desc-wrapper">
+                            <textarea class="desc-textarea" rows="3" placeholder="Add a description for this time entry...">${e.description}</textarea>
+                            <button class="btn-generate" onclick="showToast('success', 'Generating description...')">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+                                Generate
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="activity-section">
+                    <div class="activity-header">
+                        <h2 class="activity-title">Window Activity</h2>
+                        <button class="btn-manual" onclick="showToast('info', 'Add manual entry')">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                            Add Manual Entry
+                        </button>
+                    </div>
+
+                    ${apps.map(app => `
+                        <div class="app-group ${expandedApps.has(app.name) ? 'expanded' : ''}">
+                            <div class="app-group-header" onclick="toggleAppGroup('${app.name}')">
+                                <div class="app-icon">${app.icon}</div>
+                                <div class="app-info">
+                                    <div class="app-name">${app.name}</div>
+                                    <div class="app-count">${app.activities.length} activities</div>
+                                </div>
+                                <span class="app-duration">${formatDuration(app.time)}</span>
+                                <svg class="expand-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                            </div>
+                            <div class="activity-list">
+                                ${app.activities.map(act => `
+                                    <div class="activity-row">
+                                        <div class="activity-info">
+                                            <div class="activity-window">${act.window}</div>
+                                            <div class="activity-timestamp">${act.time}</div>
+                                        </div>
+                                        ${act.screenshots > 0 ? `
+                                            <button class="screenshot-btn" onclick="showToast('info', 'View screenshots')">
+                                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                                                ${act.screenshots}
+                                            </button>
+                                        ` : ''}
+                                        <span class="activity-dur">${formatDuration(act.duration)}</span>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+
+            document.getElementById('activityDetailsContent').innerHTML = html;
+        }
+
+        function renderWorklog() {
+            const grouped = {}; data.entries.forEach(e => { const k = e.date.toDateString(); if (!grouped[k]) grouped[k] = []; grouped[k].push(e); });
+            const weekStart = new Date(today); weekStart.setDate(weekStart.getDate() - weekStart.getDay() + 1);
+            const weekEnd = new Date(weekStart); weekEnd.setDate(weekEnd.getDate() + 6);
+            let weekTotal = data.entries.reduce((s, e) => s + e.duration, 0);
+
+            let html = `<div class="week-group"><div class="week-header"><span class="week-label">Week of ${weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${weekEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span><span class="week-duration">${formatDuration(weekTotal)}</span></div>`;
+
+            Object.entries(grouped).forEach(([key, entries]) => {
+                const date = new Date(key);
+                const dayTotal = entries.reduce((s, e) => s + e.duration, 0);
+                html += `<div class="date-group"><div class="date-header"><span class="date-label">${formatDateLabel(date)}</span><span class="date-duration">${formatDuration(dayTotal)}</span></div>`;
+                entries.forEach(e => {
+                    const assignHtml = e.assignment.jira ? `<svg class="jira-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M11.571 11.513H0a5.218 5.218 0 0 0 5.232 5.215h2.13v2.057A5.215 5.215 0 0 0 12.575 24V12.518a1.005 1.005 0 0 0-1.005-1.005z"/></svg><span class="key">${e.assignment.jira.key}</span><span class="summary">${e.assignment.jira.summary}</span>` : e.assignment.bucket ? `<div class="dot" style="background: ${e.assignment.bucket.color}"></div><span class="name">${e.assignment.bucket.name}</span>` : '<span class="name" style="color: var(--color-text-tertiary)">No assignment</span>';
+                    html += `<div class="entry" onclick="openActivityDetails(${e.id})"><div class="entry-left"><div class="entry-assign">${assignHtml}</div><div class="entry-time">${formatTime(e.startTime)} - ${formatTime(e.endTime)}</div><div class="entry-desc">${e.description}</div></div><div class="entry-right"><div class="entry-dur">${formatDuration(e.duration)}</div><div class="entry-acts">${e.activities} activities</div></div></div>`;
+                });
+                html += '</div>';
+            });
+            html += '</div>';
+            document.getElementById('worklogContent').innerHTML = html;
+        }
+
+        // Buckets
+        function renderBuckets() {
+            document.getElementById('bucketTree').innerHTML = data.buckets.map(b => `<div class="bucket-item"><div class="bucket-color" style="background: ${b.color}; box-shadow: 0 0 12px ${b.color}60"></div><div class="bucket-name">${b.name}</div><div class="bucket-btns"><button><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button><button class="delete"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button></div></div>`).join('');
+        }
+
+        function renderJiraIssues() {
+            document.getElementById('jiraList').innerHTML = data.jiraIssues.map(i => `<div class="jira-card"><div class="header"><span class="key">${i.key}</span><span class="type">${i.type}</span><span class="project">${i.project}</span></div><div class="summary">${i.summary}</div></div>`).join('');
+        }
+
+        // Bucket tabs
+        document.querySelectorAll('.bucket-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.bucket-tab').forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                document.getElementById('bucketsSection').style.display = tab.dataset.tab === 'buckets' ? 'block' : 'none';
+                document.getElementById('jiraSection').classList.toggle('active', tab.dataset.tab === 'jira');
+            });
+        });
+
+        // Create bucket
+        document.getElementById('btnNewBucket').addEventListener('click', () => openModal('createBucketModal'));
+        document.querySelectorAll('.color-swatch').forEach(s => s.addEventListener('click', () => { document.querySelectorAll('.color-swatch').forEach(x => x.classList.remove('selected')); s.classList.add('selected'); selectedColor = s.dataset.color; }));
+
+        function createBucket() {
+            const name = document.getElementById('newBucketName').value.trim();
+            if (!name) { showToast('error', 'Please enter a bucket name'); return; }
+            data.buckets.push({ id: data.buckets.length + 1, name, color: selectedColor });
+            renderBuckets(); closeModal('createBucketModal'); document.getElementById('newBucketName').value = '';
+            showToast('success', `Bucket "${name}" created`);
+        }
+
+        // Modals
+        function openModal(id) { document.getElementById(id).classList.add('visible'); }
+        function closeModal(id) { document.getElementById(id).classList.remove('visible'); }
+        document.querySelectorAll('.modal-overlay').forEach(o => o.addEventListener('click', e => { if (e.target === o) o.classList.remove('visible'); }));
+        document.addEventListener('keydown', e => { if (e.key === 'Escape') document.querySelectorAll('.modal-overlay.visible').forEach(m => m.classList.remove('visible')); });
+
+        // Toasts
+        function showToast(type, msg) {
+            const id = 'toast-' + Date.now();
+            const icons = { success: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>', error: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>', warning: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>', info: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>' };
+            const toast = document.createElement('div'); toast.id = id; toast.className = `toast ${type}`;
+            toast.innerHTML = `<div class="toast-icon">${icons[type]}</div><div class="toast-msg">${msg}</div><button class="toast-close" onclick="dismissToast('${id}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>`;
+            document.getElementById('toastContainer').appendChild(toast);
+            setTimeout(() => dismissToast(id), 5000);
+        }
+
+        function dismissToast(id) { const t = document.getElementById(id); if (t) { t.classList.add('hiding'); setTimeout(() => t.remove(), 200); } }
+
+        // Toggles
+        document.querySelectorAll('.toggle').forEach(t => t.addEventListener('click', () => t.classList.toggle('active')));
+
+        // Init
+        renderWorklog(); renderBuckets(); renderJiraIssues();
+    </script>
+</body>
 </html>
