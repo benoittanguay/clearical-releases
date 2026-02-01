@@ -165,30 +165,34 @@ export class AIAccountService {
     /**
      * Calculate score for an account based on various factors (FALLBACK ONLY)
      * Used only when AI is unavailable:
-     * - 60% Historical usage pattern
-     * - 25% Keyword match on issue summary
-     * - 10% Project name match
-     * - 5% Description match
+     * - 35% Historical usage pattern (reduced to avoid over-reliance on manual selections)
+     * - 35% Keyword match on issue summary (increased for better context matching)
+     * - 20% Project name match (increased for project relevance)
+     * - 10% Description match (increased for activity context)
      */
     calculateAccountScore(account, issue, context, aiClassification) {
         let score = 0;
-        // 1. Historical usage - strong signal (60%)
+        // 1. Historical usage (35%) - important but not dominant
+        // Reduced from 60% to prevent over-reliance on past manual selections
         // Use enhanced matching if full entries available, otherwise fall back to basic
         const historicalScore = context.historicalEntries
             ? this.calculateEnhancedHistoricalScore(account.key, issue, context)
             : this.calculateHistoricalScore(account.key, issue.projectKey, context.historicalAccounts);
-        score += historicalScore * 0.6;
-        // 2. Account name matches issue summary (25%)
+        score += historicalScore * 0.35;
+        // 2. Account name matches issue summary (35%) - primary context signal
+        // Increased from 25% to prioritize semantic relevance over history
         const keywordScore = this.keywordMatch(account.name, issue.summary);
-        score += keywordScore * 0.25;
-        // 3. Account name matches project name (10%)
+        score += keywordScore * 0.35;
+        // 3. Account name matches project name (20%)
+        // Increased from 10% for better project-based matching
         if (this.containsKeywords(account.name, issue.projectName)) {
-            score += 0.1;
+            score += 0.2;
         }
-        // 4. Account name matches description (5%)
+        // 4. Account name matches description (10%)
+        // Increased from 5% for better activity context matching
         if (context.description) {
             const descScore = this.keywordMatch(account.name, context.description);
-            score += descScore * 0.05;
+            score += descScore * 0.10;
         }
         return Math.min(score, 1.0);
     }

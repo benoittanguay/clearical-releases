@@ -56,7 +56,7 @@ INCS_Debug := \
 	-I/Users/benoittanguay/Library/Caches/node-gyp/22.17.1/deps/uv/include \
 	-I/Users/benoittanguay/Library/Caches/node-gyp/22.17.1/deps/zlib \
 	-I/Users/benoittanguay/Library/Caches/node-gyp/22.17.1/deps/v8/include \
-	-I/Users/benoittanguay/Documents/Anti/TimePortal/.worktrees/mic-camera-detection/electron/native/node_modules/node-addon-api
+	-I/Users/benoittanguay/Documents/Anti/TimePortal/electron/native/node_modules/node-addon-api
 
 DEFS_Release := \
 	'-DNODE_GYP_MODULE_NAME=media_monitor' \
@@ -110,10 +110,13 @@ INCS_Release := \
 	-I/Users/benoittanguay/Library/Caches/node-gyp/22.17.1/deps/uv/include \
 	-I/Users/benoittanguay/Library/Caches/node-gyp/22.17.1/deps/zlib \
 	-I/Users/benoittanguay/Library/Caches/node-gyp/22.17.1/deps/v8/include \
-	-I/Users/benoittanguay/Documents/Anti/TimePortal/.worktrees/mic-camera-detection/electron/native/node_modules/node-addon-api
+	-I/Users/benoittanguay/Documents/Anti/TimePortal/electron/native/node_modules/node-addon-api
 
 OBJS := \
 	$(obj).target/$(TARGET)/src/media_monitor.o \
+	$(obj).target/$(TARGET)/src/system_audio_capture.o \
+	$(obj).target/$(TARGET)/src/mic_capture.o \
+	$(obj).target/$(TARGET)/src/speech_transcriber.o \
 	$(obj).target/$(TARGET)/src/index.o
 
 # Add to the list of files we specially track dependencies for.
@@ -173,7 +176,12 @@ LIBS := \
 	-framework AVFoundation \
 	-framework CoreMediaIO \
 	-framework IOKit \
-	-framework Foundation
+	-framework Foundation \
+	-framework ScreenCaptureKit \
+	-framework CoreMedia \
+	-framework Accelerate \
+	-framework Speech \
+	-framework AudioToolbox
 
 $(builddir)/media_monitor.node: GYP_LDFLAGS := $(LDFLAGS_$(BUILDTYPE))
 $(builddir)/media_monitor.node: LIBS := $(LIBS)

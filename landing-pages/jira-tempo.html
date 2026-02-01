@@ -1,0 +1,2328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clearical - Tempo Timesheets Without the Tempo | Jira Time Tracking Automation</title>
+    <meta name="description" content="Automatic time tracking for Jira and Tempo users. Work in your IDE, Clearical tracks automatically, sync to Tempo with one click. Free 14-day trial.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+
+    <style>
+        /* ============================================
+           CSS CUSTOM PROPERTIES
+           ============================================ */
+        :root {
+            /* Colors - Brand Palette */
+            --color-bg-primary: #F2F0ED;
+            --color-bg-secondary: #FFFFFF;
+            --color-bg-dark: #181717;
+            --color-accent: #FF4800;
+            --color-accent-light: #FF6B35;
+            --color-text-primary: #0D0C0C;
+            --color-text-secondary: #6B6560;
+            --color-border: #E4E0DC;
+
+            /* Integration Colors */
+            --color-jira: #0052CC;
+            --color-tempo: #00AA99;
+            --color-github: #181717;
+            --color-vscode: #007ACC;
+
+            /* Typography */
+            --font-display: 'Space Mono', monospace;
+            --font-body: 'IBM Plex Sans', system-ui, sans-serif;
+            --font-mono: 'JetBrains Mono', 'Courier New', monospace;
+
+            /* Spacing Scale */
+            --space-4: 4px;
+            --space-8: 8px;
+            --space-12: 12px;
+            --space-16: 16px;
+            --space-24: 24px;
+            --space-32: 32px;
+            --space-48: 48px;
+            --space-64: 64px;
+            --space-96: 96px;
+            --space-128: 128px;
+
+            /* Layout */
+            --container-max-width: 1280px;
+            --container-padding: var(--space-24);
+            --border-radius-sm: 4px;
+            --border-radius-md: 8px;
+            --border-radius-lg: 12px;
+            --border-radius-xl: 16px;
+
+            /* Transitions */
+            --transition-fast: 150ms ease-out;
+            --transition-base: 250ms ease-out;
+            --transition-slow: 350ms ease-out;
+
+            /* Shadows */
+            --shadow-sm: 0 1px 2px rgba(13, 12, 12, 0.04), 0 1px 4px rgba(13, 12, 12, 0.02);
+            --shadow-md: 0 4px 8px rgba(13, 12, 12, 0.04), 0 2px 4px rgba(13, 12, 12, 0.02);
+            --shadow-lg: 0 12px 24px rgba(13, 12, 12, 0.08), 0 4px 8px rgba(13, 12, 12, 0.04);
+            --shadow-xl: 0 24px 48px rgba(13, 12, 12, 0.12), 0 8px 16px rgba(13, 12, 12, 0.06);
+
+            /* Glow Effects */
+            --glow-accent: 0 0 20px rgba(255, 72, 0, 0.3), 0 0 40px rgba(255, 72, 0, 0.2), 0 0 60px rgba(255, 72, 0, 0.1);
+            --glow-accent-strong: 0 0 30px rgba(255, 72, 0, 0.4), 0 0 60px rgba(255, 72, 0, 0.3), 0 0 90px rgba(255, 72, 0, 0.2);
+        }
+
+        /* ============================================
+           RESET & BASE STYLES
+           ============================================ */
+        *, *::before, *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        html {
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            scroll-behavior: smooth;
+        }
+
+        body {
+            font-family: var(--font-body);
+            font-size: 16px;
+            line-height: 1.6;
+            color: var(--color-text-primary);
+            background-color: var(--color-bg-primary);
+            overflow-x: hidden;
+        }
+
+        /* ============================================
+           NAVIGATION HEADER
+           ============================================ */
+        .nav-header {
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            background: rgba(242, 240, 237, 0.95);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--color-border);
+            transition: all var(--transition-base);
+        }
+
+        .nav-header.scrolled {
+            background: rgba(255, 255, 255, 0.98);
+            box-shadow: var(--shadow-md);
+        }
+
+        .nav-container {
+            max-width: var(--container-max-width);
+            margin-inline: auto;
+            padding-inline: var(--container-padding);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            height: 72px;
+        }
+
+        .nav-logo {
+            font-family: var(--font-display);
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--color-text-primary);
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: var(--space-8);
+        }
+
+        .nav-logo-accent {
+            color: var(--color-accent);
+        }
+
+        .nav-links {
+            display: flex;
+            align-items: center;
+            gap: var(--space-32);
+            list-style: none;
+        }
+
+        .nav-link {
+            font-family: var(--font-mono);
+            font-size: 0.875rem;
+            color: var(--color-text-secondary);
+            text-decoration: none;
+            transition: color var(--transition-fast);
+            position: relative;
+        }
+
+        .nav-link::after {
+            content: '';
+            position: absolute;
+            bottom: -4px;
+            left: 0;
+            width: 0;
+            height: 2px;
+            background: var(--color-accent);
+            transition: width var(--transition-base);
+        }
+
+        .nav-link:hover {
+            color: var(--color-text-primary);
+        }
+
+        .nav-link:hover::after {
+            width: 100%;
+        }
+
+        .nav-cta {
+            padding: var(--space-12) var(--space-24);
+            background: var(--color-accent);
+            color: white;
+            font-family: var(--font-display);
+            font-size: 0.875rem;
+            font-weight: 700;
+            text-decoration: none;
+            border-radius: var(--border-radius-md);
+            transition: all var(--transition-base);
+            white-space: nowrap;
+        }
+
+        .nav-cta:hover {
+            background: #E64000;
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-md);
+        }
+
+        @media (max-width: 768px) {
+            .nav-links {
+                display: none;
+            }
+
+            .nav-container {
+                height: 64px;
+            }
+        }
+
+        /* ============================================
+           TYPOGRAPHY
+           ============================================ */
+        h1, h2, h3, h4, h5, h6 {
+            font-family: var(--font-display);
+            line-height: 1.2;
+            font-weight: 700;
+        }
+
+        h1 {
+            font-size: clamp(2.5rem, 5vw, 4rem);
+            letter-spacing: -0.02em;
+        }
+
+        h2 {
+            font-size: clamp(2rem, 4vw, 3rem);
+            letter-spacing: -0.01em;
+        }
+
+        h3 {
+            font-size: clamp(1.5rem, 3vw, 2rem);
+        }
+
+        p {
+            font-size: clamp(1rem, 2vw, 1.125rem);
+            line-height: 1.6;
+        }
+
+        .text-mono {
+            font-family: var(--font-mono);
+            font-size: 0.875em;
+        }
+
+        /* ============================================
+           LAYOUT COMPONENTS
+           ============================================ */
+        .container {
+            max-width: var(--container-max-width);
+            margin-inline: auto;
+            padding-inline: var(--container-padding);
+        }
+
+        .section {
+            padding-block: var(--space-96);
+        }
+
+        @media (max-width: 768px) {
+            .section {
+                padding-block: var(--space-64);
+            }
+        }
+
+        /* ============================================
+           HERO SECTION
+           ============================================ */
+        .hero {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            position: relative;
+            overflow: hidden;
+            padding-top: 72px;
+        }
+
+        .hero::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background:
+                repeating-linear-gradient(
+                    0deg,
+                    transparent,
+                    transparent 99px,
+                    var(--color-border) 99px,
+                    var(--color-border) 100px
+                ),
+                repeating-linear-gradient(
+                    90deg,
+                    transparent,
+                    transparent 99px,
+                    var(--color-border) 99px,
+                    var(--color-border) 100px
+                );
+            opacity: 0.4;
+            pointer-events: none;
+        }
+
+        .hero-content {
+            position: relative;
+            z-index: 1;
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: var(--space-64);
+            align-items: center;
+        }
+
+        @media (min-width: 1024px) {
+            .hero-content {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+
+        .hero-text h1 {
+            margin-bottom: var(--space-24);
+            color: var(--color-text-primary);
+        }
+
+        .hero-text h1 .accent {
+            color: var(--color-accent);
+        }
+
+        .hero-subheading {
+            font-size: clamp(1.125rem, 2vw, 1.375rem);
+            line-height: 1.5;
+            color: var(--color-text-secondary);
+            margin-bottom: var(--space-48);
+            max-width: 600px;
+        }
+
+        /* Terminal Component with Enhanced Styling */
+        .terminal-wrapper {
+            position: relative;
+            animation: float 6s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+        }
+
+        .terminal {
+            background: var(--color-bg-dark);
+            border-radius: var(--border-radius-lg);
+            overflow: hidden;
+            box-shadow: var(--shadow-xl), var(--glow-accent);
+            font-family: var(--font-mono);
+            position: relative;
+        }
+
+        /* Terminal Reflection */
+        .terminal::after {
+            content: '';
+            position: absolute;
+            bottom: -60px;
+            left: 10%;
+            right: 10%;
+            height: 40px;
+            background: linear-gradient(180deg, rgba(24, 23, 23, 0.2) 0%, transparent 100%);
+            filter: blur(20px);
+            border-radius: 50%;
+            opacity: 0.6;
+        }
+
+        .terminal-header {
+            background: #282828;
+            padding: var(--space-12) var(--space-16);
+            display: flex;
+            align-items: center;
+            gap: var(--space-8);
+            border-bottom: 1px solid #383838;
+        }
+
+        .terminal-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            transition: transform var(--transition-fast);
+        }
+
+        .terminal-dot:hover {
+            transform: scale(1.2);
+        }
+
+        .terminal-dot.red { background: #FF5F56; }
+        .terminal-dot.yellow { background: #FFBD2E; }
+        .terminal-dot.green { background: #27C93F; }
+
+        .terminal-title {
+            flex: 1;
+            text-align: center;
+            font-size: 0.75rem;
+            color: #8B8B8B;
+            margin-left: calc(var(--space-12) * -1);
+        }
+
+        .terminal-body {
+            padding: var(--space-24);
+            font-size: 0.875rem;
+            line-height: 1.8;
+            color: #E0E0E0;
+            min-height: 320px;
+        }
+
+        .terminal-line {
+            display: flex;
+            gap: var(--space-12);
+            margin-bottom: var(--space-8);
+            opacity: 0;
+            animation: terminalLineAppear 0.3s ease-out forwards;
+        }
+
+        .terminal-line:nth-child(1) { animation-delay: 0.2s; }
+        .terminal-line:nth-child(2) { animation-delay: 0.6s; }
+        .terminal-line:nth-child(3) { animation-delay: 1.0s; }
+        .terminal-line:nth-child(4) { animation-delay: 1.4s; }
+        .terminal-line:nth-child(5) { animation-delay: 1.8s; }
+        .terminal-line:nth-child(6) { animation-delay: 2.2s; }
+        .terminal-line:nth-child(7) { animation-delay: 2.6s; }
+        .terminal-line:nth-child(8) { animation-delay: 3.0s; }
+        .terminal-line:nth-child(9) { animation-delay: 3.4s; }
+        .terminal-line:nth-child(10) { animation-delay: 3.8s; }
+
+        @keyframes terminalLineAppear {
+            from {
+                opacity: 0;
+                transform: translateX(-4px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .terminal-prompt {
+            color: #61AFEF;
+            user-select: none;
+        }
+
+        .terminal-command {
+            color: #98C379;
+        }
+
+        .terminal-output {
+            color: #ABB2BF;
+            padding-left: var(--space-24);
+        }
+
+        .terminal-success {
+            color: #98C379;
+        }
+
+        .terminal-info {
+            color: #61AFEF;
+        }
+
+        .terminal-cursor {
+            display: inline-block;
+            width: 8px;
+            height: 16px;
+            background: var(--color-accent);
+            animation: blink 1s infinite;
+            margin-left: var(--space-4);
+        }
+
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0; }
+        }
+
+        /* Connection Line from Terminal to Jira Ticket */
+        .connection-line {
+            position: absolute;
+            top: 50%;
+            right: -40px;
+            width: 40px;
+            height: 2px;
+            background: linear-gradient(90deg, var(--color-accent), transparent);
+            opacity: 0;
+            animation: connectionPulse 2s ease-in-out 4s infinite;
+        }
+
+        @keyframes connectionPulse {
+            0%, 100% { opacity: 0; }
+            50% { opacity: 0.6; }
+        }
+
+        /* CTA Button */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: var(--space-12);
+            padding: var(--space-16) var(--space-32);
+            font-family: var(--font-display);
+            font-size: 1rem;
+            font-weight: 700;
+            text-decoration: none;
+            border-radius: var(--border-radius-md);
+            transition: all var(--transition-base);
+            cursor: pointer;
+            border: none;
+            white-space: nowrap;
+        }
+
+        .btn-primary {
+            background: var(--color-accent);
+            color: white;
+            box-shadow: var(--shadow-md);
+        }
+
+        .btn-primary:hover {
+            background: #E64000;
+            box-shadow: var(--shadow-lg);
+            transform: translateY(-2px);
+        }
+
+        .btn-primary:active {
+            transform: translateY(0);
+        }
+
+        .btn-secondary {
+            background: var(--color-bg-secondary);
+            color: var(--color-text-primary);
+            box-shadow: var(--shadow-sm);
+            border: 2px solid var(--color-border);
+        }
+
+        .btn-secondary:hover {
+            border-color: var(--color-accent);
+            box-shadow: var(--shadow-md);
+        }
+
+        .hero-cta {
+            display: flex;
+            gap: var(--space-16);
+            flex-wrap: wrap;
+        }
+
+        /* ============================================
+           JIRA TICKET VISUALIZATION
+           ============================================ */
+        .jira-ticket-wrapper {
+            position: relative;
+            margin-top: var(--space-48);
+        }
+
+        .jira-ticket {
+            background: var(--color-bg-secondary);
+            border: 2px solid var(--color-border);
+            border-left: 4px solid var(--color-jira);
+            border-radius: var(--border-radius-md);
+            padding: var(--space-16);
+            font-family: var(--font-body);
+            box-shadow: var(--shadow-md);
+            transition: all var(--transition-base);
+            animation: ticketSlideIn 0.6s ease-out 4.5s both;
+        }
+
+        @keyframes ticketSlideIn {
+            from {
+                opacity: 0;
+                transform: translateX(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .jira-ticket:hover {
+            transform: translateY(-4px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .jira-header {
+            display: flex;
+            align-items: center;
+            gap: var(--space-12);
+            margin-bottom: var(--space-12);
+        }
+
+        .jira-key {
+            font-family: var(--font-mono);
+            font-weight: 700;
+            color: var(--color-jira);
+            font-size: 0.875rem;
+        }
+
+        .jira-status {
+            padding: var(--space-4) var(--space-8);
+            background: #E3FCEF;
+            color: #006644;
+            font-size: 0.75rem;
+            font-weight: 600;
+            border-radius: var(--border-radius-sm);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .jira-title {
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--color-text-primary);
+            margin-bottom: var(--space-8);
+        }
+
+        .jira-meta {
+            display: flex;
+            gap: var(--space-16);
+            font-size: 0.875rem;
+            color: var(--color-text-secondary);
+            padding-top: var(--space-12);
+            border-top: 1px solid var(--color-border);
+        }
+
+        .jira-meta-item {
+            display: flex;
+            align-items: center;
+            gap: var(--space-4);
+        }
+
+        .time-entry-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: var(--space-4);
+            padding: var(--space-4) var(--space-8);
+            background: rgba(255, 72, 0, 0.1);
+            color: var(--color-accent);
+            font-size: 0.75rem;
+            font-weight: 600;
+            border-radius: var(--border-radius-sm);
+            animation: badgePulse 2s ease-in-out 5s infinite;
+        }
+
+        @keyframes badgePulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+
+        /* ============================================
+           INTEGRATIONS SECTION
+           ============================================ */
+        .integrations-section {
+            background: var(--color-bg-secondary);
+            position: relative;
+        }
+
+        .integrations-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: var(--space-24);
+            margin-top: var(--space-48);
+        }
+
+        .integration-card {
+            background: var(--color-bg-primary);
+            border: 2px solid var(--color-border);
+            border-radius: var(--border-radius-lg);
+            padding: var(--space-32);
+            text-align: center;
+            transition: all var(--transition-base);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: var(--space-16);
+        }
+
+        .integration-card:hover {
+            border-color: var(--color-accent);
+            transform: translateY(-4px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .integration-icon {
+            width: 64px;
+            height: 64px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+            border-radius: var(--border-radius-md);
+            transition: transform var(--transition-base);
+        }
+
+        .integration-card:hover .integration-icon {
+            transform: scale(1.1);
+        }
+
+        .integration-name {
+            font-family: var(--font-display);
+            font-size: 1.125rem;
+            font-weight: 700;
+            color: var(--color-text-primary);
+        }
+
+        .integration-description {
+            font-size: 0.875rem;
+            color: var(--color-text-secondary);
+            line-height: 1.5;
+        }
+
+        /* ============================================
+           BEFORE/AFTER COMPARISON
+           ============================================ */
+        .comparison-section {
+            background: var(--color-bg-primary);
+        }
+
+        .comparison-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: var(--space-48);
+            margin-top: var(--space-64);
+        }
+
+        @media (max-width: 1024px) {
+            .comparison-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .comparison-card {
+            background: var(--color-bg-secondary);
+            border-radius: var(--border-radius-lg);
+            padding: var(--space-32);
+            box-shadow: var(--shadow-md);
+            transition: all var(--transition-base);
+        }
+
+        .comparison-card.before {
+            border: 2px solid #DC2626;
+        }
+
+        .comparison-card.after {
+            border: 2px solid #059669;
+        }
+
+        .comparison-card:hover {
+            transform: translateY(-4px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .comparison-label {
+            display: inline-flex;
+            align-items: center;
+            gap: var(--space-8);
+            padding: var(--space-8) var(--space-16);
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            border-radius: var(--border-radius-sm);
+            margin-bottom: var(--space-24);
+        }
+
+        .comparison-label.before {
+            background: rgba(220, 38, 38, 0.1);
+            color: #DC2626;
+        }
+
+        .comparison-label.after {
+            background: rgba(5, 150, 105, 0.1);
+            color: #059669;
+        }
+
+        .comparison-content h3 {
+            font-size: 1.5rem;
+            margin-bottom: var(--space-16);
+        }
+
+        .comparison-list {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-12);
+        }
+
+        .comparison-list li {
+            display: flex;
+            align-items: flex-start;
+            gap: var(--space-12);
+            font-size: 0.975rem;
+            color: var(--color-text-secondary);
+            line-height: 1.6;
+        }
+
+        .comparison-list li::before {
+            content: '×';
+            font-size: 1.5rem;
+            font-weight: 700;
+            line-height: 1;
+            flex-shrink: 0;
+        }
+
+        .comparison-card.before .comparison-list li::before {
+            color: #DC2626;
+        }
+
+        .comparison-card.after .comparison-list li::before {
+            content: '✓';
+            color: #059669;
+        }
+
+        /* ============================================
+           PAIN SECTION
+           ============================================ */
+        .pain-section {
+            background: var(--color-bg-dark);
+            color: white;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .pain-section::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -10%;
+            width: 600px;
+            height: 600px;
+            background: radial-gradient(circle, rgba(255, 72, 0, 0.1) 0%, transparent 70%);
+            pointer-events: none;
+        }
+
+        .section-header {
+            text-align: center;
+            margin-bottom: var(--space-64);
+            position: relative;
+        }
+
+        .section-tag {
+            font-family: var(--font-mono);
+            font-size: 0.875rem;
+            color: var(--color-accent);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: var(--space-12);
+            display: inline-block;
+        }
+
+        .pain-section .section-tag {
+            color: var(--color-accent-light);
+        }
+
+        .pain-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: var(--space-32);
+        }
+
+        .pain-card {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: var(--border-radius-lg);
+            padding: var(--space-32);
+            transition: all var(--transition-base);
+        }
+
+        .pain-card:hover {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(255, 72, 0, 0.3);
+            transform: translateY(-4px);
+        }
+
+        .pain-number {
+            font-family: var(--font-mono);
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: var(--color-accent);
+            line-height: 1;
+            margin-bottom: var(--space-16);
+            opacity: 0.6;
+        }
+
+        .pain-quote {
+            font-family: var(--font-display);
+            font-size: 1.25rem;
+            line-height: 1.4;
+            margin-bottom: var(--space-16);
+            color: white;
+        }
+
+        .pain-description {
+            color: #ABB2BF;
+            line-height: 1.6;
+        }
+
+        /* ============================================
+           HOW IT WORKS SECTION
+           ============================================ */
+        .how-it-works {
+            background: var(--color-bg-secondary);
+        }
+
+        .steps-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: var(--space-48);
+            margin-top: var(--space-64);
+        }
+
+        .step {
+            position: relative;
+            text-align: center;
+        }
+
+        .step::after {
+            content: '→';
+            position: absolute;
+            top: 60px;
+            right: -24px;
+            font-size: 2rem;
+            color: var(--color-accent);
+            font-weight: 700;
+        }
+
+        .step:last-child::after {
+            display: none;
+        }
+
+        @media (max-width: 768px) {
+            .step::after {
+                content: '↓';
+                top: auto;
+                bottom: -36px;
+                right: 50%;
+                transform: translateX(50%);
+            }
+        }
+
+        .step-icon {
+            width: 120px;
+            height: 120px;
+            margin: 0 auto var(--space-24);
+            background: var(--color-bg-primary);
+            border: 2px solid var(--color-border);
+            border-radius: var(--border-radius-lg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 3rem;
+            transition: all var(--transition-base);
+        }
+
+        .step:hover .step-icon {
+            border-color: var(--color-accent);
+            transform: scale(1.05);
+        }
+
+        .step-number {
+            position: absolute;
+            top: -12px;
+            right: -12px;
+            width: 36px;
+            height: 36px;
+            background: var(--color-accent);
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: var(--font-mono);
+            font-weight: 700;
+            font-size: 0.875rem;
+            box-shadow: var(--shadow-md);
+        }
+
+        .step h3 {
+            margin-bottom: var(--space-12);
+            font-size: 1.25rem;
+        }
+
+        .step p {
+            color: var(--color-text-secondary);
+            font-size: 1rem;
+        }
+
+        /* ============================================
+           FEATURES SECTION WITH TABS
+           ============================================ */
+        .features-section {
+            background: var(--color-bg-primary);
+        }
+
+        .tabs-container {
+            margin-top: var(--space-64);
+        }
+
+        .tab-buttons {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: var(--space-12);
+            margin-bottom: var(--space-48);
+            background: var(--color-bg-secondary);
+            padding: var(--space-8);
+            border-radius: var(--border-radius-lg);
+            box-shadow: var(--shadow-sm);
+        }
+
+        .tab-button {
+            padding: var(--space-16) var(--space-24);
+            font-family: var(--font-mono);
+            font-size: 0.875rem;
+            font-weight: 500;
+            background: transparent;
+            border: none;
+            border-radius: var(--border-radius-md);
+            cursor: pointer;
+            transition: all var(--transition-fast);
+            color: var(--color-text-secondary);
+            text-align: left;
+            display: flex;
+            align-items: center;
+            gap: var(--space-8);
+        }
+
+        .tab-icon {
+            font-size: 1.125rem;
+        }
+
+        .tab-button:hover {
+            background: var(--color-bg-primary);
+            color: var(--color-text-primary);
+        }
+
+        .tab-button.active {
+            background: var(--color-accent);
+            color: white;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .tab-content {
+            display: none;
+            animation: fadeIn var(--transition-base);
+        }
+
+        .tab-content.active {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: var(--space-48);
+            align-items: center;
+        }
+
+        @media (max-width: 1024px) {
+            .tab-content.active {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(8px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .feature-info h3 {
+            margin-bottom: var(--space-16);
+            color: var(--color-text-primary);
+        }
+
+        .feature-info p {
+            color: var(--color-text-secondary);
+            margin-bottom: var(--space-24);
+            line-height: 1.7;
+        }
+
+        .feature-list {
+            list-style: none;
+        }
+
+        .feature-list li {
+            padding: var(--space-12) 0;
+            padding-left: var(--space-32);
+            position: relative;
+            color: var(--color-text-secondary);
+            font-size: 1rem;
+        }
+
+        .feature-list li::before {
+            content: '✓';
+            position: absolute;
+            left: 0;
+            color: var(--color-accent);
+            font-weight: 700;
+            font-size: 1.125rem;
+        }
+
+        /* Code Block Component - Enhanced */
+        .code-block {
+            background: var(--color-bg-dark);
+            border-radius: var(--border-radius-lg);
+            overflow: hidden;
+            box-shadow: var(--shadow-lg);
+            font-family: var(--font-mono);
+        }
+
+        .code-header {
+            background: #282828;
+            padding: var(--space-12) var(--space-16);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid #383838;
+        }
+
+        .code-tabs {
+            display: flex;
+            gap: var(--space-8);
+        }
+
+        .code-tab {
+            padding: var(--space-4) var(--space-12);
+            font-size: 0.75rem;
+            color: #8B8B8B;
+            background: transparent;
+            border-radius: var(--border-radius-sm);
+        }
+
+        .code-tab.active {
+            background: var(--color-bg-dark);
+            color: #E0E0E0;
+        }
+
+        .code-actions {
+            display: flex;
+            gap: var(--space-8);
+        }
+
+        .code-action {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #484848;
+        }
+
+        .code-body {
+            padding: var(--space-24);
+            font-size: 0.875rem;
+            line-height: 1.8;
+            overflow-x: auto;
+        }
+
+        .code-line {
+            display: flex;
+            gap: var(--space-24);
+        }
+
+        .line-number {
+            color: #5C6370;
+            user-select: none;
+            text-align: right;
+            min-width: 24px;
+        }
+
+        .line-content {
+            color: #ABB2BF;
+        }
+
+        /* Enhanced Syntax Highlighting */
+        .syntax-keyword { color: #C678DD; }
+        .syntax-string { color: #98C379; }
+        .syntax-number { color: #D19A66; }
+        .syntax-function { color: #61AFEF; }
+        .syntax-property { color: #E06C75; }
+        .syntax-comment { color: #5C6370; font-style: italic; }
+        .syntax-bracket { color: #ABB2BF; }
+        .syntax-class { color: #E5C07B; }
+        .syntax-method { color: #61AFEF; }
+        .syntax-operator { color: #56B6C2; }
+
+        /* ============================================
+           CTA SECTION
+           ============================================ */
+        .cta-section {
+            background: linear-gradient(135deg, var(--color-accent) 0%, #E64000 100%);
+            color: white;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .cta-section::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -10%;
+            width: 800px;
+            height: 800px;
+            background: radial-gradient(circle, rgba(255, 255, 255, 0.1) 0%, transparent 70%);
+            pointer-events: none;
+        }
+
+        .cta-content {
+            text-align: center;
+            max-width: 800px;
+            margin: 0 auto;
+            position: relative;
+            z-index: 1;
+        }
+
+        .cta-content h2 {
+            color: white;
+            margin-bottom: var(--space-24);
+        }
+
+        .cta-content p {
+            font-size: 1.25rem;
+            line-height: 1.6;
+            margin-bottom: var(--space-48);
+            opacity: 0.95;
+        }
+
+        .cta-section .btn-primary {
+            background: white;
+            color: var(--color-accent);
+            font-size: 1.125rem;
+            padding: var(--space-24) var(--space-48);
+        }
+
+        .cta-section .btn-primary:hover {
+            background: var(--color-bg-primary);
+            transform: translateY(-4px);
+            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.2);
+        }
+
+        .cta-features {
+            display: flex;
+            justify-content: center;
+            gap: var(--space-48);
+            margin-top: var(--space-32);
+            flex-wrap: wrap;
+            font-family: var(--font-mono);
+            font-size: 0.875rem;
+            opacity: 0.9;
+        }
+
+        .cta-feature {
+            display: flex;
+            align-items: center;
+            gap: var(--space-8);
+        }
+
+        .cta-feature::before {
+            content: '✓';
+            font-weight: 700;
+            font-size: 1.125rem;
+        }
+
+        /* ============================================
+           FOOTER
+           ============================================ */
+        footer {
+            background: var(--color-bg-dark);
+            color: #ABB2BF;
+            padding: var(--space-48) 0;
+        }
+
+        .footer-content {
+            text-align: center;
+        }
+
+        .footer-logo {
+            font-family: var(--font-display);
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: white;
+            margin-bottom: var(--space-16);
+        }
+
+        .footer-tagline {
+            font-family: var(--font-mono);
+            font-size: 0.875rem;
+            color: var(--color-accent-light);
+            margin-bottom: var(--space-24);
+        }
+
+        .footer-links {
+            display: flex;
+            justify-content: center;
+            gap: var(--space-32);
+            margin-bottom: var(--space-24);
+            flex-wrap: wrap;
+        }
+
+        .footer-link {
+            color: #ABB2BF;
+            text-decoration: none;
+            font-size: 0.875rem;
+            transition: color var(--transition-fast);
+        }
+
+        .footer-link:hover {
+            color: var(--color-accent-light);
+        }
+
+        .footer-copy {
+            font-size: 0.875rem;
+            color: #5C6370;
+        }
+
+        /* ============================================
+           RESPONSIVE UTILITIES
+           ============================================ */
+        @media (max-width: 768px) {
+            :root {
+                --container-padding: var(--space-16);
+            }
+
+            .hero-cta {
+                flex-direction: column;
+            }
+
+            .btn {
+                width: 100%;
+                justify-content: center;
+            }
+
+            .tab-buttons {
+                grid-template-columns: 1fr;
+            }
+
+            .cta-features {
+                flex-direction: column;
+                gap: var(--space-16);
+            }
+
+            .integrations-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* ============================================
+           ACCESSIBILITY
+           ============================================ */
+        @media (prefers-reduced-motion: reduce) {
+            *,
+            *::before,
+            *::after {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
+        }
+
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
+        }
+
+        /* Focus styles for keyboard navigation */
+        *:focus-visible {
+            outline: 3px solid var(--color-accent);
+            outline-offset: 2px;
+        }
+
+        button:focus-visible,
+        a:focus-visible {
+            outline: 3px solid var(--color-accent);
+            outline-offset: 4px;
+        }
+    </style>
+</head>
+<body>
+    <!-- NAVIGATION HEADER -->
+    <nav class="nav-header" id="nav-header">
+        <div class="nav-container">
+            <a href="/" class="nav-logo">
+                <span>Clearical</span><span class="nav-logo-accent">//</span>
+            </a>
+            <ul class="nav-links">
+                <li><a href="#features" class="nav-link">Features</a></li>
+                <li><a href="#integrations" class="nav-link">Integrations</a></li>
+                <li><a href="#pricing" class="nav-link">Pricing</a></li>
+                <li><a href="#download" class="nav-link">Download</a></li>
+            </ul>
+            <a href="#download" class="nav-cta">Start Free Trial</a>
+        </div>
+    </nav>
+
+    <!-- HERO SECTION -->
+    <section class="hero section">
+        <div class="container">
+            <div class="hero-content">
+                <div class="hero-text">
+                    <h1>Tempo Timesheets. <span class="accent">Without the Tempo.</span></h1>
+                    <p class="hero-subheading">
+                        Jira knows what you worked on. Your calendar knows when. Your brain knows neither by Friday.
+                        Clearical connects the dots—then pushes them to Tempo.
+                    </p>
+                    <div class="hero-cta">
+                        <a href="#download" class="btn btn-primary">
+                            Download for Mac — Free 14-Day Trial
+                        </a>
+                        <a href="#how-it-works" class="btn btn-secondary">
+                            See How It Works
+                        </a>
+                    </div>
+                </div>
+
+                <div class="hero-visual">
+                    <div class="terminal-wrapper">
+                        <div class="terminal">
+                            <div class="terminal-header">
+                                <div class="terminal-dot red"></div>
+                                <div class="terminal-dot yellow"></div>
+                                <div class="terminal-dot green"></div>
+                                <div class="terminal-title">clearical-cli — zsh</div>
+                            </div>
+                            <div class="terminal-body">
+                                <div class="terminal-line">
+                                    <span class="terminal-prompt">$</span>
+                                    <span class="terminal-command">clearical sync --today</span>
+                                </div>
+                                <div class="terminal-line">
+                                    <span class="terminal-output terminal-info">→ Analyzing git activity...</span>
+                                </div>
+                                <div class="terminal-line">
+                                    <span class="terminal-output">  ├─ Scanned 23 commits</span>
+                                </div>
+                                <div class="terminal-line">
+                                    <span class="terminal-output">  └─ Found 5 Jira tickets</span>
+                                </div>
+                                <div class="terminal-line">
+                                    <span class="terminal-output terminal-success">  ✓ PROJ-1234, PROJ-1235, PROJ-1240, PROJ-1242, PROJ-1250</span>
+                                </div>
+                                <div class="terminal-line">
+                                    <span class="terminal-output terminal-info">→ Calculating time allocation...</span>
+                                </div>
+                                <div class="terminal-line">
+                                    <span class="terminal-output terminal-success">  ✓ 8h distributed across 5 tickets</span>
+                                </div>
+                                <div class="terminal-line">
+                                    <span class="terminal-output terminal-info">→ Syncing to Tempo...</span>
+                                </div>
+                                <div class="terminal-line">
+                                    <span class="terminal-output terminal-success">  ✓ 5 worklog entries created</span>
+                                </div>
+                                <div class="terminal-line" style="margin-top: 16px;">
+                                    <span class="terminal-prompt">$</span>
+                                    <span class="terminal-cursor"></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Jira Ticket Visualization -->
+                    <div class="jira-ticket-wrapper">
+                        <div class="jira-ticket">
+                            <div class="jira-header">
+                                <span class="jira-key">PROJ-1234</span>
+                                <span class="jira-status">In Progress</span>
+                            </div>
+                            <div class="jira-title">Implement SSO authentication flow</div>
+                            <div class="jira-meta">
+                                <div class="jira-meta-item">
+                                    <span>⏱️</span>
+                                    <span class="time-entry-badge">+3.5h added</span>
+                                </div>
+                                <div class="jira-meta-item">
+                                    <span>📅</span>
+                                    <span>Jan 18, 2026</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- INTEGRATIONS SECTION -->
+    <section id="integrations" class="integrations-section section">
+        <div class="container">
+            <div class="section-header">
+                <span class="section-tag">// Integrations</span>
+                <h2>Works With Your Entire Stack</h2>
+            </div>
+
+            <div class="integrations-grid">
+                <div class="integration-card">
+                    <div class="integration-icon" style="background: #0052CC; color: white;">
+                        <svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M11.571 11.513H0a5.218 5.218 0 0 0 5.232 5.215h2.13v2.057A5.215 5.215 0 0 0 12.575 24V12.518a1.005 1.005 0 0 0-1.005-1.005zm5.723-5.756H24a5.218 5.218 0 0 0-5.232-5.214h-2.13V2.6a5.215 5.215 0 0 0-5.213 5.213v11.481a1.005 1.005 0 0 0 1.005 1.005h5.723a5.218 5.218 0 0 0 5.232-5.215v-2.125h-2.13a5.215 5.215 0 0 0-5.213-5.213z"/>
+                        </svg>
+                    </div>
+                    <h3 class="integration-name">Jira</h3>
+                    <p class="integration-description">Extract ticket keys from commits and branches</p>
+                </div>
+
+                <div class="integration-card">
+                    <div class="integration-icon" style="background: #00AA99; color: white;">
+                        <svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12 2L2 7v10c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-10-5z"/>
+                        </svg>
+                    </div>
+                    <h3 class="integration-name">Tempo</h3>
+                    <p class="integration-description">Direct API sync for worklog entries</p>
+                </div>
+
+                <div class="integration-card">
+                    <div class="integration-icon" style="background: #181717; color: white;">
+                        <svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.17 6.839 9.49.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.603-3.369-1.34-3.369-1.34-.454-1.156-1.11-1.463-1.11-1.463-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.831.092-.646.35-1.086.636-1.336-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.114 2.504.336 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.167 22 16.418 22 12c0-5.523-4.477-10-10-10z"/>
+                        </svg>
+                    </div>
+                    <h3 class="integration-name">GitHub</h3>
+                    <p class="integration-description">Track commits, PRs, and code reviews</p>
+                </div>
+
+                <div class="integration-card">
+                    <div class="integration-icon" style="background: #FC6D26; color: white;">
+                        <svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M23.546 10.93L13.067.452a1.55 1.55 0 0 0-2.188 0L8.708 2.627l2.76 2.76a1.838 1.838 0 0 1 2.328 2.341l2.658 2.66a1.838 1.838 0 0 1 1.924 3.031 1.837 1.837 0 0 1-2.6 0 1.838 1.838 0 0 1-.398-1.991L12.86 8.955v6.525a1.834 1.834 0 0 1 .49 3.004 1.834 1.834 0 0 1-2.59 0 1.834 1.834 0 0 1 .492-3.004V8.937a1.834 1.834 0 0 1-.994-2.404l-2.72-2.72L.452 10.9a1.55 1.55 0 0 0 0 2.188l10.48 10.48a1.55 1.55 0 0 0 2.188 0l10.426-10.426a1.552 1.552 0 0 0 0-2.213"/>
+                        </svg>
+                    </div>
+                    <h3 class="integration-name">GitLab</h3>
+                    <p class="integration-description">Support for GitLab workflows and MRs</p>
+                </div>
+
+                <div class="integration-card">
+                    <div class="integration-icon" style="background: #007ACC; color: white;">
+                        <svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M23.15 2.587L18.21.21a1.494 1.494 0 0 0-1.705.29l-9.46 8.63-4.12-3.128a.999.999 0 0 0-1.276.057L.327 7.261A1 1 0 0 0 .326 8.74L3.899 12 .326 15.26a1 1 0 0 0 .001 1.479L1.65 17.94a.999.999 0 0 0 1.276.057l4.12-3.128 9.46 8.63a1.492 1.492 0 0 0 1.704.29l4.942-2.377A1.5 1.5 0 0 0 24 20.06V3.939a1.5 1.5 0 0 0-.85-1.352zm-5.146 14.861L10.826 12l7.178-5.448v10.896z"/>
+                        </svg>
+                    </div>
+                    <h3 class="integration-name">VS Code</h3>
+                    <p class="integration-description">Native extension for code-level tracking</p>
+                </div>
+
+                <div class="integration-card">
+                    <div class="integration-icon" style="background: linear-gradient(135deg, #087CFA 0%, #FF318C 50%, #FE2857 100%); color: white;">
+                        <svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M11.343 18.031c.058.049.12.098.181.146-1.177.145-2.389.24-3.656.24-5.238 0-7.054-1.038-7.054-1.646 0-.608 1.816-1.646 7.054-1.646.538 0 1.054.021 1.549.059-.037.14-.059.283-.059.429 0 .944.724 1.718 1.625 1.718.291 0 .562-.09.787-.242.177.071.366.139.573.192zm-5.343-9.031c-.291 0-.562.09-.787.242-.177-.071-.366-.139-.573-.192-.058-.049-.12-.098-.181-.146 1.177-.145 2.389-.24 3.656-.24 5.238 0 7.054 1.038 7.054 1.646 0 .608-1.816 1.646-7.054 1.646-.538 0-1.054-.021-1.549-.059.037-.14.059-.283.059-.429 0-.944-.724-1.718-1.625-1.718zm12 2.75c0-2.899-2.467-3.75-5.5-3.75-1.124 0-2.141.104-3.043.283-.346-.305-.785-.533-1.281-.533-1.074 0-1.945.871-1.945 1.945 0 .234.043.457.118.665-3.423.346-5.068 1.462-5.068 2.64 0 1.178 1.645 2.294 5.068 2.64-.075.208-.118.431-.118.665 0 1.074.871 1.945 1.945 1.945.496 0 .935-.228 1.281-.533.902.179 1.919.283 3.043.283 3.033 0 5.5-.851 5.5-3.75 0-.342-.058-.654-.146-.939.088-.285.146-.597.146-.939z"/>
+                        </svg>
+                    </div>
+                    <h3 class="integration-name">JetBrains</h3>
+                    <p class="integration-description">IntelliJ, WebStorm, PyCharm, and more</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- BEFORE/AFTER COMPARISON -->
+    <section class="comparison-section section">
+        <div class="container">
+            <div class="section-header">
+                <span class="section-tag">// The Difference</span>
+                <h2>Before vs. After Clearical</h2>
+            </div>
+
+            <div class="comparison-grid">
+                <div class="comparison-card before">
+                    <div class="comparison-label before">
+                        <span>⚠️</span>
+                        <span>Manual Time Entry</span>
+                    </div>
+                    <div class="comparison-content">
+                        <h3>The Old Way</h3>
+                        <ul class="comparison-list">
+                            <li>Spend 30+ minutes every Friday reconstructing your week</li>
+                            <li>Dig through git logs, Slack messages, and calendar events</li>
+                            <li>Guess at time allocations across 5+ tickets</li>
+                            <li>Open Tempo in 6 different tabs to fill out worklogs</li>
+                            <li>Miss required fields and start over</li>
+                            <li>Submit timesheet, get rejected, repeat</li>
+                            <li>Lose billable hours because you forgot what you worked on</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="comparison-card after">
+                    <div class="comparison-label after">
+                        <span>✓</span>
+                        <span>Automated with Clearical</span>
+                    </div>
+                    <div class="comparison-content">
+                        <h3>The Clearical Way</h3>
+                        <ul class="comparison-list">
+                            <li>Work normally in your IDE—Clearical tracks automatically</li>
+                            <li>All git activity, commits, and PRs are captured in real-time</li>
+                            <li>AI-powered time allocation based on actual code activity</li>
+                            <li>One-click sync to Tempo with all required fields populated</li>
+                            <li>Review and adjust before syncing if needed</li>
+                            <li>Timesheets submitted on time, every time</li>
+                            <li>Capture every billable minute without the manual labor</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- PAIN SECTION -->
+    <section class="pain-section section">
+        <div class="container">
+            <div class="section-header">
+                <span class="section-tag">// The Problem</span>
+                <h2>The Friday 4PM Scramble</h2>
+            </div>
+
+            <div class="pain-grid">
+                <div class="pain-card">
+                    <div class="pain-number">01</div>
+                    <p class="pain-quote">"8 hours. 5 tickets. No idea which got what."</p>
+                    <p class="pain-description">
+                        Sound familiar? Every sprint. You shipped features, fixed bugs, reviewed PRs.
+                        But breaking down your week into billable hours? That's a different kind of debugging.
+                    </p>
+                </div>
+
+                <div class="pain-card">
+                    <div class="pain-number">02</div>
+                    <p class="pain-quote">"Submit timesheet" → "Required fields missing"</p>
+                    <p class="pain-description">
+                        The worst notification in enterprise software. You filled out Tempo. You clicked submit.
+                        But somehow you're still missing work log descriptions, billing codes, or that one custom field.
+                    </p>
+                </div>
+
+                <div class="pain-card">
+                    <div class="pain-number">03</div>
+                    <p class="pain-quote">"I'll log it with the next commit"</p>
+                    <p class="pain-description">
+                        The commit that never comes. Or comes three weeks later when you've forgotten what
+                        "refactor utils" actually meant or how long it took.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- HOW IT WORKS SECTION -->
+    <section id="how-it-works" class="how-it-works section">
+        <div class="container">
+            <div class="section-header">
+                <span class="section-tag">// The Solution</span>
+                <h2>From Desktop to Tempo in 3 Steps</h2>
+            </div>
+
+            <div class="steps-container">
+                <div class="step">
+                    <div class="step-icon">
+                        <span class="step-number">1</span>
+                        💻
+                    </div>
+                    <h3>Work in your IDE</h3>
+                    <p>
+                        Write code. Commit. Push. Review. Do what you already do.
+                        Clearical runs silently in the background.
+                    </p>
+                </div>
+
+                <div class="step">
+                    <div class="step-icon">
+                        <span class="step-number">2</span>
+                        🔍
+                    </div>
+                    <h3>Clearical tracks automatically</h3>
+                    <p>
+                        Every git commit, branch name, and calendar event is analyzed.
+                        Jira ticket keys are extracted and matched.
+                    </p>
+                </div>
+
+                <div class="step">
+                    <div class="step-icon">
+                        <span class="step-number">3</span>
+                        ⚡
+                    </div>
+                    <h3>One-click sync to Tempo</h3>
+                    <p>
+                        Review your day's work, adjust if needed, and sync.
+                        Time entries appear in Tempo with full context.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- FEATURES SECTION -->
+    <section id="features" class="features-section section">
+        <div class="container">
+            <div class="section-header">
+                <span class="section-tag">// Core Features</span>
+                <h2>Jira-Native Intelligence</h2>
+            </div>
+
+            <div class="tabs-container">
+                <div class="tab-buttons" role="tablist">
+                    <button class="tab-button active" data-tab="matching" role="tab" aria-selected="true">
+                        <span class="tab-icon">🎯</span>
+                        <span>Ticket Matching</span>
+                    </button>
+                    <button class="tab-button" data-tab="allocation" role="tab" aria-selected="false">
+                        <span class="tab-icon">⏱️</span>
+                        <span>Time Allocation</span>
+                    </button>
+                    <button class="tab-button" data-tab="sync" role="tab" aria-selected="false">
+                        <span class="tab-icon">🔄</span>
+                        <span>Tempo Sync</span>
+                    </button>
+                    <button class="tab-button" data-tab="analytics" role="tab" aria-selected="false">
+                        <span class="tab-icon">📊</span>
+                        <span>Sprint Analytics</span>
+                    </button>
+                    <button class="tab-button" data-tab="descriptions" role="tab" aria-selected="false">
+                        <span class="tab-icon">📝</span>
+                        <span>Worklog Descriptions</span>
+                    </button>
+                    <button class="tab-button" data-tab="offline" role="tab" aria-selected="false">
+                        <span class="tab-icon">📡</span>
+                        <span>Offline Queueing</span>
+                    </button>
+                </div>
+
+                <!-- Tab 1: Ticket Matching -->
+                <div class="tab-content active" data-tab="matching" role="tabpanel">
+                    <div class="feature-info">
+                        <h3>Automatic Ticket Matching</h3>
+                        <p>
+                            Clearical scans your git commits, branch names, and PR titles for Jira ticket keys.
+                            Works with any ticket format: PROJ-123, TEAM-456, or custom prefixes.
+                        </p>
+                        <ul class="feature-list">
+                            <li>Regex-powered pattern matching across all git metadata</li>
+                            <li>Support for multiple Jira projects simultaneously</li>
+                            <li>Smart detection in commit messages and branch names</li>
+                            <li>Manual override when automation needs help</li>
+                        </ul>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">
+                            <div class="code-tabs">
+                                <div class="code-tab active">api-response.json</div>
+                            </div>
+                            <div class="code-actions">
+                                <div class="code-action"></div>
+                                <div class="code-action"></div>
+                                <div class="code-action"></div>
+                            </div>
+                        </div>
+                        <div class="code-body">
+                            <div class="code-line">
+                                <span class="line-number">1</span>
+                                <span class="line-content"><span class="syntax-bracket">{</span></span>
+                            </div>
+                            <div class="code-line">
+                                <span class="line-number">2</span>
+                                <span class="line-content">  <span class="syntax-property">"commit"</span><span class="syntax-bracket">:</span> <span class="syntax-string">"a3f8b2c"</span><span class="syntax-bracket">,</span></span>
+                            </div>
+                            <div class="code-line">
+                                <span class="line-number">3</span>
+                                <span class="line-content">  <span class="syntax-property">"branch"</span><span class="syntax-bracket">:</span> <span class="syntax-string">"feature/PROJ-1234-sso-auth"</span><span class="syntax-bracket">,</span></span>
+                            </div>
+                            <div class="code-line">
+                                <span class="line-number">4</span>
+                                <span class="line-content">  <span class="syntax-property">"message"</span><span class="syntax-bracket">:</span> <span class="syntax-string">"PROJ-1234: Implement OAuth flow"</span><span class="syntax-bracket">,</span></span>
+                            </div>
+                            <div class="code-line">
+                                <span class="line-number">5</span>
+                                <span class="line-content">  <span class="syntax-property">"timestamp"</span><span class="syntax-bracket">:</span> <span class="syntax-string">"2026-01-18T14:23:00Z"</span><span class="syntax-bracket">,</span></span>
+                            </div>
+                            <div class="code-line">
+                                <span class="line-number">6</span>
+                                <span class="line-content">  <span class="syntax-property">"matched_ticket"</span><span class="syntax-bracket">:</span> <span class="syntax-bracket">{</span></span>
+                            </div>
+                            <div class="code-line">
+                                <span class="line-number">7</span>
+                                <span class="line-content">    <span class="syntax-property">"key"</span><span class="syntax-bracket">:</span> <span class="syntax-string">"PROJ-1234"</span><span class="syntax-bracket">,</span></span>
+                            </div>
+                            <div class="code-line">
+                                <span class="line-number">8</span>
+                                <span class="line-content">    <span class="syntax-property">"title"</span><span class="syntax-bracket">:</span> <span class="syntax-string">"Implement SSO authentication"</span><span class="syntax-bracket">,</span></span>
+                            </div>
+                            <div class="code-line">
+                                <span class="line-number">9</span>
+                                <span class="line-content">    <span class="syntax-property">"confidence"</span><span class="syntax-bracket">:</span> <span class="syntax-number">0.98</span><span class="syntax-bracket">,</span></span>
+                            </div>
+                            <div class="code-line">
+                                <span class="line-number">10</span>
+                                <span class="line-content">    <span class="syntax-property">"sources"</span><span class="syntax-bracket">:</span> <span class="syntax-bracket">[</span><span class="syntax-string">"branch_name"</span><span class="syntax-bracket">,</span> <span class="syntax-string">"commit_message"</span><span class="syntax-bracket">]</span></span>
+                            </div>
+                            <div class="code-line">
+                                <span class="line-number">11</span>
+                                <span class="line-content">  <span class="syntax-bracket">}</span></span>
+                            </div>
+                            <div class="code-line">
+                                <span class="line-number">12</span>
+                                <span class="line-content"><span class="syntax-bracket">}</span></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab 2: Time Allocation -->
+                <div class="tab-content" data-tab="allocation" role="tabpanel">
+                    <div class="feature-info">
+                        <h3>Smart Time Allocation</h3>
+                        <p>
+                            Distributes your working hours intelligently based on git activity, commit frequency,
+                            and calendar events. No more guessing how long something took.
+                        </p>
+                        <ul class="feature-list">
+                            <li>Weighted distribution across multiple tickets per day</li>
+                            <li>Calendar integration for meeting time deduction</li>
+                            <li>Minimum billing increment support (15min, 30min, etc.)</li>
+                            <li>Manual adjustments before syncing to Tempo</li>
+                        </ul>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">
+                            <div class="code-tabs">
+                                <div class="code-tab active">time-allocation.json</div>
+                            </div>
+                            <div class="code-actions">
+                                <div class="code-action"></div>
+                                <div class="code-action"></div>
+                                <div class="code-action"></div>
+                            </div>
+                        </div>
+                        <div class="code-body">
+                            <div class="code-line">
+                                <span class="line-number">1</span>
+                                <span class="line-content"><span class="syntax-bracket">{</span></span>
+                            </div>
+                            <div class="code-line">
+                                <span class="line-number">2</span>
+                                <span class="line-content">  <span class="syntax-property">"date"</span><span class="syntax-bracket">:</span> <span class="syntax-string">"2026-01-18"</span><span class="syntax-bracket">,</span></span>
+                            </div>
+                            <div class="code-line">
+                                <span class="line-number">3</span>
+                                <span class="line-content">  <span class="syntax-property">"total_working_hours"</span><span class="syntax-bracket">:</span> <span class="syntax-number">8.0</span><span class="syntax-bracket">,</span></span>
+                            </div>
+                            <div class="code-line">
+                                <span class="line-number">4</span>
+                                <span class="line-content">  <span class="syntax-property">"meeting_hours"</span><span class="syntax-bracket">:</span> <span class="syntax-number">1.5</span><span class="syntax-bracket">,</span></span>
+                            </div>
+                            <div class="code-line">
+                                <span class="line-number">5</span>
+                                <span class="line-content">  <span class="syntax-property">"coding_hours"</span><span class="syntax-bracket">:</span> <span class="syntax-number">6.5</span><span class="syntax-bracket">,</span></span>
+                            </div>
+                            <div class="code-line">
+                                <span class="line-number">6</span>
+                                <span class="line-content">  <span class="syntax-property">"allocations"</span><span class="syntax-bracket">:</span> <span class="syntax-bracket">[</span></span>
+                            </div>
+                            <div class="code-line">
+                                <span class="line-number">7</span>
+                                <span class="line-content">    <span class="syntax-bracket">{</span> <span class="syntax-property">"ticket"</span><span class="syntax-bracket">:</span> <span class="syntax-string">"PROJ-1234"</span><span class="syntax-bracket">,</span> <span class="syntax-property">"hours"</span><span class="syntax-bracket">:</span> <span class="syntax-number">3.5</span><span class="syntax-bracket">,</span> <span class="syntax-property">"commits"</span><span class="syntax-bracket">:</span> <span class="syntax-number">8</span> <span class="syntax-bracket">},</span></span>
+                            </div>
+                            <div class="code-line">
+                                <span class="line-number">8</span>
+                                <span class="line-content">    <span class="syntax-bracket">{</span> <span class="syntax-property">"ticket"</span><span class="syntax-bracket">:</span> <span class="syntax-string">"PROJ-1235"</span><span class="syntax-bracket">,</span> <span class="syntax-property">"hours"</span><span class="syntax-bracket">:</span> <span class="syntax-number">2.0</span><span class="syntax-bracket">,</span> <span class="syntax-property">"commits"</span><span class="syntax-bracket">:</span> <span class="syntax-number">5</span> <span class="syntax-bracket">},</span></span>
+                            </div>
+                            <div class="code-line">
+                                <span class="line-number">9</span>
+                                <span class="line-content">    <span class="syntax-bracket">{</span> <span class="syntax-property">"ticket"</span><span class="syntax-bracket">:</span> <span class="syntax-string">"PROJ-1240"</span><span class="syntax-bracket">,</span> <span class="syntax-property">"hours"</span><span class="syntax-bracket">:</span> <span class="syntax-number">1.0</span><span class="syntax-bracket">,</span> <span class="syntax-property">"commits"</span><span class="syntax-bracket">:</span> <span class="syntax-number">2</span> <span class="syntax-bracket">}</span></span>
+                            </div>
+                            <div class="code-line">
+                                <span class="line-number">10</span>
+                                <span class="line-content">  <span class="syntax-bracket">]</span></span>
+                            </div>
+                            <div class="code-line">
+                                <span class="line-number">11</span>
+                                <span class="line-content"><span class="syntax-bracket">}</span></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab 3: Tempo Sync -->
+                <div class="tab-content" data-tab="sync" role="tabpanel">
+                    <div class="feature-info">
+                        <h3>Tempo Sync</h3>
+                        <p>
+                            Direct integration with Tempo's API. One click to create worklog entries with all required
+                            fields populated. Supports custom fields, billing codes, and work attributes.
+                        </p>
+                        <ul class="feature-list">
+                            <li>Batch worklog creation for entire days or weeks</li>
+                            <li>Custom field mapping and validation</li>
+                            <li>Conflict detection and resolution</li>
+                            <li>Sync history and audit trail</li>
+                        </ul>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">
+                            <div class="code-tabs">
+                                <div class="code-tab active">tempo-api-request.json</div>
+                            </div>
+                            <div class="code-actions">
+                                <div class="code-action"></div>
+                                <div class="code-action"></div>
+                                <div class="code-action"></div>
+                            </div>
+                        </div>
+                        <div class="code-body">
+                            <div class="code-line">
+                                <span class="line-number">1</span>
+                                <span class="line-content"><span class="syntax-keyword">POST</span> <span class="syntax-string">https://api.tempo.io/core/3/worklogs</span></span>
+                            </div>
+                            <div class="code-line">
+                                <span class="line-number">2</span>
+                                <span class="line-content"><span class="syntax-comment">// Authorization: Bearer &lt;token&gt;</span></span>
+                            </div>
+                            <div class="code-line">
+                                <span class="line-number">3</span>
+                                <span class="line-content"></span>
+                            </div>
+                            <div class="code-line">
+                                <span class="line-number">4</span>
+                                <span class="line-content"><span class="syntax-bracket">{</span></span>
+                            </div>
+                            <div class="code-line">
+                                <span class="line-number">5</span>
+                                <span class="line-content">  <span class="syntax-property">"issueKey"</span><span class="syntax-bracket">:</span> <span class="syntax-string">"PROJ-1234"</span><span class="syntax-bracket">,</span></span>
+                            </div>
+                            <div class="code-line">
+                                <span class="line-number">6</span>
+                                <span class="line-content">  <span class="syntax-property">"timeSpentSeconds"</span><span class="syntax-bracket">:</span> <span class="syntax-number">12600</span><span class="syntax-bracket">,</span> <span class="syntax-comment">// 3.5 hours</span></span>
+                            </div>
+                            <div class="code-line">
+                                <span class="line-number">7</span>
+                                <span class="line-content">  <span class="syntax-property">"startDate"</span><span class="syntax-bracket">:</span> <span class="syntax-string">"2026-01-18"</span><span class="syntax-bracket">,</span></span>
+                            </div>
+                            <div class="code-line">
+                                <span class="line-number">8</span>
+                                <span class="line-content">  <span class="syntax-property">"startTime"</span><span class="syntax-bracket">:</span> <span class="syntax-string">"09:00:00"</span><span class="syntax-bracket">,</span></span>
+                            </div>
+                            <div class="code-line">
+                                <span class="line-number">9</span>
+                                <span class="line-content">  <span class="syntax-property">"description"</span><span class="syntax-bracket">:</span> <span class="syntax-string">"Implemented OAuth 2.0 flow..."</span><span class="syntax-bracket">,</span></span>
+                            </div>
+                            <div class="code-line">
+                                <span class="line-number">10</span>
+                                <span class="line-content">  <span class="syntax-property">"authorAccountId"</span><span class="syntax-bracket">:</span> <span class="syntax-string">"5b10ac8d82e05b22cc7d4ef5"</span></span>
+                            </div>
+                            <div class="code-line">
+                                <span class="line-number">11</span>
+                                <span class="line-content"><span class="syntax-bracket">}</span></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab 4: Sprint Analytics -->
+                <div class="tab-content" data-tab="analytics" role="tabpanel">
+                    <div class="feature-info">
+                        <h3>Sprint Analytics</h3>
+                        <p>
+                            See where your time actually goes. Sprint-level breakdowns by project, epic, and ticket type.
+                            Perfect for retrospectives and capacity planning.
+                        </p>
+                        <ul class="feature-list">
+                            <li>Visual time distribution across epics and projects</li>
+                            <li>Sprint velocity tracking based on actual hours</li>
+                            <li>Compare estimated vs. actual time spent</li>
+                            <li>Export analytics for team reporting</li>
+                        </ul>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">
+                            <div class="code-tabs">
+                                <div class="code-tab active">sprint-analytics.json</div>
+                            </div>
+                            <div class="code-actions">
+                                <div class="code-action"></div>
+                                <div class="code-action"></div>
+                                <div class="code-action"></div>
+                            </div>
+                        </div>
+                        <div class="code-body">
+                            <div class="code-line">
+                                <span class="line-number">1</span>
+                                <span class="line-content"><span class="syntax-bracket">{</span></span>
+                            </div>
+                            <div class="code-line">
+                                <span class="line-number">2</span>
+                                <span class="line-content">  <span class="syntax-property">"sprint"</span><span class="syntax-bracket">:</span> <span class="syntax-string">"Sprint 24"</span><span class="syntax-bracket">,</span></span>
+                            </div>
+                            <div class="code-line">
+                                <span class="line-number">3</span>
+                                <span class="line-content">  <span class="syntax-property">"period"</span><span class="syntax-bracket">:</span> <span class="syntax-string">"Jan 4 - Jan 18, 2026"</span><span class="syntax-bracket">,</span></span>
+                            </div>
+                            <div class="code-line">
+                                <span class="line-number">4</span>
+                                <span class="line-content">  <span class="syntax-property">"total_hours"</span><span class="syntax-bracket">:</span> <span class="syntax-number">78.5</span><span class="syntax-bracket">,</span></span>
+                            </div>
+                            <div class="code-line">
+                                <span class="line-number">5</span>
+                                <span class="line-content">  <span class="syntax-property">"by_type"</span><span class="syntax-bracket">:</span> <span class="syntax-bracket">{</span></span>
+                            </div>
+                            <div class="code-line">
+                                <span class="line-number">6</span>
+                                <span class="line-content">    <span class="syntax-property">"Feature"</span><span class="syntax-bracket">:</span> <span class="syntax-number">45.0</span><span class="syntax-bracket">,</span></span>
+                            </div>
+                            <div class="code-line">
+                                <span class="line-number">7</span>
+                                <span class="line-content">    <span class="syntax-property">"Bug"</span><span class="syntax-bracket">:</span> <span class="syntax-number">18.5</span><span class="syntax-bracket">,</span></span>
+                            </div>
+                            <div class="code-line">
+                                <span class="line-number">8</span>
+                                <span class="line-content">    <span class="syntax-property">"Technical Debt"</span><span class="syntax-bracket">:</span> <span class="syntax-number">15.0</span></span>
+                            </div>
+                            <div class="code-line">
+                                <span class="line-number">9</span>
+                                <span class="line-content">  <span class="syntax-bracket">},</span></span>
+                            </div>
+                            <div class="code-line">
+                                <span class="line-number">10</span>
+                                <span class="line-content">  <span class="syntax-property">"velocity"</span><span class="syntax-bracket">:</span> <span class="syntax-number">34</span><span class="syntax-bracket">,</span> <span class="syntax-comment">// story points</span></span>
+                            </div>
+                            <div class="code-line">
+                                <span class="line-number">11</span>
+                                <span class="line-content">  <span class="syntax-property">"tickets_completed"</span><span class="syntax-bracket">:</span> <span class="syntax-number">23</span></span>
+                            </div>
+                            <div class="code-line">
+                                <span class="line-number">12</span>
+                                <span class="line-content"><span class="syntax-bracket">}</span></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab 5: Worklog Descriptions -->
+                <div class="tab-content" data-tab="descriptions" role="tabpanel">
+                    <div class="feature-info">
+                        <h3>Worklog Descriptions</h3>
+                        <p>
+                            Auto-generated worklog descriptions from your commit messages. Or write your own.
+                            Either way, Tempo gets the context it needs.
+                        </p>
+                        <ul class="feature-list">
+                            <li>Commit message aggregation for daily summaries</li>
+                            <li>Template support for standardized descriptions</li>
+                            <li>Bulk editing across multiple worklogs</li>
+                            <li>Description templates per project or ticket type</li>
+                        </ul>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">
+                            <div class="code-tabs">
+                                <div class="code-tab active">worklog-description.txt</div>
+                            </div>
+                            <div class="code-actions">
+                                <div class="code-action"></div>
+                                <div class="code-action"></div>
+                                <div class="code-action"></div>
+                            </div>
+                        </div>
+                        <div class="code-body">
+                            <div class="code-line">
+                                <span class="line-number">1</span>
+                                <span class="line-content"><span class="syntax-comment">// Auto-generated from commits:</span></span>
+                            </div>
+                            <div class="code-line">
+                                <span class="line-number">2</span>
+                                <span class="line-content"></span>
+                            </div>
+                            <div class="code-line">
+                                <span class="line-number">3</span>
+                                <span class="line-content">Implemented OAuth <span class="syntax-number">2.0</span> flow <span class="syntax-keyword">for</span> Google SSO</span>
+                            </div>
+                            <div class="code-line">
+                                <span class="line-number">4</span>
+                                <span class="line-content"></span>
+                            </div>
+                            <div class="code-line">
+                                <span class="line-number">5</span>
+                                <span class="line-content">- Added token refresh mechanism</span>
+                            </div>
+                            <div class="code-line">
+                                <span class="line-number">6</span>
+                                <span class="line-content">- Integrated <span class="syntax-keyword">with</span> user profile sync</span>
+                            </div>
+                            <div class="code-line">
+                                <span class="line-number">7</span>
+                                <span class="line-content">- Fixed edge <span class="syntax-keyword">case</span> <span class="syntax-keyword">in</span> callback handling</span>
+                            </div>
+                            <div class="code-line">
+                                <span class="line-number">8</span>
+                                <span class="line-content">- Updated tests <span class="syntax-keyword">for</span> <span class="syntax-keyword">new</span> auth flow</span>
+                            </div>
+                            <div class="code-line">
+                                <span class="line-number">9</span>
+                                <span class="line-content"></span>
+                            </div>
+                            <div class="code-line">
+                                <span class="line-number">10</span>
+                                <span class="line-content"><span class="syntax-number">8</span> commits | <span class="syntax-number">3.5</span> hours tracked</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab 6: Offline Queueing -->
+                <div class="tab-content" data-tab="offline" role="tabpanel">
+                    <div class="feature-info">
+                        <h3>Offline Queueing</h3>
+                        <p>
+                            No internet? No problem. Clearical queues your time entries and syncs when you're back online.
+                            Perfect for flights, remote work, or flaky VPNs.
+                        </p>
+                        <ul class="feature-list">
+                            <li>Local-first architecture with automatic sync</li>
+                            <li>Conflict resolution for overlapping entries</li>
+                            <li>Retry mechanism with exponential backoff</li>
+                            <li>Sync status indicators and manual retry controls</li>
+                        </ul>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">
+                            <div class="code-tabs">
+                                <div class="code-tab active">sync-queue.json</div>
+                            </div>
+                            <div class="code-actions">
+                                <div class="code-action"></div>
+                                <div class="code-action"></div>
+                                <div class="code-action"></div>
+                            </div>
+                        </div>
+                        <div class="code-body">
+                            <div class="code-line">
+                                <span class="line-number">1</span>
+                                <span class="line-content"><span class="syntax-bracket">{</span></span>
+                            </div>
+                            <div class="code-line">
+                                <span class="line-number">2</span>
+                                <span class="line-content">  <span class="syntax-property">"status"</span><span class="syntax-bracket">:</span> <span class="syntax-string">"offline"</span><span class="syntax-bracket">,</span></span>
+                            </div>
+                            <div class="code-line">
+                                <span class="line-number">3</span>
+                                <span class="line-content">  <span class="syntax-property">"queued_entries"</span><span class="syntax-bracket">:</span> <span class="syntax-number">12</span><span class="syntax-bracket">,</span></span>
+                            </div>
+                            <div class="code-line">
+                                <span class="line-number">4</span>
+                                <span class="line-content">  <span class="syntax-property">"last_sync"</span><span class="syntax-bracket">:</span> <span class="syntax-string">"2026-01-17T16:30:00Z"</span><span class="syntax-bracket">,</span></span>
+                            </div>
+                            <div class="code-line">
+                                <span class="line-number">5</span>
+                                <span class="line-content">  <span class="syntax-property">"pending"</span><span class="syntax-bracket">:</span> <span class="syntax-bracket">[</span></span>
+                            </div>
+                            <div class="code-line">
+                                <span class="line-number">6</span>
+                                <span class="line-content">    <span class="syntax-bracket">{</span></span>
+                            </div>
+                            <div class="code-line">
+                                <span class="line-number">7</span>
+                                <span class="line-content">      <span class="syntax-property">"id"</span><span class="syntax-bracket">:</span> <span class="syntax-string">"local_1234"</span><span class="syntax-bracket">,</span></span>
+                            </div>
+                            <div class="code-line">
+                                <span class="line-number">8</span>
+                                <span class="line-content">      <span class="syntax-property">"ticket"</span><span class="syntax-bracket">:</span> <span class="syntax-string">"PROJ-1234"</span><span class="syntax-bracket">,</span></span>
+                            </div>
+                            <div class="code-line">
+                                <span class="line-number">9</span>
+                                <span class="line-content">      <span class="syntax-property">"hours"</span><span class="syntax-bracket">:</span> <span class="syntax-number">3.5</span><span class="syntax-bracket">,</span></span>
+                            </div>
+                            <div class="code-line">
+                                <span class="line-number">10</span>
+                                <span class="line-content">      <span class="syntax-property">"will_sync"</span><span class="syntax-bracket">:</span> <span class="syntax-string">"when_online"</span></span>
+                            </div>
+                            <div class="code-line">
+                                <span class="line-number">11</span>
+                                <span class="line-content">    <span class="syntax-bracket">}</span></span>
+                            </div>
+                            <div class="code-line">
+                                <span class="line-number">12</span>
+                                <span class="line-content">  <span class="syntax-bracket">]</span></span>
+                            </div>
+                            <div class="code-line">
+                                <span class="line-number">13</span>
+                                <span class="line-content"><span class="syntax-bracket">}</span></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA SECTION -->
+    <section id="pricing" class="cta-section section">
+        <div class="container">
+            <div class="cta-content">
+                <h2>Never Miss Another Timesheet</h2>
+                <p>
+                    Work tracked. Tickets matched. Tempo updated. All before standup.
+                </p>
+                <a href="#download" class="btn btn-primary" id="download">
+                    Download for Mac — Free 14-Day Trial
+                </a>
+                <div class="cta-features">
+                    <div class="cta-feature">No credit card required</div>
+                    <div class="cta-feature">14-day free trial</div>
+                    <div class="cta-feature">Cancel anytime</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- FOOTER -->
+    <footer>
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-logo">Clearical</div>
+                <div class="footer-tagline">// Time tracking for developers who hate time tracking</div>
+                <div class="footer-links">
+                    <a href="#features" class="footer-link">Features</a>
+                    <a href="#pricing" class="footer-link">Pricing</a>
+                    <a href="#" class="footer-link">Documentation</a>
+                    <a href="#" class="footer-link">Support</a>
+                    <a href="#" class="footer-link">Privacy</a>
+                </div>
+                <div class="footer-copy">
+                    &copy; 2026 Clearical. Built for developers, by developers.
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // Navigation scroll effect
+        const navHeader = document.getElementById('nav-header');
+        let lastScrollTop = 0;
+
+        window.addEventListener('scroll', () => {
+            const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+
+            if (scrollTop > 100) {
+                navHeader.classList.add('scrolled');
+            } else {
+                navHeader.classList.remove('scrolled');
+            }
+
+            lastScrollTop = scrollTop;
+        });
+
+        // Tab switching functionality
+        const tabButtons = document.querySelectorAll('.tab-button');
+        const tabContents = document.querySelectorAll('.tab-content');
+
+        tabButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                const targetTab = button.dataset.tab;
+
+                // Remove active state from all buttons and contents
+                tabButtons.forEach(btn => {
+                    btn.classList.remove('active');
+                    btn.setAttribute('aria-selected', 'false');
+                });
+                tabContents.forEach(content => {
+                    content.classList.remove('active');
+                });
+
+                // Add active state to clicked button and corresponding content
+                button.classList.add('active');
+                button.setAttribute('aria-selected', 'true');
+                document.querySelector(`.tab-content[data-tab="${targetTab}"]`).classList.add('active');
+            });
+        });
+
+        // Smooth scrolling for anchor links
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const targetId = this.getAttribute('href');
+                if (targetId === '#download') {
+                    // Scroll to CTA section
+                    const ctaSection = document.getElementById('pricing');
+                    if (ctaSection) {
+                        ctaSection.scrollIntoView({
+                            behavior: 'smooth',
+                            block: 'start'
+                        });
+                    }
+                    return;
+                }
+                const targetElement = document.querySelector(targetId);
+                if (targetElement) {
+                    const navHeight = navHeader.offsetHeight;
+                    const targetPosition = targetElement.getBoundingClientRect().top + window.pageYOffset - navHeight;
+                    window.scrollTo({
+                        top: targetPosition,
+                        behavior: 'smooth'
+                    });
+                }
+            });
+        });
+
+        // Add entrance animations on scroll
+        const observerOptions = {
+            threshold: 0.1,
+            rootMargin: '0px 0px -50px 0px'
+        };
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.style.opacity = '1';
+                    entry.target.style.transform = 'translateY(0)';
+                }
+            });
+        }, observerOptions);
+
+        // Observe elements for scroll animations
+        document.querySelectorAll('.pain-card, .step, .feature-info, .code-block, .integration-card, .comparison-card').forEach(el => {
+            el.style.opacity = '0';
+            el.style.transform = 'translateY(20px)';
+            el.style.transition = 'opacity 0.6s ease-out, transform 0.6s ease-out';
+            observer.observe(el);
+        });
+    </script>
+</body>
+</html>

@@ -1091,15 +1091,18 @@ function App() {
                 {/* Timer Display - Split-flap display with retro flip clock housing */}
                 <div className="relative flex justify-center">
                   <FlipClockContainer>
-                    <SplitFlapDisplay value={formatTime(elapsed)} size="large" />
-                    {/* Recording Controls with Waveform - inside the flip clock container */}
-                    <div className="mt-4">
-                      <RecordingControls
-                        isRecording={isAudioRecording}
-                        onToggleRecording={handleToggleRecording}
-                        disabled={!isRunning || isStopping}
-                        elapsedMs={elapsed}
-                      />
+                    {/* Wrapper to align recording controls with split flap display */}
+                    <div className="inline-flex flex-col">
+                      <SplitFlapDisplay value={formatTime(elapsed)} size="large" />
+                      {/* Recording Controls with Waveform - inside the flip clock container */}
+                      <div className="mt-4">
+                        <RecordingControls
+                          isRecording={isAudioRecording}
+                          onToggleRecording={handleToggleRecording}
+                          disabled={!isRunning || isStopping}
+                          elapsedMs={elapsed}
+                        />
+                      </div>
                     </div>
                   </FlipClockContainer>
                   {isPaused && (
