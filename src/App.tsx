@@ -709,6 +709,29 @@ function App() {
     }
   }, [setActiveRecordingEntry, isRunning, checkPermissions, startTimer]);
 
+  // Listen for recording stop events from widget or main process (media detection)
+  // This keeps App.tsx's isAudioRecording state in sync with actual recording state
+  useEffect(() => {
+    const onStopFn = window.electron?.ipcRenderer?.meeting?.onRecordingShouldStop;
+    if (!onStopFn) {
+      console.log('[App] onRecordingShouldStop not available');
+      return;
+    }
+
+    console.log('[App] Setting up recording stop listener');
+    const unsubscribe = onStopFn((data: { entryId: string; duration: number }) => {
+      console.log('[App] Recording stopped externally (widget or media ended):', data);
+      // Update local recording state
+      recordingSessionIdRef.current = null;
+      setIsAudioRecording(false);
+    });
+
+    return () => {
+      console.log('[App] Cleaning up recording stop listener');
+      unsubscribe?.();
+    };
+  }, []);
+
   // Listen for widget prompt to start timer (meeting detected but timer not running)
   useEffect(() => {
     // @ts-ignore

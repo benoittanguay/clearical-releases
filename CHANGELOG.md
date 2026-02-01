@@ -2,6 +2,14 @@
 
 All notable changes to Clearical will be documented in this file.
 
+## [1.7.28] - 2025-01-31
+
+### Bug Fixes
+- **Audio Recording Quality**: Ensured native audio module with resampling fixes is properly included in release build
+- **Recording Widget**: Fixed issue where Chrono tab continued showing recording animation after stopping via widget
+
+---
+
 ## [1.7.27] - 2025-01-31
 
 ### Bug Fixes
