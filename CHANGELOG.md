@@ -2,6 +2,17 @@
 
 All notable changes to Clearical will be documented in this file.
 
+## [1.7.26] - 2025-01-31
+
+### Bug Fixes
+- **Audio Recording Quality**: Fixed severely distorted audio recordings (chipmunk effect and grainy noise)
+  - Added proper audio format detection and conversion for non-float sample formats
+  - Added sample rate resampling when source audio differs from 48kHz target
+  - Both microphone and system audio capture now properly normalize to consistent format
+- **Recording Transcription**: Fixed issue where transcription wasn't saved when stopping recording via widget before stopping timer
+
+---
+
 ## [1.7.25] - 2025-01-31
 
 ### New Features
