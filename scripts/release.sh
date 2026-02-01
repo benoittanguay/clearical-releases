@@ -380,15 +380,15 @@ The app is **signed and notarized** by Apple for your security."
     echo ""
     echo -e "${GREEN}✓ Published: https://github.com/benoittanguay/clearical-releases/releases/tag/v${VERSION}${NC}"
 
-    # Step 8: Update marketing website (demo.html)
+    # Step 8: Update marketing website (demo.html) on gh-pages branch
     echo ""
     echo -e "${BLUE}Step 8: Updating marketing website...${NC}"
 
     if [ -f "$PROJECT_ROOT/demo.html" ]; then
-        # Clone the releases repo to a temp directory
+        # Clone only the gh-pages branch to a temp directory
         TEMP_RELEASES_DIR=$(mktemp -d)
-        echo "  Cloning clearical-releases repo..."
-        git clone --depth 1 https://github.com/benoittanguay/clearical-releases.git "$TEMP_RELEASES_DIR" 2>/dev/null
+        echo "  Cloning clearical-releases gh-pages branch..."
+        git clone --depth 1 --branch gh-pages https://github.com/benoittanguay/clearical-releases.git "$TEMP_RELEASES_DIR" 2>/dev/null
 
         # Copy demo.html
         cp "$PROJECT_ROOT/demo.html" "$TEMP_RELEASES_DIR/demo.html"
