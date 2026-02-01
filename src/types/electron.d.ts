@@ -412,7 +412,7 @@ export interface ElectronAPI {
             getRecordingStatus: () => Promise<{ success: boolean; isRecording: boolean; entryId: string | null; platform: string | null; error?: string }>;
             setAutoRecordEnabled: (enabled: boolean) => Promise<{ success: boolean; error?: string }>;
             // Audio capture and transcription
-            saveAudioAndTranscribe: (entryId: string, audioBase64: string, mimeType?: string) => Promise<{
+            saveAudioAndTranscribe: (entryId: string, audioDataOrPath: string, mimeType?: string, isFilePath?: boolean) => Promise<{
                 success: boolean;
                 audioPath?: string;  // Path to saved audio file (always returned, even on failure)
                 mimeType?: string;   // MIME type of audio file
@@ -473,6 +473,9 @@ export interface ElectronAPI {
                 channelCount: number;
                 sampleRate: number;
                 sampleCount: number;
+                detectedRate?: number;
+                rateDetected?: boolean;
+                resampling?: boolean;
             }) => void) => (() => void) | undefined;
             // Native microphone capture (bypasses getUserMedia limitations when Chrome has exclusive mic access)
             isMicCaptureAvailable: () => Promise<boolean>;
@@ -483,7 +486,28 @@ export interface ElectronAPI {
                 channelCount: number;
                 sampleRate: number;
                 sampleCount: number;
+                detectedRate?: number;
+                rateDetected?: boolean;
+                resampling?: boolean;
             }) => void) => (() => void) | undefined;
+            // File-based recording (direct to WAV files, no resampling or mixing)
+            startFileRecording: (micPath: string, systemPath: string) => Promise<{
+                success: boolean;
+                mic?: { success: boolean; error?: string };
+                system?: { success: boolean; error?: string };
+                error?: string;
+            }>;
+            stopFileRecording: () => Promise<{
+                success: boolean;
+                mic?: { filePath?: string; sampleRate?: number; success: boolean };
+                system?: { filePath?: string; sampleRate?: number; success: boolean };
+                error?: string;
+            }>;
+            mergeAudioFiles: (micPath: string | null, systemPath: string | null, outputPath: string) => Promise<{
+                success: boolean;
+                outputPath?: string;
+                error?: string;
+            }>;
             // Event subscriptions for automatic recording
             onRecordingShouldStart: (callback: (data: { entryId: string; timestamp: number }) => void) => (() => void) | undefined;
             onRecordingShouldStop: (callback: (data: { entryId: string; duration: number }) => void) => (() => void) | undefined;

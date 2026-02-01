@@ -350,3 +350,266 @@ export function getFileSizeBytes(filePath: string): number {
     const stats = fs.statSync(filePath);
     return stats.size;
 }
+
+/**
+ * Result of audio merge operation
+ */
+export interface MergeResult {
+    success: boolean;
+    outputPath?: string;
+    error?: string;
+}
+
+/**
+ * Merge two audio files (mic and system audio) into a single file
+ *
+ * Uses FFmpeg to:
+ * 1. Resample both inputs to 48kHz
+ * 2. Mix them into a single stereo output
+ * 3. Output as WebM/Opus for transcription compatibility
+ *
+ * @param micPath - Path to microphone audio (WAV, any sample rate)
+ * @param systemPath - Path to system audio (WAV, any sample rate)
+ * @param outputPath - Path for the merged output file
+ * @returns MergeResult with success status and output path
+ */
+export async function mergeAudioFiles(
+    micPath: string | null,
+    systemPath: string | null,
+    outputPath: string
+): Promise<MergeResult> {
+    console.log('[AudioChunker] Merging audio files');
+    console.log('[AudioChunker]   Mic:', micPath);
+    console.log('[AudioChunker]   System:', systemPath);
+    console.log('[AudioChunker]   Output:', outputPath);
+
+    // Check if ffmpeg is available
+    const ffmpegAvailable = await isFfmpegAvailable();
+    if (!ffmpegAvailable) {
+        return {
+            success: false,
+            error: 'ffmpeg not available'
+        };
+    }
+
+    // Validate inputs - need at least one file
+    const hasMic = micPath && fs.existsSync(micPath);
+    const hasSystem = systemPath && fs.existsSync(systemPath);
+
+    if (!hasMic && !hasSystem) {
+        return {
+            success: false,
+            error: 'No audio files to merge'
+        };
+    }
+
+    // Probe input files to log their actual properties
+    const probeFile = async (filePath: string, label: string) => {
+        return new Promise<void>((resolve) => {
+            const ffprobe = spawn('ffprobe', [
+                '-v', 'error',
+                '-select_streams', 'a:0',
+                '-show_entries', 'stream=sample_rate,channels,duration',
+                '-of', 'default=noprint_wrappers=1',
+                filePath
+            ]);
+            let output = '';
+            ffprobe.stdout.on('data', (data) => { output += data.toString(); });
+            ffprobe.stderr.on('data', (data) => { output += data.toString(); });
+            ffprobe.on('close', () => {
+                console.log(`[AudioChunker] ${label} properties:`, output.trim().replace(/\n/g, ', '));
+                resolve();
+            });
+            ffprobe.on('error', () => {
+                console.log(`[AudioChunker] Failed to probe ${label}`);
+                resolve();
+            });
+            setTimeout(() => { ffprobe.kill(); resolve(); }, 5000);
+        });
+    };
+
+    // Probe both files
+    if (hasMic) await probeFile(micPath!, 'Mic file');
+    if (hasSystem) await probeFile(systemPath!, 'System file');
+
+    // Create output directory if needed
+    const outputDir = path.dirname(outputPath);
+    if (!fs.existsSync(outputDir)) {
+        fs.mkdirSync(outputDir, { recursive: true });
+    }
+
+    return new Promise((resolve) => {
+        let ffmpegArgs: string[];
+
+        if (hasMic && hasSystem) {
+            // Merge both files
+            // Use amix filter to combine, with duration=longest to keep all audio
+            ffmpegArgs = [
+                '-y',                           // Overwrite output
+                '-i', micPath!,                 // Input 1: mic
+                '-i', systemPath!,              // Input 2: system audio
+                '-filter_complex',
+                // Resample both to 48kHz, convert to stereo, then mix
+                '[0:a]aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo[mic];' +
+                '[1:a]aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo[sys];' +
+                '[mic][sys]amix=inputs=2:duration=longest:dropout_transition=0[out]',
+                '-map', '[out]',
+                '-c:a', 'libopus',              // Encode as Opus
+                '-b:a', '128k',                 // 128kbps bitrate
+                '-ar', '48000',                 // 48kHz sample rate
+                outputPath
+            ];
+        } else if (hasMic) {
+            // Only mic audio
+            ffmpegArgs = [
+                '-y',
+                '-i', micPath!,
+                '-af', 'aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo',
+                '-c:a', 'libopus',
+                '-b:a', '128k',
+                '-ar', '48000',
+                outputPath
+            ];
+        } else {
+            // Only system audio
+            ffmpegArgs = [
+                '-y',
+                '-i', systemPath!,
+                '-af', 'aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo',
+                '-c:a', 'libopus',
+                '-b:a', '128k',
+                '-ar', '48000',
+                outputPath
+            ];
+        }
+
+        console.log('[AudioChunker] Running ffmpeg with args:', ffmpegArgs.join(' '));
+
+        const ffmpeg = spawn('ffmpeg', ffmpegArgs);
+
+        let stderr = '';
+        ffmpeg.stderr.on('data', (data) => {
+            stderr += data.toString();
+        });
+
+        ffmpeg.on('error', (err) => {
+            console.error('[AudioChunker] ffmpeg error:', err);
+            resolve({
+                success: false,
+                error: `ffmpeg error: ${err.message}`
+            });
+        });
+
+        ffmpeg.on('close', (code) => {
+            if (code === 0) {
+                console.log('[AudioChunker] Merge successful:', outputPath);
+                resolve({
+                    success: true,
+                    outputPath
+                });
+            } else {
+                console.error('[AudioChunker] ffmpeg failed with code:', code);
+                console.error('[AudioChunker] stderr:', stderr);
+                resolve({
+                    success: false,
+                    error: `ffmpeg exited with code ${code}: ${stderr.slice(-500)}`
+                });
+            }
+        });
+
+        // Timeout after 5 minutes for long recordings
+        setTimeout(() => {
+            console.error('[AudioChunker] ffmpeg merge timeout');
+            ffmpeg.kill();
+            resolve({
+                success: false,
+                error: 'ffmpeg merge timeout'
+            });
+        }, 300000);
+    });
+}
+
+/**
+ * Convert a single audio file to WebM/Opus format for transcription
+ *
+ * @param inputPath - Path to input audio file (any format FFmpeg supports)
+ * @param outputPath - Path for the output WebM file
+ * @returns MergeResult with success status and output path
+ */
+export async function convertToWebm(
+    inputPath: string,
+    outputPath: string
+): Promise<MergeResult> {
+    console.log('[AudioChunker] Converting to WebM:', inputPath, '->', outputPath);
+
+    if (!fs.existsSync(inputPath)) {
+        return {
+            success: false,
+            error: 'Input file not found'
+        };
+    }
+
+    const ffmpegAvailable = await isFfmpegAvailable();
+    if (!ffmpegAvailable) {
+        return {
+            success: false,
+            error: 'ffmpeg not available'
+        };
+    }
+
+    // Create output directory if needed
+    const outputDir = path.dirname(outputPath);
+    if (!fs.existsSync(outputDir)) {
+        fs.mkdirSync(outputDir, { recursive: true });
+    }
+
+    return new Promise((resolve) => {
+        const ffmpeg = spawn('ffmpeg', [
+            '-y',
+            '-i', inputPath,
+            '-af', 'aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo',
+            '-c:a', 'libopus',
+            '-b:a', '128k',
+            '-ar', '48000',
+            outputPath
+        ]);
+
+        let stderr = '';
+        ffmpeg.stderr.on('data', (data) => {
+            stderr += data.toString();
+        });
+
+        ffmpeg.on('error', (err) => {
+            console.error('[AudioChunker] ffmpeg error:', err);
+            resolve({
+                success: false,
+                error: `ffmpeg error: ${err.message}`
+            });
+        });
+
+        ffmpeg.on('close', (code) => {
+            if (code === 0) {
+                console.log('[AudioChunker] Conversion successful');
+                resolve({
+                    success: true,
+                    outputPath
+                });
+            } else {
+                console.error('[AudioChunker] ffmpeg conversion failed:', code, stderr.slice(-500));
+                resolve({
+                    success: false,
+                    error: `ffmpeg exited with code ${code}`
+                });
+            }
+        });
+
+        // Timeout after 5 minutes
+        setTimeout(() => {
+            ffmpeg.kill();
+            resolve({
+                success: false,
+                error: 'ffmpeg conversion timeout'
+            });
+        }, 300000);
+    });
+}
