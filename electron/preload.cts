@@ -320,9 +320,9 @@ contextBridge.exposeInMainWorld('electron', {
                 ipcRenderer.on('meeting:event-recording-should-stop', subscription);
                 return () => ipcRenderer.removeListener('meeting:event-recording-should-stop', subscription);
             },
-            // Send audio levels to widget for visualization
-            sendAudioLevels: (levels: number[]) =>
-                ipcRenderer.send('meeting:send-audio-levels', levels),
+            // Send audio levels to widget for visualization (elapsedMs for waveform sync)
+            sendAudioLevels: (levels: number[], elapsedMs?: number) =>
+                ipcRenderer.send('meeting:send-audio-levels', { levels, elapsedMs }),
         },
         // Working hours operations
         workingHours: {

@@ -2044,14 +2044,14 @@ ipcMain.handle(MEETING_IPC_CHANNELS.SET_AUTO_RECORD_ENABLED, (_event, enabled: b
 
 // Audio levels forwarding to widget
 let audioLevelsForwardedCount = 0;
-ipcMain.on(MEETING_IPC_CHANNELS.SEND_AUDIO_LEVELS, async (_event, levels: number[]) => {
+ipcMain.on(MEETING_IPC_CHANNELS.SEND_AUDIO_LEVELS, async (_event, data: { levels: number[]; elapsedMs?: number }) => {
     audioLevelsForwardedCount++;
     if (audioLevelsForwardedCount <= 3 || audioLevelsForwardedCount % 100 === 0) {
         console.log('[Main] Forwarding audio levels to widget, count:', audioLevelsForwardedCount);
     }
     const { getRecordingWidgetManager } = await import('./meeting/recordingWidgetManager.js');
     const widgetManager = getRecordingWidgetManager();
-    widgetManager.sendAudioLevels(levels);
+    widgetManager.sendAudioLevels(data.levels, data.elapsedMs);
 });
 
 // Recording failed to start - close widget and notify user

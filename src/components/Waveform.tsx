@@ -2,59 +2,63 @@
  * Waveform Component
  *
  * Reusable audio waveform visualization that shows real-time audio levels.
- * Used in both the recording widget and the main app chrono page.
+ * Uses smooth scrolling with proper state management to avoid nested updates.
  */
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import './Waveform.css';
+
+interface WaveformProps {
+    isRecording: boolean;
+    audioLevel?: number; // 0-1 normalized audio level
+    elapsedMs?: number; // Recording elapsed time in milliseconds (for sync)
+    width?: number; // Container width in pixels
+    height?: number; // Container height in pixels
+    variant?: 'dark' | 'light'; // Color scheme
+    showPlayhead?: boolean; // Show the center playhead line
+    showScanlines?: boolean; // Show the scanlines overlay
+}
 
 interface WaveformBar {
     height: number;
     id: number;
 }
 
-interface WaveformProps {
-    isRecording: boolean;
-    audioLevel?: number; // 0-1 normalized audio level
-    width?: number; // Container width in pixels
-    height?: number; // Container height in pixels
-    variant?: 'dark' | 'light'; // Color scheme
-}
-
 // Waveform configuration
 const BAR_WIDTH = 2;
 const BAR_GAP = 4;
 const BAR_STEP = BAR_WIDTH + BAR_GAP;
-const SCROLL_SPEED = 12; // 12px/s with 6px bars = 2 bars/second
+const SCROLL_SPEED = 12; // pixels per second
 const MIN_HEIGHT = 6;
-const MAX_HEIGHT_RATIO = 0.75; // Max bar height as ratio of container
+const MAX_HEIGHT_RATIO = 0.75;
 
 export function Waveform({
     isRecording,
     audioLevel = 0,
+    elapsedMs = 0,
     width = 400,
     height = 48,
-    variant = 'dark'
+    variant = 'dark',
+    showPlayhead = true,
+    showScanlines = true
 }: WaveformProps): React.ReactElement {
     const maxHeight = height * MAX_HEIGHT_RATIO;
     const containerWidth = width;
 
-    // Waveform state
-    const [bars, setBars] = useState<WaveformBar[]>([]);
-    const [trackPosition, setTrackPosition] = useState(containerWidth / 2);
-    const [trackScale, setTrackScale] = useState(1);
-
-    // Refs
-    const animationFrameRef = useRef<number>(0);
-    const lastTimeRef = useRef<number>(performance.now());
-    const barIdCounterRef = useRef<number>(0);
-    const audioStateRef = useRef<'normal' | 'loud' | 'quiet'>('normal');
-    const stateCounterRef = useRef<number>(0);
-    const lastHeightRef = useRef<number>(maxHeight * 0.5);
-    const currentIntensityRef = useRef<number>(0);
-    const currentAudioLevelRef = useRef<number>(0);
-    const hasRealAudioRef = useRef<boolean>(false);
+    // Use refs for animation state to avoid re-render loops
+    const barsRef = useRef<WaveformBar[]>([]);
+    const trackPositionRef = useRef(0);
+    const barIdCounterRef = useRef(0);
+    const lastTimeRef = useRef(performance.now());
+    const lastHeightRef = useRef(maxHeight * 0.5);
+    const currentAudioLevelRef = useRef(0);
+    const hasRealAudioRef = useRef(false);
     const recentAudioLevelsRef = useRef<number[]>([]);
+    const initializedRef = useRef(false);
+    const initialElapsedMsRef = useRef(elapsedMs); // Capture initial elapsed time for sync
+
+    // State for rendering (updated periodically)
+    const [, forceUpdate] = useState(0);
 
     // Update audio level ref when prop changes
     useEffect(() => {
@@ -64,137 +68,125 @@ export function Waveform({
             if (recentAudioLevelsRef.current.length > 5) {
                 recentAudioLevelsRef.current.shift();
             }
-            const smoothedLevel = Math.max(...recentAudioLevelsRef.current);
-            const compressed = Math.pow(smoothedLevel, 0.5);
-            currentAudioLevelRef.current = Math.max(0.05, Math.min(1, compressed));
+            // Use average instead of max for more natural variation
+            const avg = recentAudioLevelsRef.current.reduce((a, b) => a + b, 0) / recentAudioLevelsRef.current.length;
+            // Light compression to preserve dynamic range
+            const compressed = Math.pow(avg, 0.7);
+            currentAudioLevelRef.current = Math.max(0.02, Math.min(1, compressed));
         }
     }, [audioLevel]);
 
-    // Generate bar height based on audio state or real data
+    // Generate bar height based on audio level
     const generateBarHeight = useCallback((): number => {
-        // If we have real audio levels, use them
         if (hasRealAudioRef.current && isRecording) {
             const level = currentAudioLevelRef.current;
-
-            // Add organic variation that scales with the audio level
-            const variationRange = 0.15 + level * 0.25;
+            // More variation at all audio levels for dynamic waveform
+            const variationRange = 0.3 + level * 0.4;
             const variation = 1 + (Math.random() - 0.5) * 2 * variationRange;
-
-            // Calculate base height from audio level
-            const baseHeight = MIN_HEIGHT + (maxHeight - MIN_HEIGHT) * level;
-
-            // Apply variation and smooth with previous height for continuity
+            // Scale the level to preserve dynamic range (quiet = short bars)
+            const scaledLevel = Math.pow(level, 0.7);
+            const baseHeight = MIN_HEIGHT + (maxHeight - MIN_HEIGHT) * scaledLevel;
             const targetHeight = baseHeight * variation;
-            const smoothed = lastHeightRef.current * 0.3 + targetHeight * 0.7;
+            // Less smoothing for more responsive movement
+            const smoothed = lastHeightRef.current * 0.2 + targetHeight * 0.8;
             lastHeightRef.current = smoothed;
-
             return Math.max(MIN_HEIGHT, Math.min(maxHeight, Math.round(smoothed)));
         }
 
-        // Fallback to simulated audio when recording
         if (isRecording) {
-            stateCounterRef.current--;
-            if (stateCounterRef.current <= 0) {
-                const rand = Math.random();
-                if (rand < 0.15) {
-                    audioStateRef.current = 'loud';
-                    stateCounterRef.current = 3 + Math.floor(Math.random() * 8);
-                } else if (rand < 0.3) {
-                    audioStateRef.current = 'quiet';
-                    stateCounterRef.current = 5 + Math.floor(Math.random() * 10);
-                } else {
-                    audioStateRef.current = 'normal';
-                    stateCounterRef.current = 2 + Math.floor(Math.random() * 5);
-                }
-            }
-
-            let targetHeight;
-            if (audioStateRef.current === 'loud') {
-                targetHeight = maxHeight * (0.7 + Math.random() * 0.3);
-            } else if (audioStateRef.current === 'quiet') {
-                targetHeight = MIN_HEIGHT + Math.random() * 8;
-            } else {
-                targetHeight = MIN_HEIGHT + (maxHeight - MIN_HEIGHT) * (0.3 + Math.random() * 0.4);
-            }
-
-            lastHeightRef.current = lastHeightRef.current * 0.3 + targetHeight * 0.7;
-            return Math.round(lastHeightRef.current);
+            // Idle animation with more variation
+            const variation = 0.2 + Math.random() * 0.5;
+            const targetHeight = MIN_HEIGHT + (maxHeight - MIN_HEIGHT) * variation;
+            const smoothed = lastHeightRef.current * 0.2 + targetHeight * 0.8;
+            lastHeightRef.current = smoothed;
+            return Math.round(smoothed);
         }
 
-        // Not recording - return minimum height
         return MIN_HEIGHT;
     }, [isRecording, maxHeight]);
 
-    // Initialize waveform bars
+    // Initialize bars and position based on elapsed time (only on mount or container resize)
     useEffect(() => {
-        const barsNeeded = Math.ceil(containerWidth / BAR_STEP) + 25;
-        const initialBars: WaveformBar[] = [];
+        // Calculate where track should be based on initial elapsed time (for sync)
+        const targetPosition = -(initialElapsedMsRef.current / 1000) * SCROLL_SPEED;
 
-        for (let i = 0; i < barsNeeded; i++) {
+        // Calculate how many bars we need
+        const barsNeeded = Math.ceil(containerWidth / BAR_STEP) + 10;
+
+        // Calculate how many bars should have scrolled past based on elapsed time
+        const barsScrolledPast = Math.max(0, Math.floor(Math.abs(targetPosition) / BAR_STEP));
+        const totalBarsNeeded = barsNeeded + barsScrolledPast;
+
+        // Generate initial bars with varied heights to look natural
+        const initialBars: WaveformBar[] = [];
+        let lastHeight = maxHeight * 0.5;
+        for (let i = 0; i < totalBarsNeeded; i++) {
+            // Use random variation similar to idle animation
+            const variation = 0.2 + Math.random() * 0.5;
+            const targetHeight = MIN_HEIGHT + (maxHeight - MIN_HEIGHT) * variation;
+            const smoothed = lastHeight * 0.2 + targetHeight * 0.8;
+            lastHeight = smoothed;
             initialBars.push({
-                height: MIN_HEIGHT,
+                height: Math.round(smoothed),
                 id: barIdCounterRef.current++
             });
         }
 
-        setBars(initialBars);
-        setTrackPosition(containerWidth / 2);
-    }, [containerWidth]);
+        barsRef.current = initialBars;
+        trackPositionRef.current = targetPosition;
+        initializedRef.current = true;
+        lastHeightRef.current = lastHeight; // Preserve continuity
+        forceUpdate(n => n + 1);
+    }, [containerWidth, maxHeight]);
 
-    // Waveform animation loop
+    // Animation loop
     useEffect(() => {
         if (!isRecording) {
-            // Reset refs when not recording
             hasRealAudioRef.current = false;
             recentAudioLevelsRef.current = [];
             return;
         }
 
-        lastTimeRef.current = performance.now();
         let isActive = true;
+        lastTimeRef.current = performance.now();
 
         const animate = (currentTime: number) => {
             if (!isActive) return;
 
             let deltaTime = (currentTime - lastTimeRef.current) / 1000;
-            deltaTime = Math.min(deltaTime, 0.1);
+            deltaTime = Math.min(deltaTime, 0.1); // Cap to prevent jumps
             lastTimeRef.current = currentTime;
 
-            setTrackPosition(prevPos => {
-                let newPos = prevPos - SCROLL_SPEED * deltaTime;
+            // Update track position
+            trackPositionRef.current -= SCROLL_SPEED * deltaTime;
 
-                setBars(prevBars => {
-                    const trackWidth = prevBars.length * BAR_STEP;
-                    const rightEdge = newPos + trackWidth;
+            // Check if we need to add new bars on the right
+            const trackWidth = barsRef.current.length * BAR_STEP;
+            const rightEdge = trackPositionRef.current + trackWidth;
 
-                    if (rightEdge < containerWidth + BAR_STEP * 5) {
-                        const newHeight = generateBarHeight();
-                        const newIntensity = (newHeight - MIN_HEIGHT) / (maxHeight - MIN_HEIGHT);
-                        currentIntensityRef.current = currentIntensityRef.current * 0.2 + newIntensity * 0.8;
+            if (rightEdge < containerWidth + BAR_STEP * 5) {
+                barsRef.current = [...barsRef.current, {
+                    height: generateBarHeight(),
+                    id: barIdCounterRef.current++
+                }];
+            }
 
-                        return [...prevBars, { height: newHeight, id: barIdCounterRef.current++ }];
-                    }
+            // Remove bars that have scrolled off the left
+            if (barsRef.current.length > 0) {
+                const firstBarRight = trackPositionRef.current + BAR_STEP;
+                if (firstBarRight < -BAR_STEP) {
+                    trackPositionRef.current += BAR_STEP;
+                    barsRef.current = barsRef.current.slice(1);
+                }
+            }
 
-                    if (prevBars.length > 0) {
-                        const barRight = newPos + BAR_STEP;
-                        if (barRight < -BAR_STEP) {
-                            newPos += BAR_STEP;
-                            return prevBars.slice(1);
-                        }
-                    }
-
-                    return prevBars;
-                });
-
-                return newPos;
-            });
-
-            const pulseScale = 0.85 + (currentIntensityRef.current * 0.3);
-            setTrackScale(pulseScale);
+            // Trigger re-render
+            forceUpdate(n => n + 1);
 
             animationFrameRef.current = requestAnimationFrame(animate);
         };
 
+        const animationFrameRef = { current: 0 };
         animationFrameRef.current = requestAnimationFrame(animate);
 
         return () => {
@@ -203,11 +195,11 @@ export function Waveform({
                 cancelAnimationFrame(animationFrameRef.current);
             }
         };
-    }, [isRecording, generateBarHeight, containerWidth, maxHeight]);
+    }, [isRecording, containerWidth, generateBarHeight]);
 
     // Determine if a bar is on the left (recorded) or right (buffer) side
     const getBarSide = (barIndex: number): 'left' | 'right' => {
-        const barPosition = trackPosition + barIndex * BAR_STEP + BAR_WIDTH / 2;
+        const barPosition = trackPositionRef.current + barIndex * BAR_STEP + BAR_WIDTH / 2;
         return barPosition < containerWidth / 2 ? 'left' : 'right';
     };
 
@@ -220,12 +212,9 @@ export function Waveform({
             <div className="waveform-component__bg-right" />
             <div
                 className="waveform-component__track"
-                style={{
-                    left: `${trackPosition}px`,
-                    transform: `scaleY(${trackScale})`
-                }}
+                style={{ left: `${trackPositionRef.current}px` }}
             >
-                {bars.map((bar, index) => (
+                {barsRef.current.map((bar, index) => (
                     <div
                         key={bar.id}
                         className="waveform-component__bar"
@@ -247,10 +236,8 @@ export function Waveform({
                     </div>
                 ))}
             </div>
-            {/* Playhead */}
-            <div className="waveform-component__playhead" />
-            {/* Scanline overlay */}
-            <div className="waveform-component__scanlines" />
+            {showPlayhead && <div className="waveform-component__playhead" />}
+            {showScanlines && <div className="waveform-component__scanlines" />}
         </div>
     );
 }

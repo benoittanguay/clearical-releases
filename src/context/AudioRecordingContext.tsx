@@ -505,6 +505,7 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
             const dataArray = new Uint8Array(analyser.frequencyBinCount);
             let audioLevelsSentCount = 0;
             silenceStartTimeRef.current = null; // Reset silence detection
+            const recordingStartTimestamp = Date.now(); // For waveform sync
 
             // Also get time domain data for raw waveform analysis
             const timeDomainArray = new Uint8Array(analyser.frequencyBinCount);
@@ -596,7 +597,8 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
                     // Send to main process to forward to widget
                     const sendFn = window.electron?.ipcRenderer?.meeting?.sendAudioLevels;
                     if (sendFn) {
-                        sendFn(levels);
+                        const elapsedMs = Date.now() - recordingStartTimestamp;
+                        sendFn(levels, elapsedMs);
                         audioLevelsSentCount++;
                         // Log every 100 sends (~5 seconds)
                         if (audioLevelsSentCount % 100 === 1) {

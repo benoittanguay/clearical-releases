@@ -13,6 +13,7 @@ interface RecordingControlsProps {
     isRecording: boolean;
     onToggleRecording: () => void;
     disabled?: boolean;
+    elapsedMs?: number; // Recording elapsed time for waveform sync
 }
 
 interface AudioLevelData {
@@ -23,7 +24,8 @@ interface AudioLevelData {
 export function RecordingControls({
     isRecording,
     onToggleRecording,
-    disabled = false
+    disabled = false,
+    elapsedMs = 0
 }: RecordingControlsProps): React.ReactElement {
     const [audioLevel, setAudioLevel] = useState(0);
     const [isVisible, setIsVisible] = useState(false);
@@ -85,8 +87,11 @@ export function RecordingControls({
                     recentAudioLevelsRef.current.shift();
                 }
 
-                const smoothedLevel = Math.max(...recentAudioLevelsRef.current);
-                setAudioLevel(Math.max(0.05, Math.min(1, smoothedLevel)));
+                // Use average for more natural variation (max tends to flatten dynamics)
+                const smoothedLevel = recentAudioLevelsRef.current.reduce((a, b) => a + b, 0) / recentAudioLevelsRef.current.length;
+                // Light compression to preserve dynamic range
+                const compressed = Math.pow(smoothedLevel, 0.7);
+                setAudioLevel(Math.max(0.02, Math.min(1, compressed)));
             }
         };
 
@@ -146,6 +151,7 @@ export function RecordingControls({
                 <Waveform
                     isRecording={isRecording}
                     audioLevel={audioLevel}
+                    elapsedMs={elapsedMs}
                     width={waveformWidth}
                     height={40}
                     variant="light"
