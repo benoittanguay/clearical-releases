@@ -67,26 +67,57 @@ body {
 }
 
 /* ============================================
-   EXIT ANIMATION - Curtain close + slide up
+   EXIT ANIMATION - Curtain close to icon then slide up
    ============================================ */
 
-@keyframes slideAndRevealOut {
+@keyframes curtainToCenter {
     0% {
         transform: translateY(0);
         clip-path: inset(0 0 0 0 round 0 0 24px 24px);
     }
-    40% {
+    60% {
         transform: translateY(0);
-        clip-path: inset(0 42% 0 42% round 0 0 24px 24px);
+        /* Curtain to center - clip from both sides and bottom, keep top corners square */
+        clip-path: inset(0 calc(50% - 30px) calc(100% - 56px) calc(50% - 30px) round 0 0 24px 24px);
     }
     100% {
         transform: translateY(-100%);
-        clip-path: inset(0 42% 0 42% round 0 0 24px 24px);
+        clip-path: inset(0 calc(50% - 30px) calc(100% - 56px) calc(50% - 30px) round 0 0 24px 24px);
     }
 }
 
 .audio-widget.hiding {
-    animation: slideAndRevealOut 0.35s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    animation: curtainToCenter 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+/* Icon slides to center during exit */
+@keyframes iconToCenter {
+    0% {
+        transform: translateX(0);
+    }
+    60% {
+        transform: translateX(230px);
+    }
+    100% {
+        transform: translateX(230px);
+    }
+}
+
+.hiding .app-icon {
+    animation: iconToCenter 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+/* Fade out other elements during curtain close */
+@keyframes fadeOutDuringCurtain {
+    0% {
+        opacity: 1;
+    }
+    40% {
+        opacity: 0;
+    }
+    100% {
+        opacity: 0;
+    }
 }
 
 /* ============================================
@@ -100,6 +131,10 @@ body {
     position: relative;
     height: 36px;
     margin-bottom: 8px;
+}
+
+.hiding .widget-top-row {
+    margin-bottom: 0;
 }
 
 /* ============================================
@@ -129,21 +164,6 @@ body {
     }
 }
 
-@keyframes iconToCenter {
-    0% {
-        transform: translateX(0);
-    }
-    40% {
-        transform: translateX(232px);
-    }
-    100% {
-        transform: translateX(232px);
-    }
-}
-
-.hiding .app-icon {
-    animation: iconToCenter 0.35s cubic-bezier(0.4, 0, 0.2, 1) forwards;
-}
 
 .app-icon img {
     width: 100%;
@@ -203,7 +223,11 @@ body {
 }
 
 .hiding .recording-pill {
-    animation: fadeOutEarly 0.35s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    animation: fadeOutDuringCurtain 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.hiding .recording-pill-container {
+    animation: fadeOutDuringCurtain 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 
 .recording-dot {
@@ -239,7 +263,7 @@ body {
 }
 
 .hiding .action-buttons {
-    animation: fadeOutEarly 0.35s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    animation: fadeOutDuringCurtain 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 
 .action-btn {
@@ -322,7 +346,7 @@ body {
 }
 
 .hiding .waveform-container {
-    animation: waveformHide 0.35s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    animation: fadeOutDuringCurtain 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 
 /* Retro TV scanline pattern overlay */
@@ -389,7 +413,7 @@ body {
 }
 
 .hiding .playhead {
-    animation: fadeOutEarly 0.35s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    animation: fadeOutDuringCurtain 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 
 /* ============================================
@@ -439,24 +463,9 @@ body {
     }
 }
 
-/* Transition from stopped state to hiding - starts from narrowed state */
+/* Transition from stopped state to hiding - curtain to icon */
 .audio-widget.stopped.hiding {
-    animation: stoppedToHiding 0.35s cubic-bezier(0.4, 0, 0.2, 1) forwards;
-}
-
-@keyframes stoppedToHiding {
-    0% {
-        transform: translateY(0);
-        clip-path: inset(0 32% 0 32% round 0 0 24px 24px);
-    }
-    40% {
-        transform: translateY(0);
-        clip-path: inset(0 42% 0 42% round 0 0 24px 24px);
-    }
-    100% {
-        transform: translateY(-100%);
-        clip-path: inset(0 42% 0 42% round 0 0 24px 24px);
-    }
+    animation: curtainToIcon 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 
 .stopped .action-buttons {
@@ -525,9 +534,15 @@ body {
     transform: translateX(232px);
 }
 
-/* Fade out pill when going from stopped to hiding */
+/* Hide pill instantly when going from stopped to hiding */
 .stopped.hiding .recording-pill {
-    animation: fadeOutEarly 0.35s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    opacity: 0 !important;
+    animation: none !important;
+}
+
+.stopped.hiding .recording-pill-container {
+    opacity: 0 !important;
+    animation: none !important;
 }
 
 /* Success checkmark */

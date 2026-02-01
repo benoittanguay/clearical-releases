@@ -21,7 +21,7 @@ const WAVEFORM_HEIGHT = 48;
 // Animation timing constants (in milliseconds)
 // Keep in sync with CSS animations in RecordingWidget styles
 const ANIMATION_ENTER_DURATION = 520;   // Time for widget to animate in
-const ANIMATION_EXIT_DURATION = 370;    // Time for widget to animate out
+const ANIMATION_EXIT_DURATION = 500;    // Time for widget to animate out (collapse to icon)
 const SAVED_MESSAGE_DURATION = 2000;    // How long to show "Saved" before closing
 
 // Get time-appropriate greeting
@@ -309,34 +309,26 @@ export function RecordingWidget(): React.ReactElement {
             const response = await window.electron.ipcRenderer.invoke('widget:stop-recording', { timestamp: Date.now() });
             console.log('[RecordingWidget] Stop response:', response);
 
-            // Now show the success animation after recording has actually stopped
-            setContentMode('stopped');
+            // Skip stopped state - go straight to hiding
+            setIsHiding(true);
 
-            // After showing success state, transition to hiding
+            // After exit animation completes, request window close
             setTimeout(() => {
-                setIsHiding(true);
-
-                // After exit animation completes, request window close
-                setTimeout(() => {
-                    window.electron?.ipcRenderer?.invoke?.('widget:request-close', { timestamp: Date.now() })
-                        .catch((error: Error) => {
-                            console.error('[RecordingWidget] Close request failed:', error);
-                        });
-                }, ANIMATION_EXIT_DURATION);
-            }, SAVED_MESSAGE_DURATION);
+                window.electron?.ipcRenderer?.invoke?.('widget:request-close', { timestamp: Date.now() })
+                    .catch((error: Error) => {
+                        console.error('[RecordingWidget] Close request failed:', error);
+                    });
+            }, ANIMATION_EXIT_DURATION);
         } catch (error) {
             console.error('[RecordingWidget] Stop IPC failed:', error);
-            // Still show stopped state even on error
-            setContentMode('stopped');
-            setTimeout(() => {
-                setIsHiding(true);
+            // Skip stopped state - go straight to hiding
+            setIsHiding(true);
 
-                // After exit animation completes, request window close
-                setTimeout(() => {
-                    window.electron?.ipcRenderer?.invoke?.('widget:request-close', { timestamp: Date.now() })
-                        .catch(() => {}); // Ignore errors on error path
-                }, ANIMATION_EXIT_DURATION);
-            }, SAVED_MESSAGE_DURATION);
+            // After exit animation completes, request window close
+            setTimeout(() => {
+                window.electron?.ipcRenderer?.invoke?.('widget:request-close', { timestamp: Date.now() })
+                    .catch(() => {}); // Ignore errors on error path
+            }, ANIMATION_EXIT_DURATION);
         }
     }, []);
 
@@ -549,7 +541,7 @@ export function RecordingWidget(): React.ReactElement {
                     <img src="./icon.png" alt="Clearical" />
                 </div>
 
-                {/* Recording Pill Container */}
+                {/* Recording Pill Container - fades out during exit animation */}
                 <div className="recording-pill-container">
                     <div className="recording-pill" ref={recordingPillRef}>
                         <div className="recording-dot"></div>
@@ -563,7 +555,7 @@ export function RecordingWidget(): React.ReactElement {
                     </div>
                 </div>
 
-                {/* Action Buttons - Always visible */}
+                {/* Action Buttons - fade out during exit animation */}
                 <div className="action-buttons">
                     <button className="action-btn stop-btn" onClick={handleStop}>
                         <div className="stop-icon"></div>
@@ -576,7 +568,7 @@ export function RecordingWidget(): React.ReactElement {
                 </div>
             </div>
 
-            {/* Waveform */}
+            {/* Waveform - fades out during exit animation */}
             <div className="waveform-container" ref={waveformContainerRef}>
                 <Waveform
                     isRecording={contentMode === 'recording' && !isHiding}
@@ -590,7 +582,7 @@ export function RecordingWidget(): React.ReactElement {
                 />
             </div>
 
-            {/* Playhead */}
+            {/* Playhead - fades out during exit animation */}
             <div className="playhead" ref={playheadRef}></div>
 
             {/* Meeting Ended Prompt Overlay - Positioned above playhead */}
