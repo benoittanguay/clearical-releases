@@ -26,6 +26,7 @@ import { SplitFlapDisplay, FlipClockContainer } from './components/SplitFlapDisp
 import { BucketDetailView } from './components/BucketDetailView';
 import { JiraDetailView } from './components/JiraDetailView';
 import { RecordingControls } from './components/RecordingControls';
+import { WorklogCalendar } from './components/WorklogCalendar';
 import type { WorkAssignment, TimeBucket, LinkedJiraIssue } from './context/StorageContext';
 import './App.css'
 
@@ -55,6 +56,9 @@ function App() {
   const [jiraRefreshFn, setJiraRefreshFn] = useState<(() => void) | null>(null);
   const [isAudioRecording, setIsAudioRecording] = useState(false);
   const [shouldPromptSplitting, setShouldPromptSplitting] = useState(false);
+  const [worklogViewMode, setWorklogViewMode] = useState<'list' | 'calendar'>('list');
+  const [calendarMonth, setCalendarMonth] = useState<Date>(() => new Date());
+  const [selectedCalendarDay, setSelectedCalendarDay] = useState<Date | null>(null);
 
   // Threshold for auto-prompting the Splitting Assistant (45 minutes)
   const SPLITTING_PROMPT_THRESHOLD_MS = 45 * 60 * 1000;
@@ -262,13 +266,17 @@ function App() {
     const keyTimestamp = parseInt(dateKey);
     const keyDate = new Date(keyTimestamp);
 
-    // Determine if this is a week key by checking if it's a Monday (week start)
-    // Note: getWeekStart() returns Monday, not Sunday
+    // Determine if this is a month key (1st of month, not a Monday) or week key (Monday)
+    const isMonthKey = keyDate.getDate() === 1 && keyDate.getDay() !== 1;
     const isWeekKey = keyDate.getDay() === 1;
 
     // Calculate the date range to filter entries
     let startDate: Date, endDate: Date;
-    if (isWeekKey) {
+    if (isMonthKey) {
+      // Month range: from 1st of this month to 1st of next month
+      startDate = new Date(keyDate.getFullYear(), keyDate.getMonth(), 1);
+      endDate = new Date(keyDate.getFullYear(), keyDate.getMonth() + 1, 1);
+    } else if (isWeekKey) {
       startDate = new Date(keyTimestamp);
       endDate = new Date(keyTimestamp);
       endDate.setDate(endDate.getDate() + 7); // Week is 7 days
@@ -1468,8 +1476,71 @@ function App() {
               <div className="flex-shrink-0 px-6 py-4 z-20 drag-handle" style={{ backgroundColor: 'var(--color-bg-primary)', borderBottom: '1px solid var(--color-border-primary)' }}>
                 <div className="flex items-center justify-between">
                   <h2 className="text-2xl font-bold" style={{ color: 'var(--color-text-primary)', fontFamily: 'var(--font-display)' }}>Worklog</h2>
-                  {entries.length > 0 && (
-                    <div className="flex items-center gap-3 no-drag">
+                  <div className="flex items-center gap-4 no-drag">
+                    {/* View Toggle Tabs */}
+                    <div className="flex items-center gap-1 p-1 rounded-lg" style={{ backgroundColor: 'var(--color-bg-tertiary)' }}>
+                      <button
+                        onClick={() => setWorklogViewMode('list')}
+                        className="px-3 py-1.5 text-sm font-medium rounded-md transition-all flex items-center gap-1.5"
+                        style={{
+                          backgroundColor: worklogViewMode === 'list' ? 'white' : 'transparent',
+                          color: worklogViewMode === 'list' ? 'var(--color-accent)' : 'var(--color-text-tertiary)',
+                          boxShadow: worklogViewMode === 'list' ? '0 1px 2px rgba(0,0,0,0.05)' : 'none',
+                        }}
+                        onMouseEnter={(e) => {
+                          if (worklogViewMode !== 'list') {
+                            e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.5)';
+                            e.currentTarget.style.color = 'var(--color-text-secondary)';
+                          }
+                        }}
+                        onMouseLeave={(e) => {
+                          if (worklogViewMode !== 'list') {
+                            e.currentTarget.style.backgroundColor = 'transparent';
+                            e.currentTarget.style.color = 'var(--color-text-tertiary)';
+                          }
+                        }}
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <line x1="8" y1="6" x2="21" y2="6" />
+                          <line x1="8" y1="12" x2="21" y2="12" />
+                          <line x1="8" y1="18" x2="21" y2="18" />
+                          <line x1="3" y1="6" x2="3.01" y2="6" />
+                          <line x1="3" y1="12" x2="3.01" y2="12" />
+                          <line x1="3" y1="18" x2="3.01" y2="18" />
+                        </svg>
+                        List
+                      </button>
+                      <button
+                        onClick={() => setWorklogViewMode('calendar')}
+                        className="px-3 py-1.5 text-sm font-medium rounded-md transition-all flex items-center gap-1.5"
+                        style={{
+                          backgroundColor: worklogViewMode === 'calendar' ? 'white' : 'transparent',
+                          color: worklogViewMode === 'calendar' ? 'var(--color-accent)' : 'var(--color-text-tertiary)',
+                          boxShadow: worklogViewMode === 'calendar' ? '0 1px 2px rgba(0,0,0,0.05)' : 'none',
+                        }}
+                        onMouseEnter={(e) => {
+                          if (worklogViewMode !== 'calendar') {
+                            e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.5)';
+                            e.currentTarget.style.color = 'var(--color-text-secondary)';
+                          }
+                        }}
+                        onMouseLeave={(e) => {
+                          if (worklogViewMode !== 'calendar') {
+                            e.currentTarget.style.backgroundColor = 'transparent';
+                            e.currentTarget.style.color = 'var(--color-text-tertiary)';
+                          }
+                        }}
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                          <line x1="16" y1="2" x2="16" y2="6" />
+                          <line x1="8" y1="2" x2="8" y2="6" />
+                          <line x1="3" y1="10" x2="21" y2="10" />
+                        </svg>
+                        Calendar
+                      </button>
+                    </div>
+                    {entries.length > 0 && (
                       <button
                         onClick={() => setShowExportDialog(true)}
                         className="px-4 py-2 bg-green-600 hover:bg-green-500 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2"
@@ -1481,8 +1552,8 @@ function App() {
                         </svg>
                         Export CSV
                       </button>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -1490,6 +1561,23 @@ function App() {
               <div className="flex-1 overflow-y-auto px-4 pb-4" style={{ backgroundColor: 'var(--color-bg-primary)' }}>
                 {entries.length === 0 ? (
                   <div className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>No activities recorded yet.</div>
+                ) : worklogViewMode === 'calendar' ? (
+                  <WorklogCalendar
+                    entries={entries}
+                    buckets={buckets}
+                    formatTime={formatTime}
+                    selectedDay={selectedCalendarDay}
+                    onDaySelect={setSelectedCalendarDay}
+                    currentMonth={calendarMonth}
+                    onMonthChange={setCalendarMonth}
+                    onEntryClick={(id) => {
+                      setSelectedEntry(id);
+                      setCurrentView('worklog-detail');
+                    }}
+                    onDeleteEntry={removeEntry}
+                    onBulkLogToTempo={handleBulkLogToTempo}
+                    tempoEnabled={settings.tempo?.enabled}
+                  />
                 ) : (
                   <div>
                     {(() => {
