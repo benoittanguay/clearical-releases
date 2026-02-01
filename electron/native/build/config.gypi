@@ -493,7 +493,7 @@
     "python": "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
     "standalone_static_library": 1,
     "global_prefix": "/Users/benoittanguay/.nvm/versions/node/v22.17.1",
-    "local_prefix": "/Users/benoittanguay/Documents/Anti/TimePortal/.worktrees/mic-camera-detection/electron/native",
+    "local_prefix": "/Users/benoittanguay/Documents/Anti/TimePortal/electron/native",
     "globalconfig": "/Users/benoittanguay/.nvm/versions/node/v22.17.1/etc/npmrc",
     "userconfig": "/Users/benoittanguay/.npmrc",
     "init_module": "/Users/benoittanguay/.npm-init.js",

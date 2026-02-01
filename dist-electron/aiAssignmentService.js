@@ -250,47 +250,54 @@ export class AIAssignmentService {
     /**
      * Calculate score for a bucket assignment (FALLBACK ONLY)
      * Used only when AI is unavailable:
-     * - 60% Historical usage pattern
-     * - 25% Keyword matching in bucket name
-     * - 15% Linked Jira issue relevance
+     * - 35% Historical usage pattern (reduced to avoid over-reliance on manual selections)
+     * - 40% Keyword matching in bucket name (primary signal for context relevance)
+     * - 25% Linked Jira issue relevance
      */
     calculateBucketScore(bucket, context, aiClassification) {
         let score = 0;
-        // 1. Historical usage pattern (60%) - strongest signal in fallback mode
+        // 1. Historical usage pattern (35%) - important but not dominant
+        // Reduced from 60% to prevent over-reliance on past manual selections
         const historicalMatch = this.calculateHistoricalBucketMatch(bucket.id, context);
-        score += historicalMatch * 0.6;
-        // 2. Keyword matching in bucket name (25%)
+        score += historicalMatch * 0.35;
+        // 2. Keyword matching in bucket name (40%) - primary context signal
+        // Increased from 25% to prioritize semantic relevance over history
         const nameMatch = this.keywordMatch(bucket.name, context.description);
-        score += nameMatch * 0.25;
-        // 3. Linked Jira issue relevance (15%)
+        score += nameMatch * 0.40;
+        // 3. Linked Jira issue relevance (25%)
+        // Increased from 15% to better leverage Jira context
         if (bucket.linkedIssue) {
             const issueMatch = this.keywordMatch(bucket.linkedIssue.summary, context.description);
-            score += issueMatch * 0.15;
+            score += issueMatch * 0.25;
         }
         return Math.min(score, 1.0);
     }
     /**
      * Calculate score for a Jira issue assignment (FALLBACK ONLY)
      * Used only when AI is unavailable:
-     * - 60% Historical usage pattern
-     * - 20% Summary keyword match
-     * - 10% Technology/domain match
-     * - 10% Project affinity
+     * - 30% Historical usage pattern (reduced to avoid over-reliance on manual selections)
+     * - 35% Summary keyword match (primary signal for context relevance)
+     * - 20% Technology/domain match (increased for better tech stack matching)
+     * - 15% Project affinity
      */
     calculateJiraScore(issue, context, aiClassification) {
         let score = 0;
-        // 1. Historical usage (60%) - strongest signal in fallback mode
+        // 1. Historical usage (30%) - important but not dominant
+        // Reduced from 60% to prevent over-reliance on past manual selections
         const historicalMatch = this.calculateHistoricalJiraMatch(issue.key, context);
-        score += historicalMatch * 0.6;
-        // 2. Summary keyword match (20%)
+        score += historicalMatch * 0.30;
+        // 2. Summary keyword match (35%) - primary context signal
+        // Increased from 20% to prioritize semantic relevance over history
         const summaryMatch = this.keywordMatch(issue.summary, context.description);
-        score += summaryMatch * 0.2;
-        // 3. Technology/domain match (10%)
+        score += summaryMatch * 0.35;
+        // 3. Technology/domain match (20%) - better tech stack matching
+        // Increased from 10% for more accurate domain-based suggestions
         const techMatch = this.technologyMatch(issue, context.detectedTechnologies);
-        score += techMatch * 0.1;
-        // 4. Project affinity (10%) - prefer recently used projects
+        score += techMatch * 0.20;
+        // 4. Project affinity (15%) - prefer recently used projects
+        // Increased from 10% to balance project context
         const projectMatch = this.projectAffinityMatch(issue.projectKey);
-        score += projectMatch * 0.1;
+        score += projectMatch * 0.15;
         return Math.min(score, 1.0);
     }
     /**

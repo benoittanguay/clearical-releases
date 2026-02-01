@@ -2,6 +2,20 @@
 
 All notable changes to Clearical will be documented in this file.
 
+## [1.7.32] - 2025-02-01
+
+### Bug Fixes
+- **Audio Diagnostics**: Added debug logging to native module to diagnose why sample rate detection isn't working
+
+---
+
+## [1.7.31] - 2025-02-01
+
+### Improvements
+- **Audio Diagnostics**: Enhanced logging to show detected sample rate, rate detection status, and resampling state in renderer console for debugging audio quality issues
+
+---
+
 ## [1.7.30] - 2025-01-31
 
 ### Bug Fixes

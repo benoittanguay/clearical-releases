@@ -1,0 +1,1711 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clearical for Developers — Time Tracking That Stays Out of Your Way</title>
+    <meta name="description" content="Stop context-switching to track time. Clearical captures your work automatically while you stay in flow state.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+    <style>
+        /* ============================================
+           CSS Custom Properties & Reset
+           ============================================ */
+        :root {
+            /* Colors */
+            --color-bg-primary: #F2F0ED;
+            --color-bg-secondary: #FFFFFF;
+            --color-bg-dark: #181717;
+            --color-accent: #FF4800;
+            --color-accent-light: #FF6B35;
+            --color-text-primary: #0D0C0C;
+            --color-text-secondary: #6B6560;
+            --color-border: #E4E0DC;
+            --color-success: #27C93F;
+            --color-warning: #FFBD2E;
+            --color-danger: #FF5F56;
+
+            /* Typography */
+            --font-display: 'Familjen Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            --font-body: 'Familjen Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            --font-mono: 'JetBrains Mono', 'SF Mono', Monaco, 'Courier New', monospace;
+
+            /* Spacing Scale */
+            --space-4: 4px;
+            --space-8: 8px;
+            --space-12: 12px;
+            --space-16: 16px;
+            --space-24: 24px;
+            --space-32: 32px;
+            --space-48: 48px;
+            --space-64: 64px;
+            --space-96: 96px;
+            --space-128: 128px;
+
+            /* Animation */
+            --ease-out: cubic-bezier(0.22, 0.61, 0.36, 1);
+            --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+            --duration-fast: 200ms;
+            --duration-normal: 300ms;
+            --duration-slow: 500ms;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html {
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            scroll-behavior: smooth;
+        }
+
+        body {
+            font-family: var(--font-body);
+            font-size: 18px;
+            line-height: 1.6;
+            color: var(--color-text-primary);
+            background: var(--color-bg-primary);
+            position: relative;
+        }
+
+        /* Noise overlay for texture */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='3.5' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.03'/%3E%3C/svg%3E");
+            pointer-events: none;
+            z-index: 9999;
+            opacity: 0.6;
+        }
+
+        /* ============================================
+           Navigation Header
+           ============================================ */
+        .nav-header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: rgba(242, 240, 237, 0.85);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--color-border);
+            z-index: 1000;
+            transform: translateY(0);
+            transition: transform var(--duration-normal) var(--ease-out);
+        }
+
+        .nav-header.hidden {
+            transform: translateY(-100%);
+        }
+
+        .nav-container {
+            max-width: 1280px;
+            margin-inline: auto;
+            padding-inline: var(--space-24);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            height: 72px;
+        }
+
+        .nav-logo {
+            font-family: var(--font-display);
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--color-text-primary);
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: var(--space-8);
+        }
+
+        .nav-logo-icon {
+            width: 32px;
+            height: 32px;
+            background: var(--color-accent);
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 18px;
+        }
+
+        .nav-links {
+            display: none;
+            gap: var(--space-32);
+            align-items: center;
+        }
+
+        @media (min-width: 768px) {
+            .nav-links {
+                display: flex;
+            }
+        }
+
+        .nav-link {
+            font-size: 16px;
+            font-weight: 500;
+            color: var(--color-text-secondary);
+            text-decoration: none;
+            transition: color var(--duration-fast) var(--ease-out);
+            position: relative;
+        }
+
+        .nav-link::after {
+            content: '';
+            position: absolute;
+            bottom: -4px;
+            left: 0;
+            width: 0;
+            height: 2px;
+            background: var(--color-accent);
+            transition: width var(--duration-normal) var(--ease-out);
+        }
+
+        .nav-link:hover {
+            color: var(--color-text-primary);
+        }
+
+        .nav-link:hover::after {
+            width: 100%;
+        }
+
+        .nav-cta {
+            background: var(--color-accent);
+            color: white;
+            font-size: 16px;
+            font-weight: 600;
+            padding: var(--space-12) var(--space-24);
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all var(--duration-fast) var(--ease-out);
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .nav-cta:hover {
+            background: var(--color-accent-light);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(255, 72, 0, 0.3);
+        }
+
+        .nav-cta:active {
+            transform: translateY(0);
+        }
+
+        /* ============================================
+           Typography
+           ============================================ */
+        h1, h2, h3, h4 {
+            font-family: var(--font-display);
+            line-height: 1.2;
+            font-weight: 600;
+        }
+
+        h1 {
+            font-size: clamp(40px, 6vw, 72px);
+            font-weight: 700;
+            letter-spacing: -0.02em;
+        }
+
+        h2 {
+            font-size: clamp(32px, 4.5vw, 56px);
+            font-weight: 700;
+            letter-spacing: -0.015em;
+        }
+
+        h3 {
+            font-size: clamp(24px, 3vw, 36px);
+            font-weight: 600;
+        }
+
+        p {
+            font-size: clamp(16px, 1.8vw, 18px);
+            line-height: 1.7;
+        }
+
+        .code {
+            font-family: var(--font-mono);
+            font-size: 0.9em;
+            color: var(--color-accent);
+        }
+
+        /* ============================================
+           Layout Utilities
+           ============================================ */
+        .container {
+            max-width: 1280px;
+            margin-inline: auto;
+            padding-inline: var(--space-24);
+        }
+
+        @media (min-width: 768px) {
+            .container {
+                padding-inline: var(--space-48);
+            }
+        }
+
+        section {
+            padding-block: var(--space-96);
+        }
+
+        @media (min-width: 768px) {
+            section {
+                padding-block: var(--space-128);
+            }
+        }
+
+        /* Enhanced Dot Grid Background Pattern */
+        .dot-grid {
+            background-image: radial-gradient(circle, rgba(13, 12, 12, 0.12) 1.5px, transparent 1.5px);
+            background-size: 32px 32px;
+            background-position: 0 0;
+            position: relative;
+        }
+
+        .dot-grid::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(180deg,
+                var(--color-bg-primary) 0%,
+                transparent 20%,
+                transparent 80%,
+                var(--color-bg-primary) 100%);
+            pointer-events: none;
+        }
+
+        /* ============================================
+           Hero Section
+           ============================================ */
+        .hero {
+            position: relative;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            overflow: hidden;
+            padding-top: 120px;
+        }
+
+        .hero-content {
+            position: relative;
+            z-index: 2;
+            max-width: 900px;
+        }
+
+        .hero h1 {
+            margin-bottom: var(--space-24);
+            opacity: 0;
+            animation: fadeSlideUp 0.8s var(--ease-out) 0.2s forwards;
+            background: linear-gradient(135deg, var(--color-text-primary) 0%, var(--color-text-secondary) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .hero-subheading {
+            font-size: clamp(18px, 2.2vw, 24px);
+            line-height: 1.6;
+            color: var(--color-text-secondary);
+            margin-bottom: var(--space-48);
+            max-width: 720px;
+            opacity: 0;
+            animation: fadeSlideUp 0.8s var(--ease-out) 0.4s forwards;
+        }
+
+        /* Hero CTAs */
+        .hero-ctas {
+            display: flex;
+            flex-wrap: wrap;
+            gap: var(--space-16);
+            margin-bottom: var(--space-64);
+            opacity: 0;
+            animation: fadeSlideUp 0.8s var(--ease-out) 0.6s forwards;
+        }
+
+        .primary-cta {
+            display: inline-flex;
+            align-items: center;
+            gap: var(--space-12);
+            background: var(--color-accent);
+            color: white;
+            font-family: var(--font-display);
+            font-size: 18px;
+            font-weight: 600;
+            padding: var(--space-16) var(--space-32);
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all var(--duration-normal) var(--ease-out);
+            text-decoration: none;
+            box-shadow: 0 8px 24px rgba(255, 72, 0, 0.25);
+        }
+
+        .primary-cta:hover {
+            background: var(--color-accent-light);
+            transform: translateY(-2px);
+            box-shadow: 0 12px 32px rgba(255, 72, 0, 0.35);
+        }
+
+        .primary-cta:active {
+            transform: translateY(0);
+        }
+
+        .secondary-cta {
+            display: inline-flex;
+            align-items: center;
+            gap: var(--space-8);
+            color: var(--color-text-primary);
+            font-family: var(--font-display);
+            font-size: 18px;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all var(--duration-fast) var(--ease-out);
+            position: relative;
+        }
+
+        .secondary-cta::after {
+            content: '';
+            position: absolute;
+            bottom: -2px;
+            left: 0;
+            width: 100%;
+            height: 2px;
+            background: var(--color-accent);
+            transform: scaleX(0.7);
+            transform-origin: left;
+            transition: transform var(--duration-normal) var(--ease-out);
+        }
+
+        .secondary-cta:hover::after {
+            transform: scaleX(1);
+        }
+
+        .secondary-cta svg {
+            width: 20px;
+            height: 20px;
+            transition: transform var(--duration-fast) var(--ease-out);
+        }
+
+        .secondary-cta:hover svg {
+            transform: translateX(4px);
+        }
+
+        /* Enhanced Terminal Window */
+        .terminal-showcase {
+            position: relative;
+            opacity: 0;
+            animation: fadeSlideUp 0.8s var(--ease-out) 0.8s forwards;
+        }
+
+        .terminal {
+            background: var(--color-bg-dark);
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow:
+                0 20px 60px rgba(13, 12, 12, 0.2),
+                0 0 0 1px rgba(255, 255, 255, 0.05) inset;
+            position: relative;
+            animation: float 6s ease-in-out infinite;
+        }
+
+        /* Glow effect */
+        .terminal::before {
+            content: '';
+            position: absolute;
+            inset: -2px;
+            background: linear-gradient(135deg, var(--color-accent), var(--color-accent-light));
+            border-radius: 12px;
+            opacity: 0;
+            filter: blur(20px);
+            transition: opacity var(--duration-slow) var(--ease-out);
+            z-index: -1;
+        }
+
+        .terminal:hover::before {
+            opacity: 0.3;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-12px); }
+        }
+
+        .terminal-header {
+            background: #2D2C2C;
+            padding: var(--space-16) var(--space-24);
+            display: flex;
+            align-items: center;
+            gap: var(--space-8);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .terminal-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+
+        .terminal-dot:nth-child(1) { background: var(--color-danger); }
+        .terminal-dot:nth-child(2) { background: var(--color-warning); }
+        .terminal-dot:nth-child(3) { background: var(--color-success); }
+
+        .terminal-title {
+            margin-left: auto;
+            font-family: var(--font-mono);
+            font-size: 12px;
+            color: #6B6560;
+        }
+
+        .terminal-body {
+            padding: var(--space-32);
+            font-family: var(--font-mono);
+            font-size: 14px;
+            line-height: 1.8;
+            color: #E4E0DC;
+            min-height: 320px;
+        }
+
+        @media (min-width: 768px) {
+            .terminal-body {
+                font-size: 15px;
+                min-height: 380px;
+            }
+        }
+
+        .terminal-line {
+            display: flex;
+            gap: var(--space-12);
+            margin-bottom: var(--space-8);
+        }
+
+        .terminal-prompt {
+            color: var(--color-accent);
+            user-select: none;
+            flex-shrink: 0;
+        }
+
+        .terminal-command {
+            color: #E4E0DC;
+        }
+
+        .terminal-output {
+            color: var(--color-success);
+        }
+
+        .terminal-info {
+            color: #B8B4B0;
+        }
+
+        .terminal-highlight {
+            color: #FFBD2E;
+        }
+
+        .terminal-comment {
+            color: #6B6560;
+        }
+
+        .typing-cursor {
+            display: inline-block;
+            width: 8px;
+            height: 18px;
+            background: var(--color-accent);
+            animation: blink 1s step-end infinite;
+            margin-left: 2px;
+        }
+
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            50.01%, 100% { opacity: 0; }
+        }
+
+        /* Connection Diagram */
+        .connection-diagram {
+            position: absolute;
+            right: -15%;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 600px;
+            height: 600px;
+            opacity: 0.1;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        @media (max-width: 1280px) {
+            .connection-diagram {
+                display: none;
+            }
+        }
+
+        .diagram-node {
+            animation: pulse 3s ease-in-out infinite;
+        }
+
+        .diagram-line {
+            stroke-dasharray: 1000;
+            stroke-dashoffset: 1000;
+            animation: drawLine 3s ease-out forwards;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 0.1; }
+            50% { opacity: 0.3; }
+        }
+
+        @keyframes drawLine {
+            to { stroke-dashoffset: 0; }
+        }
+
+        /* ============================================
+           IDE Mockup Section
+           ============================================ */
+        .ide-section {
+            background: var(--color-bg-secondary);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .ide-container {
+            display: grid;
+            gap: var(--space-48);
+            align-items: center;
+        }
+
+        @media (min-width: 1024px) {
+            .ide-container {
+                grid-template-columns: 1fr 1.2fr;
+                gap: var(--space-64);
+            }
+        }
+
+        .ide-content h2 {
+            margin-bottom: var(--space-24);
+        }
+
+        .ide-content p {
+            color: var(--color-text-secondary);
+            margin-bottom: var(--space-32);
+            max-width: 540px;
+        }
+
+        .ide-features {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-16);
+        }
+
+        .ide-feature {
+            display: flex;
+            align-items: start;
+            gap: var(--space-16);
+            padding: var(--space-16);
+            background: var(--color-bg-primary);
+            border-radius: 8px;
+            border: 1px solid var(--color-border);
+            transition: all var(--duration-fast) var(--ease-out);
+        }
+
+        .ide-feature:hover {
+            border-color: var(--color-accent);
+            transform: translateX(4px);
+        }
+
+        .ide-feature-icon {
+            width: 24px;
+            height: 24px;
+            flex-shrink: 0;
+            margin-top: 2px;
+        }
+
+        .ide-feature-text h4 {
+            font-size: 18px;
+            margin-bottom: var(--space-4);
+        }
+
+        .ide-feature-text p {
+            font-size: 15px;
+            margin: 0;
+            color: var(--color-text-secondary);
+        }
+
+        /* IDE Window */
+        .ide-window {
+            background: #1E1E1E;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 24px 72px rgba(13, 12, 12, 0.15);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .ide-titlebar {
+            background: #2D2D2D;
+            padding: var(--space-12) var(--space-16);
+            display: flex;
+            align-items: center;
+            gap: var(--space-8);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .ide-file-tab {
+            background: #1E1E1E;
+            padding: var(--space-8) var(--space-16);
+            border-radius: 4px 4px 0 0;
+            font-family: var(--font-mono);
+            font-size: 12px;
+            color: #CCCCCC;
+            display: flex;
+            align-items: center;
+            gap: var(--space-8);
+            margin-left: var(--space-8);
+        }
+
+        .ide-editor {
+            padding: var(--space-24);
+            font-family: var(--font-mono);
+            font-size: 13px;
+            line-height: 1.8;
+            color: #D4D4D4;
+            overflow-x: auto;
+        }
+
+        .ide-line {
+            display: flex;
+            gap: var(--space-24);
+        }
+
+        .ide-line-number {
+            color: #6B6560;
+            user-select: none;
+            text-align: right;
+            min-width: 24px;
+        }
+
+        .ide-code {
+            flex: 1;
+        }
+
+        .syntax-keyword { color: #C586C0; }
+        .syntax-function { color: #DCDCAA; }
+        .syntax-string { color: #CE9178; }
+        .syntax-variable { color: #9CDCFE; }
+        .syntax-comment { color: #6A9955; }
+        .syntax-number { color: #B5CEA8; }
+
+        /* Clearical indicator in IDE */
+        .clearical-indicator {
+            position: absolute;
+            bottom: var(--space-16);
+            right: var(--space-16);
+            background: rgba(255, 72, 0, 0.1);
+            border: 1px solid var(--color-accent);
+            border-radius: 6px;
+            padding: var(--space-8) var(--space-12);
+            font-family: var(--font-mono);
+            font-size: 11px;
+            color: var(--color-accent);
+            display: flex;
+            align-items: center;
+            gap: var(--space-8);
+            animation: pulse-indicator 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse-indicator {
+            0%, 100% { opacity: 0.7; }
+            50% { opacity: 1; }
+        }
+
+        .indicator-dot {
+            width: 6px;
+            height: 6px;
+            background: var(--color-accent);
+            border-radius: 50%;
+            animation: blink 1.5s ease-in-out infinite;
+        }
+
+        /* ============================================
+           Pain Section
+           ============================================ */
+        .pain-section {
+            background: var(--color-bg-dark);
+            color: var(--color-bg-primary);
+            position: relative;
+        }
+
+        .pain-section::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: linear-gradient(90deg,
+                transparent 0%,
+                rgba(255, 72, 0, 0.5) 50%,
+                transparent 100%);
+        }
+
+        .pain-section h2 {
+            color: var(--color-bg-primary);
+            text-align: center;
+            margin-bottom: var(--space-64);
+        }
+
+        .pain-grid {
+            display: grid;
+            gap: var(--space-32);
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        }
+
+        .pain-card {
+            padding: var(--space-32);
+            background: rgba(242, 240, 237, 0.05);
+            border: 1px solid rgba(242, 240, 237, 0.1);
+            border-radius: 12px;
+            transition: all var(--duration-normal) var(--ease-out);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .pain-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 4px;
+            height: 0;
+            background: var(--color-accent);
+            transition: height var(--duration-normal) var(--ease-out);
+        }
+
+        .pain-card:hover {
+            background: rgba(242, 240, 237, 0.08);
+            border-color: rgba(255, 72, 0, 0.3);
+            transform: translateY(-4px);
+        }
+
+        .pain-card:hover::before {
+            height: 100%;
+        }
+
+        .pain-card h3 {
+            color: var(--color-accent-light);
+            margin-bottom: var(--space-16);
+            font-size: clamp(20px, 2.5vw, 28px);
+        }
+
+        .pain-card p {
+            color: #B8B4B0;
+            line-height: 1.7;
+        }
+
+        /* ============================================
+           How It Works Section
+           ============================================ */
+        .how-it-works {
+            background: var(--color-bg-secondary);
+            position: relative;
+        }
+
+        .how-it-works h2 {
+            text-align: center;
+            margin-bottom: var(--space-64);
+        }
+
+        .steps {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-48);
+            max-width: 900px;
+            margin-inline: auto;
+        }
+
+        @media (min-width: 768px) {
+            .steps {
+                flex-direction: row;
+                justify-content: space-between;
+                align-items: flex-start;
+            }
+        }
+
+        .step {
+            flex: 1;
+            text-align: center;
+            position: relative;
+        }
+
+        .step-number {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 72px;
+            height: 72px;
+            background: var(--color-bg-primary);
+            border: 3px solid var(--color-accent);
+            border-radius: 50%;
+            font-family: var(--font-mono);
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--color-accent);
+            margin-bottom: var(--space-24);
+            position: relative;
+            box-shadow: 0 4px 16px rgba(255, 72, 0, 0.2);
+        }
+
+        .step-number::after {
+            content: '';
+            position: absolute;
+            inset: -8px;
+            border: 2px solid var(--color-accent);
+            border-radius: 50%;
+            opacity: 0.2;
+        }
+
+        .step h3 {
+            margin-bottom: var(--space-12);
+            font-size: 24px;
+        }
+
+        .step p {
+            color: var(--color-text-secondary);
+        }
+
+        .step::after {
+            content: '→';
+            position: absolute;
+            top: 36px;
+            right: -32px;
+            font-size: 32px;
+            color: var(--color-border);
+            display: none;
+        }
+
+        @media (min-width: 768px) {
+            .step:not(:last-child)::after {
+                display: block;
+            }
+        }
+
+        /* ============================================
+           Features Section
+           ============================================ */
+        .features {
+            background: var(--color-bg-primary);
+            position: relative;
+        }
+
+        .features h2 {
+            text-align: center;
+            margin-bottom: var(--space-64);
+        }
+
+        .features-grid {
+            display: grid;
+            gap: var(--space-24);
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            position: relative;
+        }
+
+        .feature-card {
+            background: var(--color-bg-secondary);
+            padding: var(--space-32);
+            border-radius: 12px;
+            border: 1px solid var(--color-border);
+            transition: all var(--duration-normal) var(--ease-out);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .feature-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 3px;
+            background: linear-gradient(90deg, var(--color-accent), var(--color-accent-light));
+            transform: scaleX(0);
+            transform-origin: left;
+            transition: transform var(--duration-normal) var(--ease-out);
+        }
+
+        .feature-card:hover {
+            transform: translateY(-6px);
+            box-shadow: 0 16px 48px rgba(13, 12, 12, 0.12);
+            border-color: transparent;
+        }
+
+        .feature-card:hover::before {
+            transform: scaleX(1);
+        }
+
+        .feature-icon {
+            width: 56px;
+            height: 56px;
+            background: var(--color-bg-primary);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: var(--space-24);
+            transition: all var(--duration-fast) var(--ease-out);
+        }
+
+        .feature-card:hover .feature-icon {
+            background: rgba(255, 72, 0, 0.1);
+            transform: scale(1.05);
+        }
+
+        .feature-icon svg {
+            width: 28px;
+            height: 28px;
+            stroke: var(--color-accent);
+            stroke-width: 2;
+            fill: none;
+        }
+
+        .feature-card h3 {
+            font-size: 22px;
+            margin-bottom: var(--space-12);
+        }
+
+        .feature-card p {
+            color: var(--color-text-secondary);
+            font-size: 16px;
+            line-height: 1.6;
+            margin-bottom: var(--space-16);
+        }
+
+        .feature-tech {
+            font-family: var(--font-mono);
+            font-size: 13px;
+            color: var(--color-accent);
+            opacity: 0.8;
+        }
+
+        /* ============================================
+           CTA Section
+           ============================================ */
+        .cta-section {
+            background: linear-gradient(135deg, var(--color-accent) 0%, var(--color-accent-light) 100%);
+            color: white;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Animated gradient overlay */
+        .cta-section::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(255, 255, 255, 0.1) 0%, transparent 70%);
+            animation: rotate 20s linear infinite;
+        }
+
+        @keyframes rotate {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        .cta-content {
+            position: relative;
+            z-index: 1;
+        }
+
+        .cta-section h2 {
+            color: white;
+            margin-bottom: var(--space-24);
+        }
+
+        .cta-section p {
+            font-size: clamp(18px, 2vw, 22px);
+            margin-bottom: var(--space-48);
+            max-width: 700px;
+            margin-inline: auto;
+            opacity: 0.95;
+        }
+
+        .cta-button-large {
+            display: inline-flex;
+            align-items: center;
+            gap: var(--space-12);
+            background: white;
+            color: var(--color-accent);
+            font-family: var(--font-display);
+            font-size: 20px;
+            font-weight: 700;
+            padding: var(--space-24) var(--space-48);
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all var(--duration-normal) var(--ease-out);
+            text-decoration: none;
+            box-shadow: 0 12px 32px rgba(13, 12, 12, 0.3);
+            margin-bottom: var(--space-24);
+        }
+
+        .cta-button-large:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 16px 48px rgba(13, 12, 12, 0.4);
+        }
+
+        .cta-button-large:active {
+            transform: translateY(-1px);
+        }
+
+        .cta-terminal {
+            max-width: 500px;
+            margin-inline: auto;
+            margin-top: var(--space-48);
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 8px;
+            padding: var(--space-16);
+            font-family: var(--font-mono);
+            font-size: 14px;
+            text-align: left;
+            backdrop-filter: blur(8px);
+        }
+
+        .cta-terminal-line {
+            opacity: 0.9;
+        }
+
+        /* ============================================
+           Animations
+           ============================================ */
+        @keyframes fadeSlideUp {
+            from {
+                opacity: 0;
+                transform: translateY(24px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Scroll-triggered animations */
+        .reveal {
+            opacity: 0;
+            transform: translateY(32px);
+            transition: all 0.8s var(--ease-out);
+        }
+
+        .reveal.active {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        /* ============================================
+           Responsive Adjustments
+           ============================================ */
+        @media (max-width: 768px) {
+            .nav-container {
+                padding-inline: var(--space-16);
+                height: 64px;
+            }
+
+            section {
+                padding-block: var(--space-64);
+            }
+
+            .hero {
+                min-height: auto;
+                padding-block: var(--space-96);
+                padding-top: 100px;
+            }
+
+            .terminal-body {
+                font-size: 12px;
+                padding: var(--space-16);
+                min-height: 280px;
+            }
+
+            .pain-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .features-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .hero-ctas {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .primary-cta,
+            .secondary-cta {
+                width: 100%;
+                justify-content: center;
+            }
+        }
+
+        /* ============================================
+           Accessibility
+           ============================================ */
+        @media (prefers-reduced-motion: reduce) {
+            *,
+            *::before,
+            *::after {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
+
+            .typing-cursor {
+                animation: none;
+                opacity: 1;
+            }
+
+            .terminal {
+                animation: none;
+            }
+        }
+
+        /* Focus styles */
+        a:focus-visible,
+        button:focus-visible {
+            outline: 3px solid var(--color-accent);
+            outline-offset: 4px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation Header -->
+    <header class="nav-header">
+        <nav class="nav-container">
+            <a href="/" class="nav-logo">
+                <div class="nav-logo-icon">C</div>
+                Clearical
+            </a>
+            <div class="nav-links">
+                <a href="#features" class="nav-link">Features</a>
+                <a href="#pricing" class="nav-link">Pricing</a>
+                <a href="#download" class="nav-link">Download</a>
+                <a href="#download" class="nav-cta">Start Free Trial</a>
+            </div>
+        </nav>
+    </header>
+
+    <!-- Hero Section -->
+    <section class="hero dot-grid">
+        <div class="container">
+            <div class="hero-content">
+                <h1>Your Flow State Is Sacred.<br>We'll Handle the Time Tracking.</h1>
+                <p class="hero-subheading">
+                    Stop context-switching to track time. Clearical captures your work automatically while you stay focused on shipping code. Zero timers. Zero interruptions. Just pure development time, perfectly tracked.
+                </p>
+
+                <!-- Hero CTAs -->
+                <div class="hero-ctas">
+                    <a href="#download" class="primary-cta">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="7 10 12 15 17 10"></polyline>
+                            <line x1="12" y1="15" x2="12" y2="3"></line>
+                        </svg>
+                        Download for Mac — Free 14-Day Trial
+                    </a>
+                    <a href="#how-it-works" class="secondary-cta">
+                        See How It Works
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="9 18 15 12 9 6"></polyline>
+                        </svg>
+                    </a>
+                </div>
+
+                <!-- Enhanced Terminal Window -->
+                <div class="terminal-showcase">
+                    <div class="terminal">
+                        <div class="terminal-header">
+                            <div class="terminal-dot"></div>
+                            <div class="terminal-dot"></div>
+                            <div class="terminal-dot"></div>
+                            <div class="terminal-title">zsh — clearical</div>
+                        </div>
+                        <div class="terminal-body">
+                            <div class="terminal-line">
+                                <span class="terminal-prompt">$</span>
+                                <span class="terminal-command">clearical status</span>
+                            </div>
+                            <div class="terminal-line" style="margin-left: 28px;">
+                                <span class="terminal-info">Tracking:</span>
+                                <span class="terminal-highlight">VS Code</span>
+                                <span class="terminal-info">— auth-service/oauth.ts</span>
+                            </div>
+                            <div class="terminal-line" style="margin-left: 28px;">
+                                <span class="terminal-info">Session:</span>
+                                <span class="terminal-highlight">2h 34m</span>
+                            </div>
+                            <div class="terminal-line" style="margin-left: 28px;">
+                                <span class="terminal-info">Auto-saved:</span>
+                                <span class="terminal-highlight">47 screenshots</span>
+                            </div>
+                            <div class="terminal-line" style="margin-top: 12px;">
+                                <span class="terminal-prompt">$</span>
+                                <span class="terminal-command">clearical log --today</span>
+                            </div>
+                            <div class="terminal-line" style="margin-left: 28px; margin-top: 8px;">
+                                <span class="terminal-info">09:00-11:30</span>
+                                <span class="terminal-highlight" style="margin-left: 8px;">AUTH-142</span>
+                                <span class="terminal-info" style="margin-left: 8px;">Implement OAuth flow</span>
+                            </div>
+                            <div class="terminal-line" style="margin-left: 28px;">
+                                <span class="terminal-info">11:45-12:30</span>
+                                <span class="terminal-highlight" style="margin-left: 8px;">AUTH-142</span>
+                                <span class="terminal-info" style="margin-left: 8px;">Debug token refresh</span>
+                            </div>
+                            <div class="terminal-line" style="margin-left: 28px;">
+                                <span class="terminal-info">14:00-16:34</span>
+                                <span class="terminal-highlight" style="margin-left: 8px;">API-89</span>
+                                <span class="terminal-info" style="margin-left: 12px;">Add rate limiting</span>
+                            </div>
+                            <div class="terminal-line" style="margin-top: 12px;">
+                                <span class="terminal-prompt">$</span>
+                                <span class="typing-cursor"></span>
+                            </div>
+                            <div class="terminal-line" style="margin-top: 16px;">
+                                <span class="terminal-comment"># You never left your IDE</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Connection Diagram -->
+        <svg class="connection-diagram" viewBox="0 0 600 600" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <!-- Central Node -->
+            <circle class="diagram-node" cx="300" cy="300" r="50" fill="#FF4800" opacity="0.15"/>
+            <text x="300" y="305" text-anchor="middle" fill="#FF4800" font-size="14" font-weight="600">AI</text>
+
+            <!-- Outer Nodes -->
+            <circle class="diagram-node" cx="150" cy="150" r="40" fill="#FF4800" opacity="0.1"/>
+            <text x="150" y="155" text-anchor="middle" fill="#FF4800" font-size="12">IDE</text>
+
+            <circle class="diagram-node" cx="450" cy="150" r="40" fill="#FF4800" opacity="0.1"/>
+            <text x="450" y="155" text-anchor="middle" fill="#FF4800" font-size="12">Git</text>
+
+            <circle class="diagram-node" cx="150" cy="450" r="40" fill="#FF4800" opacity="0.1"/>
+            <text x="150" y="455" text-anchor="middle" fill="#FF4800" font-size="12">Shots</text>
+
+            <circle class="diagram-node" cx="450" cy="450" r="40" fill="#FF4800" opacity="0.1"/>
+            <text x="450" y="455" text-anchor="middle" fill="#FF4800" font-size="12">Sheet</text>
+
+            <!-- Connecting Lines -->
+            <line class="diagram-line" x1="300" y1="300" x2="150" y2="150" stroke="#FF4800" opacity="0.15" stroke-width="2"/>
+            <line class="diagram-line" x1="300" y1="300" x2="450" y2="150" stroke="#FF4800" opacity="0.15" stroke-width="2"/>
+            <line class="diagram-line" x1="300" y1="300" x2="150" y2="450" stroke="#FF4800" opacity="0.15" stroke-width="2"/>
+            <line class="diagram-line" x1="300" y1="300" x2="450" y2="450" stroke="#FF4800" opacity="0.15" stroke-width="2"/>
+        </svg>
+    </section>
+
+    <!-- IDE Integration Section -->
+    <section class="ide-section">
+        <div class="container">
+            <div class="ide-container">
+                <div class="ide-content reveal">
+                    <h2>Lives Where You Work</h2>
+                    <p>
+                        Native integrations that understand your development workflow. From the moment you open your IDE to the second you push to production, Clearical tracks it all—invisibly.
+                    </p>
+                    <div class="ide-features">
+                        <div class="ide-feature">
+                            <svg class="ide-feature-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="3" y="3" width="18" height="18" rx="2"/>
+                                <line x1="9" y1="3" x2="9" y2="21"/>
+                            </svg>
+                            <div class="ide-feature-text">
+                                <h4>Active File Detection</h4>
+                                <p>Knows exactly what file and project you're working on</p>
+                            </div>
+                        </div>
+                        <div class="ide-feature">
+                            <svg class="ide-feature-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="16 18 22 12 16 6"/>
+                                <polyline points="8 6 2 12 8 18"/>
+                            </svg>
+                            <div class="ide-feature-text">
+                                <h4>Language Aware</h4>
+                                <p>Categorizes time by programming language and framework</p>
+                            </div>
+                        </div>
+                        <div class="ide-feature">
+                            <svg class="ide-feature-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="10"/>
+                                <polyline points="12 6 12 12 16 14"/>
+                            </svg>
+                            <div class="ide-feature-text">
+                                <h4>Intelligent Idle Detection</h4>
+                                <p>Stops tracking during coffee breaks, not during deep thinking</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- IDE Window Mockup -->
+                <div class="reveal">
+                    <div class="ide-window" style="position: relative;">
+                        <div class="ide-titlebar">
+                            <div class="terminal-dot"></div>
+                            <div class="terminal-dot"></div>
+                            <div class="terminal-dot"></div>
+                            <div class="ide-file-tab">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4FC1FF" stroke-width="2">
+                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                                    <polyline points="14 2 14 8 20 8"/>
+                                </svg>
+                                oauth.ts
+                            </div>
+                        </div>
+                        <div class="ide-editor">
+                            <div class="ide-line">
+                                <span class="ide-line-number">1</span>
+                                <span class="ide-code"><span class="syntax-keyword">import</span> { <span class="syntax-variable">Router</span> } <span class="syntax-keyword">from</span> <span class="syntax-string">'express'</span>;</span>
+                            </div>
+                            <div class="ide-line">
+                                <span class="ide-line-number">2</span>
+                                <span class="ide-code"><span class="syntax-keyword">import</span> { <span class="syntax-variable">OAuth2Client</span> } <span class="syntax-keyword">from</span> <span class="syntax-string">'google-auth-library'</span>;</span>
+                            </div>
+                            <div class="ide-line">
+                                <span class="ide-line-number">3</span>
+                                <span class="ide-code"></span>
+                            </div>
+                            <div class="ide-line">
+                                <span class="ide-line-number">4</span>
+                                <span class="ide-code"><span class="syntax-keyword">const</span> <span class="syntax-variable">router</span> = <span class="syntax-function">Router</span>();</span>
+                            </div>
+                            <div class="ide-line">
+                                <span class="ide-line-number">5</span>
+                                <span class="ide-code"><span class="syntax-keyword">const</span> <span class="syntax-variable">client</span> = <span class="syntax-keyword">new</span> <span class="syntax-function">OAuth2Client</span>({</span>
+                            </div>
+                            <div class="ide-line">
+                                <span class="ide-line-number">6</span>
+                                <span class="ide-code">  <span class="syntax-variable">clientId</span>: process.env.<span class="syntax-variable">GOOGLE_CLIENT_ID</span>,</span>
+                            </div>
+                            <div class="ide-line">
+                                <span class="ide-line-number">7</span>
+                                <span class="ide-code">  <span class="syntax-variable">redirectUri</span>: <span class="syntax-string">'http://localhost:3000/auth/callback'</span></span>
+                            </div>
+                            <div class="ide-line">
+                                <span class="ide-line-number">8</span>
+                                <span class="ide-code">});</span>
+                            </div>
+                            <div class="ide-line">
+                                <span class="ide-line-number">9</span>
+                                <span class="ide-code"></span>
+                            </div>
+                            <div class="ide-line">
+                                <span class="ide-line-number">10</span>
+                                <span class="ide-code"><span class="syntax-comment">// Generate OAuth URL with PKCE</span></span>
+                            </div>
+                            <div class="ide-line">
+                                <span class="ide-line-number">11</span>
+                                <span class="ide-code">router.<span class="syntax-function">get</span>(<span class="syntax-string">'/login'</span>, <span class="syntax-keyword">async</span> (<span class="syntax-variable">req</span>, <span class="syntax-variable">res</span>) => {</span>
+                            </div>
+                            <div class="ide-line">
+                                <span class="ide-line-number">12</span>
+                                <span class="ide-code">  <span class="syntax-keyword">const</span> <span class="syntax-variable">url</span> = <span class="syntax-keyword">await</span> client.<span class="syntax-function">generateAuthUrl</span>({</span>
+                            </div>
+                            <div class="ide-line">
+                                <span class="ide-line-number">13</span>
+                                <span class="ide-code">    <span class="syntax-variable">scope</span>: [<span class="syntax-string">'profile'</span>, <span class="syntax-string">'email'</span>]</span>
+                            </div>
+                            <div class="ide-line">
+                                <span class="ide-line-number">14</span>
+                                <span class="ide-code">  });</span>
+                            </div>
+                        </div>
+
+                        <!-- Clearical Indicator -->
+                        <div class="clearical-indicator">
+                            <div class="indicator-dot"></div>
+                            <span>Tracking: 1h 23m</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Pain Section -->
+    <section class="pain-section">
+        <div class="container">
+            <h2 class="reveal">The Developer's Paradox</h2>
+            <div class="pain-grid">
+                <div class="pain-card reveal">
+                    <h3>Timer apps break your focus</h3>
+                    <p>
+                        Alt-tab to start, alt-tab to stop, alt-tab to switch projects.
+                        Death by interruption. Every context switch costs you 23 minutes of deep work. Your IDE shouldn't compete with Slack for your attention.
+                    </p>
+                </div>
+
+                <div class="pain-card reveal">
+                    <h3>Standup: "What did you do yesterday?"</h3>
+                    <p>
+                        Drawing a blank on the PR you spent 3 hours debugging.
+                        Your Git history knows exactly what you did, but your memory doesn't. Your commits tell the truth, your standup notes are fiction.
+                    </p>
+                </div>
+
+                <div class="pain-card reveal">
+                    <h3>The IDE says 4 hours, the timer says 2</h3>
+                    <p>
+                        Because you forgot to start it. Again. Your WakaTime stats tell the truth,
+                        but your timesheet is full of gaps. Your billable hours are disappearing into the void.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- How It Works Section -->
+    <section class="how-it-works" id="how-it-works">
+        <div class="container">
+            <h2 class="reveal">Time Tracking That Stays Out of Your Way</h2>
+            <div class="steps">
+                <div class="step reveal">
+                    <div class="step-number">01</div>
+                    <h3>Zero interaction</h3>
+                    <p>Open your IDE. Write code. That's it. No timers to start, no forms to fill, no interruptions. Just pure development.</p>
+                </div>
+
+                <div class="step reveal">
+                    <div class="step-number">02</div>
+                    <h3>Captures everything</h3>
+                    <p>VS Code, JetBrains, Xcode. Git commits. Browser research. Terminal commands. All automatically logged with context.</p>
+                </div>
+
+                <div class="step reveal">
+                    <div class="step-number">03</div>
+                    <h3>AI generates summaries</h3>
+                    <p>Branch names become task descriptions. Commit messages become work summaries. Screenshots become proof of work.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section class="features" id="features">
+        <div class="container">
+            <h2 class="reveal">Engineered for Engineers</h2>
+            <div class="features-grid">
+                <div class="feature-card reveal">
+                    <div class="feature-icon">
+                        <svg viewBox="0 0 24 24">
+                            <rect x="3" y="3" width="18" height="18" rx="2"/>
+                            <line x1="9" y1="3" x2="9" y2="21"/>
+                        </svg>
+                    </div>
+                    <h3>IDE-aware</h3>
+                    <p>Native integrations for VS Code, JetBrains IDEs, Xcode, and more. Tracks active files, languages, and frameworks in real-time.</p>
+                    <div class="feature-tech">vscode.d.ts • jetbrains-api • xcode-plugin</div>
+                </div>
+
+                <div class="feature-card reveal">
+                    <div class="feature-icon">
+                        <svg viewBox="0 0 24 24">
+                            <circle cx="12" cy="12" r="3"/>
+                            <path d="M12 1v6m0 6v6m8.66-11.66l-5.2 3m-3.92 2.26l-5.2 3M1.34 12.66l5.2-3m3.92-2.26l5.2-3"/>
+                        </svg>
+                    </div>
+                    <h3>Git-friendly</h3>
+                    <p>Automatically detects branch switches, associates time with commits, and extracts ticket numbers from branch names.</p>
+                    <div class="feature-tech">git-hooks • branch-parser • commit-analyzer</div>
+                </div>
+
+                <div class="feature-card reveal">
+                    <div class="feature-icon">
+                        <svg viewBox="0 0 24 24">
+                            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                            <polyline points="7.5 4.21 12 6.81 16.5 4.21"/>
+                            <polyline points="7.5 19.79 7.5 14.6 3 12"/>
+                            <polyline points="21 12 16.5 14.6 16.5 19.79"/>
+                            <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+                            <line x1="12" y1="22.08" x2="12" y2="12"/>
+                        </svg>
+                    </div>
+                    <h3>Jira & Tempo sync</h3>
+                    <p>One-click export to Tempo. Ticket numbers from branch names automatically matched to Jira issues. Your timesheet writes itself.</p>
+                    <div class="feature-tech">tempo-api • jira-integration • auto-worklog</div>
+                </div>
+
+                <div class="feature-card reveal">
+                    <div class="feature-icon">
+                        <svg viewBox="0 0 24 24">
+                            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+                        </svg>
+                    </div>
+                    <h3>Offline-first</h3>
+                    <p>Local-first architecture. Your data stays on your machine. Sync to cloud only when you want to. Full control over your data.</p>
+                    <div class="feature-tech">sqlite • local-storage • optional-sync</div>
+                </div>
+
+                <div class="feature-card reveal">
+                    <div class="feature-icon">
+                        <svg viewBox="0 0 24 24">
+                            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+                        </svg>
+                    </div>
+                    <h3>Lightweight</h3>
+                    <p>Less than 100MB installed. Native performance built with Rust. Barely touches CPU or battery. Won't slow down your machine.</p>
+                    <div class="feature-tech">rust • native • &lt;100mb • &lt;1% cpu</div>
+                </div>
+
+                <div class="feature-card reveal">
+                    <div class="feature-icon">
+                        <svg viewBox="0 0 24 24">
+                            <path d="M18 3a3 3 0 0 0-3 3v12a3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3H6a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3V6a3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3h12a3 3 0 0 0 3-3 3 3 0 0 0-3-3z"/>
+                        </svg>
+                    </div>
+                    <h3>Keyboard-driven</h3>
+                    <p>Global hotkeys. Command palette for everything. No mouse required. Vim motions supported. Navigate at the speed of thought.</p>
+                    <div class="feature-tech">cmd+k • global-shortcuts • vim-mode</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA Section -->
+    <section class="cta-section">
+        <div class="container">
+            <div class="cta-content">
+                <h2 class="reveal">Get Back to Building</h2>
+                <p class="reveal">
+                    Stop context-switching to track time. Start shipping features. Clearical handles the rest—invisibly, automatically, perfectly.
+                </p>
+                <a href="#download" class="cta-button-large reveal">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="7 10 12 15 17 10"></polyline>
+                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg>
+                    Download for Mac — Free 14-Day Trial
+                </a>
+
+                <div class="cta-terminal reveal">
+                    <div class="cta-terminal-line" style="opacity: 0.7; margin-bottom: 4px;">
+                        $ brew install clearical
+                    </div>
+                    <div class="cta-terminal-line" style="opacity: 0.9;">
+                        ✓ Ready to track. No signup required.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <script>
+        // ============================================
+        // Navigation Header Scroll Behavior
+        // ============================================
+        let lastScroll = 0;
+        const nav = document.querySelector('.nav-header');
+
+        window.addEventListener('scroll', () => {
+            const currentScroll = window.pageYOffset;
+
+            if (currentScroll <= 0) {
+                nav.classList.remove('hidden');
+                return;
+            }
+
+            if (currentScroll > lastScroll && currentScroll > 100) {
+                // Scrolling down
+                nav.classList.add('hidden');
+            } else {
+                // Scrolling up
+                nav.classList.remove('hidden');
+            }
+
+            lastScroll = currentScroll;
+        });
+
+        // ============================================
+        // Scroll-triggered Reveal Animations
+        // ============================================
+        const revealElements = document.querySelectorAll('.reveal');
+
+        const revealObserver = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('active');
+                }
+            });
+        }, {
+            threshold: 0.1,
+            rootMargin: '0px 0px -80px 0px'
+        });
+
+        revealElements.forEach(el => {
+            revealObserver.observe(el);
+        });
+
+        // ============================================
+        // Smooth Scroll for Anchor Links
+        // ============================================
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                const href = this.getAttribute('href');
+
+                if (href === '#download') {
+                    e.preventDefault();
+                    console.log('Download triggered');
+                    // In production, this would trigger the download
+                    return;
+                }
+
+                const target = document.querySelector(href);
+                if (target) {
+                    e.preventDefault();
+                    const offsetTop = target.offsetTop - 80;
+                    window.scrollTo({
+                        top: offsetTop,
+                        behavior: 'smooth'
+                    });
+                }
+            });
+        });
+
+        // ============================================
+        // Keyboard Shortcut Easter Egg (Cmd+K)
+        // ============================================
+        document.addEventListener('keydown', (e) => {
+            if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+                e.preventDefault();
+                console.log('⌘K detected - Command palette would open here');
+                // In production app, this would open command palette
+            }
+        });
+
+        // ============================================
+        // Animate SVG Connection Lines
+        // ============================================
+        const diagramLines = document.querySelectorAll('.diagram-line');
+        diagramLines.forEach((line, index) => {
+            line.style.animationDelay = `${index * 0.2}s`;
+        });
+    </script>
+</body>
+</html>

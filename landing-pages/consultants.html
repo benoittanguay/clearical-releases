@@ -1,0 +1,1775 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clearical for Consultants - Time Is Your Product</title>
+    <meta name="description" content="Precision time tracking for all consultants and professional service providers. Every minute tracked, every hour billed, every client profitable.">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+
+    <style>
+        /* ================================
+           CSS Custom Properties
+           ================================ */
+        :root {
+            /* Colors */
+            --color-bg-primary: #F2F0ED;
+            --color-bg-secondary: #FFFFFF;
+            --color-bg-dark: #181717;
+            --color-accent: #FF4800;
+            --color-accent-light: #FF6B35;
+            --color-text-primary: #0D0C0C;
+            --color-text-secondary: #6B6560;
+            --color-border: #E4E0DC;
+
+            /* Typography */
+            --font-display: 'Instrument Sans', system-ui, sans-serif;
+            --font-body: 'Inter', system-ui, sans-serif;
+
+            /* Spacing scale */
+            --space-xs: 0.5rem;
+            --space-sm: 0.75rem;
+            --space-md: 1rem;
+            --space-lg: 1.5rem;
+            --space-xl: 2rem;
+            --space-2xl: 3rem;
+            --space-3xl: 4rem;
+            --space-4xl: 6rem;
+            --space-5xl: 8rem;
+
+            /* Layout */
+            --container-max: 1400px;
+            --container-narrow: 1000px;
+            --border-radius: 1rem;
+            --border-radius-lg: 1.5rem;
+
+            /* Transitions */
+            --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+            --transition-base: 250ms cubic-bezier(0.4, 0, 0.2, 1);
+            --transition-slow: 400ms cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* ================================
+           Reset & Base Styles
+           ================================ */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html {
+            scroll-behavior: smooth;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        body {
+            font-family: var(--font-body);
+            color: var(--color-text-primary);
+            background-color: var(--color-bg-primary);
+            line-height: 1.6;
+            overflow-x: hidden;
+            position: relative;
+        }
+
+        /* Subtle noise texture */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0.03;
+            z-index: 1;
+            pointer-events: none;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+        }
+
+        /* Dot pattern background */
+        body::after {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0.015;
+            z-index: 1;
+            pointer-events: none;
+            background-image: radial-gradient(circle, #0D0C0C 1px, transparent 1px);
+            background-size: 24px 24px;
+        }
+
+        img {
+            max-width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        button {
+            font-family: inherit;
+            cursor: pointer;
+            border: none;
+            background: none;
+        }
+
+        /* ================================
+           Typography
+           ================================ */
+        .display-xl {
+            font-family: var(--font-display);
+            font-size: clamp(3rem, 8vw, 6rem);
+            font-weight: 700;
+            line-height: 1.1;
+            letter-spacing: -0.02em;
+        }
+
+        .display-lg {
+            font-family: var(--font-display);
+            font-size: clamp(2.5rem, 6vw, 4.5rem);
+            font-weight: 700;
+            line-height: 1.1;
+            letter-spacing: -0.02em;
+        }
+
+        .display-md {
+            font-family: var(--font-display);
+            font-size: clamp(2rem, 5vw, 3.5rem);
+            font-weight: 600;
+            line-height: 1.2;
+            letter-spacing: -0.01em;
+        }
+
+        .heading-lg {
+            font-family: var(--font-display);
+            font-size: clamp(1.75rem, 4vw, 2.5rem);
+            font-weight: 600;
+            line-height: 1.3;
+            letter-spacing: -0.01em;
+        }
+
+        .body-lg {
+            font-size: clamp(1.125rem, 2vw, 1.375rem);
+            line-height: 1.6;
+            color: var(--color-text-secondary);
+        }
+
+        .body-base {
+            font-size: 1rem;
+            line-height: 1.6;
+        }
+
+        .mono {
+            font-family: monospace;
+            font-size: 0.875rem;
+            letter-spacing: 0.05em;
+        }
+
+        /* ================================
+           Layout Utilities
+           ================================ */
+        .container {
+            max-width: var(--container-max);
+            margin-inline: auto;
+            padding-inline: var(--space-xl);
+            position: relative;
+            z-index: 2;
+        }
+
+        .container-narrow {
+            max-width: var(--container-narrow);
+            margin-inline: auto;
+            padding-inline: var(--space-xl);
+            position: relative;
+            z-index: 2;
+        }
+
+        .section {
+            padding-block: var(--space-4xl);
+            position: relative;
+        }
+
+        .section-lg {
+            padding-block: var(--space-5xl);
+            position: relative;
+        }
+
+        /* ================================
+           Components - Header
+           ================================ */
+        .header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 100;
+            padding-block: var(--space-lg);
+            background-color: var(--color-bg-primary);
+            border-bottom: 1px solid transparent;
+            transition: all var(--transition-base);
+        }
+
+        .header.scrolled {
+            background-color: rgba(242, 240, 237, 0.9);
+            backdrop-filter: blur(12px);
+            border-bottom-color: var(--color-border);
+            box-shadow: 0 1px 3px rgba(13, 12, 12, 0.05);
+        }
+
+        .header-content {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .logo {
+            font-family: var(--font-display);
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--color-text-primary);
+            text-decoration: none;
+        }
+
+        /* ================================
+           Components - Hero Section
+           ================================ */
+        .hero {
+            padding-top: calc(80px + var(--space-4xl));
+            padding-bottom: var(--space-5xl);
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Gradient orbs background */
+        .hero::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -10%;
+            width: 800px;
+            height: 800px;
+            background: radial-gradient(circle, rgba(255, 72, 0, 0.05), transparent 70%);
+            border-radius: 50%;
+            z-index: 0;
+            animation: float 20s ease-in-out infinite;
+        }
+
+        .hero::after {
+            content: '';
+            position: absolute;
+            bottom: -30%;
+            left: -10%;
+            width: 600px;
+            height: 600px;
+            background: radial-gradient(circle, rgba(255, 107, 53, 0.04), transparent 70%);
+            border-radius: 50%;
+            z-index: 0;
+            animation: float 15s ease-in-out infinite reverse;
+        }
+
+        @keyframes float {
+            0%, 100% {
+                transform: translate(0, 0);
+            }
+            50% {
+                transform: translate(30px, -30px);
+            }
+        }
+
+        .hero-content {
+            max-width: 900px;
+            position: relative;
+            z-index: 2;
+        }
+
+        .hero-eyebrow {
+            display: inline-flex;
+            align-items: center;
+            gap: var(--space-sm);
+            padding: var(--space-xs) var(--space-md);
+            background-color: var(--color-bg-secondary);
+            border: 1px solid var(--color-border);
+            border-radius: 2rem;
+            margin-bottom: var(--space-xl);
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: var(--color-text-secondary);
+            box-shadow: 0 2px 8px rgba(13, 12, 12, 0.04);
+        }
+
+        .hero-eyebrow-dot {
+            width: 6px;
+            height: 6px;
+            background-color: var(--color-accent);
+            border-radius: 50%;
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 1;
+                box-shadow: 0 0 0 0 rgba(255, 72, 0, 0.4);
+            }
+            50% {
+                opacity: 0.8;
+                box-shadow: 0 0 0 4px rgba(255, 72, 0, 0);
+            }
+        }
+
+        .hero-headline {
+            margin-bottom: var(--space-xl);
+        }
+
+        .hero-subheading {
+            max-width: 700px;
+            margin-bottom: var(--space-2xl);
+        }
+
+        .hero-cta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: var(--space-md);
+            align-items: center;
+        }
+
+        /* ================================
+           Components - Buttons
+           ================================ */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: var(--space-sm);
+            padding: 1rem 2rem;
+            font-family: var(--font-display);
+            font-size: 1rem;
+            font-weight: 600;
+            text-decoration: none;
+            border-radius: 0.75rem;
+            transition: all var(--transition-base);
+            white-space: nowrap;
+        }
+
+        .btn-primary {
+            background-color: var(--color-accent);
+            color: white;
+            box-shadow: 0 1px 3px rgba(255, 72, 0, 0.2), 0 4px 16px rgba(255, 72, 0, 0.1);
+        }
+
+        .btn-primary:hover {
+            background-color: var(--color-accent-light);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(255, 72, 0, 0.3), 0 8px 24px rgba(255, 72, 0, 0.15);
+        }
+
+        .btn-secondary {
+            background-color: var(--color-bg-secondary);
+            color: var(--color-text-primary);
+            border: 1px solid var(--color-border);
+            box-shadow: 0 1px 3px rgba(13, 12, 12, 0.05);
+        }
+
+        .btn-secondary:hover {
+            border-color: var(--color-text-secondary);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(13, 12, 12, 0.1);
+        }
+
+        .btn-icon {
+            transition: transform var(--transition-base);
+        }
+
+        .btn:hover .btn-icon {
+            transform: translateX(4px);
+        }
+
+        /* ================================
+           Components - Floating Stats
+           ================================ */
+        .floating-stats {
+            position: absolute;
+            right: var(--space-xl);
+            top: 50%;
+            transform: translateY(-50%);
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.8));
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(228, 224, 220, 0.8);
+            border-radius: var(--border-radius-lg);
+            padding: var(--space-xl);
+            box-shadow:
+                0 4px 24px rgba(13, 12, 12, 0.08),
+                0 0 1px rgba(13, 12, 12, 0.1),
+                inset 0 1px 0 rgba(255, 255, 255, 0.5);
+            width: 280px;
+            position: relative;
+            z-index: 10;
+        }
+
+        /* Glow effect on hover */
+        .floating-stats::before {
+            content: '';
+            position: absolute;
+            top: -2px;
+            left: -2px;
+            right: -2px;
+            bottom: -2px;
+            background: linear-gradient(135deg, rgba(255, 72, 0, 0.15), rgba(255, 107, 53, 0.05));
+            border-radius: var(--border-radius-lg);
+            z-index: -1;
+            opacity: 0;
+            transition: opacity var(--transition-base);
+        }
+
+        .floating-stats:hover::before {
+            opacity: 1;
+        }
+
+        .stat {
+            padding-block: var(--space-md);
+            transition: transform var(--transition-base);
+        }
+
+        .stat:hover {
+            transform: translateX(4px);
+        }
+
+        .stat:not(:last-child) {
+            border-bottom: 1px solid rgba(228, 224, 220, 0.5);
+        }
+
+        .stat-value {
+            font-family: var(--font-display);
+            font-size: 2.5rem;
+            font-weight: 700;
+            line-height: 1;
+            margin-bottom: var(--space-xs);
+            background: linear-gradient(135deg, var(--color-accent), var(--color-accent-light));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            filter: drop-shadow(0 2px 4px rgba(255, 72, 0, 0.1));
+        }
+
+        .stat-label {
+            font-size: 0.875rem;
+            color: var(--color-text-secondary);
+        }
+
+        /* ================================
+           Components - Logo Bar
+           ================================ */
+        .logo-bar {
+            background-color: var(--color-bg-secondary);
+            border-top: 1px solid var(--color-border);
+            border-bottom: 1px solid var(--color-border);
+            padding-block: var(--space-3xl);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .logo-bar::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(255, 72, 0, 0.1), transparent);
+        }
+
+        .logo-bar-title {
+            text-align: center;
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: var(--color-text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: var(--space-xl);
+        }
+
+        .logo-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: var(--space-2xl);
+            align-items: center;
+            justify-items: center;
+            max-width: 1100px;
+            margin-inline: auto;
+        }
+
+        .client-logo {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: var(--space-md);
+            opacity: 0.35;
+            transition: opacity var(--transition-base);
+            font-family: var(--font-display);
+            font-weight: 600;
+            font-size: 1.125rem;
+            color: var(--color-text-primary);
+            letter-spacing: 0.02em;
+        }
+
+        .client-logo:hover {
+            opacity: 0.7;
+        }
+
+        /* ================================
+           Components - Pain Section
+           ================================ */
+        .pain-section {
+            background-color: var(--color-bg-dark);
+            color: white;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .pain-section::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(255, 72, 0, 0.3), transparent);
+        }
+
+        /* Grid pattern overlay */
+        .pain-section::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0.02;
+            z-index: 0;
+            background-image:
+                linear-gradient(rgba(255, 255, 255, 0.1) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255, 255, 255, 0.1) 1px, transparent 1px);
+            background-size: 48px 48px;
+        }
+
+        .section-header {
+            text-align: center;
+            margin-bottom: var(--space-4xl);
+            position: relative;
+            z-index: 1;
+        }
+
+        .section-title {
+            color: white;
+        }
+
+        .pain-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: var(--space-xl);
+            position: relative;
+            z-index: 1;
+        }
+
+        .pain-card {
+            background-color: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: var(--border-radius);
+            padding: var(--space-xl);
+            transition: all var(--transition-base);
+            position: relative;
+            overflow: hidden;
+            backdrop-filter: blur(10px);
+        }
+
+        .pain-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, var(--color-accent), var(--color-accent-light));
+            transform: scaleX(0);
+            transform-origin: left;
+            transition: transform var(--transition-slow);
+        }
+
+        .pain-card:hover {
+            background-color: rgba(255, 255, 255, 0.08);
+            border-color: rgba(255, 72, 0, 0.3);
+            transform: translateY(-4px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        .pain-card:hover::before {
+            transform: scaleX(1);
+        }
+
+        .pain-number {
+            font-family: monospace;
+            font-size: 0.875rem;
+            color: var(--color-accent);
+            margin-bottom: var(--space-md);
+        }
+
+        .pain-title {
+            font-family: var(--font-display);
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: var(--space-md);
+            line-height: 1.3;
+        }
+
+        .pain-description {
+            color: rgba(255, 255, 255, 0.7);
+            line-height: 1.6;
+        }
+
+        /* ================================
+           Components - How It Works
+           ================================ */
+        .how-section {
+            position: relative;
+            background: linear-gradient(180deg, var(--color-bg-primary) 0%, rgba(255, 255, 255, 0.5) 100%);
+        }
+
+        .steps-container {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: var(--space-2xl);
+            margin-top: var(--space-3xl);
+            position: relative;
+        }
+
+        /* Connecting line with gradient */
+        .steps-container::before {
+            content: '';
+            position: absolute;
+            top: 40px;
+            left: 10%;
+            right: 10%;
+            height: 3px;
+            background: linear-gradient(90deg,
+                var(--color-accent) 0%,
+                var(--color-accent-light) 25%,
+                var(--color-accent) 50%,
+                var(--color-accent-light) 75%,
+                var(--color-accent) 100%
+            );
+            z-index: 0;
+            border-radius: 2px;
+            box-shadow: 0 2px 8px rgba(255, 72, 0, 0.2);
+        }
+
+        /* Animated dot on line */
+        .steps-container::after {
+            content: '';
+            position: absolute;
+            top: 39px;
+            left: 10%;
+            width: 5px;
+            height: 5px;
+            background: white;
+            border-radius: 50%;
+            box-shadow: 0 0 0 2px var(--color-accent);
+            animation: moveDot 3s ease-in-out infinite;
+        }
+
+        @keyframes moveDot {
+            0%, 100% {
+                left: 10%;
+            }
+            50% {
+                left: calc(90% - 5px);
+            }
+        }
+
+        .step {
+            position: relative;
+            z-index: 1;
+        }
+
+        .step-number {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, var(--color-accent), var(--color-accent-light));
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: var(--font-display);
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: var(--space-lg);
+            box-shadow:
+                0 4px 24px rgba(255, 72, 0, 0.3),
+                0 0 0 4px var(--color-bg-primary),
+                0 0 0 6px rgba(255, 72, 0, 0.2);
+            transition: transform var(--transition-base);
+        }
+
+        .step:hover .step-number {
+            transform: scale(1.1) rotate(5deg);
+        }
+
+        .step-title {
+            font-family: var(--font-display);
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: var(--space-md);
+        }
+
+        .step-description {
+            color: var(--color-text-secondary);
+            line-height: 1.6;
+        }
+
+        /* ================================
+           Components - Features
+           ================================ */
+        .features-section {
+            background-color: var(--color-bg-secondary);
+        }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: var(--space-xl);
+            margin-top: var(--space-3xl);
+        }
+
+        .feature-card {
+            background-color: var(--color-bg-primary);
+            border: 1px solid var(--color-border);
+            border-radius: var(--border-radius-lg);
+            padding: var(--space-2xl);
+            box-shadow: 0 2px 8px rgba(13, 12, 12, 0.04);
+            transition: all var(--transition-base);
+        }
+
+        .feature-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 24px rgba(13, 12, 12, 0.08);
+        }
+
+        .feature-icon {
+            width: 60px;
+            height: 60px;
+            background: linear-gradient(135deg, var(--color-accent), var(--color-accent-light));
+            border-radius: 1rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: var(--space-lg);
+            box-shadow: 0 4px 16px rgba(255, 72, 0, 0.2);
+            transition: transform var(--transition-base);
+        }
+
+        .feature-card:hover .feature-icon {
+            transform: scale(1.05) rotate(-5deg);
+        }
+
+        .feature-icon svg {
+            width: 32px;
+            height: 32px;
+            color: white;
+        }
+
+        .feature-title {
+            font-family: var(--font-display);
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: var(--space-md);
+        }
+
+        .feature-description {
+            color: var(--color-text-secondary);
+            line-height: 1.7;
+        }
+
+        /* ================================
+           Components - Product Mockup
+           ================================ */
+        .mockup-section {
+            background-color: var(--color-bg-primary);
+            position: relative;
+        }
+
+        .mockup-window {
+            background-color: var(--color-bg-secondary);
+            border: 1px solid var(--color-border);
+            border-radius: var(--border-radius-lg);
+            overflow: hidden;
+            box-shadow: 0 8px 32px rgba(13, 12, 12, 0.12);
+            margin-top: var(--space-3xl);
+        }
+
+        .mockup-header {
+            background-color: #E8E5E1;
+            padding: var(--space-md) var(--space-lg);
+            display: flex;
+            align-items: center;
+            gap: var(--space-sm);
+            border-bottom: 1px solid var(--color-border);
+        }
+
+        .mockup-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+
+        .dot-red { background-color: #FF5F56; }
+        .dot-yellow { background-color: #FFBD2E; }
+        .dot-green { background-color: #27C93F; }
+
+        .mockup-content {
+            padding: var(--space-2xl);
+            min-height: 400px;
+            background: linear-gradient(135deg, #F9F8F6 0%, #FFFFFF 100%);
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: var(--space-lg);
+        }
+
+        .app-item {
+            background-color: white;
+            border: 1px solid var(--color-border);
+            border-radius: 0.75rem;
+            padding: var(--space-lg);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: var(--space-sm);
+            transition: all var(--transition-base);
+            box-shadow: 0 2px 8px rgba(13, 12, 12, 0.04);
+        }
+
+        .app-item:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 16px rgba(13, 12, 12, 0.08);
+            border-color: var(--color-accent);
+        }
+
+        .app-icon {
+            width: 48px;
+            height: 48px;
+            background: linear-gradient(135deg, var(--color-accent), var(--color-accent-light));
+            border-radius: 0.75rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+            font-size: 1.125rem;
+        }
+
+        .app-name {
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: var(--color-text-primary);
+            text-align: center;
+        }
+
+        /* ================================
+           Components - Testimonials
+           ================================ */
+        .testimonials-section {
+            background-color: var(--color-bg-primary);
+            position: relative;
+        }
+
+        .testimonials-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: var(--space-xl);
+            margin-top: var(--space-3xl);
+        }
+
+        .testimonial-card {
+            background-color: var(--color-bg-secondary);
+            border: 1px solid var(--color-border);
+            border-radius: var(--border-radius-lg);
+            padding: var(--space-2xl);
+            position: relative;
+            box-shadow: 0 2px 8px rgba(13, 12, 12, 0.04);
+            transition: all var(--transition-base);
+        }
+
+        .testimonial-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 32px rgba(13, 12, 12, 0.1);
+        }
+
+        .testimonial-card.featured {
+            grid-row: span 2;
+            background: linear-gradient(135deg, var(--color-bg-dark), #2a2828);
+            color: white;
+            border-color: transparent;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+        }
+
+        .testimonial-card.featured:hover {
+            box-shadow: 0 16px 48px rgba(0, 0, 0, 0.3);
+        }
+
+        .quote-mark {
+            font-size: 4rem;
+            line-height: 1;
+            color: var(--color-accent);
+            opacity: 0.2;
+            margin-bottom: var(--space-md);
+            font-family: Georgia, serif;
+            position: absolute;
+            top: var(--space-lg);
+            left: var(--space-lg);
+        }
+
+        .testimonial-text {
+            font-size: 1.125rem;
+            line-height: 1.7;
+            margin-bottom: var(--space-lg);
+            padding-top: var(--space-2xl);
+        }
+
+        .testimonial-card.featured .testimonial-text {
+            font-size: 1.375rem;
+            color: rgba(255, 255, 255, 0.95);
+        }
+
+        .testimonial-author {
+            display: flex;
+            align-items: center;
+            gap: var(--space-md);
+        }
+
+        .author-avatar {
+            width: 52px;
+            height: 52px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--color-accent), var(--color-accent-light));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+            font-size: 1.25rem;
+            flex-shrink: 0;
+            box-shadow: 0 4px 12px rgba(255, 72, 0, 0.3);
+            border: 3px solid var(--color-bg-secondary);
+            transition: transform var(--transition-base);
+        }
+
+        .testimonial-card.featured .author-avatar {
+            border-color: var(--color-bg-dark);
+        }
+
+        .testimonial-card:hover .author-avatar {
+            transform: scale(1.1);
+        }
+
+        .author-info {
+            flex: 1;
+        }
+
+        .author-name {
+            font-weight: 600;
+            margin-bottom: 0.25rem;
+            font-size: 1rem;
+        }
+
+        .author-title {
+            font-size: 0.875rem;
+            color: var(--color-text-secondary);
+        }
+
+        .testimonial-card.featured .author-title {
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        /* ================================
+           Components - CTA Section
+           ================================ */
+        .cta-section {
+            background: linear-gradient(135deg, var(--color-accent), var(--color-accent-light));
+            color: white;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Gradient orbs for depth */
+        .cta-section::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -20%;
+            width: 600px;
+            height: 600px;
+            background: radial-gradient(circle, rgba(255, 255, 255, 0.15), transparent);
+            border-radius: 50%;
+        }
+
+        .cta-section::after {
+            content: '';
+            position: absolute;
+            bottom: -30%;
+            left: -10%;
+            width: 500px;
+            height: 500px;
+            background: radial-gradient(circle, rgba(255, 255, 255, 0.1), transparent);
+            border-radius: 50%;
+        }
+
+        /* Diagonal stripe pattern */
+        .cta-pattern {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0.03;
+            background-image: repeating-linear-gradient(
+                45deg,
+                transparent,
+                transparent 20px,
+                rgba(255, 255, 255, 0.5) 20px,
+                rgba(255, 255, 255, 0.5) 21px
+            );
+        }
+
+        .cta-content {
+            max-width: 800px;
+            margin-inline: auto;
+            text-align: center;
+            position: relative;
+            z-index: 1;
+        }
+
+        .cta-title {
+            color: white;
+            margin-bottom: var(--space-lg);
+            text-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .cta-text {
+            font-size: 1.25rem;
+            margin-bottom: var(--space-2xl);
+            opacity: 0.95;
+        }
+
+        .cta-button {
+            background-color: white;
+            color: var(--color-accent);
+            padding: 1.25rem 2.5rem;
+            font-size: 1.125rem;
+            box-shadow:
+                0 8px 32px rgba(0, 0, 0, 0.2),
+                0 0 0 1px rgba(255, 255, 255, 0.1);
+        }
+
+        .cta-button:hover {
+            transform: translateY(-4px);
+            box-shadow:
+                0 12px 40px rgba(0, 0, 0, 0.3),
+                0 0 0 1px rgba(255, 255, 255, 0.2);
+        }
+
+        .cta-note {
+            margin-top: var(--space-lg);
+            font-size: 0.875rem;
+            opacity: 0.8;
+        }
+
+        /* ================================
+           Components - Footer
+           ================================ */
+        .footer {
+            background-color: var(--color-bg-dark);
+            color: rgba(255, 255, 255, 0.7);
+            padding-block: var(--space-3xl);
+        }
+
+        .footer-content {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr 1fr;
+            gap: var(--space-3xl);
+            margin-bottom: var(--space-2xl);
+        }
+
+        .footer-brand {
+            color: white;
+            font-family: var(--font-display);
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: var(--space-md);
+        }
+
+        .footer-description {
+            line-height: 1.7;
+            max-width: 300px;
+        }
+
+        .footer-title {
+            color: white;
+            font-weight: 600;
+            margin-bottom: var(--space-lg);
+            font-size: 0.875rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .footer-links {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-sm);
+        }
+
+        .footer-links a {
+            color: rgba(255, 255, 255, 0.7);
+            text-decoration: none;
+            transition: color var(--transition-base);
+        }
+
+        .footer-links a:hover {
+            color: white;
+        }
+
+        .footer-bottom {
+            padding-top: var(--space-xl);
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.875rem;
+        }
+
+        /* ================================
+           Animations
+           ================================ */
+        .fade-in {
+            opacity: 0;
+            transform: translateY(30px);
+            transition: opacity var(--transition-slow), transform var(--transition-slow);
+        }
+
+        .fade-in.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        /* ================================
+           Responsive Design
+           ================================ */
+        @media (max-width: 1200px) {
+            .floating-stats {
+                position: static;
+                transform: none;
+                margin-top: var(--space-3xl);
+                width: 100%;
+                max-width: 400px;
+            }
+
+            .mockup-content {
+                grid-template-columns: repeat(3, 1fr);
+            }
+        }
+
+        @media (max-width: 992px) {
+            :root {
+                --space-4xl: 4rem;
+                --space-5xl: 5rem;
+            }
+
+            .steps-container {
+                grid-template-columns: 1fr;
+                gap: var(--space-xl);
+            }
+
+            .steps-container::before,
+            .steps-container::after {
+                display: none;
+            }
+
+            .testimonials-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .testimonial-card.featured {
+                grid-row: auto;
+            }
+
+            .footer-content {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .logo-grid {
+                grid-template-columns: repeat(3, 1fr);
+                gap: var(--space-xl);
+            }
+
+            .features-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .mockup-content {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        @media (max-width: 768px) {
+            :root {
+                --space-xl: 1.5rem;
+                --space-2xl: 2rem;
+                --space-3xl: 2.5rem;
+            }
+
+            .container,
+            .container-narrow {
+                padding-inline: var(--space-md);
+            }
+
+            .hero {
+                padding-top: calc(60px + var(--space-2xl));
+            }
+
+            .pain-grid,
+            .features-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .hero-cta {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .btn {
+                justify-content: center;
+            }
+
+            .footer-content {
+                grid-template-columns: 1fr;
+                gap: var(--space-2xl);
+            }
+
+            .footer-bottom {
+                flex-direction: column;
+                gap: var(--space-md);
+                text-align: center;
+            }
+
+            .logo-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .mockup-content {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* ================================
+           Accessibility
+           ================================ */
+        @media (prefers-reduced-motion: reduce) {
+            *,
+            *::before,
+            *::after {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+                scroll-behavior: auto !important;
+            }
+        }
+
+        .visually-hidden {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border-width: 0;
+        }
+
+        *:focus-visible {
+            outline: 2px solid var(--color-accent);
+            outline-offset: 2px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header class="header" id="header">
+        <div class="container">
+            <div class="header-content">
+                <a href="#" class="logo">Clearical</a>
+                <a href="#cta" class="btn btn-primary">
+                    Download for Mac
+                    <svg class="btn-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M8 12L12 8M12 8L8 4M12 8H4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </a>
+            </div>
+        </div>
+    </header>
+
+    <!-- Hero Section -->
+    <section class="hero section-lg">
+        <div class="container">
+            <div class="hero-content fade-in">
+                <div class="hero-eyebrow">
+                    <span class="hero-eyebrow-dot"></span>
+                    <span class="mono">FOR ALL CONSULTANTS</span>
+                </div>
+                <h1 class="display-xl hero-headline">
+                    Time Is Your Product. Know Where Every Minute Goes.
+                </h1>
+                <p class="body-lg hero-subheading">
+                    Billable hours aren't just a metric—they're your inventory. When a minute is worth $150+, approximation isn't just lazy. It's expensive. For everyone.
+                </p>
+                <div class="hero-cta">
+                    <a href="#cta" class="btn btn-primary">
+                        Download for Mac — Free 14-Day Trial
+                        <svg class="btn-icon" width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M10 15L15 10M15 10L10 5M15 10H5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </a>
+                    <a href="#how-it-works" class="btn btn-secondary">
+                        See How It Works
+                    </a>
+                </div>
+            </div>
+
+            <!-- Floating Stats -->
+            <div class="floating-stats fade-in" style="animation-delay: 200ms;">
+                <div class="stat">
+                    <div class="stat-value">$247K</div>
+                    <div class="stat-label">Avg. recovered revenue/year</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">18.5%</div>
+                    <div class="stat-label">Increase in billable hours</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">2.4hr</div>
+                    <div class="stat-label">Daily time saved</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Logo Bar / Social Proof -->
+    <section class="logo-bar">
+        <div class="container">
+            <div class="logo-bar-title">Trusted by consultants at leading firms</div>
+            <div class="logo-grid">
+                <div class="client-logo">McKinsey</div>
+                <div class="client-logo">BCG</div>
+                <div class="client-logo">Deloitte</div>
+                <div class="client-logo">Accenture</div>
+                <div class="client-logo">PwC</div>
+                <div class="client-logo">Bain</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Pain Section -->
+    <section class="pain-section section">
+        <div class="container">
+            <div class="section-header fade-in">
+                <h2 class="display-md section-title">The Real Cost of Guessing</h2>
+            </div>
+            <div class="pain-grid">
+                <div class="pain-card fade-in">
+                    <div class="pain-number">[01]</div>
+                    <h3 class="pain-title">"The 4-hour client meeting that became 2 on the invoice"</h3>
+                    <p class="pain-description">
+                        Because you didn't track the prep work, the follow-up emails, the internal coordination. That's not generosity—that's leaving money on the table.
+                    </p>
+                </div>
+                <div class="pain-card fade-in">
+                    <div class="pain-number">[02]</div>
+                    <h3 class="pain-title">"Wait, which client was that research for?"</h3>
+                    <p class="pain-description">
+                        Three engagements, one browser, zero documentation. Sound familiar? By Friday, you're playing forensic accountant with your own week.
+                    </p>
+                </div>
+                <div class="pain-card fade-in">
+                    <div class="pain-number">[03]</div>
+                    <h3 class="pain-title">"I'll round down to be safe"</h3>
+                    <p class="pain-description">
+                        Safe for who? Certainly not your revenue or your firm's bottom line. When doubt costs you $50 per entry, "close enough" adds up fast.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- How It Works Section -->
+    <section id="how-it-works" class="how-section section-lg">
+        <div class="container-narrow">
+            <div class="section-header fade-in">
+                <h2 class="display-md section-title">Precision Without the Process</h2>
+            </div>
+            <div class="steps-container">
+                <div class="step fade-in">
+                    <div class="step-number">1</div>
+                    <h3 class="step-title">Context captured automatically</h3>
+                    <p class="step-description">
+                        Every meeting, email, document, and call. Clearical knows what you're working on without you lifting a finger.
+                    </p>
+                </div>
+                <div class="step fade-in">
+                    <div class="step-number">2</div>
+                    <h3 class="step-title">AI matches to clients</h3>
+                    <p class="step-description">
+                        Smart recognition links work to the right engagement automatically. Pattern learning ensures accuracy improves over time.
+                    </p>
+                </div>
+                <div class="step fade-in">
+                    <div class="step-number">3</div>
+                    <h3 class="step-title">Review and approve</h3>
+                    <p class="step-description">
+                        One-click timesheet generation. Accurate to the minute. Ready to bill with complete confidence.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section class="features-section section-lg">
+        <div class="container">
+            <div class="section-header fade-in">
+                <h2 class="display-md section-title">Built for Professional Services</h2>
+            </div>
+            <div class="features-grid">
+                <div class="feature-card fade-in">
+                    <div class="feature-icon">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M17 21V19C17 17.9391 16.5786 16.9217 15.8284 16.1716C15.0783 15.4214 14.0609 15 13 15H5C3.93913 15 2.92172 15.4214 2.17157 16.1716C1.42143 16.9217 1 17.9391 1 19V21M23 21V19C22.9993 18.1137 22.7044 17.2528 22.1614 16.5523C21.6184 15.8519 20.8581 15.3516 20 15.13M16 3.13C16.8604 3.3503 17.623 3.8507 18.1676 4.55231C18.7122 5.25392 19.0078 6.11683 19.0078 7.005C19.0078 7.89317 18.7122 8.75608 18.1676 9.45769C17.623 10.1593 16.8604 10.6597 16 10.88M13 7C13 9.20914 11.2091 11 9 11C6.79086 11 5 9.20914 5 7C5 4.79086 6.79086 3 9 3C11.2091 3 13 4.79086 13 7Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </div>
+                    <h3 class="feature-title">Multi-Client Intelligence</h3>
+                    <p class="feature-description">
+                        Switch between engagements seamlessly. Clearical learns your patterns and automatically routes time to the right client and project.
+                    </p>
+                </div>
+
+                <div class="feature-card fade-in">
+                    <div class="feature-icon">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M9 5H7C5.89543 5 5 5.89543 5 7V19C5 20.1046 5.89543 21 7 21H17C18.1046 21 19 20.1046 19 19V7C19 5.89543 18.1046 5 17 5H15M9 5C9 6.10457 9.89543 7 11 7H13C14.1046 7 15 6.10457 15 5M9 5C9 3.89543 9.89543 3 11 3H13C14.1046 3 15 3.89543 15 5M12 12H15M12 16H15M9 12H9.01M9 16H9.01" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </div>
+                    <h3 class="feature-title">Automatic Categorization</h3>
+                    <p class="feature-description">
+                        Meetings, research, deliverables, admin—all categorized automatically. AI learns how you work and gets smarter every day.
+                    </p>
+                </div>
+
+                <div class="feature-card fade-in">
+                    <div class="feature-icon">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M9 12H15M9 16H15M17 21H7C5.89543 21 5 20.1046 5 19V5C5 3.89543 5.89543 3 7 3H12.5858C12.851 3 13.1054 3.10536 13.2929 3.29289L18.7071 8.70711C18.8946 8.89464 19 9.149 19 9.41421V19C19 20.1046 18.1046 21 17 21Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </div>
+                    <h3 class="feature-title">Detailed Audit Trail</h3>
+                    <p class="feature-description">
+                        Justify every billable minute with complete documentation. Screenshots, activity logs, and full context for client audits.
+                    </p>
+                </div>
+
+                <div class="feature-card fade-in">
+                    <div class="feature-icon">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M12 2V22M17 5H9.5C8.57174 5 7.6815 5.36875 7.02513 6.02513C6.36875 6.6815 6 7.57174 6 8.5C6 9.42826 6.36875 10.3185 7.02513 10.9749C7.6815 11.6313 8.57174 12 9.5 12H14.5C15.4283 12 16.3185 12.3687 16.9749 13.0251C17.6313 13.6815 18 14.5717 18 15.5C18 16.4283 17.6313 17.3185 16.9749 17.9749C16.3185 18.6313 15.4283 19 14.5 19H6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </div>
+                    <h3 class="feature-title">Custom Billing Rates</h3>
+                    <p class="feature-description">
+                        Different rates for different clients. Different rates for different work types. Clearical handles the complexity automatically.
+                    </p>
+                </div>
+
+                <div class="feature-card fade-in">
+                    <div class="feature-icon">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M4 7V4C4 3.46957 4.21071 2.96086 4.58579 2.58579C4.96086 2.21071 5.46957 2 6 2H18C18.5304 2 19.0391 2.21071 19.4142 2.58579C19.7893 2.96086 20 3.46957 20 4V7M4 7H20M4 7V20C4 20.5304 4.21071 21.0391 4.58579 21.4142C4.96086 21.7893 5.46957 22 6 22H18C18.5304 22 19.0391 21.7893 19.4142 21.4142C19.7893 21.0391 20 20.5304 20 20V7M10 11H14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </div>
+                    <h3 class="feature-title">Integration Ready</h3>
+                    <p class="feature-description">
+                        Exports to your firm's systems. QuickBooks, FreshBooks, Harvest, or custom CSV. Your workflow, enhanced.
+                    </p>
+                </div>
+
+                <div class="feature-card fade-in">
+                    <div class="feature-icon">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M12 15V17M6 21H18C19.1046 21 20 20.1046 20 19V13C20 11.8954 19.1046 11 18 11H6C4.89543 11 4 11.8954 4 13V19C4 20.1046 4.89543 21 6 21ZM16 11V7C16 5.93913 15.5786 4.92172 14.8284 4.17157C14.0783 3.42143 13.0609 3 12 3C10.9391 3 9.92172 3.42143 9.17157 4.17157C8.42143 4.92172 8 5.93913 8 7V11H16Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </div>
+                    <h3 class="feature-title">Bank-Level Security</h3>
+                    <p class="feature-description">
+                        SOC 2 compliant, end-to-end encrypted, zero-knowledge architecture. Your client data stays confidential. Always.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Product Mockup Section -->
+    <section class="mockup-section section-lg">
+        <div class="container">
+            <div class="section-header fade-in">
+                <h2 class="display-md section-title">Track Real Consulting Work</h2>
+                <p class="body-lg" style="max-width: 700px; margin-inline: auto; margin-top: var(--space-md);">
+                    From PowerPoint presentations to client emails, Excel models to Zoom calls—Clearical captures it all.
+                </p>
+            </div>
+            <div class="mockup-window fade-in">
+                <div class="mockup-header">
+                    <span class="mockup-dot dot-red"></span>
+                    <span class="mockup-dot dot-yellow"></span>
+                    <span class="mockup-dot dot-green"></span>
+                </div>
+                <div class="mockup-content">
+                    <div class="app-item">
+                        <div class="app-icon">PP</div>
+                        <div class="app-name">PowerPoint</div>
+                    </div>
+                    <div class="app-item">
+                        <div class="app-icon">EX</div>
+                        <div class="app-name">Excel</div>
+                    </div>
+                    <div class="app-item">
+                        <div class="app-icon">WD</div>
+                        <div class="app-name">Word</div>
+                    </div>
+                    <div class="app-item">
+                        <div class="app-icon">EM</div>
+                        <div class="app-name">Email</div>
+                    </div>
+                    <div class="app-item">
+                        <div class="app-icon">ZM</div>
+                        <div class="app-name">Zoom</div>
+                    </div>
+                    <div class="app-item">
+                        <div class="app-icon">TE</div>
+                        <div class="app-name">Teams</div>
+                    </div>
+                    <div class="app-item">
+                        <div class="app-icon">SL</div>
+                        <div class="app-name">Slack</div>
+                    </div>
+                    <div class="app-item">
+                        <div class="app-icon">BR</div>
+                        <div class="app-name">Browser</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Testimonials Section -->
+    <section class="testimonials-section section">
+        <div class="container">
+            <div class="section-header fade-in">
+                <h2 class="display-md section-title">From Consultants Like You</h2>
+            </div>
+            <div class="testimonials-grid">
+                <div class="testimonial-card featured fade-in">
+                    <div class="quote-mark">"</div>
+                    <p class="testimonial-text">
+                        I recovered $127,000 in my first year. Not from new clients. Just from actually billing what I was already working. That's the real cost of guessing.
+                    </p>
+                    <div class="testimonial-author">
+                        <div class="author-avatar">MK</div>
+                        <div class="author-info">
+                            <div class="author-name">Michael Kramer</div>
+                            <div class="author-title">Management Consultant, Big 4 Firm</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="testimonial-card fade-in">
+                    <div class="quote-mark">"</div>
+                    <p class="testimonial-text">
+                        No more 'which project was that?' panic at month-end. Everything's categorized. I review and invoice. Done.
+                    </p>
+                    <div class="testimonial-author">
+                        <div class="author-avatar">SL</div>
+                        <div class="author-info">
+                            <div class="author-name">Sarah Lin</div>
+                            <div class="author-title">Independent Marketing Strategist</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="testimonial-card fade-in">
+                    <div class="quote-mark">"</div>
+                    <p class="testimonial-text">
+                        Clients prefer the detailed reports. Transparency builds trust—and justifies premium rates. Win-win.
+                    </p>
+                    <div class="testimonial-author">
+                        <div class="author-avatar">JP</div>
+                        <div class="author-info">
+                            <div class="author-name">James Park</div>
+                            <div class="author-title">Financial Advisory Professional</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA Section -->
+    <section id="cta" class="cta-section section-lg">
+        <div class="cta-pattern"></div>
+        <div class="container">
+            <div class="cta-content">
+                <h2 class="display-lg cta-title">Bill What You're Worth</h2>
+                <p class="cta-text">
+                    Every minute tracked. Every hour billed. Every client profitable.
+                </p>
+                <a href="#" class="btn cta-button">
+                    Download for Mac — Free 14-Day Trial
+                    <svg class="btn-icon" width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M10 4V16M10 16L16 10M10 16L4 10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </a>
+                <p class="cta-note">No credit card required • Cancel anytime • macOS 11.0+</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div>
+                    <div class="footer-brand">Clearical</div>
+                    <p class="footer-description">
+                        Precision time tracking for consultants and professional service providers. Every minute matters.
+                    </p>
+                </div>
+                <div>
+                    <div class="footer-title">Product</div>
+                    <ul class="footer-links">
+                        <li><a href="#">Features</a></li>
+                        <li><a href="#">Pricing</a></li>
+                        <li><a href="#">Integrations</a></li>
+                        <li><a href="#">Download</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <div class="footer-title">Company</div>
+                    <ul class="footer-links">
+                        <li><a href="#">About</a></li>
+                        <li><a href="#">Blog</a></li>
+                        <li><a href="#">Careers</a></li>
+                        <li><a href="#">Contact</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <div class="footer-title">Legal</div>
+                    <ul class="footer-links">
+                        <li><a href="#">Privacy</a></li>
+                        <li><a href="#">Terms</a></li>
+                        <li><a href="#">Security</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <div>&copy; 2026 Clearical. All rights reserved.</div>
+                <div>Built for consultants who bill by the hour.</div>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // Header scroll effect
+        const header = document.getElementById('header');
+
+        window.addEventListener('scroll', () => {
+            if (window.pageYOffset > 100) {
+                header.classList.add('scrolled');
+            } else {
+                header.classList.remove('scrolled');
+            }
+        });
+
+        // Intersection observer for fade-in animations
+        const observerOptions = {
+            threshold: 0.1,
+            rootMargin: '0px 0px -50px 0px'
+        };
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach((entry, index) => {
+                if (entry.isIntersecting) {
+                    setTimeout(() => {
+                        entry.target.classList.add('visible');
+                    }, index * 100);
+                }
+            });
+        }, observerOptions);
+
+        document.querySelectorAll('.fade-in').forEach((el) => {
+            observer.observe(el);
+        });
+
+        // Smooth scroll for anchor links
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                const href = this.getAttribute('href');
+                if (href === '#') return;
+
+                e.preventDefault();
+                const target = document.querySelector(href);
+
+                if (target) {
+                    const headerOffset = 80;
+                    const elementPosition = target.getBoundingClientRect().top;
+                    const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
+
+                    window.scrollTo({
+                        top: offsetPosition,
+                        behavior: 'smooth'
+                    });
+                }
+            });
+        });
+
+        // Floating stats animation
+        const floatingStats = document.querySelector('.floating-stats');
+
+        if (floatingStats) {
+            const statsObserver = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        entry.target.style.opacity = '1';
+                        entry.target.style.transform = 'translateY(0)';
+                    }
+                });
+            }, {
+                threshold: 0.3
+            });
+
+            statsObserver.observe(floatingStats);
+            floatingStats.style.opacity = '0';
+            floatingStats.style.transform = 'translateY(30px)';
+            floatingStats.style.transition = 'opacity 0.6s ease-out, transform 0.6s ease-out';
+        }
+    </script>
+</body>
+</html>

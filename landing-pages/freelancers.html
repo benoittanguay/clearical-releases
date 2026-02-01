@@ -1,0 +1,1478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clearical for Freelancers — Stop Losing Time and Money</title>
+    <meta name="description" content="Automatic time tracking for all freelance knowledge workers. Stop reconstructing your week. Start billing accurately.">
+
+    <style>
+        /* ========================================
+           CSS RESET & BASE
+           ======================================== */
+        *, *::before, *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        /* ========================================
+           DESIGN TOKENS
+           ======================================== */
+        :root {
+            /* Brand Colors */
+            --color-bg-primary: #F2F0ED;
+            --color-bg-secondary: #FFFFFF;
+            --color-bg-dark: #181717;
+            --color-accent: #FF4800;
+            --color-accent-light: #FF6B35;
+            --color-accent-dark: #E64000;
+            --color-text-primary: #0D0C0C;
+            --color-text-secondary: #6B6560;
+            --color-border: #E4E0DC;
+            --color-border-strong: #D1CCC6;
+
+            /* Typography */
+            --font-display: 'Cabinet Grotesk', 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            --font-body: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', sans-serif;
+            --font-mono: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+
+            /* Spacing Scale */
+            --space-xs: 0.5rem;
+            --space-sm: 0.75rem;
+            --space-md: 1rem;
+            --space-lg: 1.5rem;
+            --space-xl: 2rem;
+            --space-2xl: 3rem;
+            --space-3xl: 4rem;
+            --space-4xl: 6rem;
+            --space-5xl: 8rem;
+
+            /* Sizing */
+            --max-width: 1280px;
+            --max-width-narrow: 960px;
+            --max-width-text: 720px;
+
+            /* Shadows */
+            --shadow-sm: 0 1px 2px rgba(13, 12, 12, 0.04);
+            --shadow-md: 0 4px 12px rgba(13, 12, 12, 0.08);
+            --shadow-lg: 0 12px 32px rgba(13, 12, 12, 0.12);
+            --shadow-float: 0 20px 48px rgba(13, 12, 12, 0.16), 0 8px 16px rgba(13, 12, 12, 0.08);
+
+            /* Border Radius */
+            --radius-sm: 8px;
+            --radius-md: 12px;
+            --radius-lg: 16px;
+            --radius-xl: 24px;
+
+            /* Transitions */
+            --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+            --transition-base: 250ms cubic-bezier(0.4, 0, 0.2, 1);
+            --transition-slow: 350ms cubic-bezier(0.4, 0, 0.2, 1);
+            --transition-bounce: 500ms cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        /* ========================================
+           TYPOGRAPHY
+           ======================================== */
+        html {
+            font-size: 16px;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        body {
+            font-family: var(--font-body);
+            font-size: 1.0625rem;
+            line-height: 1.6;
+            color: var(--color-text-primary);
+            background-color: var(--color-bg-primary);
+            overflow-x: hidden;
+        }
+
+        h1, h2, h3, h4, h5, h6 {
+            font-family: var(--font-display);
+            font-weight: 700;
+            line-height: 1.1;
+            letter-spacing: -0.02em;
+        }
+
+        h1 {
+            font-size: clamp(2.5rem, 6vw, 4.5rem);
+            margin-bottom: var(--space-lg);
+        }
+
+        h2 {
+            font-size: clamp(2rem, 4vw, 3.5rem);
+            margin-bottom: var(--space-xl);
+        }
+
+        h3 {
+            font-size: clamp(1.5rem, 3vw, 2rem);
+            margin-bottom: var(--space-md);
+        }
+
+        p {
+            margin-bottom: var(--space-md);
+        }
+
+        .text-large {
+            font-size: clamp(1.125rem, 2vw, 1.375rem);
+            line-height: 1.5;
+        }
+
+        .text-secondary {
+            color: var(--color-text-secondary);
+        }
+
+        .mono {
+            font-family: var(--font-mono);
+            font-size: 0.875em;
+        }
+
+        /* ========================================
+           LAYOUT UTILITIES
+           ======================================== */
+        .container {
+            max-width: var(--max-width);
+            margin-inline: auto;
+            padding-inline: var(--space-xl);
+        }
+
+        .container-narrow {
+            max-width: var(--max-width-narrow);
+            margin-inline: auto;
+            padding-inline: var(--space-xl);
+        }
+
+        .container-text {
+            max-width: var(--max-width-text);
+            margin-inline: auto;
+            padding-inline: var(--space-xl);
+        }
+
+        .section {
+            padding-block: var(--space-5xl);
+        }
+
+        @media (max-width: 768px) {
+            .section {
+                padding-block: var(--space-4xl);
+            }
+
+            .container, .container-narrow, .container-text {
+                padding-inline: var(--space-lg);
+            }
+        }
+
+        /* ========================================
+           NOISE TEXTURE OVERLAY
+           ======================================== */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 9999;
+            opacity: 0.05;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='2.5' numOctaves='5' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+            mix-blend-mode: overlay;
+        }
+
+        /* ========================================
+           NAVIGATION HEADER
+           ======================================== */
+        .nav-header {
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            background: rgba(242, 240, 237, 0.8);
+            backdrop-filter: blur(12px) saturate(180%);
+            -webkit-backdrop-filter: blur(12px) saturate(180%);
+            border-bottom: 1px solid var(--color-border);
+            transition: all var(--transition-base);
+        }
+
+        .nav-header.scrolled {
+            background: rgba(242, 240, 237, 0.95);
+            box-shadow: var(--shadow-sm);
+        }
+
+        .nav-container {
+            max-width: var(--max-width);
+            margin-inline: auto;
+            padding-inline: var(--space-xl);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            height: 72px;
+        }
+
+        .nav-logo {
+            font-family: var(--font-display);
+            font-size: 1.375rem;
+            font-weight: 700;
+            color: var(--color-text-primary);
+            text-decoration: none;
+            letter-spacing: -0.02em;
+            transition: color var(--transition-fast);
+        }
+
+        .nav-logo:hover {
+            color: var(--color-accent);
+        }
+
+        .nav-links {
+            display: flex;
+            align-items: center;
+            gap: var(--space-2xl);
+            list-style: none;
+        }
+
+        .nav-link {
+            color: var(--color-text-secondary);
+            text-decoration: none;
+            font-weight: 500;
+            font-size: 0.9375rem;
+            transition: color var(--transition-fast);
+            position: relative;
+        }
+
+        .nav-link::after {
+            content: '';
+            position: absolute;
+            bottom: -4px;
+            left: 0;
+            width: 0;
+            height: 2px;
+            background: var(--color-accent);
+            transition: width var(--transition-base);
+        }
+
+        .nav-link:hover {
+            color: var(--color-text-primary);
+        }
+
+        .nav-link:hover::after {
+            width: 100%;
+        }
+
+        .nav-cta {
+            padding: var(--space-sm) var(--space-lg);
+            font-size: 0.9375rem;
+        }
+
+        .mobile-menu-toggle {
+            display: none;
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: var(--space-sm);
+            color: var(--color-text-primary);
+        }
+
+        @media (max-width: 768px) {
+            .nav-container {
+                padding-inline: var(--space-lg);
+            }
+
+            .nav-links {
+                display: none;
+            }
+
+            .mobile-menu-toggle {
+                display: block;
+            }
+        }
+
+        /* ========================================
+           ANNOUNCEMENT PILL
+           ======================================== */
+        .announcement {
+            background: var(--color-bg-dark);
+            color: white;
+            padding-block: var(--space-md);
+            text-align: center;
+            font-size: 0.875rem;
+            font-weight: 500;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .announcement::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 72, 0, 0.1), transparent);
+            animation: shimmer 3s infinite;
+        }
+
+        @keyframes shimmer {
+            to {
+                left: 100%;
+            }
+        }
+
+        .announcement-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: var(--space-sm);
+            background: rgba(255, 72, 0, 0.2);
+            border: 1px solid rgba(255, 72, 0, 0.4);
+            padding: var(--space-xs) var(--space-md);
+            border-radius: 100px;
+            transition: all var(--transition-base);
+            position: relative;
+            box-shadow: 0 4px 16px rgba(255, 72, 0, 0.2);
+        }
+
+        .announcement-pill:hover {
+            transform: scale(1.03);
+            background: rgba(255, 72, 0, 0.25);
+            border-color: rgba(255, 72, 0, 0.5);
+        }
+
+        .announcement-badge {
+            background: var(--color-accent);
+            color: white;
+            padding: 3px 10px;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            box-shadow: 0 2px 8px rgba(255, 72, 0, 0.3);
+        }
+
+        /* ========================================
+           HERO SECTION
+           ======================================== */
+        .hero {
+            position: relative;
+            min-height: 90vh;
+            display: flex;
+            align-items: center;
+            padding-block: var(--space-5xl);
+            overflow: hidden;
+        }
+
+        /* Enhanced Grid Pattern */
+        .hero::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0.6;
+            background-image:
+                linear-gradient(var(--color-border-strong) 1.5px, transparent 1.5px),
+                linear-gradient(90deg, var(--color-border-strong) 1.5px, transparent 1.5px);
+            background-size: 48px 48px;
+            mask-image: radial-gradient(ellipse 80% 70% at 50% 40%, black 30%, transparent 80%);
+        }
+
+        /* Gradient overlay for depth */
+        .hero::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(ellipse 60% 50% at 50% 40%, rgba(255, 72, 0, 0.03) 0%, transparent 70%);
+            pointer-events: none;
+        }
+
+        .hero-content {
+            position: relative;
+            z-index: 1;
+            text-align: center;
+        }
+
+        .hero h1 {
+            animation: fadeSlideUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+        }
+
+        .hero-subtitle {
+            max-width: 720px;
+            margin-inline: auto;
+            margin-bottom: var(--space-2xl);
+            animation: fadeSlideUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.1s backwards;
+        }
+
+        .hero-cta {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: var(--space-md);
+            animation: fadeSlideUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.2s backwards;
+        }
+
+        .hero-note {
+            font-size: 0.875rem;
+            color: var(--color-text-secondary);
+        }
+
+        /* ========================================
+           PRODUCT MOCKUP WITH UNIVERSAL CONTENT
+           ======================================== */
+        .product-preview {
+            margin-top: var(--space-4xl);
+            animation: fadeSlideUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.3s backwards, floatSlow 8s ease-in-out 1s infinite;
+        }
+
+        .product-window {
+            position: relative;
+            background: var(--color-bg-secondary);
+            border-radius: var(--radius-xl);
+            border: 1px solid var(--color-border);
+            box-shadow: var(--shadow-float);
+            overflow: hidden;
+            max-width: 1000px;
+            margin-inline: auto;
+        }
+
+        .window-titlebar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 6px;
+            padding: var(--space-md) var(--space-lg);
+            background: linear-gradient(180deg, #ffffff 0%, #fafaf9 100%);
+            border-bottom: 1px solid var(--color-border);
+        }
+
+        .window-controls {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .window-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            transition: transform var(--transition-fast);
+        }
+
+        .window-dot:hover {
+            transform: scale(1.1);
+        }
+
+        .window-dot:nth-child(1) { background: #FF5F57; }
+        .window-dot:nth-child(2) { background: #FFBD2E; }
+        .window-dot:nth-child(3) { background: #28CA42; }
+
+        .window-title {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 0.8125rem;
+            font-weight: 600;
+            color: var(--color-text-secondary);
+        }
+
+        .window-content {
+            padding: 0;
+            background: #FAFAFA;
+            min-height: 500px;
+            position: relative;
+        }
+
+        /* Timeline Content */
+        .timeline-container {
+            display: flex;
+            flex-direction: column;
+            gap: 0;
+        }
+
+        .timeline-entry {
+            display: grid;
+            grid-template-columns: 80px 100px 1fr 160px;
+            gap: var(--space-lg);
+            padding: var(--space-lg) var(--space-xl);
+            border-bottom: 1px solid var(--color-border);
+            align-items: center;
+            transition: background var(--transition-fast);
+        }
+
+        .timeline-entry:hover {
+            background: rgba(255, 72, 0, 0.02);
+        }
+
+        .timeline-time {
+            font-family: var(--font-mono);
+            font-size: 0.8125rem;
+            color: var(--color-text-secondary);
+            font-weight: 500;
+        }
+
+        .timeline-screenshot {
+            width: 100px;
+            height: 64px;
+            border-radius: var(--radius-sm);
+            background: linear-gradient(135deg, #E8E6E3 0%, #F5F4F2 100%);
+            border: 1px solid var(--color-border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .screenshot-placeholder {
+            width: 100%;
+            height: 100%;
+            opacity: 0.15;
+        }
+
+        .timeline-details {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            min-width: 0;
+        }
+
+        .timeline-app {
+            display: flex;
+            align-items: center;
+            gap: var(--space-sm);
+            font-size: 0.9375rem;
+            font-weight: 600;
+            color: var(--color-text-primary);
+        }
+
+        .app-icon {
+            width: 20px;
+            height: 20px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+        }
+
+        /* Universal App Icons - diverse knowledge worker tools */
+        .icon-figma { background: linear-gradient(135deg, #F24E1E 0%, #A259FF 100%); color: white; }
+        .icon-excel { background: #217346; color: white; }
+        .icon-zoom { background: #2D8CFF; color: white; }
+        .icon-email { background: #EA4335; color: white; }
+        .icon-docs { background: #4285F4; color: white; }
+        .icon-powerpoint { background: #D04525; color: white; }
+        .icon-browser { background: #FBBC04; color: white; }
+        .icon-calendar { background: #34A853; color: white; }
+
+        .timeline-description {
+            font-size: 0.875rem;
+            color: var(--color-text-secondary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .timeline-duration {
+            font-family: var(--font-mono);
+            font-size: 0.875rem;
+            color: var(--color-text-primary);
+            font-weight: 600;
+            text-align: right;
+        }
+
+        /* Responsive Timeline */
+        @media (max-width: 768px) {
+            .timeline-entry {
+                grid-template-columns: 1fr;
+                gap: var(--space-sm);
+            }
+
+            .timeline-screenshot {
+                display: none;
+            }
+        }
+
+        /* ========================================
+           BUTTON COMPONENTS
+           ======================================== */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: var(--space-sm);
+            padding: var(--space-md) var(--space-xl);
+            border-radius: var(--radius-md);
+            font-family: var(--font-display);
+            font-size: 1rem;
+            font-weight: 600;
+            text-decoration: none;
+            border: none;
+            cursor: pointer;
+            transition: all var(--transition-base);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.2);
+            transform: translate(-50%, -50%);
+            transition: width 0.6s, height 0.6s;
+        }
+
+        .btn:hover::before {
+            width: 300px;
+            height: 300px;
+        }
+
+        .btn-primary {
+            background: var(--color-accent);
+            color: white;
+            box-shadow: 0 4px 16px rgba(255, 72, 0, 0.3);
+        }
+
+        .btn-primary:hover {
+            background: var(--color-accent-dark);
+            box-shadow: 0 8px 24px rgba(255, 72, 0, 0.4);
+            transform: translateY(-2px);
+        }
+
+        .btn-primary:active {
+            transform: translateY(0);
+        }
+
+        .btn-secondary {
+            background: var(--color-bg-secondary);
+            color: var(--color-text-primary);
+            border: 1px solid var(--color-border);
+            box-shadow: var(--shadow-sm);
+        }
+
+        .btn-secondary:hover {
+            border-color: var(--color-text-secondary);
+            box-shadow: var(--shadow-md);
+            transform: translateY(-2px);
+        }
+
+        .btn-icon {
+            transition: transform var(--transition-base);
+        }
+
+        .btn:hover .btn-icon {
+            transform: translateX(4px);
+        }
+
+        /* ========================================
+           PAIN SECTION
+           ======================================== */
+        .pain-section {
+            background: var(--color-bg-dark);
+            color: white;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .pain-section::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(ellipse 60% 50% at 50% 50%, rgba(255, 72, 0, 0.08) 0%, transparent 70%);
+            pointer-events: none;
+        }
+
+        .pain-section h2 {
+            color: white;
+            text-align: center;
+            position: relative;
+            z-index: 1;
+        }
+
+        .pain-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: var(--space-2xl);
+            margin-top: var(--space-4xl);
+            position: relative;
+            z-index: 1;
+        }
+
+        .pain-card {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: var(--radius-lg);
+            padding: var(--space-xl);
+            transition: all var(--transition-base);
+            opacity: 0;
+            transform: translateY(30px);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+        }
+
+        .pain-card.is-visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .pain-card:hover {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(255, 72, 0, 0.4);
+            transform: translateY(-6px);
+            box-shadow: 0 16px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .pain-quote {
+            font-family: var(--font-display);
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: var(--color-accent-light);
+            margin-bottom: var(--space-lg);
+            line-height: 1.3;
+        }
+
+        .pain-description {
+            color: rgba(255, 255, 255, 0.7);
+            line-height: 1.6;
+        }
+
+        /* ========================================
+           HOW IT WORKS SECTION
+           ======================================== */
+        .how-it-works {
+            background: var(--color-bg-secondary);
+        }
+
+        .how-it-works h2 {
+            text-align: center;
+        }
+
+        .steps {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: var(--space-2xl);
+            margin-top: var(--space-4xl);
+            position: relative;
+        }
+
+        /* Connection Line */
+        @media (min-width: 769px) {
+            .steps::before {
+                content: '';
+                position: absolute;
+                top: 40px;
+                left: 20%;
+                right: 20%;
+                height: 3px;
+                background: linear-gradient(
+                    90deg,
+                    var(--color-accent) 0%,
+                    var(--color-accent-light) 50%,
+                    var(--color-accent) 100%
+                );
+                opacity: 0.4;
+                z-index: 0;
+                box-shadow: 0 2px 8px rgba(255, 72, 0, 0.2);
+            }
+        }
+
+        .step {
+            position: relative;
+            text-align: center;
+            opacity: 0;
+            transform: translateY(30px);
+        }
+
+        .step.is-visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .step-number {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, var(--color-accent) 0%, var(--color-accent-light) 100%);
+            color: white;
+            font-family: var(--font-display);
+            font-size: 2rem;
+            font-weight: 700;
+            border-radius: 50%;
+            margin-bottom: var(--space-lg);
+            box-shadow: 0 8px 24px rgba(255, 72, 0, 0.3), 0 4px 12px rgba(255, 72, 0, 0.2);
+            position: relative;
+            z-index: 1;
+            border: 3px solid white;
+        }
+
+        .step h3 {
+            margin-bottom: var(--space-md);
+        }
+
+        .step p {
+            color: var(--color-text-secondary);
+            margin-bottom: 0;
+        }
+
+        /* ========================================
+           BENTO GRID FEATURES
+           ======================================== */
+        .features-section {
+            background: var(--color-bg-primary);
+        }
+
+        .features-section h2 {
+            text-align: center;
+            margin-bottom: var(--space-lg);
+        }
+
+        .features-intro {
+            text-align: center;
+            max-width: 600px;
+            margin-inline: auto;
+            margin-bottom: var(--space-4xl);
+        }
+
+        .bento-grid {
+            display: grid;
+            grid-template-columns: repeat(12, 1fr);
+            gap: var(--space-lg);
+        }
+
+        .bento-item {
+            background: var(--color-bg-secondary);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-lg);
+            padding: var(--space-xl);
+            transition: all var(--transition-base);
+            opacity: 0;
+            transform: translateY(30px);
+            position: relative;
+            overflow: hidden;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .bento-item::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            background: linear-gradient(90deg, var(--color-accent), var(--color-accent-light));
+            transform: scaleX(0);
+            transform-origin: left;
+            transition: transform var(--transition-slow);
+        }
+
+        .bento-item:hover::before {
+            transform: scaleX(1);
+        }
+
+        .bento-item.is-visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .bento-item:hover {
+            border-color: var(--color-accent-light);
+            box-shadow: var(--shadow-lg);
+            transform: translateY(-6px);
+        }
+
+        /* Bento Grid Layout */
+        .bento-item:nth-child(1) { grid-column: span 7; }
+        .bento-item:nth-child(2) { grid-column: span 5; }
+        .bento-item:nth-child(3) { grid-column: span 5; }
+        .bento-item:nth-child(4) { grid-column: span 7; }
+        .bento-item:nth-child(5) { grid-column: span 6; }
+        .bento-item:nth-child(6) { grid-column: span 6; }
+
+        @media (max-width: 1024px) {
+            .bento-item:nth-child(1),
+            .bento-item:nth-child(2),
+            .bento-item:nth-child(3),
+            .bento-item:nth-child(4),
+            .bento-item:nth-child(5),
+            .bento-item:nth-child(6) {
+                grid-column: span 12;
+            }
+        }
+
+        @media (min-width: 768px) and (max-width: 1024px) {
+            .bento-item:nth-child(1),
+            .bento-item:nth-child(4) { grid-column: span 12; }
+            .bento-item:nth-child(2),
+            .bento-item:nth-child(3),
+            .bento-item:nth-child(5),
+            .bento-item:nth-child(6) { grid-column: span 6; }
+        }
+
+        .bento-icon {
+            width: 56px;
+            height: 56px;
+            background: linear-gradient(135deg, var(--color-accent), var(--color-accent-light));
+            border-radius: var(--radius-md);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: var(--space-lg);
+            font-size: 1.75rem;
+            box-shadow: 0 4px 16px rgba(255, 72, 0, 0.2);
+            transition: transform var(--transition-base);
+        }
+
+        .bento-item:hover .bento-icon {
+            transform: scale(1.1) rotate(5deg);
+        }
+
+        .bento-item h3 {
+            margin-bottom: var(--space-sm);
+        }
+
+        .bento-item p {
+            color: var(--color-text-secondary);
+            margin-bottom: 0;
+            font-size: 0.9375rem;
+        }
+
+        /* ========================================
+           CTA SECTION
+           ======================================== */
+        .cta-section {
+            background: linear-gradient(135deg, var(--color-accent) 0%, #FF3300 100%);
+            color: white;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .cta-section::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: radial-gradient(circle at 2px 2px, rgba(255, 255, 255, 0.2) 1px, transparent 0);
+            background-size: 32px 32px;
+            opacity: 0.6;
+        }
+
+        .cta-content {
+            position: relative;
+            z-index: 1;
+        }
+
+        .cta-section h2 {
+            color: white;
+        }
+
+        .cta-section .text-large {
+            max-width: 640px;
+            margin-inline: auto;
+            margin-bottom: var(--space-2xl);
+            opacity: 0.95;
+        }
+
+        .btn-white {
+            background: white;
+            color: var(--color-accent);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+            font-size: 1.125rem;
+            padding: var(--space-lg) var(--space-2xl);
+        }
+
+        .btn-white:hover {
+            background: #f9f9f9;
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
+            transform: translateY(-3px) scale(1.02);
+        }
+
+        /* ========================================
+           ANIMATIONS
+           ======================================== */
+        @keyframes fadeSlideUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes floatSlow {
+            0%, 100% {
+                transform: translateY(0px);
+            }
+            50% {
+                transform: translateY(-15px);
+            }
+        }
+
+        /* Stagger animations for grid items */
+        .pain-card:nth-child(1).is-visible { transition-delay: 0s; }
+        .pain-card:nth-child(2).is-visible { transition-delay: 0.1s; }
+        .pain-card:nth-child(3).is-visible { transition-delay: 0.2s; }
+
+        .step:nth-child(1).is-visible { transition-delay: 0s; }
+        .step:nth-child(2).is-visible { transition-delay: 0.15s; }
+        .step:nth-child(3).is-visible { transition-delay: 0.3s; }
+
+        .bento-item:nth-child(1).is-visible { transition-delay: 0s; }
+        .bento-item:nth-child(2).is-visible { transition-delay: 0.1s; }
+        .bento-item:nth-child(3).is-visible { transition-delay: 0.2s; }
+        .bento-item:nth-child(4).is-visible { transition-delay: 0.3s; }
+        .bento-item:nth-child(5).is-visible { transition-delay: 0.4s; }
+        .bento-item:nth-child(6).is-visible { transition-delay: 0.5s; }
+
+        /* Transition properties for staggered animations */
+        .pain-card,
+        .step,
+        .bento-item {
+            transition: all var(--transition-slow);
+        }
+
+        /* ========================================
+           REDUCED MOTION
+           ======================================== */
+        @media (prefers-reduced-motion: reduce) {
+            *,
+            *::before,
+            *::after {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
+        }
+
+        /* ========================================
+           RESPONSIVE ADJUSTMENTS
+           ======================================== */
+        @media (max-width: 768px) {
+            h1 { font-size: 2.25rem; }
+            h2 { font-size: 1.875rem; }
+
+            .hero {
+                min-height: auto;
+                padding-block: var(--space-4xl);
+            }
+
+            .hero-cta {
+                width: 100%;
+            }
+
+            .btn {
+                width: 100%;
+                justify-content: center;
+            }
+
+            .product-window {
+                margin-inline: -1rem;
+            }
+
+            .window-content {
+                min-height: 400px;
+            }
+
+            .pain-grid,
+            .steps {
+                grid-template-columns: 1fr;
+                gap: var(--space-lg);
+            }
+
+            .bento-grid {
+                gap: var(--space-md);
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation Header -->
+    <header class="nav-header">
+        <div class="nav-container">
+            <a href="/" class="nav-logo">Clearical</a>
+
+            <nav>
+                <ul class="nav-links">
+                    <li><a href="#features" class="nav-link">Features</a></li>
+                    <li><a href="#pricing" class="nav-link">Pricing</a></li>
+                    <li><a href="#download" class="btn btn-primary nav-cta">
+                        <span>Download</span>
+                    </a></li>
+                </ul>
+            </nav>
+
+            <button class="mobile-menu-toggle" aria-label="Menu">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="3" y1="12" x2="21" y2="12"></line>
+                    <line x1="3" y1="6" x2="21" y2="6"></line>
+                    <line x1="3" y1="18" x2="21" y2="18"></line>
+                </svg>
+            </button>
+        </div>
+    </header>
+
+    <!-- Announcement Bar -->
+    <div class="announcement">
+        <div class="announcement-pill">
+            <span class="announcement-badge">New</span>
+            <span>Now available: AI-powered activity descriptions</span>
+        </div>
+    </div>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="container hero-content">
+            <h1>Your Hours. Your Money.<br>Stop Losing Both.</h1>
+
+            <p class="text-large text-secondary hero-subtitle">
+                You didn't go freelance to spend Friday nights reconstructing your week from calendar invites and email timestamps. Clearical watches while you work, so invoicing is just... done.
+            </p>
+
+            <div class="hero-cta">
+                <a href="#download" class="btn btn-primary">
+                    <span>Download for Mac — Free Trial</span>
+                    <svg class="btn-icon" width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M4.16669 10H15.8334M15.8334 10L10 4.16669M15.8334 10L10 15.8334" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </a>
+                <p class="hero-note">14-day free trial · No credit card required · Mac-native</p>
+            </div>
+
+            <div class="product-preview">
+                <div class="product-window">
+                    <div class="window-titlebar">
+                        <div class="window-controls">
+                            <div class="window-dot"></div>
+                            <div class="window-dot"></div>
+                            <div class="window-dot"></div>
+                        </div>
+                        <span class="window-title">Today's Timeline</span>
+                    </div>
+                    <div class="window-content">
+                        <div class="timeline-container">
+                            <div class="timeline-entry">
+                                <span class="timeline-time">9:15 AM</span>
+                                <div class="timeline-screenshot">
+                                    <div class="screenshot-placeholder" style="background: linear-gradient(135deg, #F24E1E 0%, #A259FF 100%);"></div>
+                                </div>
+                                <div class="timeline-details">
+                                    <div class="timeline-app">
+                                        <span class="app-icon icon-figma">▲</span>
+                                        <span>Figma</span>
+                                    </div>
+                                    <div class="timeline-description">Client presentation deck updates — Q4 strategy slides</div>
+                                </div>
+                                <span class="timeline-duration">52 min</span>
+                            </div>
+
+                            <div class="timeline-entry">
+                                <span class="timeline-time">10:07 AM</span>
+                                <div class="timeline-screenshot">
+                                    <div class="screenshot-placeholder" style="background: linear-gradient(135deg, #217346 0%, #34A853 100%);"></div>
+                                </div>
+                                <div class="timeline-details">
+                                    <div class="timeline-app">
+                                        <span class="app-icon icon-excel">◆</span>
+                                        <span>Excel</span>
+                                    </div>
+                                    <div class="timeline-description">Q4 budget spreadsheet revisions — Acme Corp financials</div>
+                                </div>
+                                <span class="timeline-duration">1h 18m</span>
+                            </div>
+
+                            <div class="timeline-entry">
+                                <span class="timeline-time">11:25 AM</span>
+                                <div class="timeline-screenshot">
+                                    <div class="screenshot-placeholder" style="background: linear-gradient(135deg, #2D8CFF 0%, #00A2ED 100%);"></div>
+                                </div>
+                                <div class="timeline-details">
+                                    <div class="timeline-app">
+                                        <span class="app-icon icon-zoom">●</span>
+                                        <span>Zoom</span>
+                                    </div>
+                                    <div class="timeline-description">Client call with Johnson Marketing — Campaign review</div>
+                                </div>
+                                <span class="timeline-duration">45 min</span>
+                            </div>
+
+                            <div class="timeline-entry">
+                                <span class="timeline-time">12:10 PM</span>
+                                <div class="timeline-screenshot">
+                                    <div class="screenshot-placeholder" style="background: linear-gradient(135deg, #EA4335 0%, #FBBC04 100%);"></div>
+                                </div>
+                                <div class="timeline-details">
+                                    <div class="timeline-app">
+                                        <span class="app-icon icon-email">✉</span>
+                                        <span>Mail</span>
+                                    </div>
+                                    <div class="timeline-description">Email correspondence — Project scope clarification</div>
+                                </div>
+                                <span class="timeline-duration">22 min</span>
+                            </div>
+
+                            <div class="timeline-entry">
+                                <span class="timeline-time">2:30 PM</span>
+                                <div class="timeline-screenshot">
+                                    <div class="screenshot-placeholder" style="background: linear-gradient(135deg, #4285F4 0%, #34A853 100%);"></div>
+                                </div>
+                                <div class="timeline-details">
+                                    <div class="timeline-app">
+                                        <span class="app-icon icon-docs">▭</span>
+                                        <span>Google Docs</span>
+                                    </div>
+                                    <div class="timeline-description">Market analysis report — Competitor research writeup</div>
+                                </div>
+                                <span class="timeline-duration">1h 5m</span>
+                            </div>
+
+                            <div class="timeline-entry">
+                                <span class="timeline-time">3:35 PM</span>
+                                <div class="timeline-screenshot">
+                                    <div class="screenshot-placeholder" style="background: linear-gradient(135deg, #D04525 0%, #E64000 100%);"></div>
+                                </div>
+                                <div class="timeline-details">
+                                    <div class="timeline-app">
+                                        <span class="app-icon icon-powerpoint">■</span>
+                                        <span>PowerPoint</span>
+                                    </div>
+                                    <div class="timeline-description">Monthly performance deck — Client metrics and KPIs</div>
+                                </div>
+                                <span class="timeline-duration">38 min</span>
+                            </div>
+
+                            <div class="timeline-entry">
+                                <span class="timeline-time">4:13 PM</span>
+                                <div class="timeline-screenshot">
+                                    <div class="screenshot-placeholder" style="background: linear-gradient(135deg, #FBBC04 0%, #FF6D00 100%);"></div>
+                                </div>
+                                <div class="timeline-details">
+                                    <div class="timeline-app">
+                                        <span class="app-icon icon-browser">○</span>
+                                        <span>Chrome</span>
+                                    </div>
+                                    <div class="timeline-description">Research: Industry trends and market analysis</div>
+                                </div>
+                                <span class="timeline-duration">41 min</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Pain Section -->
+    <section class="pain-section section">
+        <div class="container">
+            <h2>The Freelancer's Friday Night</h2>
+
+            <div class="pain-grid">
+                <div class="pain-card">
+                    <div class="pain-quote">"What did I work on Tuesday?"</div>
+                    <p class="pain-description">
+                        Staring at a blank timesheet, trying to remember which client got which hours. Was it the presentation or the spreadsheet? Both?
+                    </p>
+                </div>
+
+                <div class="pain-card">
+                    <div class="pain-quote">"Was that meeting 45 minutes or an hour?"</div>
+                    <p class="pain-description">
+                        Rounding down because you can't remember. Leaving money on the table. Again. That's rent money disappearing into the void.
+                    </p>
+                </div>
+
+                <div class="pain-card">
+                    <div class="pain-quote">"I'll log it after this deadline"</div>
+                    <p class="pain-description">
+                        You won't. That unbilled time adds up to thousands per year. Your expertise, unpaid. Your hours, vanished.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- How It Works Section -->
+    <section class="how-it-works section">
+        <div class="container-narrow">
+            <h2>Time Tracking That Doesn't Need You</h2>
+
+            <div class="steps">
+                <div class="step">
+                    <div class="step-number">1</div>
+                    <h3>Work Normally</h3>
+                    <p>Use any app. Design in Figma, crunch numbers in Excel, write in Word, meet on Zoom. Clearical runs silently in the background.</p>
+                </div>
+
+                <div class="step">
+                    <div class="step-number">2</div>
+                    <h3>Clearical Captures Everything</h3>
+                    <p>Screenshots, app usage, meeting times. All private, all local. Every minute accounted for with visual proof of your work.</p>
+                </div>
+
+                <div class="step">
+                    <div class="step-number">3</div>
+                    <h3>Review and Invoice</h3>
+                    <p>See your week at a glance. Visual timeline, smart grouping, AI descriptions. Export to your invoicing tool. Bill accurately, finally.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features Bento Grid -->
+    <section class="features-section section" id="features">
+        <div class="container">
+            <h2>Built for Every Freelancer</h2>
+            <p class="text-large text-secondary features-intro">
+                Whether you design, write, analyze, consult, or manage projects—if you work at a desk, Clearical works for you.
+            </p>
+
+            <div class="bento-grid">
+                <div class="bento-item">
+                    <div class="bento-icon">📸</div>
+                    <h3>Screenshot Timeline</h3>
+                    <p>Visual proof of your work. See your Figma designs, Excel spreadsheets, Word docs, email threads. Review your day like a photo album, not a spreadsheet.</p>
+                </div>
+
+                <div class="bento-item">
+                    <div class="bento-icon">🏷️</div>
+                    <h3>Client Grouping</h3>
+                    <p>Organize by project or client automatically. Everything for Acme Corp tagged and grouped. Zero manual sorting, perfect invoices.</p>
+                </div>
+
+                <div class="bento-item">
+                    <div class="bento-icon">✨</div>
+                    <h3>Smart Descriptions</h3>
+                    <p>AI understands what you worked on. "Q4 budget analysis" not "Excel - 2.5 hours". Professional descriptions, automatically generated.</p>
+                </div>
+
+                <div class="bento-item">
+                    <div class="bento-icon">📤</div>
+                    <h3>Export Anywhere</h3>
+                    <p>CSV, PDF, or direct integrations with your invoicing tools. Works with Harvest, Toggl, FreshBooks—whatever you're already using.</p>
+                </div>
+
+                <div class="bento-item">
+                    <div class="bento-icon">🔒</div>
+                    <h3>Privacy-First</h3>
+                    <p>Everything stays on your Mac. No cloud uploads unless you want them. Your clients' confidential work remains confidential. Always.</p>
+                </div>
+
+                <div class="bento-item">
+                    <div class="bento-icon">⚡</div>
+                    <h3>Works Offline</h3>
+                    <p>Coffee shop Wi-Fi down? Doesn't matter. Clearical tracks completely offline. No internet required to capture your billable hours.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA Section -->
+    <section class="cta-section section" id="download">
+        <div class="container-text cta-content">
+            <h2>Reclaim Your Weekends</h2>
+            <p class="text-large">
+                Stop reconstructing. Start billing accurately. Your future self will thank you.
+            </p>
+            <a href="#download" class="btn btn-white">
+                <span>Download for Mac — Free 14-Day Trial</span>
+                <svg class="btn-icon" width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M10 3.33334V16.6667M10 16.6667L15.8333 10.8333M10 16.6667L4.16666 10.8333" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+            </a>
+        </div>
+    </section>
+
+    <!-- Scroll Animation Script -->
+    <script>
+        // Intersection Observer for scroll-triggered animations
+        const observerOptions = {
+            root: null,
+            rootMargin: '0px',
+            threshold: 0.1
+        };
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('is-visible');
+                }
+            });
+        }, observerOptions);
+
+        // DOM Ready
+        document.addEventListener('DOMContentLoaded', () => {
+            // Observe all animated elements
+            const animatedElements = document.querySelectorAll('.pain-card, .step, .bento-item');
+            animatedElements.forEach(el => observer.observe(el));
+
+            // Smooth scroll for anchor links
+            document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+                anchor.addEventListener('click', function (e) {
+                    e.preventDefault();
+                    const target = document.querySelector(this.getAttribute('href'));
+                    if (target) {
+                        target.scrollIntoView({
+                            behavior: 'smooth',
+                            block: 'start'
+                        });
+                    }
+                });
+            });
+
+            // Header scroll effect
+            const header = document.querySelector('.nav-header');
+            let lastScroll = 0;
+
+            window.addEventListener('scroll', () => {
+                const currentScroll = window.pageYOffset;
+
+                if (currentScroll > 50) {
+                    header.classList.add('scrolled');
+                } else {
+                    header.classList.remove('scrolled');
+                }
+
+                lastScroll = currentScroll;
+            });
+
+            // Subtle parallax effect for hero section
+            let ticking = false;
+
+            window.addEventListener('scroll', () => {
+                if (!ticking) {
+                    window.requestAnimationFrame(() => {
+                        const scrolled = window.pageYOffset;
+                        const heroContent = document.querySelector('.hero-content');
+
+                        if (heroContent && scrolled < window.innerHeight) {
+                            heroContent.style.transform = `translateY(${scrolled * 0.3}px)`;
+                            heroContent.style.opacity = 1 - (scrolled / window.innerHeight) * 0.5;
+                        }
+
+                        ticking = false;
+                    });
+
+                    ticking = true;
+                }
+            });
+        });
+    </script>
+</body>
+</html>

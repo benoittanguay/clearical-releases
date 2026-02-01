@@ -1,0 +1,1516 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tempo Timesheet Automation | Auto-Fill Jira Worklogs | Clearical</title>
+    <meta name="description" content="Never manually fill Tempo timesheets again. Clearical automatically tracks your work and syncs to Tempo with accurate Jira ticket attribution. One-click timesheet submission.">
+    <meta name="keywords" content="tempo timesheet automation, automatic tempo time tracking, jira tempo integration, tempo worklogs automation, how to automate tempo timesheets, automatic jira time logging, tempo timesheet tool, fill tempo timesheets automatically">
+
+    <!-- Open Graph -->
+    <meta property="og:title" content="Tempo Timesheet Automation | Auto-Fill Jira Worklogs | Clearical">
+    <meta property="og:description" content="Never manually fill Tempo timesheets again. Clearical automatically tracks your work and syncs to Tempo with accurate Jira ticket attribution.">
+    <meta property="og:type" content="website">
+    <meta property="og:image" content="https://clearical.com/og-tempo.png">
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Tempo Timesheet Automation | Auto-Fill Jira Worklogs">
+    <meta name="twitter:description" content="Never manually fill Tempo timesheets again. One-click timesheet submission with accurate Jira ticket attribution.">
+
+    <!-- Canonical -->
+    <link rel="canonical" href="https://clearical.com/tempo-timesheet-automation">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+    <!-- Schema.org markup for FAQ -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "How do I automate Tempo timesheets?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Clearical automatically tracks your work activity and syncs directly to Tempo via API. It detects Jira tickets from your IDE, browser tabs, git branches, and meetings, then generates accurate worklog entries with one-click submission."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Can I auto-fill Jira worklogs?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes, Clearical automatically fills Jira worklogs through Tempo's API. It tracks time spent on each ticket, generates descriptive worklog entries, and syncs them directly to your Tempo timesheet."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "What's the best Tempo timesheet tool?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Clearical is the leading automatic time tracking tool for Tempo users. It provides accurate automatic tracking, Jira ticket detection, AI-generated descriptions, and one-click sync to Tempo, reducing timesheet time from 20 minutes to 30 seconds."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "How does automatic Jira time tracking work?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Clearical monitors your work activity across IDE, browser, git commits, and meetings. It uses AI to detect Jira ticket IDs and automatically allocates time to the correct tickets. The tracked time syncs directly to Tempo with accurate timestamps and descriptions."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Does it work with Tempo Cloud and Tempo Server?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes, Clearical supports both Tempo Cloud and Tempo Server instances. It integrates via Tempo's API to sync worklogs directly to your timesheet, regardless of your deployment type."
+          }
+        }
+      ]
+    }
+    </script>
+
+    <!-- Software Application Schema -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      "name": "Clearical",
+      "applicationCategory": "BusinessApplication",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD",
+        "priceValidUntil": "2026-12-31",
+        "description": "14-day free trial"
+      },
+      "operatingSystem": "Windows, macOS, Linux",
+      "description": "Automatic time tracking and Tempo timesheet automation for developers. Track work activity and sync to Tempo with one click."
+    }
+    </script>
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg: #F2F0ED;
+            --dark: #181717;
+            --accent: #FF4800;
+            --white: #FFFFFF;
+            --gray-100: #F5F5F5;
+            --gray-200: #E5E5E5;
+            --gray-300: #D4D4D4;
+            --gray-400: #A3A3A3;
+            --gray-600: #525252;
+            --gray-700: #404040;
+            --gray-800: #262626;
+            --success: #10B981;
+            --code-bg: #1E1E1E;
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--dark);
+            line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        /* Typography */
+        h1, h2, h3, h4, h5 {
+            line-height: 1.2;
+            font-weight: 700;
+        }
+
+        h1 {
+            font-size: clamp(2.5rem, 5vw, 4rem);
+            font-weight: 800;
+            letter-spacing: -0.02em;
+        }
+
+        h2 {
+            font-size: clamp(2rem, 4vw, 3rem);
+            letter-spacing: -0.02em;
+        }
+
+        h3 {
+            font-size: clamp(1.5rem, 3vw, 2rem);
+            letter-spacing: -0.01em;
+        }
+
+        h4 {
+            font-size: 1.25rem;
+            font-weight: 600;
+        }
+
+        code, pre {
+            font-family: 'JetBrains Mono', 'Courier New', monospace;
+        }
+
+        /* Layout */
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 24px;
+        }
+
+        .container-wide {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 24px;
+        }
+
+        section {
+            padding: 96px 0;
+        }
+
+        @media (max-width: 768px) {
+            section {
+                padding: 64px 0;
+            }
+        }
+
+        /* Header */
+        header {
+            background: var(--white);
+            border-bottom: 1px solid var(--gray-200);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            backdrop-filter: blur(12px);
+            background: rgba(255, 255, 255, 0.9);
+        }
+
+        nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 0;
+        }
+
+        .logo {
+            font-size: 24px;
+            font-weight: 800;
+            color: var(--dark);
+            text-decoration: none;
+            letter-spacing: -0.02em;
+        }
+
+        .logo span {
+            color: var(--accent);
+        }
+
+        /* Buttons */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 14px 28px;
+            font-size: 16px;
+            font-weight: 600;
+            text-decoration: none;
+            border-radius: 8px;
+            transition: all 0.2s ease;
+            cursor: pointer;
+            border: none;
+            font-family: inherit;
+        }
+
+        .btn-primary {
+            background: var(--accent);
+            color: var(--white);
+            box-shadow: 0 4px 12px rgba(255, 72, 0, 0.2);
+        }
+
+        .btn-primary:hover {
+            background: #E63F00;
+            box-shadow: 0 6px 16px rgba(255, 72, 0, 0.3);
+            transform: translateY(-1px);
+        }
+
+        .btn-secondary {
+            background: var(--white);
+            color: var(--dark);
+            border: 2px solid var(--dark);
+        }
+
+        .btn-secondary:hover {
+            background: var(--dark);
+            color: var(--white);
+            transform: translateY(-1px);
+        }
+
+        .btn-large {
+            padding: 18px 36px;
+            font-size: 18px;
+        }
+
+        /* Hero Section */
+        .hero {
+            background: linear-gradient(135deg, var(--white) 0%, var(--gray-100) 100%);
+            padding: 120px 0 96px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .hero::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 600px;
+            height: 600px;
+            background: radial-gradient(circle, rgba(255, 72, 0, 0.1) 0%, transparent 70%);
+            pointer-events: none;
+        }
+
+        .hero-content {
+            max-width: 800px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .hero h1 {
+            margin-bottom: 24px;
+            color: var(--dark);
+        }
+
+        .hero-subtitle {
+            font-size: clamp(1.125rem, 2vw, 1.375rem);
+            line-height: 1.6;
+            color: var(--gray-700);
+            margin-bottom: 40px;
+            max-width: 700px;
+        }
+
+        .hero-cta {
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .trust-badge {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 24px;
+            font-size: 14px;
+            color: var(--gray-600);
+        }
+
+        .trust-badge svg {
+            color: var(--success);
+        }
+
+        /* Pain Points Section */
+        .pain-points {
+            background: var(--white);
+        }
+
+        .section-header {
+            text-align: center;
+            max-width: 700px;
+            margin: 0 auto 64px;
+        }
+
+        .section-header h2 {
+            margin-bottom: 16px;
+        }
+
+        .section-header p {
+            font-size: 1.125rem;
+            color: var(--gray-600);
+        }
+
+        .pain-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 32px;
+            margin-top: 48px;
+        }
+
+        .pain-card {
+            background: var(--gray-100);
+            border-radius: 12px;
+            padding: 32px;
+            border-left: 4px solid var(--accent);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .pain-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+        }
+
+        .pain-quote {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--dark);
+            margin-bottom: 16px;
+            line-height: 1.4;
+        }
+
+        .pain-description {
+            color: var(--gray-700);
+            line-height: 1.6;
+        }
+
+        /* Workflow Section */
+        .workflow {
+            background: var(--dark);
+            color: var(--white);
+        }
+
+        .workflow .section-header h2,
+        .workflow .section-header p {
+            color: var(--white);
+        }
+
+        .workflow .section-header p {
+            opacity: 0.8;
+        }
+
+        .workflow-steps {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 48px;
+            margin-top: 64px;
+            position: relative;
+        }
+
+        @media (min-width: 768px) {
+            .workflow-steps::before {
+                content: '';
+                position: absolute;
+                top: 40px;
+                left: 10%;
+                right: 10%;
+                height: 2px;
+                background: linear-gradient(90deg, var(--accent) 0%, var(--accent) 33%, var(--accent) 66%, var(--accent) 100%);
+                z-index: 0;
+            }
+        }
+
+        .workflow-step {
+            position: relative;
+            z-index: 1;
+            text-align: center;
+        }
+
+        .step-number {
+            width: 80px;
+            height: 80px;
+            background: var(--accent);
+            color: var(--white);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 32px;
+            font-weight: 700;
+            margin: 0 auto 24px;
+            box-shadow: 0 4px 16px rgba(255, 72, 0, 0.3);
+        }
+
+        .workflow-step h3 {
+            margin-bottom: 12px;
+            font-size: 1.5rem;
+        }
+
+        .workflow-step p {
+            color: rgba(255, 255, 255, 0.8);
+            line-height: 1.6;
+        }
+
+        /* Features Section */
+        .features {
+            background: var(--bg);
+        }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 32px;
+            margin-top: 48px;
+        }
+
+        .feature-card {
+            background: var(--white);
+            border-radius: 12px;
+            padding: 32px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+            transition: all 0.2s ease;
+        }
+
+        .feature-card:hover {
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+            transform: translateY(-4px);
+        }
+
+        .feature-icon {
+            width: 48px;
+            height: 48px;
+            background: var(--accent);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 20px;
+            color: var(--white);
+        }
+
+        .feature-card h4 {
+            margin-bottom: 12px;
+            color: var(--dark);
+        }
+
+        .feature-card p {
+            color: var(--gray-700);
+            line-height: 1.6;
+        }
+
+        /* Technical Integration Section */
+        .technical-integration {
+            background: var(--white);
+        }
+
+        .integration-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 48px;
+            margin-top: 48px;
+            align-items: start;
+        }
+
+        @media (max-width: 968px) {
+            .integration-content {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .integration-visual {
+            background: var(--code-bg);
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+        }
+
+        .code-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 16px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .code-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: var(--gray-600);
+        }
+
+        .code-dot:nth-child(1) {
+            background: #FF5F56;
+        }
+
+        .code-dot:nth-child(2) {
+            background: #FFBD2E;
+        }
+
+        .code-dot:nth-child(3) {
+            background: #27C93F;
+        }
+
+        .code-content {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 14px;
+            line-height: 1.8;
+            color: #D4D4D4;
+        }
+
+        .code-comment {
+            color: #6A9955;
+        }
+
+        .code-keyword {
+            color: #569CD6;
+        }
+
+        .code-string {
+            color: #CE9178;
+        }
+
+        .code-function {
+            color: #DCDCAA;
+        }
+
+        .integration-list {
+            list-style: none;
+        }
+
+        .integration-list li {
+            padding: 16px 0;
+            border-bottom: 1px solid var(--gray-200);
+            display: flex;
+            align-items: start;
+            gap: 12px;
+        }
+
+        .integration-list li:last-child {
+            border-bottom: none;
+        }
+
+        .integration-list svg {
+            color: var(--accent);
+            flex-shrink: 0;
+            margin-top: 4px;
+        }
+
+        .integration-highlight {
+            background: var(--gray-100);
+            border-radius: 8px;
+            padding: 24px;
+            margin-top: 24px;
+            border-left: 4px solid var(--accent);
+        }
+
+        .integration-highlight h4 {
+            margin-bottom: 12px;
+        }
+
+        /* Testimonial Section */
+        .testimonial {
+            background: linear-gradient(135deg, var(--accent) 0%, #E63F00 100%);
+            color: var(--white);
+            padding: 96px 0;
+        }
+
+        .testimonial-content {
+            max-width: 900px;
+            margin: 0 auto;
+            text-align: center;
+        }
+
+        .quote-icon {
+            width: 64px;
+            height: 64px;
+            margin: 0 auto 32px;
+            opacity: 0.9;
+        }
+
+        .testimonial-text {
+            font-size: clamp(1.25rem, 2.5vw, 1.75rem);
+            line-height: 1.6;
+            margin-bottom: 32px;
+            font-weight: 500;
+        }
+
+        .testimonial-author {
+            font-size: 1.125rem;
+            opacity: 0.95;
+            font-weight: 600;
+        }
+
+        .testimonial-role {
+            opacity: 0.8;
+            margin-top: 4px;
+        }
+
+        /* Stats Section */
+        .stats {
+            background: var(--white);
+            padding: 64px 0;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 48px;
+            text-align: center;
+        }
+
+        .stat-number {
+            font-size: clamp(3rem, 5vw, 4rem);
+            font-weight: 800;
+            color: var(--accent);
+            margin-bottom: 8px;
+            line-height: 1;
+        }
+
+        .stat-label {
+            font-size: 1.125rem;
+            color: var(--gray-700);
+            font-weight: 500;
+        }
+
+        /* Comparison Table */
+        .comparison {
+            background: var(--bg);
+        }
+
+        .comparison-table {
+            max-width: 800px;
+            margin: 48px auto 0;
+            background: var(--white);
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+        }
+
+        .comparison-table table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .comparison-table th {
+            background: var(--dark);
+            color: var(--white);
+            padding: 20px;
+            font-size: 1.125rem;
+            font-weight: 600;
+            text-align: left;
+        }
+
+        .comparison-table th:last-child {
+            background: var(--accent);
+        }
+
+        .comparison-table td {
+            padding: 20px;
+            border-bottom: 1px solid var(--gray-200);
+            font-size: 1rem;
+        }
+
+        .comparison-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .comparison-table tr:nth-child(even) {
+            background: var(--gray-100);
+        }
+
+        .comparison-table td:first-child {
+            color: var(--gray-600);
+        }
+
+        .comparison-table td:last-child {
+            color: var(--dark);
+            font-weight: 600;
+        }
+
+        @media (max-width: 768px) {
+            .comparison-table {
+                font-size: 14px;
+            }
+
+            .comparison-table th,
+            .comparison-table td {
+                padding: 16px 12px;
+            }
+        }
+
+        /* FAQ Section */
+        .faq {
+            background: var(--white);
+        }
+
+        .faq-list {
+            max-width: 800px;
+            margin: 48px auto 0;
+        }
+
+        .faq-item {
+            border-bottom: 1px solid var(--gray-200);
+            padding: 24px 0;
+        }
+
+        .faq-item:last-child {
+            border-bottom: none;
+        }
+
+        .faq-question {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 24px;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .faq-question h4 {
+            color: var(--dark);
+            font-size: 1.125rem;
+        }
+
+        .faq-toggle {
+            flex-shrink: 0;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: var(--gray-200);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+        }
+
+        .faq-item.active .faq-toggle {
+            background: var(--accent);
+            color: var(--white);
+            transform: rotate(45deg);
+        }
+
+        .faq-answer {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+        }
+
+        .faq-item.active .faq-answer {
+            max-height: 500px;
+            padding-top: 16px;
+        }
+
+        .faq-answer p {
+            color: var(--gray-700);
+            line-height: 1.6;
+        }
+
+        /* CTA Section */
+        .cta {
+            background: var(--dark);
+            color: var(--white);
+            text-align: center;
+            padding: 96px 0;
+        }
+
+        .cta h2 {
+            margin-bottom: 16px;
+        }
+
+        .cta p {
+            font-size: 1.25rem;
+            opacity: 0.9;
+            margin-bottom: 40px;
+        }
+
+        .cta-buttons {
+            display: flex;
+            gap: 16px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        /* Footer */
+        footer {
+            background: var(--white);
+            border-top: 1px solid var(--gray-200);
+            padding: 48px 0;
+        }
+
+        .footer-content {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr 1fr;
+            gap: 48px;
+        }
+
+        @media (max-width: 968px) {
+            .footer-content {
+                grid-template-columns: 1fr 1fr;
+                gap: 32px;
+            }
+        }
+
+        @media (max-width: 640px) {
+            .footer-content {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .footer-brand {
+            max-width: 300px;
+        }
+
+        .footer-logo {
+            font-size: 24px;
+            font-weight: 800;
+            color: var(--dark);
+            margin-bottom: 16px;
+        }
+
+        .footer-logo span {
+            color: var(--accent);
+        }
+
+        .footer-description {
+            color: var(--gray-600);
+            line-height: 1.6;
+            margin-bottom: 24px;
+        }
+
+        .footer-section h5 {
+            font-size: 14px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 16px;
+            color: var(--dark);
+        }
+
+        .footer-links {
+            list-style: none;
+        }
+
+        .footer-links li {
+            margin-bottom: 12px;
+        }
+
+        .footer-links a {
+            color: var(--gray-600);
+            text-decoration: none;
+            transition: color 0.2s ease;
+        }
+
+        .footer-links a:hover {
+            color: var(--accent);
+        }
+
+        .footer-bottom {
+            margin-top: 48px;
+            padding-top: 24px;
+            border-top: 1px solid var(--gray-200);
+            text-align: center;
+            color: var(--gray-600);
+            font-size: 14px;
+        }
+
+        /* Utilities */
+        .text-center {
+            text-align: center;
+        }
+
+        .mt-4 {
+            margin-top: 16px;
+        }
+
+        .mb-4 {
+            margin-bottom: 16px;
+        }
+
+        /* Animations */
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .fade-in-up {
+            animation: fadeInUp 0.6s ease-out;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .hero {
+                padding: 80px 0 64px;
+            }
+
+            .hero-cta {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .btn {
+                width: 100%;
+                justify-content: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header>
+        <nav class="container">
+            <a href="/" class="logo">Clear<span>ical</span></a>
+            <a href="#cta" class="btn btn-primary">Start Free Trial</a>
+        </nav>
+    </header>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="container">
+            <div class="hero-content fade-in-up">
+                <h1>Automate Your Tempo Timesheets. Finally.</h1>
+                <p class="hero-subtitle">Friday 4:55 PM. "Submit timesheet" notification. 8 hours to log. Zero memory of what you did. Sound familiar? Clearical tracks your work all week and fills Tempo automatically.</p>
+                <div class="hero-cta">
+                    <a href="#cta" class="btn btn-primary btn-large">Never Fill a Timesheet Manually Again</a>
+                    <a href="#workflow" class="btn btn-secondary btn-large">See How It Works</a>
+                </div>
+                <div class="trust-badge">
+                    <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                    </svg>
+                    14-day free trial • Syncs with your Tempo instance
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Pain Points Section -->
+    <section class="pain-points">
+        <div class="container">
+            <div class="section-header">
+                <h2>The Timesheet Struggle Is Real</h2>
+                <p>Every developer knows these moments too well</p>
+            </div>
+            <div class="pain-grid">
+                <div class="pain-card">
+                    <div class="pain-quote">"8 hours. 5 tickets. No idea which got what."</div>
+                    <p class="pain-description">You worked on AUTH-142, but for how long? Nobody knows. Especially not you.</p>
+                </div>
+                <div class="pain-card">
+                    <div class="pain-quote">"Required fields missing"</div>
+                    <p class="pain-description">The most hated notification in enterprise software. Tempo rejecting your timesheet. Again.</p>
+                </div>
+                <div class="pain-card">
+                    <div class="pain-quote">"I'll log it with the next commit"</div>
+                    <p class="pain-description">You won't. The commit ships, the time vanishes into the void.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Workflow Section -->
+    <section class="workflow" id="workflow">
+        <div class="container">
+            <div class="section-header">
+                <h2>How Tempo Timesheet Automation Works</h2>
+                <p>Three simple steps. Zero manual entry.</p>
+            </div>
+            <div class="workflow-steps">
+                <div class="workflow-step">
+                    <div class="step-number">1</div>
+                    <h3>Work Normally</h3>
+                    <p>IDE, browser, Slack, meetings. Clearical watches silently, tracking your activity across all your tools.</p>
+                </div>
+                <div class="workflow-step">
+                    <div class="step-number">2</div>
+                    <h3>Automatic Jira Matching</h3>
+                    <p>AI reads your screen, matches work to Jira tickets automatically. No manual tagging required.</p>
+                </div>
+                <div class="workflow-step">
+                    <div class="step-number">3</div>
+                    <h3>One-Click Tempo Sync</h3>
+                    <p>Review, adjust if needed, submit. Done in 30 seconds instead of 20 minutes.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section class="features">
+        <div class="container">
+            <div class="section-header">
+                <h2>Built for Tempo Users</h2>
+                <p>Every feature designed to eliminate timesheet pain</p>
+            </div>
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/>
+                        </svg>
+                    </div>
+                    <h4>Automatic Jira Ticket Detection</h4>
+                    <p>Detects Jira tickets from IDE, browser tabs, git branches, and meeting titles. No manual tagging.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"/>
+                            <polyline points="12 6 12 12 16 14"/>
+                        </svg>
+                    </div>
+                    <h4>Smart Time Allocation</h4>
+                    <p>AI distributes time across multiple tickets based on actual work patterns. Accurate to the minute.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                            <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+                            <line x1="12" y1="22.08" x2="12" y2="12"/>
+                        </svg>
+                    </div>
+                    <h4>Direct Tempo API Integration</h4>
+                    <p>Syncs directly to Tempo Cloud or Server. No CSV exports, no copy-paste, no manual data entry.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
+                            <polyline points="14 2 14 8 20 8"/>
+                            <line x1="16" y1="13" x2="8" y2="13"/>
+                            <line x1="16" y1="17" x2="8" y2="17"/>
+                            <line x1="10" y1="9" x2="8" y2="9"/>
+                        </svg>
+                    </div>
+                    <h4>AI Worklog Descriptions</h4>
+                    <p>Generates detailed, meaningful descriptions instead of "development work". Actual context from your work.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+                            <line x1="16" y1="2" x2="16" y2="6"/>
+                            <line x1="8" y1="2" x2="8" y2="6"/>
+                            <line x1="3" y1="10" x2="21" y2="10"/>
+                        </svg>
+                    </div>
+                    <h4>Sprint-Aware Distribution</h4>
+                    <p>Understands sprint boundaries and distributes time appropriately across sprint cycles.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+                        </svg>
+                    </div>
+                    <h4>Offline Tracking with Sync Queue</h4>
+                    <p>Tracks work offline, queues entries, syncs when connected. Never lose time tracking data.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Technical Integration Section -->
+    <section class="technical-integration">
+        <div class="container">
+            <div class="section-header">
+                <h2>Technical Integration Details</h2>
+                <p>Developers care about how it works. Here's the technical breakdown.</p>
+            </div>
+            <div class="integration-content">
+                <div class="integration-visual">
+                    <div class="code-header">
+                        <span class="code-dot"></span>
+                        <span class="code-dot"></span>
+                        <span class="code-dot"></span>
+                    </div>
+                    <pre class="code-content"><span class="code-comment">// Clearical detects:</span>
+
+<span class="code-keyword">const</span> <span class="code-function">detectJiraTickets</span> = () => {
+  <span class="code-comment">// Browser tabs</span>
+  <span class="code-string">"PROJ-142: Fix authentication bug"</span>
+
+  <span class="code-comment">// IDE file paths</span>
+  <span class="code-string">"feature/AUTH-142-sso-login"</span>
+
+  <span class="code-comment">// Git branches & commits</span>
+  <span class="code-string">"git: [AUTH-142] Implement SSO"</span>
+
+  <span class="code-comment">// Meeting titles</span>
+  <span class="code-string">"Sprint Planning - PROJ-143"</span>
+
+  <span class="code-comment">// Slack threads</span>
+  <span class="code-string">"Discussion on PROJ-144"</span>
+}
+
+<span class="code-comment">// Syncs to Tempo:</span>
+
+<span class="code-keyword">await</span> <span class="code-function">syncToTempo</span>({
+  worklog: {
+    issueId: <span class="code-string">"AUTH-142"</span>,
+    timeSpent: <span class="code-string">"2h 34m"</span>,
+    started: <span class="code-string">"2026-01-18T09:15:00"</span>,
+    description: <span class="code-string">"Implemented SSO login flow with OAuth2 integration"</span>
+  }
+})</pre>
+                </div>
+                <div>
+                    <h3 class="mb-4">Detection Sources</h3>
+                    <ul class="integration-list">
+                        <li>
+                            <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                            </svg>
+                            <div>
+                                <strong>IDE Activity:</strong> Detects Jira IDs in open files, file paths, and git branch names
+                            </div>
+                        </li>
+                        <li>
+                            <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                            </svg>
+                            <div>
+                                <strong>Browser Context:</strong> Reads tab titles, Jira UI, and pull request pages
+                            </div>
+                        </li>
+                        <li>
+                            <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                            </svg>
+                            <div>
+                                <strong>Git Integration:</strong> Parses commit messages and branch naming conventions
+                            </div>
+                        </li>
+                        <li>
+                            <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                            </svg>
+                            <div>
+                                <strong>Calendar Events:</strong> Extracts ticket IDs from meeting titles and descriptions
+                            </div>
+                        </li>
+                        <li>
+                            <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                            </svg>
+                            <div>
+                                <strong>Communication Tools:</strong> Identifies tickets in Slack threads and messages
+                            </div>
+                        </li>
+                    </ul>
+                    <div class="integration-highlight">
+                        <h4>Tempo API Sync</h4>
+                        <p>Direct integration via Tempo REST API. Supports both Tempo Cloud and Tempo Server instances. Worklog entries include accurate timestamps, AI-generated descriptions, and proper issue attribution.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Testimonial Section -->
+    <section class="testimonial">
+        <div class="container">
+            <div class="testimonial-content">
+                <svg class="quote-icon" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M14.017 21v-7.391c0-5.704 3.731-9.57 8.983-10.609l.995 2.151c-2.432.917-3.995 3.638-3.995 5.849h4v10h-9.983zm-14.017 0v-7.391c0-5.704 3.748-9.57 9-10.609l.996 2.151c-2.433.917-3.996 3.638-3.996 5.849h3.983v10h-9.983z"/>
+                </svg>
+                <blockquote class="testimonial-text">
+                    "I used to spend 20 minutes every Friday trying to remember my week. Now I click one button and my Tempo timesheet is done. Accurate to the minute, with real descriptions instead of 'development work'."
+                </blockquote>
+                <div class="testimonial-author">
+                    David K., Senior Developer
+                    <div class="testimonial-role">Enterprise Software Company</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Stats Section -->
+    <section class="stats">
+        <div class="container">
+            <div class="stats-grid">
+                <div class="stat">
+                    <div class="stat-number">95%</div>
+                    <div class="stat-label">Timesheet accuracy vs 60% manual</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-number">4hrs</div>
+                    <div class="stat-label">Saved per developer per month</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-number">0</div>
+                    <div class="stat-label">Missed timesheet deadlines</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Comparison Table Section -->
+    <section class="comparison">
+        <div class="container">
+            <div class="section-header">
+                <h2>Manual Tempo vs Automated Tempo</h2>
+                <p>See the difference automatic time tracking makes</p>
+            </div>
+            <div class="comparison-table">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Manual Tempo</th>
+                            <th>With Clearical</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>20 minutes per week filling timesheets</td>
+                            <td>30 seconds</td>
+                        </tr>
+                        <tr>
+                            <td>Guessing time spent per ticket</td>
+                            <td>Exact tracking to the minute</td>
+                        </tr>
+                        <tr>
+                            <td>"Development work" descriptions</td>
+                            <td>Detailed AI-generated descriptions</td>
+                        </tr>
+                        <tr>
+                            <td>Friday 4:55 PM panic</td>
+                            <td>Automatic tracking all week</td>
+                        </tr>
+                        <tr>
+                            <td>Forgotten tickets and lost time</td>
+                            <td>Every ticket automatically tracked</td>
+                        </tr>
+                        <tr>
+                            <td>Manual Jira ticket entry</td>
+                            <td>Automatic ticket detection</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
+    <!-- FAQ Section -->
+    <section class="faq">
+        <div class="container">
+            <div class="section-header">
+                <h2>Frequently Asked Questions</h2>
+                <p>Everything you need to know about Tempo timesheet automation</p>
+            </div>
+            <div class="faq-list">
+                <div class="faq-item">
+                    <div class="faq-question">
+                        <h4>How do I automate Tempo timesheets?</h4>
+                        <div class="faq-toggle">
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                                <path d="M8 4a.5.5 0 01.5.5v3h3a.5.5 0 010 1h-3v3a.5.5 0 01-1 0v-3h-3a.5.5 0 010-1h3v-3A.5.5 0 018 4z"/>
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="faq-answer">
+                        <p>Clearical automatically tracks your work activity and syncs directly to Tempo via API. It detects Jira tickets from your IDE, browser tabs, git branches, and meetings, then generates accurate worklog entries with one-click submission. Simply install Clearical, connect your Tempo instance, and it handles all timesheet automation.</p>
+                    </div>
+                </div>
+                <div class="faq-item">
+                    <div class="faq-question">
+                        <h4>Can I auto-fill Jira worklogs?</h4>
+                        <div class="faq-toggle">
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                                <path d="M8 4a.5.5 0 01.5.5v3h3a.5.5 0 010 1h-3v3a.5.5 0 01-1 0v-3h-3a.5.5 0 010-1h3v-3A.5.5 0 018 4z"/>
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="faq-answer">
+                        <p>Yes, Clearical automatically fills Jira worklogs through Tempo's API. It tracks time spent on each ticket, generates descriptive worklog entries, and syncs them directly to your Tempo timesheet. You can review and adjust before submitting, but most users just click submit.</p>
+                    </div>
+                </div>
+                <div class="faq-item">
+                    <div class="faq-question">
+                        <h4>What's the best Tempo timesheet tool?</h4>
+                        <div class="faq-toggle">
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                                <path d="M8 4a.5.5 0 01.5.5v3h3a.5.5 0 010 1h-3v3a.5.5 0 01-1 0v-3h-3a.5.5 0 010-1h3v-3A.5.5 0 018 4z"/>
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="faq-answer">
+                        <p>Clearical is the leading automatic time tracking tool for Tempo users. It provides accurate automatic tracking, Jira ticket detection, AI-generated descriptions, and one-click sync to Tempo, reducing timesheet time from 20 minutes to 30 seconds. It's built specifically for developers who use Jira and Tempo.</p>
+                    </div>
+                </div>
+                <div class="faq-item">
+                    <div class="faq-question">
+                        <h4>How does automatic Jira time tracking work?</h4>
+                        <div class="faq-toggle">
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                                <path d="M8 4a.5.5 0 01.5.5v3h3a.5.5 0 010 1h-3v3a.5.5 0 01-1 0v-3h-3a.5.5 0 010-1h3v-3A.5.5 0 018 4z"/>
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="faq-answer">
+                        <p>Clearical monitors your work activity across IDE, browser, git commits, and meetings. It uses AI to detect Jira ticket IDs and automatically allocates time to the correct tickets. The tracked time syncs directly to Tempo with accurate timestamps and AI-generated descriptions of what you actually worked on.</p>
+                    </div>
+                </div>
+                <div class="faq-item">
+                    <div class="faq-question">
+                        <h4>Does it work with Tempo Cloud and Tempo Server?</h4>
+                        <div class="faq-toggle">
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                                <path d="M8 4a.5.5 0 01.5.5v3h3a.5.5 0 010 1h-3v3a.5.5 0 01-1 0v-3h-3a.5.5 0 010-1h3v-3A.5.5 0 018 4z"/>
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="faq-answer">
+                        <p>Yes, Clearical supports both Tempo Cloud and Tempo Server instances. It integrates via Tempo's API to sync worklogs directly to your timesheet, regardless of your deployment type. Setup takes less than 5 minutes with either version.</p>
+                    </div>
+                </div>
+                <div class="faq-item">
+                    <div class="faq-question">
+                        <h4>Is my data secure and private?</h4>
+                        <div class="faq-toggle">
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                                <path d="M8 4a.5.5 0 01.5.5v3h3a.5.5 0 010 1h-3v3a.5.5 0 01-1 0v-3h-3a.5.5 0 010-1h3v-3A.5.5 0 018 4z"/>
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="faq-answer">
+                        <p>Absolutely. Clearical processes activity data locally on your machine. Only time entries and Jira ticket IDs are synced to Tempo. We never store your code, documents, or sensitive information. All API communication is encrypted, and we're SOC 2 compliant.</p>
+                    </div>
+                </div>
+                <div class="faq-item">
+                    <div class="faq-question">
+                        <h4>What if I work on multiple tickets simultaneously?</h4>
+                        <div class="faq-toggle">
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                                <path d="M8 4a.5.5 0 01.5.5v3h3a.5.5 0 010 1h-3v3a.5.5 0 01-1 0v-3h-3a.5.5 0 010-1h3v-3A.5.5 0 018 4z"/>
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="faq-answer">
+                        <p>Clearical's AI intelligently distributes time across multiple tickets based on your actual work patterns. It detects context switches and allocates time proportionally. You can review and adjust the distribution before syncing to Tempo if needed.</p>
+                    </div>
+                </div>
+                <div class="faq-item">
+                    <div class="faq-question">
+                        <h4>How accurate is the automatic time tracking?</h4>
+                        <div class="faq-toggle">
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                                <path d="M8 4a.5.5 0 01.5.5v3h3a.5.5 0 010 1h-3v3a.5.5 0 01-1 0v-3h-3a.5.5 0 010-1h3v-3A.5.5 0 018 4z"/>
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="faq-answer">
+                        <p>Clearical achieves 95% accuracy compared to 60% for manual timesheets. It tracks actual work activity down to the minute, filters out non-work time like breaks and distractions, and matches work to the correct Jira tickets automatically. Most users find it more accurate than their manual entries.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Final CTA Section -->
+    <section class="cta" id="cta">
+        <div class="container">
+            <h2>Never Fill a Timesheet Manually Again</h2>
+            <p>14-day free trial. Syncs with your Tempo instance. No credit card required.</p>
+            <div class="cta-buttons">
+                <a href="https://clearical.com/signup" class="btn btn-primary btn-large">Start Free Trial</a>
+                <a href="https://clearical.com/demo" class="btn btn-secondary btn-large">Watch Demo</a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer>
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-brand">
+                    <div class="footer-logo">Clear<span>ical</span></div>
+                    <p class="footer-description">Automatic time tracking for developers. Never manually fill timesheets again.</p>
+                </div>
+                <div class="footer-section">
+                    <h5>Product</h5>
+                    <ul class="footer-links">
+                        <li><a href="/features">Features</a></li>
+                        <li><a href="/integrations">Integrations</a></li>
+                        <li><a href="/pricing">Pricing</a></li>
+                        <li><a href="/demo">Demo</a></li>
+                    </ul>
+                </div>
+                <div class="footer-section">
+                    <h5>Resources</h5>
+                    <ul class="footer-links">
+                        <li><a href="/docs">Documentation</a></li>
+                        <li><a href="/blog">Blog</a></li>
+                        <li><a href="/support">Support</a></li>
+                        <li><a href="/api">API</a></li>
+                    </ul>
+                </div>
+                <div class="footer-section">
+                    <h5>Company</h5>
+                    <ul class="footer-links">
+                        <li><a href="/about">About</a></li>
+                        <li><a href="/privacy">Privacy</a></li>
+                        <li><a href="/terms">Terms</a></li>
+                        <li><a href="/contact">Contact</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                &copy; 2026 Clearical. All rights reserved.
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // FAQ Accordion
+        document.querySelectorAll('.faq-question').forEach(question => {
+            question.addEventListener('click', () => {
+                const item = question.closest('.faq-item');
+                const isActive = item.classList.contains('active');
+
+                // Close all items
+                document.querySelectorAll('.faq-item').forEach(i => {
+                    i.classList.remove('active');
+                });
+
+                // Open clicked item if it wasn't active
+                if (!isActive) {
+                    item.classList.add('active');
+                }
+            });
+        });
+
+        // Smooth scroll for anchor links
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'start'
+                    });
+                }
+            });
+        });
+
+        // Intersection Observer for fade-in animations
+        const observerOptions = {
+            threshold: 0.1,
+            rootMargin: '0px 0px -50px 0px'
+        };
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.style.opacity = '1';
+                    entry.target.style.transform = 'translateY(0)';
+                }
+            });
+        }, observerOptions);
+
+        // Observe elements for animations
+        document.querySelectorAll('.pain-card, .workflow-step, .feature-card, .stat').forEach(el => {
+            el.style.opacity = '0';
+            el.style.transform = 'translateY(30px)';
+            el.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
+            observer.observe(el);
+        });
+    </script>
+</body>
+</html>

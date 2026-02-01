@@ -168,7 +168,7 @@ electron_1.contextBridge.exposeInMainWorld('electron', {
             getRecordingStatus: () => electron_1.ipcRenderer.invoke('meeting:get-recording-status'),
             setAutoRecordEnabled: (enabled) => electron_1.ipcRenderer.invoke('meeting:set-auto-record-enabled', enabled),
             // Audio capture and transcription
-            saveAudioAndTranscribe: (entryId, audioBase64, mimeType) => electron_1.ipcRenderer.invoke('meeting:save-audio-and-transcribe', entryId, audioBase64, mimeType),
+            saveAudioAndTranscribe: (entryId, audioDataOrPath, mimeType, isFilePath) => electron_1.ipcRenderer.invoke('meeting:save-audio-and-transcribe', entryId, audioDataOrPath, mimeType, isFilePath),
             retryTranscription: (entryId, audioPath, mimeType) => electron_1.ipcRenderer.invoke('meeting:retry-transcription', entryId, audioPath, mimeType),
             getTranscriptionUsage: () => electron_1.ipcRenderer.invoke('meeting:get-transcription-usage'),
             // System audio capture (for capturing what others say in meetings)
@@ -201,6 +201,10 @@ electron_1.contextBridge.exposeInMainWorld('electron', {
                 electron_1.ipcRenderer.on('meeting:mic-audio-samples', subscription);
                 return () => electron_1.ipcRenderer.removeListener('meeting:mic-audio-samples', subscription);
             },
+            // File-based recording (direct to WAV files, no resampling or mixing)
+            startFileRecording: (micPath, systemPath) => electron_1.ipcRenderer.invoke('meeting:start-file-recording', micPath, systemPath),
+            stopFileRecording: () => electron_1.ipcRenderer.invoke('meeting:stop-file-recording'),
+            mergeAudioFiles: (micPath, systemPath, outputPath) => electron_1.ipcRenderer.invoke('meeting:merge-audio-files', micPath, systemPath, outputPath),
             // Event subscriptions for automatic recording
             onRecordingShouldStart: (callback) => {
                 const subscription = (_event, data) => callback(data);
@@ -212,8 +216,8 @@ electron_1.contextBridge.exposeInMainWorld('electron', {
                 electron_1.ipcRenderer.on('meeting:event-recording-should-stop', subscription);
                 return () => electron_1.ipcRenderer.removeListener('meeting:event-recording-should-stop', subscription);
             },
-            // Send audio levels to widget for visualization
-            sendAudioLevels: (levels) => electron_1.ipcRenderer.send('meeting:send-audio-levels', levels),
+            // Send audio levels to widget for visualization (elapsedMs for waveform sync)
+            sendAudioLevels: (levels, elapsedMs) => electron_1.ipcRenderer.send('meeting:send-audio-levels', { levels, elapsedMs }),
         },
         // Working hours operations
         workingHours: {
