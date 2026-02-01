@@ -2,6 +2,20 @@
 
 All notable changes to Clearical will be documented in this file.
 
+## [1.7.25] - 2025-01-31
+
+### New Features
+- **Worklog Calendar View**: Added a new calendar view to visualize time entries in a monthly grid format
+  - Toggle between List and Calendar views in the Worklog section
+  - Days with logged time are highlighted with accent color
+  - Click any day to see detailed entries in a modal
+  - View Jira issue summaries directly in the entry list
+  - "Log to Tempo" button in day modal for daily bulk logging
+  - "Log Month to Tempo" button to log all entries for the entire month
+  - Total hours displayed for the current month
+
+---
+
 ## [1.7.24] - 2025-01-31
 
 ### Bug Fixes
