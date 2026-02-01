@@ -61,9 +61,40 @@ serve(async (req) => {
             );
         }
 
+        // Verify customer still exists in Stripe
+        let customerId = profile.stripe_customer_id;
+        try {
+            const existingCustomer = await stripe.customers.retrieve(customerId);
+            if (existingCustomer.deleted) {
+                console.log(`[Portal] Customer ${customerId} was deleted, creating new customer`);
+                // Create new customer since old one was deleted
+                const newCustomer = await stripe.customers.create({
+                    email: user.email,
+                    metadata: { supabase_user_id: user.id },
+                });
+                customerId = newCustomer.id;
+                await supabaseAdmin
+                    .from('profiles')
+                    .update({ stripe_customer_id: customerId })
+                    .eq('id', user.id);
+            }
+        } catch (err) {
+            console.log(`[Portal] Customer ${customerId} not found, creating new customer:`, err.message);
+            // Create new customer since old one doesn't exist
+            const newCustomer = await stripe.customers.create({
+                email: user.email,
+                metadata: { supabase_user_id: user.id },
+            });
+            customerId = newCustomer.id;
+            await supabaseAdmin
+                .from('profiles')
+                .update({ stripe_customer_id: customerId })
+                .eq('id', user.id);
+        }
+
         // Create portal session
         const session = await stripe.billingPortal.sessions.create({
-            customer: profile.stripe_customer_id,
+            customer: customerId,
             return_url: returnUrl || 'https://clearical.io/account',
         });
 

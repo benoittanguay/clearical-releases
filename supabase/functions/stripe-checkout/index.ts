@@ -13,7 +13,7 @@
 
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { corsHeaders } from '../_shared/cors.ts';
-import { stripe, PRICE_IDS } from '../_shared/stripe.ts';
+import { stripe, getActivePrices } from '../_shared/stripe.ts';
 import { createSupabaseClient, supabaseAdmin, extractToken } from '../_shared/supabase.ts';
 
 serve(async (req) => {
@@ -48,8 +48,16 @@ serve(async (req) => {
         // Parse request body
         const { priceId, successUrl, cancelUrl } = await req.json();
 
-        // Determine the Stripe price ID
-        const stripePriceId = priceId === 'yearly' ? PRICE_IDS.YEARLY : PRICE_IDS.MONTHLY;
+        // Fetch active prices from Stripe dynamically
+        const prices = await getActivePrices();
+        const stripePriceId = priceId === 'yearly' ? prices.yearly : prices.monthly;
+
+        if (!stripePriceId) {
+            return new Response(
+                JSON.stringify({ error: `No active ${priceId === 'yearly' ? 'yearly' : 'monthly'} price found in Stripe` }),
+                { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+        }
 
         // Check if user already has a Stripe customer ID
         const { data: profile } = await supabaseAdmin
@@ -59,9 +67,24 @@ serve(async (req) => {
             .single();
 
         let customerId = profile?.stripe_customer_id;
+        let needsNewCustomer = !customerId;
 
-        // Create Stripe customer if doesn't exist
-        if (!customerId) {
+        // Verify existing customer still exists in Stripe
+        if (customerId) {
+            try {
+                const existingCustomer = await stripe.customers.retrieve(customerId);
+                if (existingCustomer.deleted) {
+                    console.log(`[Checkout] Customer ${customerId} was deleted, creating new customer`);
+                    needsNewCustomer = true;
+                }
+            } catch (err) {
+                console.log(`[Checkout] Customer ${customerId} not found, creating new customer:`, err.message);
+                needsNewCustomer = true;
+            }
+        }
+
+        // Create Stripe customer if needed
+        if (needsNewCustomer) {
             const customer = await stripe.customers.create({
                 email: user.email,
                 metadata: {
@@ -94,7 +117,6 @@ serve(async (req) => {
                 supabase_user_id: user.id,
             },
             subscription_data: {
-                trial_period_days: 14,
                 metadata: {
                     supabase_user_id: user.id,
                 },
