@@ -2,6 +2,16 @@
 
 All notable changes to Clearical will be documented in this file.
 
+## [1.7.30] - 2025-01-31
+
+### Bug Fixes
+- **Audio Recording Quality**: Fixed chipmunk audio effect caused by macOS reporting incorrect sample rates
+  - Added timing-based sample rate detection that measures actual callback rate
+  - Automatically resamples when detected rate differs from reported rate
+  - Fixes issue where macOS claims 48kHz but actually delivers audio at ~44.1kHz
+
+---
+
 ## [1.7.29] - 2025-01-31
 
 ### Bug Fixes

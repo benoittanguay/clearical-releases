@@ -69,3 +69,6 @@ playwright/.cache/
 
 # Git worktrees
 .worktrees/
+
+# Release artifacts
+dist-releases/
