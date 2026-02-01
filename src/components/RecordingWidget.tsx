@@ -50,7 +50,7 @@ export function RecordingWidget(): React.ReactElement {
     const [isHiding, setIsHiding] = useState(false);
     const [showMeetingEndedPrompt, setShowMeetingEndedPrompt] = useState(false);
     const [promptEntryId, setPromptEntryId] = useState<string | null>(null);
-    const [promptMeetingApp, setPromptMeetingApp] = useState<MeetingAppInfo | null>(null);
+    const [_promptMeetingApp, setPromptMeetingApp] = useState<MeetingAppInfo | null>(null);
 
     // Audio level state for waveform component
     const [audioLevel, setAudioLevel] = useState(0);
