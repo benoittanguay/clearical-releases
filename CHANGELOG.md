@@ -2,6 +2,13 @@
 
 All notable changes to Clearical will be documented in this file.
 
+## [1.7.27] - 2025-01-31
+
+### Bug Fixes
+- **Build**: Fixed critical issue where the app was built with the demo page instead of the actual application
+
+---
+
 ## [1.7.26] - 2025-01-31
 
 ### Bug Fixes
