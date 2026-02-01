@@ -193,11 +193,19 @@ export function RecordingWidget(): React.ReactElement {
             setIsHiding(false);
         };
 
+        // Handler for switching to recording mode (from prompt mode)
+        const handleShowRecording = (data: { timestamp: number }) => {
+            console.log('[RecordingWidget] *** RECEIVED SHOW RECORDING ***', data);
+            setContentMode('recording');
+            setIsHiding(false);
+        };
+
         // Register all listeners
         const unsubscribeAudioLevels = onFn('widget:audio-levels', handleAudioLevels);
         const unsubscribeMeetingEnded = onFn('widget:show-meeting-ended-prompt', handleShowMeetingEndedPrompt);
         const unsubscribeStartPrompt = onFn('widget:show-prompt', handleShowStartPrompt);
         const unsubscribeWorkingHours = onFn('widget:show-working-hours-prompt', handleShowWorkingHoursPrompt);
+        const unsubscribeShowRecording = onFn('widget:show-recording', handleShowRecording);
 
         console.log('[RecordingWidget] All IPC listeners registered');
 
@@ -208,6 +216,7 @@ export function RecordingWidget(): React.ReactElement {
             unsubscribeMeetingEnded?.();
             unsubscribeStartPrompt?.();
             unsubscribeWorkingHours?.();
+            unsubscribeShowRecording?.();
         };
     }, []);
 

@@ -291,6 +291,7 @@ export class RecordingWidgetManager {
 
     /**
      * Show the recording widget
+     * If widget is already showing (e.g., in prompt mode), switches it to recording mode
      */
     public show(): void {
         console.log('[RecordingWidgetManager] show() called');
@@ -301,7 +302,11 @@ export class RecordingWidgetManager {
         });
 
         if (this.isShowing && this.widgetWindow && !this.widgetWindow.isDestroyed()) {
-            console.log('[RecordingWidgetManager] Widget already showing, just calling show()');
+            console.log('[RecordingWidgetManager] Widget already showing, switching to recording mode');
+            // Send message to switch to recording mode (from prompt mode)
+            this.widgetWindow.webContents.send('widget:show-recording', {
+                timestamp: Date.now(),
+            });
             this.widgetWindow.show();
             return;
         }
