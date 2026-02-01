@@ -2,6 +2,7 @@
 #import "system_audio_capture.h"
 #import <AVFoundation/AVFoundation.h>
 #import <Accelerate/Accelerate.h>
+#import <mach/mach_time.h>
 
 // Target sample rate for output (must match AudioContext in renderer)
 static const double kTargetSampleRate = 48000.0;
@@ -18,6 +19,13 @@ API_AVAILABLE(macos(12.3))
     double _lastSourceSampleRate;
     float *_resampleBuffer;
     size_t _resampleBufferCapacity;
+
+    // Timing-based sample rate detection
+    // macOS sometimes lies about sample rate (claims 48kHz when actually 44.1kHz)
+    uint64_t _firstCallbackTime;
+    size_t _totalSamplesReceived;
+    double _detectedSampleRate;
+    BOOL _sampleRateDetected;
 }
 
 + (instancetype)sharedInstance {
@@ -48,6 +56,10 @@ API_AVAILABLE(macos(12.3))
         _lastSourceSampleRate = 0;
         _resampleBuffer = NULL;
         _resampleBufferCapacity = 0;
+        _firstCallbackTime = 0;
+        _totalSamplesReceived = 0;
+        _detectedSampleRate = 0;
+        _sampleRateDetected = NO;
     }
     return self;
 }
@@ -64,6 +76,12 @@ API_AVAILABLE(macos(12.3))
 }
 
 - (void)startCaptureWithCompletion:(void (^)(BOOL success, NSError * _Nullable error))completion {
+    // Reset timing detection for new capture session
+    _firstCallbackTime = 0;
+    _totalSamplesReceived = 0;
+    _detectedSampleRate = 0;
+    _sampleRateDetected = NO;
+
     if (@available(macOS 13.0, *)) {
         if (_isCapturing) {
             NSLog(@"[SystemAudioCapture] Already capturing");
@@ -275,15 +293,47 @@ API_AVAILABLE(macos(12.3))
     // Check audio format flags
     BOOL isFloat = (asbd->mFormatFlags & kAudioFormatFlagIsFloat) != 0;
     BOOL is32Bit = (asbd->mBitsPerChannel == 32);
-    double sourceSampleRate = asbd->mSampleRate;
-    BOOL needsResampling = (fabs(sourceSampleRate - kTargetSampleRate) > 1.0); // Allow 1Hz tolerance
+    double reportedSampleRate = asbd->mSampleRate;
 
     static int callbackCount = 0;
     callbackCount++;
 
+    // Calculate samples per channel for timing detection
+    size_t bytesPerSample = isFloat ? sizeof(float) : (asbd->mBitsPerChannel / 8);
+    size_t samplesThisCallback = totalBytes / bytesPerSample / asbd->mChannelsPerFrame;
+
+    // Detect actual sample rate from timing (macOS sometimes lies about sample rate)
+    uint64_t now = mach_absolute_time();
+    if (_firstCallbackTime == 0) {
+        _firstCallbackTime = now;
+        _totalSamplesReceived = 0;
+        _sampleRateDetected = NO;
+    }
+    _totalSamplesReceived += samplesThisCallback;
+
+    // After ~500ms of data, calculate the actual sample rate
+    static mach_timebase_info_data_t timebaseInfo;
+    if (timebaseInfo.denom == 0) {
+        mach_timebase_info(&timebaseInfo);
+    }
+    uint64_t elapsedNanos = (now - _firstCallbackTime) * timebaseInfo.numer / timebaseInfo.denom;
+    double elapsedSeconds = elapsedNanos / 1000000000.0;
+
+    if (!_sampleRateDetected && elapsedSeconds >= 0.5 && _totalSamplesReceived > 0) {
+        _detectedSampleRate = _totalSamplesReceived / elapsedSeconds;
+        _sampleRateDetected = YES;
+        NSLog(@"[SystemAudioCapture] *** DETECTED ACTUAL SAMPLE RATE: %.0f Hz (reported: %.0f Hz) ***",
+              _detectedSampleRate, reportedSampleRate);
+    }
+
+    // Use detected rate if available, otherwise fall back to reported rate
+    // The detected rate is based on actual timing, not what macOS claims
+    double sourceSampleRate = _sampleRateDetected ? _detectedSampleRate : reportedSampleRate;
+    BOOL needsResampling = (fabs(sourceSampleRate - kTargetSampleRate) > 100.0); // Allow 100Hz tolerance for timing jitter
+
     if (callbackCount % 100 == 1) {
-        NSLog(@"[SystemAudioCapture] Audio callback #%d: sampleRate=%.0f (target=%.0f, resample=%d), channels=%u, bitsPerChannel=%u, isFloat=%d, bytesPerFrame=%u, totalBytes=%zu",
-              callbackCount, sourceSampleRate, kTargetSampleRate, needsResampling, asbd->mChannelsPerFrame, asbd->mBitsPerChannel, isFloat, asbd->mBytesPerFrame, totalBytes);
+        NSLog(@"[SystemAudioCapture] Audio callback #%d: reportedRate=%.0f, detectedRate=%.0f, effectiveRate=%.0f (target=%.0f, resample=%d), channels=%u, bitsPerChannel=%u, isFloat=%d, bytesPerFrame=%u, totalBytes=%zu",
+              callbackCount, reportedSampleRate, _detectedSampleRate, sourceSampleRate, kTargetSampleRate, needsResampling, asbd->mChannelsPerFrame, asbd->mBitsPerChannel, isFloat, asbd->mBytesPerFrame, totalBytes);
     }
 
     // First, get the audio as float samples
