@@ -2,11 +2,18 @@
 #import "mic_capture.h"
 #import <Accelerate/Accelerate.h>
 
+// Target sample rate for output (must match AudioContext in renderer)
+static const double kTargetSampleRate = 48000.0;
+
 @implementation MicCapture {
     AVCaptureSession *_captureSession;
     AVCaptureAudioDataOutput *_audioOutput;
     dispatch_queue_t _captureQueue;
     BOOL _isCapturing;
+
+    // Resampling state
+    float *_resampleBuffer;
+    size_t _resampleBufferCapacity;
 }
 
 + (instancetype)sharedInstance {
@@ -32,8 +39,57 @@
         _isCapturing = NO;
         _audioCallback = NULL;
         _captureQueue = dispatch_queue_create("com.miccapture.queue", DISPATCH_QUEUE_SERIAL);
+        _resampleBuffer = NULL;
+        _resampleBufferCapacity = 0;
     }
     return self;
+}
+
+- (void)dealloc {
+    if (_resampleBuffer) {
+        free(_resampleBuffer);
+        _resampleBuffer = NULL;
+    }
+}
+
+// Helper method to resample audio from source rate to target rate using linear interpolation
+- (float *)resampleAudio:(const float *)inputSamples
+             inputLength:(size_t)inputLength
+          sourceSampleRate:(double)sourceSampleRate
+            outputLength:(size_t *)outputLength {
+
+    double ratio = kTargetSampleRate / sourceSampleRate;
+    size_t newLength = (size_t)(inputLength * ratio);
+    *outputLength = newLength;
+
+    // Ensure we have enough buffer capacity
+    if (newLength > _resampleBufferCapacity) {
+        if (_resampleBuffer) {
+            free(_resampleBuffer);
+        }
+        _resampleBufferCapacity = newLength * 2; // Allocate extra to reduce reallocations
+        _resampleBuffer = (float *)malloc(_resampleBufferCapacity * sizeof(float));
+        if (!_resampleBuffer) {
+            _resampleBufferCapacity = 0;
+            return NULL;
+        }
+    }
+
+    // Linear interpolation resampling
+    for (size_t i = 0; i < newLength; i++) {
+        double srcIndex = i / ratio;
+        size_t srcIndexFloor = (size_t)srcIndex;
+        size_t srcIndexCeil = srcIndexFloor + 1;
+        double frac = srcIndex - srcIndexFloor;
+
+        if (srcIndexCeil >= inputLength) {
+            srcIndexCeil = inputLength - 1;
+        }
+
+        _resampleBuffer[i] = (float)((1.0 - frac) * inputSamples[srcIndexFloor] + frac * inputSamples[srcIndexCeil]);
+    }
+
+    return _resampleBuffer;
 }
 
 - (BOOL)isCapturing {
@@ -255,78 +311,85 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
     // Check if we need to convert format
     BOOL isFloat = (asbd->mFormatFlags & kAudioFormatFlagIsFloat) != 0;
     BOOL is32Bit = (asbd->mBitsPerChannel == 32);
+    double sourceSampleRate = asbd->mSampleRate;
+    BOOL needsResampling = (fabs(sourceSampleRate - kTargetSampleRate) > 1.0); // Allow 1Hz tolerance
 
     static int callbackCount = 0;
     callbackCount++;
 
     if (callbackCount % 100 == 1) {
-        NSLog(@"[MicCapture] Audio callback #%d: sampleRate=%.0f, channels=%u, bitsPerChannel=%u, isFloat=%d, bytesPerFrame=%u, totalBytes=%zu",
-              callbackCount, asbd->mSampleRate, asbd->mChannelsPerFrame, asbd->mBitsPerChannel, isFloat, asbd->mBytesPerFrame, totalBytes);
+        NSLog(@"[MicCapture] Audio callback #%d: sampleRate=%.0f (target=%.0f, resample=%d), channels=%u, bitsPerChannel=%u, isFloat=%d, bytesPerFrame=%u, totalBytes=%zu",
+              callbackCount, sourceSampleRate, kTargetSampleRate, needsResampling, asbd->mChannelsPerFrame, asbd->mBitsPerChannel, isFloat, asbd->mBytesPerFrame, totalBytes);
     }
 
-    if (isFloat && is32Bit) {
-        // Already in float format - pass directly
-        size_t bytesPerSample = sizeof(float);
-        size_t totalSamples = totalBytes / bytesPerSample;
-        size_t samplesPerChannel = totalSamples / asbd->mChannelsPerFrame;
+    // First, get the audio as float samples
+    float *floatSamples = NULL;
+    size_t totalSamples = 0;
+    BOOL needsFree = NO;
 
-        _audioCallback((const float *)dataPointer,
-                       samplesPerChannel,
-                       asbd->mChannelsPerFrame,
-                       asbd->mSampleRate);
+    if (isFloat && is32Bit) {
+        // Already in float format
+        totalSamples = totalBytes / sizeof(float);
+        floatSamples = (float *)dataPointer;
     } else if (!isFloat && asbd->mBitsPerChannel == 16) {
         // Convert from 16-bit signed int to float
-        size_t totalSamples = totalBytes / sizeof(int16_t);
-        size_t samplesPerChannel = totalSamples / asbd->mChannelsPerFrame;
-
-        // Allocate buffer for float conversion
-        float *floatBuffer = (float *)malloc(totalSamples * sizeof(float));
-        if (!floatBuffer) {
+        totalSamples = totalBytes / sizeof(int16_t);
+        floatSamples = (float *)malloc(totalSamples * sizeof(float));
+        if (!floatSamples) {
             return;
         }
+        needsFree = YES;
 
-        // Convert using Accelerate framework for efficiency
-        vDSP_vflt16((const int16_t *)dataPointer, 1, floatBuffer, 1, totalSamples);
-
-        // Normalize to -1.0 to 1.0 range
+        vDSP_vflt16((const int16_t *)dataPointer, 1, floatSamples, 1, totalSamples);
         float scale = 1.0f / 32768.0f;
-        vDSP_vsmul(floatBuffer, 1, &scale, floatBuffer, 1, totalSamples);
-
-        _audioCallback(floatBuffer,
-                       samplesPerChannel,
-                       asbd->mChannelsPerFrame,
-                       asbd->mSampleRate);
-
-        free(floatBuffer);
+        vDSP_vsmul(floatSamples, 1, &scale, floatSamples, 1, totalSamples);
     } else if (!isFloat && asbd->mBitsPerChannel == 32) {
         // Convert from 32-bit signed int to float
-        size_t totalSamples = totalBytes / sizeof(int32_t);
-        size_t samplesPerChannel = totalSamples / asbd->mChannelsPerFrame;
-
-        // Allocate buffer for float conversion
-        float *floatBuffer = (float *)malloc(totalSamples * sizeof(float));
-        if (!floatBuffer) {
+        totalSamples = totalBytes / sizeof(int32_t);
+        floatSamples = (float *)malloc(totalSamples * sizeof(float));
+        if (!floatSamples) {
             return;
         }
+        needsFree = YES;
 
-        // Convert using Accelerate framework
-        vDSP_vflt32((const int32_t *)dataPointer, 1, floatBuffer, 1, totalSamples);
-
-        // Normalize to -1.0 to 1.0 range
+        vDSP_vflt32((const int32_t *)dataPointer, 1, floatSamples, 1, totalSamples);
         float scale = 1.0f / 2147483648.0f;
-        vDSP_vsmul(floatBuffer, 1, &scale, floatBuffer, 1, totalSamples);
-
-        _audioCallback(floatBuffer,
-                       samplesPerChannel,
-                       asbd->mChannelsPerFrame,
-                       asbd->mSampleRate);
-
-        free(floatBuffer);
+        vDSP_vsmul(floatSamples, 1, &scale, floatSamples, 1, totalSamples);
     } else {
         // Unsupported format
         if (callbackCount % 100 == 1) {
             NSLog(@"[MicCapture] Unsupported audio format: isFloat=%d, bitsPerChannel=%u", isFloat, asbd->mBitsPerChannel);
         }
+        return;
+    }
+
+    // Now resample if needed
+    size_t samplesPerChannel = totalSamples / asbd->mChannelsPerFrame;
+
+    if (needsResampling) {
+        size_t resampledLength = 0;
+        float *resampledSamples = [self resampleAudio:floatSamples
+                                          inputLength:totalSamples
+                                       sourceSampleRate:sourceSampleRate
+                                         outputLength:&resampledLength];
+
+        if (resampledSamples) {
+            size_t resampledSamplesPerChannel = resampledLength / asbd->mChannelsPerFrame;
+            _audioCallback(resampledSamples,
+                           resampledSamplesPerChannel,
+                           asbd->mChannelsPerFrame,
+                           kTargetSampleRate); // Report target rate since we resampled
+        }
+    } else {
+        // No resampling needed, pass through
+        _audioCallback(floatSamples,
+                       samplesPerChannel,
+                       asbd->mChannelsPerFrame,
+                       sourceSampleRate);
+    }
+
+    if (needsFree && floatSamples) {
+        free(floatSamples);
     }
 }
 

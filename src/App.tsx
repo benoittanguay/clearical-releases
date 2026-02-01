@@ -67,6 +67,8 @@ function App() {
   const { clearPendingTranscription, waitForTranscriptions, getPendingAudio, clearPendingAudio } = useAudioRecording();
   const { roundTime, isRoundingEnabled } = useTimeRounding();
   const recordingSessionIdRef = useRef<string | null>(null);
+  // Keep track of session ID even after recording stops, for transcription retrieval when timer stops
+  const lastRecordingSessionIdRef = useRef<string | null>(null);
   const handleStartStopRef = useRef<() => void>(() => {});
 
   // Check for onboarding BEFORE migration - prevents flash of main UI
@@ -475,7 +477,9 @@ function App() {
         setIsStopping(true);
 
         // Get the session ID before clearing
-        const sessionId = recordingSessionIdRef.current;
+        // Use lastRecordingSessionIdRef if current session is null (recording was stopped earlier via widget)
+        const sessionId = recordingSessionIdRef.current || lastRecordingSessionIdRef.current;
+        console.log('[App] Session ID for transcription lookup:', sessionId, '(current:', recordingSessionIdRef.current, ', last:', lastRecordingSessionIdRef.current, ')');
 
         // Clear recording session - must happen before stopTimer for proper cleanup
         // Await to ensure main process receives the stop signal before we proceed
@@ -525,6 +529,9 @@ function App() {
         if (sessionId && pendingAudio) {
           clearPendingAudio(sessionId);
         }
+
+        // Clear the last recording session ID after it's been used
+        lastRecordingSessionIdRef.current = null;
 
         console.log('[App] Activity saved, navigating to details for entry:', newEntry.id);
 
@@ -592,6 +599,7 @@ function App() {
       const result = await setActiveRecordingEntry(sessionId, true);
       if (result.success) {
         recordingSessionIdRef.current = sessionId;
+        lastRecordingSessionIdRef.current = sessionId; // Preserve for transcription lookup when timer stops
         setIsAudioRecording(true);
       } else {
         console.error('[App] Failed to start recording:', result.error);
@@ -686,6 +694,7 @@ function App() {
           const result = await setActiveRecordingEntry(sessionId, true);
           if (result.success) {
             recordingSessionIdRef.current = sessionId;
+            lastRecordingSessionIdRef.current = sessionId; // Preserve for transcription lookup when timer stops
             setIsAudioRecording(true);
           } else {
             console.error('[Renderer] Failed to start recording from tray:', result.error);
@@ -738,6 +747,7 @@ function App() {
           const result = await setActiveRecordingEntry(sessionId, true);
           if (result.success) {
             recordingSessionIdRef.current = sessionId;
+            lastRecordingSessionIdRef.current = sessionId; // Preserve for transcription lookup when timer stops
             setIsAudioRecording(true);
             console.log('[Renderer] Started recording session:', sessionId);
           } else {
