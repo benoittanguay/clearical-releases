@@ -379,6 +379,40 @@ The app is **signed and notarized** by Apple for your security."
 
     echo ""
     echo -e "${GREEN}✓ Published: https://github.com/benoittanguay/clearical-releases/releases/tag/v${VERSION}${NC}"
+
+    # Step 8: Update marketing website (demo.html)
+    echo ""
+    echo -e "${BLUE}Step 8: Updating marketing website...${NC}"
+
+    if [ -f "$PROJECT_ROOT/demo.html" ]; then
+        # Clone the releases repo to a temp directory
+        TEMP_RELEASES_DIR=$(mktemp -d)
+        echo "  Cloning clearical-releases repo..."
+        git clone --depth 1 https://github.com/benoittanguay/clearical-releases.git "$TEMP_RELEASES_DIR" 2>/dev/null
+
+        # Copy demo.html
+        cp "$PROJECT_ROOT/demo.html" "$TEMP_RELEASES_DIR/demo.html"
+
+        # Check if there are changes
+        cd "$TEMP_RELEASES_DIR"
+        if git diff --quiet demo.html 2>/dev/null; then
+            echo "  ✓ demo.html is already up to date"
+        else
+            git add demo.html
+            git commit -m "chore: update demo.html for v${VERSION}" 2>/dev/null
+            git push 2>/dev/null
+            echo "  ✓ Updated demo.html on GitHub Pages"
+        fi
+
+        # Cleanup
+        cd "$PROJECT_ROOT"
+        rm -rf "$TEMP_RELEASES_DIR"
+
+        echo ""
+        echo -e "${GREEN}✓ Marketing site: https://benoittanguay.github.io/clearical-releases/demo.html${NC}"
+    else
+        echo -e "${YELLOW}  ⚠ demo.html not found, skipping marketing site update${NC}"
+    fi
 else
     echo ""
     echo -e "${YELLOW}Skipping publish (use --publish to upload to GitHub)${NC}"
