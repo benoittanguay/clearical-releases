@@ -1196,6 +1196,11 @@ This is a known macOS issue with app updates. Your data is safe.`;
     }
 });
 
+// Get temp directory path
+ipcMain.handle('get-temp-path', () => {
+    return app.getPath('temp');
+});
+
 // Main process log file handlers
 ipcMain.handle('get-main-log-path', async () => {
     return mainLogger.getLogPath();
@@ -2174,24 +2179,49 @@ function getAudioExtension(mimeType: string): string {
     return mimeToExt[mimeType] || 'webm';
 }
 
-ipcMain.handle(MEETING_IPC_CHANNELS.SAVE_AUDIO_AND_TRANSCRIBE, async (_event, entryId: string, audioBase64: string, mimeType?: string) => {
-    console.log('[Main] SAVE_AUDIO_AND_TRANSCRIBE called for entry:', entryId);
+ipcMain.handle(MEETING_IPC_CHANNELS.SAVE_AUDIO_AND_TRANSCRIBE, async (_event, entryId: string, audioDataOrPath: string, mimeType?: string, isFilePath?: boolean) => {
+    console.log('[Main] SAVE_AUDIO_AND_TRANSCRIBE called for entry:', entryId, 'isFilePath:', isFilePath);
 
     const actualMimeType = mimeType || 'audio/webm';
     let audioPath: string | undefined;
+    let audioBase64: string;
 
     try {
-        // 1. Save audio file locally first (before transcription)
-        ensureRecordingsDir();
-        const extension = getAudioExtension(actualMimeType);
-        const timestamp = Date.now();
-        const filename = `${entryId}-${timestamp}.${extension}`;
-        audioPath = path.join(RECORDINGS_DIR, filename);
+        // Handle file path vs base64 data
+        if (isFilePath) {
+            // audioDataOrPath is a file path - read and use it directly
+            console.log('[Main] Using file path for transcription:', audioDataOrPath);
+            if (!fs.existsSync(audioDataOrPath)) {
+                throw new Error(`Audio file not found: ${audioDataOrPath}`);
+            }
+            const audioBuffer = fs.readFileSync(audioDataOrPath);
+            audioBase64 = audioBuffer.toString('base64');
+            console.log('[Main] Read audio file:', audioDataOrPath, 'size:', audioBuffer.length);
 
-        // Convert base64 to buffer and save
-        const audioBuffer = Buffer.from(audioBase64, 'base64');
-        fs.writeFileSync(audioPath, audioBuffer);
-        console.log('[Main] Audio file saved:', audioPath, 'size:', audioBuffer.length);
+            // Copy to recordings directory for storage
+            ensureRecordingsDir();
+            const extension = getAudioExtension(actualMimeType);
+            const timestamp = Date.now();
+            const filename = `${entryId}-${timestamp}.${extension}`;
+            audioPath = path.join(RECORDINGS_DIR, filename);
+            fs.copyFileSync(audioDataOrPath, audioPath);
+            console.log('[Main] Audio file copied to:', audioPath);
+        } else {
+            // audioDataOrPath is base64 data
+            audioBase64 = audioDataOrPath;
+
+            // 1. Save audio file locally first (before transcription)
+            ensureRecordingsDir();
+            const extension = getAudioExtension(actualMimeType);
+            const timestamp = Date.now();
+            const filename = `${entryId}-${timestamp}.${extension}`;
+            audioPath = path.join(RECORDINGS_DIR, filename);
+
+            // Convert base64 to buffer and save
+            const audioBuffer = Buffer.from(audioBase64, 'base64');
+            fs.writeFileSync(audioPath, audioBuffer);
+            console.log('[Main] Audio file saved:', audioPath, 'size:', audioBuffer.length);
+        }
 
         // 2. Attempt transcription
         const { getTranscriptionService } = await import('./meeting/transcriptionService.js');
@@ -2402,6 +2432,99 @@ ipcMain.handle('meeting:stop-mic-capture', () => {
     console.log('[Main] meeting:stop-mic-capture called');
     mediaMonitor.stopMicCapture();
     return { success: true };
+});
+
+// File-based recording (records directly to WAV files, no resampling)
+ipcMain.handle('meeting:start-file-recording', (_event, micPath: string, systemPath: string) => {
+    console.log('[Main] meeting:start-file-recording called');
+    console.log('[Main]   Mic path:', micPath);
+    console.log('[Main]   System path:', systemPath);
+
+    const results = {
+        mic: { success: false, error: '' },
+        system: { success: false, error: '' }
+    };
+
+    try {
+        // Start mic file recording
+        if (micPath) {
+            const micResult = mediaMonitor.startMicFileRecording(micPath);
+            results.mic = { success: micResult.success, error: '' };
+            console.log('[Main] Mic file recording started:', micResult.success);
+        }
+
+        // Start system audio file recording
+        if (systemPath) {
+            const sysResult = mediaMonitor.startSystemAudioFileRecording(systemPath);
+            results.system = { success: sysResult.success, error: sysResult.error || '' };
+            console.log('[Main] System audio file recording started:', sysResult.success);
+        }
+
+        return {
+            success: results.mic.success || results.system.success,
+            mic: results.mic,
+            system: results.system
+        };
+    } catch (error) {
+        console.error('[Main] meeting:start-file-recording error:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error'
+        };
+    }
+});
+
+ipcMain.handle('meeting:stop-file-recording', async () => {
+    console.log('[Main] meeting:stop-file-recording called');
+
+    try {
+        // Stop both recordings
+        const micResult = mediaMonitor.stopMicFileRecording();
+        const sysResult = mediaMonitor.stopSystemAudioFileRecording();
+
+        console.log('[Main] Mic recording stopped:', micResult);
+        console.log('[Main] System recording stopped:', sysResult);
+
+        return {
+            success: true,
+            mic: {
+                filePath: micResult.filePath,
+                sampleRate: micResult.sampleRate,
+                success: micResult.success
+            },
+            system: {
+                filePath: sysResult.filePath,
+                sampleRate: sysResult.sampleRate,
+                success: sysResult.success
+            }
+        };
+    } catch (error) {
+        console.error('[Main] meeting:stop-file-recording error:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error'
+        };
+    }
+});
+
+ipcMain.handle('meeting:merge-audio-files', async (_event, micPath: string | null, systemPath: string | null, outputPath: string) => {
+    console.log('[Main] meeting:merge-audio-files called');
+    console.log('[Main]   Mic:', micPath);
+    console.log('[Main]   System:', systemPath);
+    console.log('[Main]   Output:', outputPath);
+
+    try {
+        const { mergeAudioFiles } = await import('./meeting/audioChunker.js');
+        const result = await mergeAudioFiles(micPath, systemPath, outputPath);
+        console.log('[Main] Merge result:', result);
+        return result;
+    } catch (error) {
+        console.error('[Main] meeting:merge-audio-files error:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error'
+        };
+    }
 });
 
 // AI Assignment Suggestion Handler

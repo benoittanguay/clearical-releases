@@ -181,6 +181,17 @@ static int audioCallbackCount = 0;
 void audioSamplesReceived(const float* samples, size_t sampleCount, int channelCount, double sampleRate) {
     audioCallbackCount++;
 
+    // Get diagnostic info from SystemAudioCapture instance
+    double detectedRate = 0;
+    bool resampling = false;
+    bool detected = false;
+    if (@available(macOS 13.0, *)) {
+        SystemAudioCapture *capture = [SystemAudioCapture sharedInstance];
+        detectedRate = capture.detectedSampleRate;
+        resampling = capture.isResampling;
+        detected = capture.sampleRateDetected;
+    }
+
     // Log every 100th callback to avoid spam
     if (audioCallbackCount % 100 == 1) {
         NSLog(@"[SystemAudioCapture] audioSamplesReceived called #%d: sampleCount=%zu, channelCount=%d, sampleRate=%.0f",
@@ -199,13 +210,19 @@ void audioSamplesReceived(const float* samples, size_t sampleCount, int channelC
         std::vector<float> samples;
         int channelCount;
         double sampleRate;
+        double detectedRate;
+        bool resampling;
+        bool detected;
     };
 
     size_t totalSamples = sampleCount * channelCount;
     auto* data = new AudioData{
         std::vector<float>(samples, samples + totalSamples),
         channelCount,
-        sampleRate
+        sampleRate,
+        detectedRate,
+        resampling,
+        detected
     };
 
     // Use NonBlockingCall to avoid blocking the audio thread
@@ -223,6 +240,9 @@ void audioSamplesReceived(const float* samples, size_t sampleCount, int channelC
         info.Set("channelCount", Napi::Number::New(env, data->channelCount));
         info.Set("sampleRate", Napi::Number::New(env, data->sampleRate));
         info.Set("sampleCount", Napi::Number::New(env, data->samples.size() / data->channelCount));
+        info.Set("detectedRate", Napi::Number::New(env, data->detectedRate));
+        info.Set("resampling", Napi::Boolean::New(env, data->resampling));
+        info.Set("rateDetected", Napi::Boolean::New(env, data->detected));
 
         jsCallback.Call({info});
         delete data;
@@ -355,6 +375,18 @@ static int micCallbackCount = 0;
 void micSamplesReceived(const float* samples, size_t sampleCount, int channelCount, double sampleRate) {
     micCallbackCount++;
 
+    // Get diagnostic info from MicCapture instance
+    MicCapture *capture = [MicCapture sharedInstance];
+    double detectedRate = capture.detectedSampleRate;
+    bool resampling = capture.isResampling;
+    bool detected = capture.sampleRateDetected;
+
+    // Debug: log detection state every 500 callbacks
+    if (micCallbackCount % 500 == 1) {
+        NSLog(@"[MicCapture/index.mm] Diagnostic read #%d: detectedRate=%.0f, detected=%d, resampling=%d",
+              micCallbackCount, detectedRate, detected, resampling);
+    }
+
     // Log every 100th callback to avoid spam
     if (micCallbackCount % 100 == 1) {
         // Calculate RMS and peak for logging
@@ -384,13 +416,19 @@ void micSamplesReceived(const float* samples, size_t sampleCount, int channelCou
         std::vector<float> samples;
         int channelCount;
         double sampleRate;
+        double detectedRate;
+        bool resampling;
+        bool detected;
     };
 
     size_t totalSamples = sampleCount * channelCount;
     auto* data = new MicAudioData{
         std::vector<float>(samples, samples + totalSamples),
         channelCount,
-        sampleRate
+        sampleRate,
+        detectedRate,
+        resampling,
+        detected
     };
 
     // Use NonBlockingCall to avoid blocking the audio thread
@@ -408,6 +446,9 @@ void micSamplesReceived(const float* samples, size_t sampleCount, int channelCou
         info.Set("channelCount", Napi::Number::New(env, data->channelCount));
         info.Set("sampleRate", Napi::Number::New(env, data->sampleRate));
         info.Set("sampleCount", Napi::Number::New(env, data->samples.size() / data->channelCount));
+        info.Set("detectedRate", Napi::Number::New(env, data->detectedRate));
+        info.Set("resampling", Napi::Boolean::New(env, data->resampling));
+        info.Set("rateDetected", Napi::Boolean::New(env, data->detected));
 
         jsCallback.Call({info});
         delete data;
@@ -508,6 +549,95 @@ Napi::Value IsMicCapturing(const Napi::CallbackInfo& info) {
     Napi::Env env = info.Env();
     MicCapture *capture = [MicCapture sharedInstance];
     return Napi::Boolean::New(env, [capture isCapturing]);
+}
+
+// File Recording functions for mic
+
+Napi::Value StartMicFileRecording(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+
+    if (info.Length() < 1 || !info[0].IsString()) {
+        Napi::TypeError::New(env, "File path string required").ThrowAsJavaScriptException();
+        return env.Null();
+    }
+
+    std::string filePath = info[0].As<Napi::String>().Utf8Value();
+    NSString *nsFilePath = [NSString stringWithUTF8String:filePath.c_str()];
+
+    MicCapture *capture = [MicCapture sharedInstance];
+    BOOL success = [capture startRecordingToFile:nsFilePath];
+
+    Napi::Object result = Napi::Object::New(env);
+    result.Set("success", Napi::Boolean::New(env, success));
+    return result;
+}
+
+Napi::Value StopMicFileRecording(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+
+    MicCapture *capture = [MicCapture sharedInstance];
+    NSString *filePath = [capture stopRecording];
+
+    Napi::Object result = Napi::Object::New(env);
+    if (filePath) {
+        result.Set("success", Napi::Boolean::New(env, true));
+        result.Set("filePath", Napi::String::New(env, [filePath UTF8String]));
+        result.Set("sampleRate", Napi::Number::New(env, capture.actualSampleRate));
+    } else {
+        result.Set("success", Napi::Boolean::New(env, false));
+    }
+    return result;
+}
+
+// File Recording functions for system audio
+
+Napi::Value StartSystemAudioFileRecording(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+
+    if (info.Length() < 1 || !info[0].IsString()) {
+        Napi::TypeError::New(env, "File path string required").ThrowAsJavaScriptException();
+        return env.Null();
+    }
+
+    if (@available(macOS 13.0, *)) {
+        std::string filePath = info[0].As<Napi::String>().Utf8Value();
+        NSString *nsFilePath = [NSString stringWithUTF8String:filePath.c_str()];
+
+        SystemAudioCapture *capture = [SystemAudioCapture sharedInstance];
+        BOOL success = [capture startRecordingToFile:nsFilePath];
+
+        Napi::Object result = Napi::Object::New(env);
+        result.Set("success", Napi::Boolean::New(env, success));
+        return result;
+    } else {
+        Napi::Object result = Napi::Object::New(env);
+        result.Set("success", Napi::Boolean::New(env, false));
+        result.Set("error", Napi::String::New(env, "System audio capture requires macOS 13.0+"));
+        return result;
+    }
+}
+
+Napi::Value StopSystemAudioFileRecording(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+
+    if (@available(macOS 13.0, *)) {
+        SystemAudioCapture *capture = [SystemAudioCapture sharedInstance];
+        NSString *filePath = [capture stopRecording];
+
+        Napi::Object result = Napi::Object::New(env);
+        if (filePath) {
+            result.Set("success", Napi::Boolean::New(env, true));
+            result.Set("filePath", Napi::String::New(env, [filePath UTF8String]));
+            result.Set("sampleRate", Napi::Number::New(env, capture.actualSampleRate));
+        } else {
+            result.Set("success", Napi::Boolean::New(env, false));
+        }
+        return result;
+    } else {
+        Napi::Object result = Napi::Object::New(env);
+        result.Set("success", Napi::Boolean::New(env, false));
+        return result;
+    }
 }
 
 // Speech Transcription functions
@@ -672,6 +802,12 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
     exports.Set("startMicCapture", Napi::Function::New(env, StartMicCapture));
     exports.Set("stopMicCapture", Napi::Function::New(env, StopMicCapture));
     exports.Set("isMicCapturing", Napi::Function::New(env, IsMicCapturing));
+
+    // File recording (direct to WAV, no resampling)
+    exports.Set("startMicFileRecording", Napi::Function::New(env, StartMicFileRecording));
+    exports.Set("stopMicFileRecording", Napi::Function::New(env, StopMicFileRecording));
+    exports.Set("startSystemAudioFileRecording", Napi::Function::New(env, StartSystemAudioFileRecording));
+    exports.Set("stopSystemAudioFileRecording", Napi::Function::New(env, StopSystemAudioFileRecording));
 
     // Speech transcription (Apple on-device)
     exports.Set("isSpeechTranscriptionAvailable", Napi::Function::New(env, IsSpeechTranscriptionAvailable));

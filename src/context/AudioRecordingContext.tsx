@@ -166,6 +166,11 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
     // AudioWorklet node ref for mixing audio on dedicated thread
     const audioWorkletNodeRef = useRef<AudioWorkletNode | null>(null);
 
+    // File-based recording paths (direct WAV recording, no resampling)
+    const micFilePathRef = useRef<string | null>(null);
+    const systemFilePathRef = useRef<string | null>(null);
+    const isFileRecordingActiveRef = useRef<boolean>(false);
+
     // Silence detection for meeting end
     const silenceStartTimeRef = useRef<number | null>(null);
     const silenceConfirmationShownRef = useRef<boolean>(false);
@@ -295,7 +300,7 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
                     // Subscribe to native mic audio samples and forward to AudioWorklet
                     let nativeMicReceivedCount = 0;
                     const unsubscribeMic = window.electron?.ipcRenderer?.meeting?.onMicAudioSamples?.(
-                        (data: { samples: Float32Array; channelCount: number; sampleRate: number; sampleCount: number }) => {
+                        (data: { samples: Float32Array; channelCount: number; sampleRate: number; sampleCount: number; detectedRate?: number; rateDetected?: boolean; resampling?: boolean }) => {
                             nativeMicReceivedCount++;
                             // Log every 100th callback with sample analysis
                             if (nativeMicReceivedCount % 100 === 1) {
@@ -310,7 +315,7 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
                                     }
                                     micRms = Math.sqrt(micRms / samples.length);
                                 }
-                                console.log(`[AudioRecordingContext] NATIVE MIC #${nativeMicReceivedCount}: sampleRate=${data.sampleRate}, sampleCount=${data.sampleCount}, channels=${data.channelCount}, rms=${micRms.toFixed(6)}, peak=${micPeak.toFixed(6)}`);
+                                console.log(`[AudioRecordingContext] NATIVE MIC #${nativeMicReceivedCount}: sampleRate=${data.sampleRate}, sampleCount=${data.sampleCount}, channels=${data.channelCount}, rms=${micRms.toFixed(6)}, peak=${micPeak.toFixed(6)}, detectedRate=${data.detectedRate ?? 'N/A'}, rateDetected=${data.rateDetected ?? false}, resampling=${data.resampling ?? false}`);
                             }
                             // Forward samples to AudioWorklet for mixing
                             if (isNativeMicActiveRef.current && audioWorkletNodeRef.current) {
@@ -405,7 +410,7 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
                         // Replace the existing callback with one that forwards to the worklet
                         systemAudioUnsubscribeRef.current?.();
                         const unsubscribeSystem = window.electron?.ipcRenderer?.meeting?.onSystemAudioSamples?.(
-                            (data: { samples: Float32Array; channelCount: number; sampleRate: number; sampleCount: number }) => {
+                            (data: { samples: Float32Array; channelCount: number; sampleRate: number; sampleCount: number; detectedRate?: number; rateDetected?: boolean; resampling?: boolean }) => {
                                 sysAudioForwardedCount++;
                                 // Log every 100th callback
                                 if (sysAudioForwardedCount % 100 === 1) {
@@ -420,7 +425,7 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
                                         }
                                         sysRms = Math.sqrt(sysRms / samples.length);
                                     }
-                                    console.log(`[AudioRecordingContext] SYSTEM AUDIO FORWARDED #${sysAudioForwardedCount}: sampleRate=${data.sampleRate}, sampleCount=${data.sampleCount}, channels=${data.channelCount}, rms=${sysRms.toFixed(6)}, peak=${sysPeak.toFixed(6)}`);
+                                    console.log(`[AudioRecordingContext] SYSTEM AUDIO FORWARDED #${sysAudioForwardedCount}: sampleRate=${data.sampleRate}, sampleCount=${data.sampleCount}, channels=${data.channelCount}, rms=${sysRms.toFixed(6)}, peak=${sysPeak.toFixed(6)}, detectedRate=${data.detectedRate ?? 'N/A'}, rateDetected=${data.rateDetected ?? false}, resampling=${data.resampling ?? false}`);
                                 }
 
                                 // Forward samples to AudioWorklet for mixing
@@ -453,6 +458,40 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
             // Check if we have at least one audio source
             if (!nativeMicStarted && !systemAudioStarted) {
                 throw new Error('No audio capture available - neither native mic nor system audio could be started');
+            }
+
+            // ============================================================
+            // FILE-BASED RECORDING (direct WAV, no resampling)
+            // This records to separate files for post-processing with FFmpeg
+            // ============================================================
+            try {
+                // Generate unique file paths for this recording session
+                const timestamp = Date.now();
+                const tempDir = await window.electron?.ipcRenderer?.invoke?.('get-temp-path') || '/tmp';
+                const micFilePath = `${tempDir}/clearical-mic-${timestamp}.wav`;
+                const systemFilePath = `${tempDir}/clearical-system-${timestamp}.wav`;
+
+                console.log('[AudioRecordingContext] Starting file-based recording...');
+                console.log('[AudioRecordingContext]   Mic file:', micFilePath);
+                console.log('[AudioRecordingContext]   System file:', systemFilePath);
+
+                const fileResult = await window.electron?.ipcRenderer?.meeting?.startFileRecording?.(
+                    nativeMicStarted ? micFilePath : '',
+                    systemAudioStarted ? systemFilePath : ''
+                );
+
+                if (fileResult?.success) {
+                    micFilePathRef.current = nativeMicStarted ? micFilePath : null;
+                    systemFilePathRef.current = systemAudioStarted ? systemFilePath : null;
+                    isFileRecordingActiveRef.current = true;
+                    console.log('[AudioRecordingContext] File recording started successfully');
+                } else {
+                    console.warn('[AudioRecordingContext] File recording failed to start:', fileResult);
+                    // Continue anyway - MediaRecorder is the fallback
+                }
+            } catch (fileError) {
+                console.warn('[AudioRecordingContext] File recording error:', fileError);
+                // Continue anyway - MediaRecorder is the fallback
             }
 
             // Use the mixed destination stream for recording
@@ -767,10 +806,56 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
                 silenceStartTimeRef.current = null;
                 silenceConfirmationShownRef.current = false;
 
-                // Create blob from captured chunks (captured before stop() to avoid race condition)
+                // ============================================================
+                // STOP FILE-BASED RECORDING AND MERGE
+                // ============================================================
+                let mergedFilePath: string | null = null;
+                if (isFileRecordingActiveRef.current) {
+                    try {
+                        console.log('[AudioRecordingContext] Stopping file-based recording...');
+                        const fileResult = await window.electron?.ipcRenderer?.meeting?.stopFileRecording?.();
+                        console.log('[AudioRecordingContext] File recording stopped:', fileResult);
+
+                        isFileRecordingActiveRef.current = false;
+
+                        // Merge the files with FFmpeg
+                        if (fileResult?.success && (fileResult.mic?.filePath || fileResult.system?.filePath)) {
+                            const tempDir = await window.electron?.ipcRenderer?.invoke?.('get-temp-path') || '/tmp';
+                            const outputPath = `${tempDir}/clearical-merged-${Date.now()}.webm`;
+
+                            console.log('[AudioRecordingContext] Merging audio files with FFmpeg...');
+                            console.log('[AudioRecordingContext]   Mic:', fileResult.mic?.filePath);
+                            console.log('[AudioRecordingContext]   System:', fileResult.system?.filePath);
+                            console.log('[AudioRecordingContext]   Output:', outputPath);
+
+                            const mergeResult = await window.electron?.ipcRenderer?.meeting?.mergeAudioFiles?.(
+                                fileResult.mic?.filePath || null,
+                                fileResult.system?.filePath || null,
+                                outputPath
+                            );
+
+                            if (mergeResult?.success && mergeResult.outputPath) {
+                                mergedFilePath = mergeResult.outputPath;
+                                console.log('[AudioRecordingContext] Audio merge successful:', mergedFilePath);
+                            } else {
+                                console.warn('[AudioRecordingContext] Audio merge failed:', mergeResult?.error);
+                            }
+                        }
+                    } catch (fileError) {
+                        console.error('[AudioRecordingContext] Error stopping file recording:', fileError);
+                    }
+
+                    // Clean up file path refs
+                    micFilePathRef.current = null;
+                    systemFilePathRef.current = null;
+                }
+
+                // Create blob from captured chunks (fallback if file-based recording failed)
                 const audioBlob = new Blob(capturedChunks, { type: capturedMimeType });
 
-                console.log('[AudioRecordingContext] Recording stopped, blob size:', audioBlob.size);
+                console.log('[AudioRecordingContext] Recording stopped');
+                console.log('[AudioRecordingContext]   Merged file:', mergedFilePath);
+                console.log('[AudioRecordingContext]   Fallback blob size:', audioBlob.size);
 
                 setState({
                     isRecording: false,
@@ -781,7 +866,7 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
 
                 // Check minimum duration (5 seconds)
                 const duration = audioBlob.size > 0 ? (capturedChunks.length * 1000) : 0;
-                if (duration < 5000 || audioBlob.size < 1000) {
+                if (!mergedFilePath && (duration < 5000 || audioBlob.size < 1000)) {
                     console.log('[AudioRecordingContext] Recording too short, skipping transcription');
                     setTranscriptionProgress(null);
                     resolve();
@@ -795,21 +880,36 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
                 });
 
                 try {
-                    // Convert blob to base64
-                    const arrayBuffer = await audioBlob.arrayBuffer();
-                    const uint8Array = new Uint8Array(arrayBuffer);
-                    let binary = '';
-                    for (let i = 0; i < uint8Array.length; i++) {
-                        binary += String.fromCharCode(uint8Array[i]);
-                    }
-                    const audioBase64 = btoa(binary);
+                    let result;
 
-                    // Send to main process for transcription
-                    const result = await window.electron.ipcRenderer.meeting.saveAudioAndTranscribe(
-                        entryId,
-                        audioBase64,
-                        capturedMimeType
-                    );
+                    // Prefer file-based recording if available
+                    if (mergedFilePath) {
+                        console.log('[AudioRecordingContext] Transcribing merged file:', mergedFilePath);
+                        // Use file path directly for transcription
+                        result = await window.electron.ipcRenderer.meeting.saveAudioAndTranscribe(
+                            entryId,
+                            mergedFilePath, // Pass file path instead of base64
+                            'audio/webm', // FFmpeg outputs WebM
+                            true // Flag to indicate this is a file path
+                        );
+                    } else {
+                        // Fallback to MediaRecorder blob
+                        console.log('[AudioRecordingContext] Transcribing fallback blob...');
+                        const arrayBuffer = await audioBlob.arrayBuffer();
+                        const uint8Array = new Uint8Array(arrayBuffer);
+                        let binary = '';
+                        for (let i = 0; i < uint8Array.length; i++) {
+                            binary += String.fromCharCode(uint8Array[i]);
+                        }
+                        const audioBase64 = btoa(binary);
+
+                        // Send to main process for transcription
+                        result = await window.electron.ipcRenderer.meeting.saveAudioAndTranscribe(
+                            entryId,
+                            audioBase64,
+                            capturedMimeType
+                        );
+                    }
 
                     if (result.success && result.transcription) {
                         console.log('[AudioRecordingContext] Transcription complete:', result.transcription.wordCount, 'words');

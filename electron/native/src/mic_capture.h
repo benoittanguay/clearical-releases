@@ -27,6 +27,12 @@ typedef void (*MicAudioSamplesCallback)(const float* _Nonnull samples, size_t sa
 
 @property (nonatomic, assign) MicAudioSamplesCallback _Nullable audioCallback;
 @property (nonatomic, assign, readonly) BOOL isCapturing;
+@property (nonatomic, assign, readonly) double detectedSampleRate;
+@property (nonatomic, assign, readonly) BOOL isResampling;
+@property (nonatomic, assign, readonly) BOOL sampleRateDetected;
+@property (nonatomic, assign, readonly) BOOL isRecordingToFile;
+@property (nonatomic, copy, readonly) NSString * _Nullable outputFilePath;
+@property (nonatomic, assign, readonly) double actualSampleRate;
 
 + (instancetype _Nonnull)sharedInstance;
 
@@ -45,6 +51,19 @@ typedef void (*MicAudioSamplesCallback)(const float* _Nonnull samples, size_t sa
  * Stop capturing microphone audio
  */
 - (void)stopCapture;
+
+/**
+ * Start recording audio to a WAV file
+ * @param filePath Path where the WAV file will be written
+ * @return YES if recording started successfully
+ */
+- (BOOL)startRecordingToFile:(NSString * _Nonnull)filePath;
+
+/**
+ * Stop recording and finalize the WAV file
+ * @return Path to the recorded file, or nil if not recording
+ */
+- (NSString * _Nullable)stopRecording;
 
 @end
 

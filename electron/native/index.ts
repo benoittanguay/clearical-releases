@@ -243,6 +243,74 @@ class MediaMonitorWrapper extends EventEmitter {
         }
     }
 
+    // File recording methods (direct to WAV, no resampling)
+
+    startMicFileRecording(filePath: string): { success: boolean } {
+        if (!this.native) {
+            console.warn('[MediaMonitor] Native addon not available for mic file recording');
+            return { success: false };
+        }
+
+        try {
+            console.log('[MediaMonitor] Starting mic file recording to:', filePath);
+            const result = this.native.startMicFileRecording(filePath);
+            console.log('[MediaMonitor] Mic file recording result:', result);
+            return result;
+        } catch (err) {
+            console.error('[MediaMonitor] Failed to start mic file recording:', err);
+            return { success: false };
+        }
+    }
+
+    stopMicFileRecording(): { success: boolean; filePath?: string; sampleRate?: number; error?: string } {
+        if (!this.native) {
+            return { success: false, error: 'Native addon not available' };
+        }
+
+        try {
+            console.log('[MediaMonitor] Stopping mic file recording...');
+            const result = this.native.stopMicFileRecording();
+            console.log('[MediaMonitor] Mic file recording stopped:', result);
+            return result;
+        } catch (err) {
+            console.error('[MediaMonitor] Failed to stop mic file recording:', err);
+            return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
+        }
+    }
+
+    startSystemAudioFileRecording(filePath: string): { success: boolean; error?: string } {
+        if (!this.native) {
+            console.warn('[MediaMonitor] Native addon not available for system audio file recording');
+            return { success: false, error: 'Native addon not available' };
+        }
+
+        try {
+            console.log('[MediaMonitor] Starting system audio file recording to:', filePath);
+            const result = this.native.startSystemAudioFileRecording(filePath);
+            console.log('[MediaMonitor] System audio file recording result:', result);
+            return result;
+        } catch (err) {
+            console.error('[MediaMonitor] Failed to start system audio file recording:', err);
+            return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
+        }
+    }
+
+    stopSystemAudioFileRecording(): { success: boolean; filePath?: string; sampleRate?: number; error?: string } {
+        if (!this.native) {
+            return { success: false, error: 'Native addon not available' };
+        }
+
+        try {
+            console.log('[MediaMonitor] Stopping system audio file recording...');
+            const result = this.native.stopSystemAudioFileRecording();
+            console.log('[MediaMonitor] System audio file recording stopped:', result);
+            return result;
+        } catch (err) {
+            console.error('[MediaMonitor] Failed to stop system audio file recording:', err);
+            return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
+        }
+    }
+
     // Meeting app detection methods
 
     /**

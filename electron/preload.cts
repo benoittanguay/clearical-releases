@@ -260,8 +260,8 @@ contextBridge.exposeInMainWorld('electron', {
             setAutoRecordEnabled: (enabled: boolean) =>
                 ipcRenderer.invoke('meeting:set-auto-record-enabled', enabled),
             // Audio capture and transcription
-            saveAudioAndTranscribe: (entryId: string, audioBase64: string, mimeType?: string) =>
-                ipcRenderer.invoke('meeting:save-audio-and-transcribe', entryId, audioBase64, mimeType),
+            saveAudioAndTranscribe: (entryId: string, audioDataOrPath: string, mimeType?: string, isFilePath?: boolean) =>
+                ipcRenderer.invoke('meeting:save-audio-and-transcribe', entryId, audioDataOrPath, mimeType, isFilePath),
             retryTranscription: (entryId: string, audioPath: string, mimeType: string) =>
                 ipcRenderer.invoke('meeting:retry-transcription', entryId, audioPath, mimeType),
             getTranscriptionUsage: () =>
@@ -302,6 +302,13 @@ contextBridge.exposeInMainWorld('electron', {
                 ipcRenderer.on('meeting:mic-audio-samples', subscription);
                 return () => ipcRenderer.removeListener('meeting:mic-audio-samples', subscription);
             },
+            // File-based recording (direct to WAV files, no resampling or mixing)
+            startFileRecording: (micPath: string, systemPath: string) =>
+                ipcRenderer.invoke('meeting:start-file-recording', micPath, systemPath),
+            stopFileRecording: () =>
+                ipcRenderer.invoke('meeting:stop-file-recording'),
+            mergeAudioFiles: (micPath: string | null, systemPath: string | null, outputPath: string) =>
+                ipcRenderer.invoke('meeting:merge-audio-files', micPath, systemPath, outputPath),
             // Event subscriptions for automatic recording
             onRecordingShouldStart: (callback: (data: { entryId: string; timestamp: number }) => void) => {
                 const subscription = (_event: any, data: { entryId: string; timestamp: number }) => callback(data);

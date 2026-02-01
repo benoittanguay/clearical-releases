@@ -12,16 +12,51 @@ static const double kTargetSampleRate = 48000.0;
     dispatch_queue_t _captureQueue;
     BOOL _isCapturing;
 
-    // Resampling state
+    // Resampling state (kept for callback compatibility but not used for file recording)
     float *_resampleBuffer;
     size_t _resampleBufferCapacity;
+    BOOL _isResampling;
 
     // Timing-based sample rate detection
-    // macOS sometimes lies about sample rate (claims 48kHz when actually 44.1kHz)
     uint64_t _firstCallbackTime;
     size_t _totalSamplesReceived;
     double _detectedSampleRate;
     BOOL _sampleRateDetected;
+
+    // Diagnostic logging counters (reset each session)
+    int _diagLogCount;
+
+    // File recording state
+    BOOL _isRecordingToFile;
+    NSString *_outputFilePath;
+    NSFileHandle *_fileHandle;
+    size_t _totalSamplesWritten;
+    int _fileChannelCount;
+    double _fileSampleRate;
+}
+
+- (double)detectedSampleRate {
+    return _detectedSampleRate;
+}
+
+- (BOOL)isResampling {
+    return _isResampling;
+}
+
+- (BOOL)sampleRateDetected {
+    return _sampleRateDetected;
+}
+
+- (BOOL)isRecordingToFile {
+    return _isRecordingToFile;
+}
+
+- (NSString *)outputFilePath {
+    return _outputFilePath;
+}
+
+- (double)actualSampleRate {
+    return _fileSampleRate;
 }
 
 + (instancetype)sharedInstance {
@@ -114,6 +149,7 @@ static const double kTargetSampleRate = 48000.0;
     _totalSamplesReceived = 0;
     _detectedSampleRate = 0;
     _sampleRateDetected = NO;
+    _diagLogCount = 0;
 
     if (_isCapturing) {
         NSLog(@"[MicCapture] Already capturing");
@@ -355,6 +391,12 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
     uint64_t elapsedNanos = (now - _firstCallbackTime) * timebaseInfo.numer / timebaseInfo.denom;
     double elapsedSeconds = elapsedNanos / 1000000000.0;
 
+    // Debug: log timing detection progress every 100 callbacks
+    if (callbackCount % 100 == 1) {
+        NSLog(@"[MicCapture] Detection progress #%d: elapsed=%.3fs, totalSamples=%zu, detected=%d, rate=%.0f",
+              callbackCount, elapsedSeconds, _totalSamplesReceived, _sampleRateDetected, _detectedSampleRate);
+    }
+
     if (!_sampleRateDetected && elapsedSeconds >= 0.5 && _totalSamplesReceived > 0) {
         _detectedSampleRate = _totalSamplesReceived / elapsedSeconds;
         _sampleRateDetected = YES;
@@ -362,10 +404,12 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
               _detectedSampleRate, reportedSampleRate);
     }
 
-    // Use detected rate if available, otherwise fall back to reported rate
-    // The detected rate is based on actual timing, not what macOS claims
-    double sourceSampleRate = _sampleRateDetected ? _detectedSampleRate : reportedSampleRate;
-    BOOL needsResampling = (fabs(sourceSampleRate - kTargetSampleRate) > 100.0); // Allow 100Hz tolerance for timing jitter
+    // IMPORTANT: Always use the reported sample rate for resampling.
+    // Changing the ratio mid-stream (after detection) causes discontinuities that manifest
+    // as chipmunk effect because the AudioWorklet suddenly receives fewer samples.
+    // A consistent ratio with slight timing drift is far better than a mid-stream change.
+    double sourceSampleRate = reportedSampleRate;
+    BOOL needsResampling = (fabs(sourceSampleRate - kTargetSampleRate) > 100.0); // Allow 100Hz tolerance
 
     if (callbackCount % 100 == 1) {
         NSLog(@"[MicCapture] Audio callback #%d: reportedRate=%.0f, detectedRate=%.0f, effectiveRate=%.0f (target=%.0f, resample=%d), channels=%u, bitsPerChannel=%u, isFloat=%d, bytesPerFrame=%u, totalBytes=%zu",
@@ -416,7 +460,17 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
     // Now resample if needed
     size_t samplesPerChannel = totalSamples / asbd->mChannelsPerFrame;
 
+    // Track resampling state for diagnostics
+    _isResampling = needsResampling;
+
     if (needsResampling) {
+        // Log resampling details for first 20 callbacks to diagnose ratio issues
+        if (_diagLogCount < 20) {
+            double ratio = kTargetSampleRate / sourceSampleRate;
+            NSLog(@"[MicCapture] RESAMPLE #%d: detected=%d, sourceSampleRate=%.0f, ratio=%.4f, inputSamples=%zu",
+                  _diagLogCount, _sampleRateDetected, sourceSampleRate, ratio, totalSamples);
+        }
+
         size_t resampledLength = 0;
         float *resampledSamples = [self resampleAudio:floatSamples
                                           inputLength:totalSamples
@@ -425,6 +479,12 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
 
         if (resampledSamples) {
             size_t resampledSamplesPerChannel = resampledLength / asbd->mChannelsPerFrame;
+            // Log output sample count for first 20 callbacks
+            if (_diagLogCount < 20) {
+                NSLog(@"[MicCapture] OUTPUT #%d: inputSamples=%zu, outputSamples=%zu, ratio=%.4f",
+                      _diagLogCount, totalSamples, resampledLength, (double)resampledLength / totalSamples);
+                _diagLogCount++;
+            }
             _audioCallback(resampledSamples,
                            resampledSamplesPerChannel,
                            asbd->mChannelsPerFrame,
@@ -438,9 +498,165 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
                        sourceSampleRate);
     }
 
+    // Write to file if recording (write original samples, no resampling)
+    if (_isRecordingToFile && _fileHandle && floatSamples) {
+        // Store sample rate on first write
+        if (_fileSampleRate == 0) {
+            _fileSampleRate = reportedSampleRate;
+            _fileChannelCount = asbd->mChannelsPerFrame;
+            NSLog(@"[MicCapture] Recording at %.0f Hz, %d channels", _fileSampleRate, _fileChannelCount);
+        }
+
+        // Convert float samples to 16-bit PCM for better compatibility
+        size_t sampleCount = totalSamples;
+        int16_t *pcmSamples = (int16_t *)malloc(sampleCount * sizeof(int16_t));
+        if (pcmSamples) {
+            for (size_t i = 0; i < sampleCount; i++) {
+                float sample = floatSamples[i];
+                // Clamp to [-1, 1] and convert to 16-bit
+                if (sample > 1.0f) sample = 1.0f;
+                if (sample < -1.0f) sample = -1.0f;
+                pcmSamples[i] = (int16_t)(sample * 32767.0f);
+            }
+
+            NSData *data = [NSData dataWithBytes:pcmSamples length:sampleCount * sizeof(int16_t)];
+            @try {
+                [_fileHandle writeData:data];
+                _totalSamplesWritten += sampleCount;
+            } @catch (NSException *e) {
+                NSLog(@"[MicCapture] Error writing to file: %@", e);
+            }
+            free(pcmSamples);
+        }
+    }
+
     if (needsFree && floatSamples) {
         free(floatSamples);
     }
+}
+
+#pragma mark - File Recording
+
+- (BOOL)startRecordingToFile:(NSString *)filePath {
+    if (_isRecordingToFile) {
+        NSLog(@"[MicCapture] Already recording to file");
+        return NO;
+    }
+
+    NSLog(@"[MicCapture] Starting file recording to: %@", filePath);
+
+    // Create the file with a placeholder WAV header (will be updated when recording stops)
+    NSFileManager *fm = [NSFileManager defaultManager];
+
+    // Create directory if needed
+    NSString *directory = [filePath stringByDeletingLastPathComponent];
+    if (![fm fileExistsAtPath:directory]) {
+        NSError *error = nil;
+        [fm createDirectoryAtPath:directory withIntermediateDirectories:YES attributes:nil error:&error];
+        if (error) {
+            NSLog(@"[MicCapture] Failed to create directory: %@", error);
+            return NO;
+        }
+    }
+
+    // Create file with empty header (44 bytes for WAV)
+    uint8_t emptyHeader[44] = {0};
+    NSData *headerData = [NSData dataWithBytes:emptyHeader length:44];
+    if (![headerData writeToFile:filePath atomically:YES]) {
+        NSLog(@"[MicCapture] Failed to create file");
+        return NO;
+    }
+
+    // Open file for writing
+    _fileHandle = [NSFileHandle fileHandleForWritingAtPath:filePath];
+    if (!_fileHandle) {
+        NSLog(@"[MicCapture] Failed to open file for writing");
+        return NO;
+    }
+
+    // Seek past header
+    [_fileHandle seekToFileOffset:44];
+
+    _outputFilePath = [filePath copy];
+    _totalSamplesWritten = 0;
+    _fileSampleRate = 0; // Will be set on first audio callback
+    _fileChannelCount = 1;
+    _isRecordingToFile = YES;
+
+    NSLog(@"[MicCapture] File recording started");
+    return YES;
+}
+
+- (NSString *)stopRecording {
+    if (!_isRecordingToFile) {
+        NSLog(@"[MicCapture] Not recording to file");
+        return nil;
+    }
+
+    NSLog(@"[MicCapture] Stopping file recording, samples written: %zu", _totalSamplesWritten);
+
+    _isRecordingToFile = NO;
+
+    // Finalize the WAV header
+    if (_fileHandle && _outputFilePath) {
+        // Calculate sizes
+        uint32_t dataSize = (uint32_t)(_totalSamplesWritten * sizeof(int16_t));
+        uint32_t fileSize = dataSize + 36; // Total file size minus 8 bytes for RIFF header
+        uint16_t channels = (uint16_t)_fileChannelCount;
+        uint32_t sampleRate = (uint32_t)_fileSampleRate;
+        uint16_t bitsPerSample = 16;
+        uint16_t blockAlign = channels * (bitsPerSample / 8);
+        uint32_t byteRate = sampleRate * blockAlign;
+
+        // Build WAV header
+        uint8_t header[44];
+
+        // RIFF header
+        header[0] = 'R'; header[1] = 'I'; header[2] = 'F'; header[3] = 'F';
+        header[4] = fileSize & 0xFF;
+        header[5] = (fileSize >> 8) & 0xFF;
+        header[6] = (fileSize >> 16) & 0xFF;
+        header[7] = (fileSize >> 24) & 0xFF;
+        header[8] = 'W'; header[9] = 'A'; header[10] = 'V'; header[11] = 'E';
+
+        // fmt chunk
+        header[12] = 'f'; header[13] = 'm'; header[14] = 't'; header[15] = ' ';
+        header[16] = 16; header[17] = 0; header[18] = 0; header[19] = 0; // Chunk size (16 for PCM)
+        header[20] = 1; header[21] = 0; // Audio format (1 = PCM)
+        header[22] = channels & 0xFF; header[23] = (channels >> 8) & 0xFF;
+        header[24] = sampleRate & 0xFF;
+        header[25] = (sampleRate >> 8) & 0xFF;
+        header[26] = (sampleRate >> 16) & 0xFF;
+        header[27] = (sampleRate >> 24) & 0xFF;
+        header[28] = byteRate & 0xFF;
+        header[29] = (byteRate >> 8) & 0xFF;
+        header[30] = (byteRate >> 16) & 0xFF;
+        header[31] = (byteRate >> 24) & 0xFF;
+        header[32] = blockAlign & 0xFF; header[33] = (blockAlign >> 8) & 0xFF;
+        header[34] = bitsPerSample & 0xFF; header[35] = (bitsPerSample >> 8) & 0xFF;
+
+        // data chunk
+        header[36] = 'd'; header[37] = 'a'; header[38] = 't'; header[39] = 'a';
+        header[40] = dataSize & 0xFF;
+        header[41] = (dataSize >> 8) & 0xFF;
+        header[42] = (dataSize >> 16) & 0xFF;
+        header[43] = (dataSize >> 24) & 0xFF;
+
+        // Write header at beginning of file
+        [_fileHandle seekToFileOffset:0];
+        [_fileHandle writeData:[NSData dataWithBytes:header length:44]];
+        [_fileHandle closeFile];
+
+        NSLog(@"[MicCapture] WAV file finalized: %@ (%.2f seconds at %.0f Hz)",
+              _outputFilePath, (double)_totalSamplesWritten / _fileChannelCount / _fileSampleRate, _fileSampleRate);
+    }
+
+    _fileHandle = nil;
+    NSString *result = _outputFilePath;
+    _outputFilePath = nil;
+    _totalSamplesWritten = 0;
+
+    return result;
 }
 
 @end
