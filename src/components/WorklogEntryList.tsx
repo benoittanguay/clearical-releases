@@ -207,8 +207,7 @@ export const WorklogEntryList: React.FC<WorklogEntryListProps> = ({
                                             style={{
                                                 backgroundColor: 'var(--color-bg-secondary)',
                                                 borderBottom: '1px solid var(--color-border-primary)',
-                                                top: '35px', // Height of week header (py-2 = 16px + text ~18px + border 1px)
-                                                marginTop: dayIndex === 0 ? '-1px' : undefined
+                                                top: '35px' // Height of week header (py-2 = 16px + text ~18px + border 1px)
                                             }}
                                         >
                                             <h3 className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>
