@@ -1107,11 +1107,59 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
 
         console.log(`[HistoryDetail] Retrying AI analysis for ${getFailedAnalysisScreenshots.length} screenshots`);
 
-        // Track all successful updates to batch them at the end
-        const successfulUpdates = new Map<string, {
+        // Track successful updates for the current batch (saved incrementally)
+        const batchUpdates = new Map<string, {
             description: string;
             visionData: { confidence?: number; detectedText?: string[]; objects?: string[]; extraction?: any };
         }>();
+
+        // Track total successes across all batches for final message
+        let totalSuccesses = 0;
+
+        // Helper function to save current batch updates to database
+        // This ensures progress is persisted even if user navigates away
+        const saveBatchUpdates = () => {
+            if (batchUpdates.size === 0) return;
+
+            console.log(`[HistoryDetail] Saving ${batchUpdates.size} successful updates incrementally`);
+
+            const updatedActivity = entry.windowActivity?.map(activity => {
+                if (!activity.screenshotPaths) return activity;
+
+                // Check if any screenshots in this activity were successfully updated
+                const hasUpdates = activity.screenshotPaths.some(path => batchUpdates.has(path));
+                if (!hasUpdates) return activity;
+
+                // Build updated descriptions and vision data for this activity
+                const newDescriptions: { [path: string]: string } = { ...(activity.screenshotDescriptions || {}) };
+                const newVisionData: { [path: string]: { confidence?: number; detectedText?: string[]; objects?: string[]; extraction?: any } } = {
+                    ...(activity.screenshotVisionData || {})
+                };
+
+                // Apply all updates for screenshots in this activity
+                for (const path of activity.screenshotPaths) {
+                    const update = batchUpdates.get(path);
+                    if (update) {
+                        newDescriptions[path] = update.description;
+                        newVisionData[path] = update.visionData;
+                    }
+                }
+
+                return {
+                    ...activity,
+                    screenshotDescriptions: newDescriptions,
+                    screenshotVisionData: newVisionData
+                };
+            });
+
+            // Save to database
+            if (updatedActivity) {
+                onUpdate(entry.id, { windowActivity: updatedActivity });
+            }
+
+            totalSuccesses += batchUpdates.size;
+            batchUpdates.clear();
+        };
 
         // Process screenshots one at a time to respect rate limits
         let completed = 0;
@@ -1131,8 +1179,8 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                 if (result?.success && result.description && result.description !== FALLBACK_SCREENSHOT_DESCRIPTION) {
                     console.log(`[HistoryDetail] ✅ Retry successful for: ${path.split('/').pop()}`);
 
-                    // Store the successful result for batch update later
-                    successfulUpdates.set(path, {
+                    // Store the successful result for batch update
+                    batchUpdates.set(path, {
                         description: result.description,
                         visionData: {
                             confidence: result.confidence,
@@ -1160,48 +1208,12 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
             }
             await Promise.all(batch);
 
+            // Save progress after each batch to persist even if user navigates away
+            saveBatchUpdates();
+
             // Small delay between batches to respect rate limits
             if (queue.length > 0) {
                 await new Promise(resolve => setTimeout(resolve, 500));
-            }
-        }
-
-        // Batch update: Apply all successful updates in a single database write
-        if (successfulUpdates.size > 0) {
-            console.log(`[HistoryDetail] Applying ${successfulUpdates.size} successful updates in batch`);
-
-            const updatedActivity = entry.windowActivity?.map(activity => {
-                if (!activity.screenshotPaths) return activity;
-
-                // Check if any screenshots in this activity were successfully updated
-                const hasUpdates = activity.screenshotPaths.some(path => successfulUpdates.has(path));
-                if (!hasUpdates) return activity;
-
-                // Build updated descriptions and vision data for this activity
-                const newDescriptions: { [path: string]: string } = { ...(activity.screenshotDescriptions || {}) };
-                const newVisionData: { [path: string]: { confidence?: number; detectedText?: string[]; objects?: string[]; extraction?: any } } = {
-                    ...(activity.screenshotVisionData || {})
-                };
-
-                // Apply all updates for screenshots in this activity
-                for (const path of activity.screenshotPaths) {
-                    const update = successfulUpdates.get(path);
-                    if (update) {
-                        newDescriptions[path] = update.description;
-                        newVisionData[path] = update.visionData;
-                    }
-                }
-
-                return {
-                    ...activity,
-                    screenshotDescriptions: newDescriptions,
-                    screenshotVisionData: newVisionData
-                };
-            });
-
-            // Single database write with all changes
-            if (updatedActivity) {
-                onUpdate(entry.id, { windowActivity: updatedActivity });
             }
         }
 
@@ -1210,7 +1222,7 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
         showToast({
             type: 'success',
             title: 'Retry completed',
-            message: `AI analysis retry completed. ${successfulUpdates.size} of ${getFailedAnalysisScreenshots.length} screenshots successfully analyzed.`,
+            message: `AI analysis retry completed. ${totalSuccesses} of ${getFailedAnalysisScreenshots.length} screenshots successfully analyzed.`,
             duration: 3000
         });
     };
