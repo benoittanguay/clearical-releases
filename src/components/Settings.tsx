@@ -806,6 +806,41 @@ export function Settings({ onOpenJiraModal, onOpenTempoModal }: SettingsProps = 
                             </div>
                         </div>
                     </div>
+
+                    <div>
+                        <div className="flex items-center justify-between mb-1.5">
+                            <label className="block text-xs text-[var(--color-text-secondary)] font-medium">
+                                Screenshot Cooldown Per App/Site
+                            </label>
+                        </div>
+                        <div className="space-y-1.5">
+                            <input
+                                type="text"
+                                value={formatDuration(tempSettings.screenshotCooldown)}
+                                onChange={(e) => {
+                                    const newCooldown = parseDurationInput(e.target.value);
+                                    setTempSettings(prev => ({ ...prev, screenshotCooldown: newCooldown }));
+                                }}
+                                className="w-full border text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:border-[var(--color-accent)] transition-all"
+                                style={{
+                                    backgroundColor: 'var(--color-bg-primary)',
+                                    borderColor: 'var(--color-border-primary)',
+                                    color: 'var(--color-text-primary)',
+                                    fontFamily: 'var(--font-body)'
+                                }}
+                                onMouseEnter={(e) => {
+                                    e.currentTarget.style.borderColor = '#8c877d';
+                                }}
+                                onMouseLeave={(e) => {
+                                    e.currentTarget.style.borderColor = 'var(--color-border-primary)';
+                                }}
+                                placeholder="e.g. 2m, 30s"
+                            />
+                            <div className="text-xs text-[var(--color-text-secondary)]">
+                                Minimum time between screenshots for the same app or website. Different browser profiles are tracked separately.
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
 

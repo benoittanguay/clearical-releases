@@ -46,6 +46,7 @@ export interface AppSettings {
     minActivityDuration: number; // milliseconds - activities shorter than this get filtered
     activityGapThreshold: number; // milliseconds - max gap between same-app activities to keep short ones
     timeRoundingIncrement: number; // minutes - round time entries up to this increment (1 = no rounding)
+    screenshotCooldown: number; // milliseconds - minimum time between screenshots for the same app/site
     tempo: TempoSettings;
     jira: JiraSettings;
     ai?: AISettings;
@@ -62,6 +63,7 @@ const defaultSettings: AppSettings = {
     minActivityDuration: 5000, // 5 seconds
     activityGapThreshold: 5 * 60 * 1000, // 5 minutes
     timeRoundingIncrement: 15, // 15 minutes default
+    screenshotCooldown: 2 * 60 * 1000, // 2 minutes per-entity cooldown
     tempo: {
         apiToken: '',
         baseUrl: 'https://api.tempo.io',
@@ -110,6 +112,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             await window.electron.ipcRenderer.db.setSetting('minActivityDuration', settingsToSave.minActivityDuration);
             await window.electron.ipcRenderer.db.setSetting('activityGapThreshold', settingsToSave.activityGapThreshold);
             await window.electron.ipcRenderer.db.setSetting('timeRoundingIncrement', settingsToSave.timeRoundingIncrement);
+            await window.electron.ipcRenderer.db.setSetting('screenshotCooldown', settingsToSave.screenshotCooldown);
             await window.electron.ipcRenderer.db.setSetting('tempo', settingsToSave.tempo);
             await window.electron.ipcRenderer.db.setSetting('jira', settingsToSave.jira);
             await window.electron.ipcRenderer.db.setSetting('ai', settingsToSave.ai);
@@ -157,6 +160,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
                             minActivityDuration: dbSettings.minActivityDuration ?? defaultSettings.minActivityDuration,
                             activityGapThreshold: dbSettings.activityGapThreshold ?? defaultSettings.activityGapThreshold,
                             timeRoundingIncrement: dbSettings.timeRoundingIncrement ?? defaultSettings.timeRoundingIncrement,
+                            screenshotCooldown: dbSettings.screenshotCooldown ?? defaultSettings.screenshotCooldown,
                             tempo: {
                                 ...defaultSettings.tempo,
                                 ...(dbSettings.tempo || {})
@@ -373,6 +377,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             await window.electron.ipcRenderer.db.deleteSetting('minActivityDuration');
             await window.electron.ipcRenderer.db.deleteSetting('activityGapThreshold');
             await window.electron.ipcRenderer.db.deleteSetting('timeRoundingIncrement');
+            await window.electron.ipcRenderer.db.deleteSetting('screenshotCooldown');
             await window.electron.ipcRenderer.db.deleteSetting('tempo');
             await window.electron.ipcRenderer.db.deleteSetting('jira');
             await window.electron.ipcRenderer.db.deleteSetting('ai');
