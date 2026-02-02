@@ -1162,8 +1162,10 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
         };
 
         // Process screenshots one at a time to respect rate limits
+        // API limit is 10 requests per minute, so we need at least 6 seconds between requests
         let completed = 0;
-        const MAX_CONCURRENT = 2; // Process 2 at a time to balance speed and rate limits
+        const MAX_CONCURRENT = 1; // Process 1 at a time to respect strict rate limits
+        const RATE_LIMIT_DELAY_MS = 7000; // 7 seconds between requests (gives margin below 10/min limit)
         const queue = [...getFailedAnalysisScreenshots];
 
         const processOne = async (): Promise<void> => {
@@ -1211,9 +1213,9 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
             // Save progress after each batch to persist even if user navigates away
             saveBatchUpdates();
 
-            // Small delay between batches to respect rate limits
+            // Delay between requests to respect rate limits (10 requests/min max)
             if (queue.length > 0) {
-                await new Promise(resolve => setTimeout(resolve, 500));
+                await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY_MS));
             }
         }
 
