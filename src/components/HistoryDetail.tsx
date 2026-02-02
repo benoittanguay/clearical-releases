@@ -1161,59 +1161,77 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
             batchUpdates.clear();
         };
 
-        // Process screenshots one at a time to respect rate limits
-        // API limit is 10 requests per minute, so we need at least 6 seconds between requests
+        // Process screenshots in batches using the batch API
+        // Batching allows 10 screenshots per API call while respecting the 10 requests/min rate limit
         let completed = 0;
-        const MAX_CONCURRENT = 1; // Process 1 at a time to respect strict rate limits
-        const RATE_LIMIT_DELAY_MS = 7000; // 7 seconds between requests (gives margin below 10/min limit)
+        const RETRY_BATCH_SIZE = 10; // 10 screenshots per batch (single API call)
+        const RATE_LIMIT_DELAY_MS = 7000; // 7 seconds between batches (gives margin below 10/min limit)
         const queue = [...getFailedAnalysisScreenshots];
 
-        const processOne = async (): Promise<void> => {
-            const item = queue.shift();
-            if (!item) return;
+        const processBatch = async (batchItems: Array<{ path: string; timestamp: number }>) => {
+            console.log(`[HistoryDetail] Processing batch of ${batchItems.length} screenshots`);
 
-            const { path, timestamp } = item;
+            // Prepare batch inputs
+            const batchInputs = batchItems.map(item => ({
+                imagePath: item.path,
+                requestId: `retry-${item.timestamp}`
+            }));
+
             try {
-                console.log(`[HistoryDetail] Retrying analysis for: ${path.split('/').pop()}`);
                 // @ts-ignore
-                const result = await window.electron?.ipcRenderer?.analyzeScreenshot(path, `retry-${timestamp}`);
+                const result = await window.electron?.ipcRenderer?.analyzeScreenshotBatch(batchInputs);
 
-                if (result?.success && result.description && result.description !== FALLBACK_SCREENSHOT_DESCRIPTION) {
-                    console.log(`[HistoryDetail] ✅ Retry successful for: ${path.split('/').pop()}`);
+                if (result?.results) {
+                    for (let i = 0; i < result.results.length; i++) {
+                        const itemResult = result.results[i];
+                        const originalItem = batchItems[i];
 
-                    // Store the successful result for batch update
-                    batchUpdates.set(path, {
-                        description: result.description,
-                        visionData: {
-                            confidence: result.confidence,
-                            detectedText: result.detectedText,
-                            objects: result.objects,
-                            extraction: result.extraction
+                        if (itemResult?.success && itemResult.description && itemResult.description !== FALLBACK_SCREENSHOT_DESCRIPTION) {
+                            console.log(`[HistoryDetail] ✅ Retry successful for: ${originalItem.path.split('/').pop()}`);
+
+                            // Store the successful result for batch update
+                            batchUpdates.set(originalItem.path, {
+                                description: itemResult.description,
+                                visionData: {
+                                    confidence: itemResult.confidence,
+                                    detectedText: itemResult.detectedText,
+                                    objects: itemResult.objects,
+                                    extraction: itemResult.extraction
+                                }
+                            });
+                        } else {
+                            console.log(`[HistoryDetail] ⚠️ Retry failed for: ${originalItem.path.split('/').pop()}`, itemResult?.error);
                         }
-                    });
+
+                        completed++;
+                        setRetryProgress({ completed, total: getFailedAnalysisScreenshots.length });
+                    }
                 } else {
-                    console.log(`[HistoryDetail] ⚠️ Retry failed for: ${path.split('/').pop()}`, result?.error);
+                    // Batch call failed entirely
+                    console.error('[HistoryDetail] ❌ Batch analysis failed:', result?.error);
+                    for (const item of batchItems) {
+                        completed++;
+                        setRetryProgress({ completed, total: getFailedAnalysisScreenshots.length });
+                    }
                 }
             } catch (error) {
-                console.error(`[HistoryDetail] ❌ Retry error for: ${path.split('/').pop()}`, error);
+                console.error('[HistoryDetail] ❌ Batch retry error:', error);
+                for (const item of batchItems) {
+                    completed++;
+                    setRetryProgress({ completed, total: getFailedAnalysisScreenshots.length });
+                }
             }
-
-            completed++;
-            setRetryProgress({ completed, total: getFailedAnalysisScreenshots.length });
         };
 
-        // Process in batches
+        // Process in batches of RETRY_BATCH_SIZE
         while (queue.length > 0) {
-            const batch = [];
-            for (let i = 0; i < MAX_CONCURRENT && queue.length > 0; i++) {
-                batch.push(processOne());
-            }
-            await Promise.all(batch);
+            const batch = queue.splice(0, RETRY_BATCH_SIZE);
+            await processBatch(batch);
 
             // Save progress after each batch to persist even if user navigates away
             saveBatchUpdates();
 
-            // Delay between requests to respect rate limits (10 requests/min max)
+            // Delay between batches to respect rate limits (10 requests/min max)
             if (queue.length > 0) {
                 await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY_MS));
             }

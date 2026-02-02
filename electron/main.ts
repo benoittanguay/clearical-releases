@@ -995,6 +995,144 @@ ipcMain.handle('analyze-screenshot', async (event, imagePath: string, requestId?
     }
 });
 
+// Batch screenshot analysis handler - analyzes multiple screenshots in a single API call
+ipcMain.handle('analyze-screenshot-batch', async (event, inputs: Array<{
+    imagePath: string;
+    appName?: string;
+    windowTitle?: string;
+    requestId?: string;
+}>) => {
+    console.log(`[Main] analyze-screenshot-batch requested for ${inputs.length} screenshots`);
+
+    if (!inputs || inputs.length === 0) {
+        return { success: true, results: [] };
+    }
+
+    // Process each input to prepare for batch analysis
+    const batchInputs: Array<{
+        imagePath: string;
+        appName?: string;
+        windowTitle?: string;
+        requestId?: string;
+    }> = [];
+
+    const tempFiles: string[] = [];
+
+    for (const input of inputs) {
+        let analyzeImagePath = input.imagePath;
+
+        // Check if file exists
+        if (!fs.existsSync(input.imagePath)) {
+            console.log(`[Main] Image file not found: ${input.imagePath}`);
+            continue;
+        }
+
+        // Decrypt if encrypted
+        try {
+            if (isFileEncrypted(input.imagePath)) {
+                console.log(`[Main] Decrypting screenshot for batch: ${path.basename(input.imagePath)}`);
+                const decryptedData = await decryptFile(input.imagePath);
+                const originalFilename = path.basename(input.imagePath);
+                const tempPath = path.join(app.getPath('temp'), `batch_${Date.now()}_${originalFilename}`);
+                await fs.promises.writeFile(tempPath, decryptedData);
+                analyzeImagePath = tempPath;
+                tempFiles.push(tempPath);
+            }
+        } catch (decryptError) {
+            console.error(`[Main] Failed to decrypt screenshot: ${input.imagePath}`, decryptError);
+            // Continue with original path - might be unencrypted
+        }
+
+        // Parse app name and window title from filename if not provided
+        let appName = input.appName;
+        let windowTitle = input.windowTitle;
+
+        if (!appName || !windowTitle) {
+            try {
+                const filename = path.basename(analyzeImagePath, '.png');
+                if (filename.includes('|||')) {
+                    const parts = filename.split('|||');
+                    if (parts.length >= 3) {
+                        appName = appName || parts[1] || undefined;
+                        windowTitle = windowTitle || parts[2] || undefined;
+                    }
+                }
+            } catch (parseError) {
+                // Ignore parse errors
+            }
+        }
+
+        batchInputs.push({
+            imagePath: analyzeImagePath,
+            appName,
+            windowTitle,
+            requestId: input.requestId
+        });
+    }
+
+    if (batchInputs.length === 0) {
+        return {
+            success: false,
+            results: inputs.map(input => ({
+                imagePath: input.imagePath,
+                success: false,
+                description: 'Screenshot captured',
+                error: 'Failed to process image'
+            })),
+            error: 'All images failed processing'
+        };
+    }
+
+    try {
+        // Call the batch analysis method
+        const result = await aiService.analyzeScreenshotBatch(batchInputs);
+
+        console.log(`[Main] Batch analysis completed: ${result.results.filter(r => r.success).length}/${batchInputs.length} successful`);
+
+        // Map results back to original image paths (for encrypted files)
+        const finalResults = result.results.map((r, i) => {
+            const originalInput = inputs.find(input => {
+                const batchInput = batchInputs[i];
+                return batchInput && (
+                    input.imagePath === batchInput.imagePath ||
+                    path.basename(input.imagePath) === path.basename(batchInput.imagePath).replace(/^batch_\d+_/, '')
+                );
+            });
+
+            return {
+                ...r,
+                imagePath: originalInput?.imagePath || r.imagePath
+            };
+        });
+
+        return {
+            success: result.success,
+            results: finalResults
+        };
+    } catch (error) {
+        console.error('[Main] Batch analysis error:', error);
+        return {
+            success: false,
+            results: inputs.map(input => ({
+                imagePath: input.imagePath,
+                success: false,
+                description: 'Screenshot captured',
+                error: error instanceof Error ? error.message : 'Batch analysis failed'
+            })),
+            error: error instanceof Error ? error.message : 'Batch analysis failed'
+        };
+    } finally {
+        // Clean up temp files
+        for (const tempFile of tempFiles) {
+            try {
+                await fs.promises.unlink(tempFile);
+            } catch (cleanupError) {
+                console.warn(`[Main] Failed to cleanup temp file: ${tempFile}`, cleanupError);
+            }
+        }
+    }
+});
+
 // Permission Handlers
 
 /**

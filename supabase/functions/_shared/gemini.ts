@@ -265,6 +265,268 @@ export async function analyzeImage(
 }
 
 /**
+ * Image input for batch analysis
+ */
+export interface BatchImageInput {
+    base64: string;
+    mimeType: string;
+    appName?: string;
+    windowTitle?: string;
+}
+
+/**
+ * Result for a single image in batch analysis
+ */
+export interface BatchImageResult {
+    index: number;
+    success: boolean;
+    description?: string;
+    confidence?: number;
+    error?: string;
+}
+
+/**
+ * Response from batch image analysis
+ */
+export interface GeminiBatchResponse {
+    success: boolean;
+    results: BatchImageResult[];
+    error?: string;
+}
+
+/**
+ * Analyze multiple images in a single API call
+ * Includes retry logic with exponential backoff for rate limit errors
+ *
+ * @param images - Array of images with base64 data, mimeType, and optional context
+ */
+export async function analyzeImageBatch(
+    images: BatchImageInput[]
+): Promise<GeminiBatchResponse> {
+    const apiKey = Deno.env.get('GEMINI_API_KEY');
+    if (!apiKey) {
+        return {
+            success: false,
+            results: images.map((_, index) => ({
+                index,
+                success: false,
+                error: 'GEMINI_API_KEY not configured'
+            })),
+            error: 'GEMINI_API_KEY not configured'
+        };
+    }
+
+    if (images.length === 0) {
+        return { success: true, results: [] };
+    }
+
+    // Build parts array with all images and their context
+    const parts: GeminiPart[] = [];
+
+    // Add instruction text first
+    parts.push({
+        text: `Analyze the following ${images.length} screenshots and describe what the user is doing in each one. For each screenshot, provide a single, concise sentence (under 100 words) focusing on the specific task or activity visible, not general app descriptions.
+
+Respond with ONLY a JSON array containing exactly ${images.length} objects, one for each image in order. Each object should have:
+- "description": a concise activity description
+- "confidence": a number between 0 and 1 indicating your confidence
+
+Example response format:
+[
+  {"description": "Editing a React component in VS Code", "confidence": 0.95},
+  {"description": "Browsing GitHub pull requests", "confidence": 0.9}
+]
+
+Now analyze these ${images.length} screenshots:`
+    });
+
+    // Add each image with its context
+    for (let i = 0; i < images.length; i++) {
+        const img = images[i];
+
+        // Add image
+        parts.push({
+            inlineData: {
+                mimeType: img.mimeType,
+                data: img.base64,
+            }
+        });
+
+        // Add context for this image
+        let context = `\n\nImage ${i + 1}`;
+        if (img.appName || img.windowTitle) {
+            context += ' context:';
+            if (img.appName) context += ` Application: ${img.appName}`;
+            if (img.windowTitle) context += ` Window: ${img.windowTitle}`;
+        }
+        parts.push({ text: context });
+    }
+
+    const content: GeminiRequestContent = { parts };
+
+    const requestBody = JSON.stringify({
+        contents: [content],
+        generationConfig: {
+            temperature: 0.2,
+            maxOutputTokens: 2048, // Increased for multiple descriptions
+        },
+    });
+
+    let lastError = 'Unknown error';
+
+    for (let attempt = 0; attempt <= RETRY_CONFIG.maxRetries; attempt++) {
+        try {
+            const response = await fetch(`${GEMINI_API_URL}?key=${apiKey}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: requestBody,
+            });
+
+            if (response.ok) {
+                const data: GeminiAPIResponse = await response.json();
+
+                if (data.error) {
+                    return {
+                        success: false,
+                        results: images.map((_, index) => ({
+                            index,
+                            success: false,
+                            error: data.error!.message
+                        })),
+                        error: data.error.message
+                    };
+                }
+
+                if (!data.candidates || data.candidates.length === 0) {
+                    return {
+                        success: false,
+                        results: images.map((_, index) => ({
+                            index,
+                            success: false,
+                            error: 'No response from Gemini'
+                        })),
+                        error: 'No response from Gemini'
+                    };
+                }
+
+                const text = data.candidates[0].content.parts
+                    .map(part => part.text)
+                    .join('');
+
+                // Parse the JSON array response
+                const parsed = extractJsonFromResponse<Array<{ description: string; confidence?: number }>>(text);
+
+                if (!parsed || !Array.isArray(parsed)) {
+                    console.error('[Gemini] Failed to parse batch response as JSON array:', text);
+                    // Try to extract at least some descriptions from the text
+                    return {
+                        success: false,
+                        results: images.map((_, index) => ({
+                            index,
+                            success: false,
+                            error: 'Failed to parse response as JSON array'
+                        })),
+                        error: 'Failed to parse response as JSON array'
+                    };
+                }
+
+                // Map parsed results back to indices
+                const results: BatchImageResult[] = images.map((_, index) => {
+                    const result = parsed[index];
+                    if (result && result.description) {
+                        return {
+                            index,
+                            success: true,
+                            description: result.description,
+                            confidence: result.confidence ?? 0.8
+                        };
+                    } else {
+                        return {
+                            index,
+                            success: false,
+                            error: 'No description returned for this image'
+                        };
+                    }
+                });
+
+                // Check if at least some succeeded
+                const successCount = results.filter(r => r.success).length;
+                return {
+                    success: successCount > 0,
+                    results
+                };
+            }
+
+            // Handle non-OK response
+            const errorText = await response.text();
+            lastError = `Gemini API error: ${response.status}`;
+            console.error(`[Gemini] Batch API error (attempt ${attempt + 1}/${RETRY_CONFIG.maxRetries + 1}):`, response.status, errorText);
+
+            // Check if retryable
+            if (!RETRY_CONFIG.retryableStatusCodes.includes(response.status) || attempt >= RETRY_CONFIG.maxRetries) {
+                return {
+                    success: false,
+                    results: images.map((_, index) => ({
+                        index,
+                        success: false,
+                        error: lastError
+                    })),
+                    error: lastError
+                };
+            }
+
+            // Calculate delay with exponential backoff
+            const delayMs = Math.min(
+                RETRY_CONFIG.initialDelayMs * Math.pow(RETRY_CONFIG.backoffMultiplier, attempt),
+                RETRY_CONFIG.maxDelayMs
+            );
+
+            // Check for Retry-After header
+            const retryAfter = response.headers.get('Retry-After');
+            const actualDelay = retryAfter ? Math.max(parseInt(retryAfter, 10) * 1000, delayMs) : delayMs;
+
+            console.log(`[Gemini] Retrying batch request in ${actualDelay}ms...`);
+            await sleep(actualDelay);
+
+        } catch (error) {
+            lastError = error instanceof Error ? error.message : 'Unknown error';
+            console.error(`[Gemini] Batch request error (attempt ${attempt + 1}/${RETRY_CONFIG.maxRetries + 1}):`, error);
+
+            if (attempt >= RETRY_CONFIG.maxRetries) {
+                return {
+                    success: false,
+                    results: images.map((_, index) => ({
+                        index,
+                        success: false,
+                        error: lastError
+                    })),
+                    error: lastError
+                };
+            }
+
+            const delayMs = Math.min(
+                RETRY_CONFIG.initialDelayMs * Math.pow(RETRY_CONFIG.backoffMultiplier, attempt),
+                RETRY_CONFIG.maxDelayMs
+            );
+            console.log(`[Gemini] Retrying in ${delayMs}ms...`);
+            await sleep(delayMs);
+        }
+    }
+
+    return {
+        success: false,
+        results: images.map((_, index) => ({
+            index,
+            success: false,
+            error: lastError
+        })),
+        error: lastError
+    };
+}
+
+/**
  * Extract a JSON response from Gemini's text output
  * Handles cases where the response might have markdown code blocks
  */

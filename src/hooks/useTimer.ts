@@ -181,7 +181,14 @@ export function useTimer() {
     // Analysis queue for concurrency limiting
     const analysisQueue = useRef<Array<{path: string, timestamp: number}>>([]);
     const activeAnalysisCount = useRef<number>(0);
-    const MAX_CONCURRENT_ANALYSES = 3;
+    const MAX_CONCURRENT_ANALYSES = 1; // Use 1 for batch processing
+
+    // Batch analysis configuration
+    const SESSION_BATCH_SIZE = 5; // Max screenshots per batch for session analysis
+    const SESSION_BATCH_TIMEOUT_MS = 10000; // Flush batch after 10 seconds
+    const pendingBatch = useRef<Array<{path: string, timestamp: number}>>([]);
+    const batchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const isBatchProcessing = useRef<boolean>(false);
 
     // Rate limit and backoff tracking
     const consecutiveFailures = useRef<number>(0);
@@ -338,147 +345,225 @@ export function useTimer() {
             }
         };
 
-        const processNextAnalysis = () => {
+        // Process a single analysis result and update state
+        const handleAnalysisResult = (
+            path: string,
+            analysisResult: { success: boolean; description?: string; confidence?: number; detectedText?: string[]; objects?: string[]; extraction?: any; error?: string; isRateLimited?: boolean } | null
+        ) => {
+            if (analysisResult?.success && analysisResult.description) {
+                // Success - reset failure tracking
+                consecutiveFailures.current = 0;
+
+                // Store in refs (always - this ensures data is captured even if activity not in state yet)
+                currentActivityScreenshotDescriptions.current[path] = analysisResult.description;
+                currentActivityScreenshotVisionData.current[path] = {
+                    confidence: analysisResult.confidence,
+                    detectedText: analysisResult.detectedText,
+                    objects: analysisResult.objects,
+                    extraction: analysisResult.extraction
+                };
+
+                console.log('[Renderer] ✅ AI analysis completed:', {
+                    file: path.split('/').pop(),
+                    confidence: analysisResult.confidence,
+                    descriptionLength: analysisResult.description.length,
+                    hasExtraction: !!analysisResult.extraction
+                });
+
+                // Notify context that analysis completed successfully
+                completeAnalysis(path);
+
+                // Also update windowActivity state to trigger re-render (if activity exists in state)
+                setWindowActivity(prev => {
+                    // Find if this screenshot belongs to any existing activity
+                    return prev.map(activity => {
+                        if (activity.screenshotPaths?.includes(path)) {
+                            const existingDescriptions = activity.screenshotDescriptions || {};
+                            const newDescriptions: { [path: string]: string } = Object.assign(
+                                {},
+                                existingDescriptions,
+                                { [path]: analysisResult.description }
+                            );
+
+                            // Store raw Vision Framework data
+                            const existingVisionData = activity.screenshotVisionData || {};
+                            const newVisionData: { [path: string]: VisionFrameworkRawData } = Object.assign(
+                                {},
+                                existingVisionData,
+                                { [path]: {
+                                    confidence: analysisResult.confidence,
+                                    detectedText: analysisResult.detectedText,
+                                    objects: analysisResult.objects,
+                                    extraction: analysisResult.extraction
+                                }}
+                            );
+
+                            return {
+                                ...activity,
+                                screenshotDescriptions: newDescriptions,
+                                screenshotVisionData: newVisionData
+                            };
+                        }
+                        return activity;
+                    });
+                });
+            } else {
+                // Track consecutive failures
+                consecutiveFailures.current++;
+                console.log(`[Renderer] ⚠️ AI analysis failed (consecutive failures: ${consecutiveFailures.current})`, analysisResult);
+
+                // Check if this is an auth error
+                const errorMsg = analysisResult?.error || 'Analysis failed';
+                if (errorMsg.toLowerCase().includes('not authenticated') ||
+                    errorMsg.toLowerCase().includes('session expired') ||
+                    errorMsg.toLowerCase().includes('sign in')) {
+                    console.error('[Renderer] ❌ AI analysis failed due to authentication issue');
+                    console.error('[Renderer] User needs to sign in from Settings to enable AI features');
+                }
+
+                // Check if this looks like a rate limit error
+                const isRateLimited = analysisResult?.isRateLimited ||
+                    errorMsg.toLowerCase().includes('rate limit') ||
+                    errorMsg.toLowerCase().includes('429') ||
+                    errorMsg.toLowerCase().includes('too many requests');
+
+                // Pause queue if too many consecutive failures
+                if (consecutiveFailures.current >= MAX_CONSECUTIVE_FAILURES_BEFORE_PAUSE) {
+                    queuePausedUntil.current = Date.now() + QUEUE_PAUSE_DURATION_MS;
+                    console.log(`[Renderer] ⏸️ Pausing queue for ${QUEUE_PAUSE_DURATION_MS / 1000}s after ${consecutiveFailures.current} consecutive failures`);
+                } else if (isRateLimited) {
+                    // Add a shorter delay for rate limit errors even before max failures
+                    const delayMs = FAILURE_BACKOFF_BASE_MS * Math.pow(2, consecutiveFailures.current - 1);
+                    queuePausedUntil.current = Date.now() + delayMs;
+                    console.log(`[Renderer] ⏳ Rate limited, adding ${delayMs}ms delay before next request`);
+                }
+
+                // Notify context that analysis failed
+                failAnalysis(path, errorMsg);
+
+                currentActivityScreenshotDescriptions.current[path] = FALLBACK_SCREENSHOT_DESCRIPTION;
+
+                // Update state with fallback description
+                setWindowActivity(prev => {
+                    return prev.map(activity => {
+                        if (activity.screenshotPaths?.includes(path)) {
+                            const existingDescriptions = activity.screenshotDescriptions || {};
+                            const newDescriptions: { [path: string]: string } = Object.assign(
+                                {},
+                                existingDescriptions,
+                                { [path]: FALLBACK_SCREENSHOT_DESCRIPTION }
+                            );
+                            return {
+                                ...activity,
+                                screenshotDescriptions: newDescriptions
+                            };
+                        }
+                        return activity;
+                    });
+                });
+            }
+        };
+
+        // Flush the pending batch and process all items
+        const flushBatch = async () => {
+            // Clear the timeout
+            if (batchTimeoutRef.current) {
+                clearTimeout(batchTimeoutRef.current);
+                batchTimeoutRef.current = null;
+            }
+
+            // Get the items to process
+            const itemsToProcess = [...pendingBatch.current];
+            pendingBatch.current = [];
+
+            if (itemsToProcess.length === 0) {
+                return;
+            }
+
             // Check if queue is paused due to rate limiting
             const now = Date.now();
             if (queuePausedUntil.current > now) {
                 const remainingPause = Math.ceil((queuePausedUntil.current - now) / 1000);
                 console.log(`[Renderer] ⏸️ Queue paused for ${remainingPause}s due to rate limiting`);
-                // Schedule retry after pause expires
-                setTimeout(() => processNextAnalysis(), queuePausedUntil.current - now + 100);
+                // Re-queue items and schedule retry
+                pendingBatch.current.push(...itemsToProcess);
+                batchTimeoutRef.current = setTimeout(() => flushBatch(), queuePausedUntil.current - now + 100);
                 return;
             }
 
-            // Check if we can start another analysis
-            if (activeAnalysisCount.current >= MAX_CONCURRENT_ANALYSES) {
-                console.log(`[Renderer] 🚦 Max concurrent analyses (${MAX_CONCURRENT_ANALYSES}) reached, waiting...`);
+            // Check if already processing a batch
+            if (isBatchProcessing.current) {
+                console.log('[Renderer] 🚦 Batch processing already in progress, re-queuing items');
+                pendingBatch.current.push(...itemsToProcess);
                 return;
             }
 
-            // Get next item from queue
-            const nextItem = analysisQueue.current.shift();
-            if (!nextItem) {
-                console.log('[Renderer] 📭 Analysis queue empty');
-                return;
-            }
-
-            const { path, timestamp } = nextItem;
-            console.log(`[Renderer] 🔍 Starting AI analysis for: ${path.split('/').pop()} (active: ${activeAnalysisCount.current + 1}/${MAX_CONCURRENT_ANALYSES}, queue: ${analysisQueue.current.length})`);
-
-            // Increment active count
+            isBatchProcessing.current = true;
             activeAnalysisCount.current++;
 
-            // Notify context that analysis is starting
-            startAnalysis(path);
+            console.log(`[Renderer] 📦 Processing batch of ${itemsToProcess.length} screenshots`);
 
-            // Create and track the promise
-            const analysisPromise = (async () => {
+            // Notify context that analyses are starting
+            for (const item of itemsToProcess) {
+                startAnalysis(item.path);
+            }
+
+            // Create a combined promise for the batch
+            const batchPromise = (async () => {
                 try {
+                    // Prepare batch inputs
+                    const batchInputs = itemsToProcess.map(item => ({
+                        imagePath: item.path,
+                        requestId: `${item.timestamp}`
+                    }));
+
                     // @ts-ignore
-                    const analysisResult = await window.electron.ipcRenderer.analyzeScreenshot(path, `${timestamp}`);
+                    const batchResult = await window.electron.ipcRenderer.analyzeScreenshotBatch(batchInputs);
 
-                    if (analysisResult?.success && analysisResult.description) {
-                        // Success - reset failure tracking
-                        consecutiveFailures.current = 0;
+                    if (batchResult?.results) {
+                        // Process each result
+                        for (let i = 0; i < itemsToProcess.length; i++) {
+                            const item = itemsToProcess[i];
+                            const result = batchResult.results[i];
 
-                        // Store in refs (always - this ensures data is captured even if activity not in state yet)
-                        currentActivityScreenshotDescriptions.current[path] = analysisResult.description;
-                        currentActivityScreenshotVisionData.current[path] = {
-                            confidence: analysisResult.confidence,
-                            detectedText: analysisResult.detectedText,
-                            objects: analysisResult.objects,
-                            extraction: analysisResult.extraction
-                        };
+                            handleAnalysisResult(item.path, result);
 
-                        console.log('[Renderer] ✅ AI analysis completed:', {
-                            file: path.split('/').pop(),
-                            confidence: analysisResult.confidence,
-                            descriptionLength: analysisResult.description.length,
-                            hasExtraction: !!analysisResult.extraction
-                        });
-
-                        // Notify context that analysis completed successfully
-                        completeAnalysis(path);
-
-                        // Also update windowActivity state to trigger re-render (if activity exists in state)
-                        setWindowActivity(prev => {
-                            // Find if this screenshot belongs to any existing activity
-                            return prev.map(activity => {
-                                if (activity.screenshotPaths?.includes(path)) {
-                                    const existingDescriptions = activity.screenshotDescriptions || {};
-                                    const newDescriptions: { [path: string]: string } = Object.assign(
-                                        {},
-                                        existingDescriptions,
-                                        { [path]: analysisResult.description }
-                                    );
-
-                                    // Store raw Vision Framework data
-                                    const existingVisionData = activity.screenshotVisionData || {};
-                                    const newVisionData: { [path: string]: VisionFrameworkRawData } = Object.assign(
-                                        {},
-                                        existingVisionData,
-                                        { [path]: {
-                                            confidence: analysisResult.confidence,
-                                            detectedText: analysisResult.detectedText,
-                                            objects: analysisResult.objects,
-                                            extraction: analysisResult.extraction
-                                        }}
-                                    );
-
-                                    return {
-                                        ...activity,
-                                        screenshotDescriptions: newDescriptions,
-                                        screenshotVisionData: newVisionData
-                                    };
-                                }
-                                return activity;
-                            });
-                        });
+                            // Remove from pending analyses
+                            pendingAnalyses.current.delete(item.path);
+                        }
                     } else {
-                        // Track consecutive failures
-                        consecutiveFailures.current++;
-                        console.log(`[Renderer] ⚠️ AI analysis failed (consecutive failures: ${consecutiveFailures.current})`, analysisResult);
-
-                        // Check if this is an auth error
-                        const errorMsg = analysisResult?.error || 'Analysis failed';
-                        if (errorMsg.toLowerCase().includes('not authenticated') ||
-                            errorMsg.toLowerCase().includes('session expired') ||
-                            errorMsg.toLowerCase().includes('sign in')) {
-                            console.error('[Renderer] ❌ AI analysis failed due to authentication issue');
-                            console.error('[Renderer] User needs to sign in from Settings to enable AI features');
+                        // Batch call failed entirely
+                        console.error('[Renderer] ❌ Batch analysis failed:', batchResult?.error);
+                        for (const item of itemsToProcess) {
+                            handleAnalysisResult(item.path, { success: false, error: batchResult?.error || 'Batch analysis failed' });
+                            pendingAnalyses.current.delete(item.path);
                         }
+                    }
+                } catch (error) {
+                    // Track consecutive failures for network errors too
+                    consecutiveFailures.current++;
+                    console.error(`[Renderer] ❌ Batch AI analysis error (consecutive failures: ${consecutiveFailures.current}):`, error);
 
-                        // Check if this looks like a rate limit error
-                        const isRateLimited = analysisResult?.isRateLimited ||
-                            errorMsg.toLowerCase().includes('rate limit') ||
-                            errorMsg.toLowerCase().includes('429') ||
-                            errorMsg.toLowerCase().includes('too many requests');
+                    // Pause queue if too many consecutive failures
+                    if (consecutiveFailures.current >= MAX_CONSECUTIVE_FAILURES_BEFORE_PAUSE) {
+                        queuePausedUntil.current = Date.now() + QUEUE_PAUSE_DURATION_MS;
+                        console.log(`[Renderer] ⏸️ Pausing queue for ${QUEUE_PAUSE_DURATION_MS / 1000}s after ${consecutiveFailures.current} consecutive failures`);
+                    }
 
-                        // Pause queue if too many consecutive failures
-                        if (consecutiveFailures.current >= MAX_CONSECUTIVE_FAILURES_BEFORE_PAUSE) {
-                            queuePausedUntil.current = Date.now() + QUEUE_PAUSE_DURATION_MS;
-                            console.log(`[Renderer] ⏸️ Pausing queue for ${QUEUE_PAUSE_DURATION_MS / 1000}s after ${consecutiveFailures.current} consecutive failures`);
-                        } else if (isRateLimited) {
-                            // Add a shorter delay for rate limit errors even before max failures
-                            const delayMs = FAILURE_BACKOFF_BASE_MS * Math.pow(2, consecutiveFailures.current - 1);
-                            queuePausedUntil.current = Date.now() + delayMs;
-                            console.log(`[Renderer] ⏳ Rate limited, adding ${delayMs}ms delay before next request`);
-                        }
+                    // Handle error for all items in batch
+                    for (const item of itemsToProcess) {
+                        failAnalysis(item.path, error instanceof Error ? error.message : 'Unknown error');
+                        currentActivityScreenshotDescriptions.current[item.path] = FALLBACK_SCREENSHOT_DESCRIPTION;
+                        pendingAnalyses.current.delete(item.path);
 
-                        // Notify context that analysis failed
-                        failAnalysis(path, errorMsg);
-
-                        currentActivityScreenshotDescriptions.current[path] = FALLBACK_SCREENSHOT_DESCRIPTION;
-
-                        // Update state with fallback description
                         setWindowActivity(prev => {
                             return prev.map(activity => {
-                                if (activity.screenshotPaths?.includes(path)) {
+                                if (activity.screenshotPaths?.includes(item.path)) {
                                     const existingDescriptions = activity.screenshotDescriptions || {};
                                     const newDescriptions: { [path: string]: string } = Object.assign(
                                         {},
                                         existingDescriptions,
-                                        { [path]: FALLBACK_SCREENSHOT_DESCRIPTION }
+                                        { [item.path]: FALLBACK_SCREENSHOT_DESCRIPTION }
                                     );
                                     return {
                                         ...activity,
@@ -489,66 +574,47 @@ export function useTimer() {
                             });
                         });
                     }
-                } catch (error) {
-                    // Track consecutive failures for network errors too
-                    consecutiveFailures.current++;
-                    console.error(`[Renderer] ❌ AI analysis error (consecutive failures: ${consecutiveFailures.current}):`, error);
-
-                    // Pause queue if too many consecutive failures
-                    if (consecutiveFailures.current >= MAX_CONSECUTIVE_FAILURES_BEFORE_PAUSE) {
-                        queuePausedUntil.current = Date.now() + QUEUE_PAUSE_DURATION_MS;
-                        console.log(`[Renderer] ⏸️ Pausing queue for ${QUEUE_PAUSE_DURATION_MS / 1000}s after ${consecutiveFailures.current} consecutive failures`);
-                    }
-
-                    // Notify context that analysis encountered an error
-                    failAnalysis(path, error instanceof Error ? error.message : 'Unknown error');
-
-                    currentActivityScreenshotDescriptions.current[path] = FALLBACK_SCREENSHOT_DESCRIPTION;
-
-                    // Update state with fallback description
-                    setWindowActivity(prev => {
-                        return prev.map(activity => {
-                            if (activity.screenshotPaths?.includes(path)) {
-                                const existingDescriptions = activity.screenshotDescriptions || {};
-                                const newDescriptions: { [path: string]: string } = Object.assign(
-                                    {},
-                                    existingDescriptions,
-                                    { [path]: FALLBACK_SCREENSHOT_DESCRIPTION }
-                                );
-                                return {
-                                    ...activity,
-                                    screenshotDescriptions: newDescriptions
-                                };
-                            }
-                            return activity;
-                        });
-                    });
                 } finally {
-                    // Decrement active count
                     activeAnalysisCount.current--;
+                    isBatchProcessing.current = false;
+                    console.log(`[Renderer] 🏁 Batch completed (pending: ${pendingBatch.current.length})`);
 
-                    // Remove from pending analyses when complete
-                    pendingAnalyses.current.delete(path);
-
-                    console.log(`[Renderer] 🏁 Analysis completed (active: ${activeAnalysisCount.current}/${MAX_CONCURRENT_ANALYSES}, queue: ${analysisQueue.current.length})`);
-
-                    // Process next item in queue
-                    processNextAnalysis();
+                    // Process any items that accumulated while we were processing
+                    if (pendingBatch.current.length >= SESSION_BATCH_SIZE) {
+                        flushBatch();
+                    } else if (pendingBatch.current.length > 0) {
+                        // Restart the timeout for remaining items
+                        batchTimeoutRef.current = setTimeout(() => flushBatch(), SESSION_BATCH_TIMEOUT_MS);
+                    }
                 }
             })();
 
-            // Store the promise
-            pendingAnalyses.current.set(path, analysisPromise);
+            // Track the batch promise for all items
+            for (const item of itemsToProcess) {
+                pendingAnalyses.current.set(item.path, batchPromise);
+            }
         };
 
         const analyzeScreenshotAsync = (path: string, timestamp: number) => {
-            console.log(`[Renderer] 📥 Queuing AI analysis for: ${path.split('/').pop()}`);
+            console.log(`[Renderer] 📥 Queuing AI analysis for batch: ${path.split('/').pop()}`);
 
-            // Add to queue
-            analysisQueue.current.push({ path, timestamp });
+            // Add to pending batch
+            pendingBatch.current.push({ path, timestamp });
 
-            // Try to process immediately
-            processNextAnalysis();
+            // Check if batch is full
+            if (pendingBatch.current.length >= SESSION_BATCH_SIZE) {
+                console.log(`[Renderer] 📦 Batch full (${pendingBatch.current.length}/${SESSION_BATCH_SIZE}), flushing...`);
+                flushBatch();
+            } else {
+                // Start or restart the timeout
+                if (batchTimeoutRef.current) {
+                    clearTimeout(batchTimeoutRef.current);
+                }
+                batchTimeoutRef.current = setTimeout(() => {
+                    console.log(`[Renderer] ⏰ Batch timeout (${pendingBatch.current.length} items), flushing...`);
+                    flushBatch();
+                }, SESSION_BATCH_TIMEOUT_MS);
+            }
         };
 
         const pollWindow = async () => {
@@ -794,6 +860,12 @@ export function useTimer() {
         activeAnalysisCount.current = 0; // Reset active count
         consecutiveFailures.current = 0; // Reset failure tracking
         queuePausedUntil.current = 0; // Clear any queue pause
+        pendingBatch.current = []; // Clear pending batch
+        isBatchProcessing.current = false; // Reset batch processing flag
+        if (batchTimeoutRef.current) {
+            clearTimeout(batchTimeoutRef.current);
+            batchTimeoutRef.current = null;
+        }
     }, []);
 
     // Store state values in refs for use in memoized callbacks without dependencies
@@ -838,6 +910,68 @@ export function useTimer() {
         setIsRunning(false);
         setIsPaused(false);
         const now = Date.now();
+
+        // Flush any pending batch before finalizing
+        if (pendingBatch.current.length > 0) {
+            console.log(`[Renderer] 📦 Flushing ${pendingBatch.current.length} pending screenshots before stop...`);
+            // Clear the batch timeout
+            if (batchTimeoutRef.current) {
+                clearTimeout(batchTimeoutRef.current);
+                batchTimeoutRef.current = null;
+            }
+            // Process pending batch items
+            const itemsToProcess = [...pendingBatch.current];
+            pendingBatch.current = [];
+
+            // Prepare batch inputs
+            const batchInputs = itemsToProcess.map(item => ({
+                imagePath: item.path,
+                requestId: `${item.timestamp}`
+            }));
+
+            try {
+                // Notify context that analyses are starting
+                for (const item of itemsToProcess) {
+                    startAnalysis(item.path);
+                }
+
+                // @ts-ignore
+                const batchResult = await window.electron?.ipcRenderer?.analyzeScreenshotBatch(batchInputs);
+
+                if (batchResult?.results) {
+                    for (let i = 0; i < itemsToProcess.length; i++) {
+                        const item = itemsToProcess[i];
+                        const result = batchResult.results[i];
+
+                        if (result?.success && result.description) {
+                            currentActivityScreenshotDescriptions.current[item.path] = result.description;
+                            currentActivityScreenshotVisionData.current[item.path] = {
+                                confidence: result.confidence,
+                                detectedText: result.detectedText,
+                                objects: result.objects,
+                                extraction: result.extraction
+                            };
+                            completeAnalysis(item.path);
+                        } else {
+                            currentActivityScreenshotDescriptions.current[item.path] = FALLBACK_SCREENSHOT_DESCRIPTION;
+                            failAnalysis(item.path, result?.error || 'Analysis failed');
+                        }
+                    }
+                } else {
+                    // Batch failed, use fallbacks
+                    for (const item of itemsToProcess) {
+                        currentActivityScreenshotDescriptions.current[item.path] = FALLBACK_SCREENSHOT_DESCRIPTION;
+                        failAnalysis(item.path, batchResult?.error || 'Batch analysis failed');
+                    }
+                }
+            } catch (error) {
+                console.error('[Renderer] Error flushing pending batch on stop:', error);
+                for (const item of itemsToProcess) {
+                    currentActivityScreenshotDescriptions.current[item.path] = FALLBACK_SCREENSHOT_DESCRIPTION;
+                    failAnalysis(item.path, error instanceof Error ? error.message : 'Unknown error');
+                }
+            }
+        }
 
         // Wait for all pending AI analyses to complete before finalizing (with timeout)
         const pendingCount = pendingAnalyses.current.size;
@@ -1082,6 +1216,12 @@ export function useTimer() {
         activeAnalysisCount.current = 0; // Reset active count
         consecutiveFailures.current = 0; // Reset failure tracking
         queuePausedUntil.current = 0; // Clear any queue pause
+        pendingBatch.current = []; // Clear pending batch
+        isBatchProcessing.current = false; // Reset batch processing flag
+        if (batchTimeoutRef.current) {
+            clearTimeout(batchTimeoutRef.current);
+            batchTimeoutRef.current = null;
+        }
     }, []);
 
     const formatTime = (ms: number) => {
