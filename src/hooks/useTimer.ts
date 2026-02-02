@@ -43,7 +43,49 @@ const BROWSER_BUNDLE_IDS = [
     'com.microsoft.edgemac',
     'com.brave.Browser',
     'com.operasoftware.Opera',
+    'company.thebrowser.Browser', // Arc
 ];
+
+// Browser title suffixes for profile extraction
+// Format: bundleId -> suffix that appears before the profile name
+const BROWSER_TITLE_SUFFIXES: Record<string, string> = {
+    'com.google.Chrome': 'Google Chrome',
+    'com.brave.Browser': 'Brave',
+    'org.mozilla.firefox': 'Mozilla Firefox',
+    'com.microsoft.edgemac': 'Microsoft Edge',
+    'com.apple.Safari': 'Safari',
+    'com.operasoftware.Opera': 'Opera',
+    'company.thebrowser.Browser': 'Arc',
+};
+
+/**
+ * Extract browser profile name from window title.
+ * Browser titles typically follow the format: "Page Title - Browser Name" or "Page Title - Browser Name - Profile Name"
+ * Returns the profile name if found, null otherwise.
+ */
+function extractBrowserProfile(windowTitle: string, bundleId: string): string | null {
+    const browserSuffix = BROWSER_TITLE_SUFFIXES[bundleId];
+    if (!browserSuffix) return null;
+
+    // Split by common separators: " - ", " – ", " — "
+    const parts = windowTitle.split(/\s[-–—]\s/);
+    if (parts.length < 2) return null;
+
+    // Find the browser name in the parts
+    const browserIndex = parts.findIndex(part => part.trim() === browserSuffix);
+    if (browserIndex === -1) return null;
+
+    // If there's a part after the browser name, that's the profile
+    if (browserIndex < parts.length - 1) {
+        const profileName = parts[browserIndex + 1].trim();
+        // Ignore if it looks like a default profile indicator
+        if (profileName && profileName !== 'Default' && profileName !== 'Person 1') {
+            return profileName;
+        }
+    }
+
+    return null;
+}
 
 /**
  * Extract a stable identifier from a window title for activity grouping.
@@ -91,7 +133,8 @@ function extractStableIdentifier(windowTitle: string): string | null {
 
 /**
  * Generate entity key for screenshot cooldown tracking.
- * Browsers: bundleId:stableIdentifier (e.g., "com.google.Chrome:github.com")
+ * Browsers with profile: bundleId:profile:stableIdentifier (e.g., "com.google.Chrome:Work:github.com")
+ * Browsers without profile: bundleId:stableIdentifier (e.g., "com.google.Chrome:github.com")
  * Non-browsers: bundleId or appName
  */
 function getScreenshotCooldownKey(
@@ -101,16 +144,27 @@ function getScreenshotCooldownKey(
 ): string {
     const isBrowser = BROWSER_BUNDLE_IDS.includes(bundleId || '');
 
-    if (isBrowser) {
+    if (isBrowser && bundleId) {
         const stableIdentifier = extractStableIdentifier(windowTitle);
+        const profile = extractBrowserProfile(windowTitle, bundleId);
+
+        // Build key with optional profile
+        let key = bundleId;
+        if (profile) {
+            key += `:${profile}`;
+        }
+        if (stableIdentifier) {
+            key += `:${stableIdentifier}`;
+        }
+
         console.log(`[Renderer] 🔑 Browser key generation:`, {
             windowTitle,
             extractedIdentifier: stableIdentifier,
-            resultKey: stableIdentifier ? `${bundleId || appName}:${stableIdentifier}` : bundleId || appName
+            extractedProfile: profile,
+            resultKey: key
         });
-        if (stableIdentifier) {
-            return `${bundleId || appName}:${stableIdentifier}`;
-        }
+
+        return key;
     }
 
     return bundleId || appName;
@@ -241,7 +295,8 @@ export function useTimer() {
         const INTERVAL_SCREENSHOT_TIME = 2 * 60 * 1000; // 2 minutes - screenshot if no window change
         const WINDOW_POLL_INTERVAL = 1 * 1000; // 1 second for better window change detection
         const MIN_SCREENSHOT_INTERVAL = 5 * 1000; // Minimum 5 seconds between screenshots
-        const PER_ENTITY_COOLDOWN = 2 * 60 * 1000; // 2 minutes per-entity cooldown
+        // Use configurable cooldown from settings (default 2 minutes)
+        const PER_ENTITY_COOLDOWN = settings.screenshotCooldown ?? (2 * 60 * 1000);
 
         const captureScreenshotForCurrentWindow = async (
             reason: string,
@@ -801,7 +856,7 @@ export function useTimer() {
             if (screenshotIntervalRef.current) clearInterval(screenshotIntervalRef.current);
             if (windowPollRef.current) clearInterval(windowPollRef.current);
         };
-    }, [isRunning, isPaused, startTime]); // Note: windowActivity intentionally excluded to prevent interval thrashing
+    }, [isRunning, isPaused, startTime, settings.screenshotCooldown]); // Note: windowActivity intentionally excluded to prevent interval thrashing
 
     const checkPermissions = useCallback(async (): Promise<PermissionCheckResult> => {
         try {
