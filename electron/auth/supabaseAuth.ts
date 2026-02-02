@@ -65,6 +65,11 @@ export class SupabaseAuthService {
     // Callback for notifying dependent services when session is refreshed
     private onSessionRefreshCallback: ((session: AuthSession) => void) | null = null;
 
+    // Mutex to prevent concurrent refresh attempts (race condition fix)
+    // When multiple callers try to refresh simultaneously, only one refresh happens
+    // and all callers receive the same result
+    private refreshPromise: Promise<boolean> | null = null;
+
     constructor() {
         // Session file stored in app data directory
         const userDataPath = app.getPath('userData');
@@ -425,9 +430,43 @@ export class SupabaseAuthService {
     }
 
     /**
-     * Refresh session using refresh token
+     * Refresh session using refresh token.
+     *
+     * IMPORTANT: This method uses a mutex to prevent concurrent refresh attempts.
+     * When multiple callers try to refresh simultaneously (e.g., background refresh +
+     * AIService + multiple screenshot analyses), only one actual refresh happens.
+     * All callers receive the same result from the single refresh operation.
+     *
+     * This prevents a race condition where:
+     * 1. First caller exchanges refresh token for new tokens (Supabase rotates the token)
+     * 2. Second concurrent caller uses the OLD (now invalid) refresh token
+     * 3. Second call fails with "invalid" error, triggering clearSession()
+     * 4. User gets unexpectedly logged out
      */
     async refreshSession(): Promise<boolean> {
+        // If a refresh is already in progress, wait for it instead of starting a new one
+        // This prevents the race condition where concurrent refreshes invalidate each other
+        if (this.refreshPromise) {
+            console.log('[SupabaseAuth] Refresh already in progress, waiting for existing refresh...');
+            return this.refreshPromise;
+        }
+
+        // Start the actual refresh and store the promise
+        this.refreshPromise = this.doRefreshSession();
+
+        try {
+            return await this.refreshPromise;
+        } finally {
+            // Clear the mutex when done (success or failure)
+            this.refreshPromise = null;
+        }
+    }
+
+    /**
+     * Internal method that performs the actual token refresh.
+     * Should only be called via refreshSession() which handles the mutex.
+     */
+    private async doRefreshSession(): Promise<boolean> {
         if (!this.supabase) {
             console.error('[SupabaseAuth] Cannot refresh: Supabase client not initialized');
             return false;
