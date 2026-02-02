@@ -70,16 +70,16 @@ export class RecordingWidgetManager {
             }
         });
 
-        // Handle minimize request from widget
+        // Handle minimize request from widget - destroy window to prevent blocking clicks
         ipcMain.on('widget:minimize', () => {
             console.log('[RecordingWidgetManager] Minimize requested from widget');
-            this.hide();
+            this.close();
         });
 
-        // Handle hide request from widget (with animation)
+        // Handle hide request from widget (after animation completes) - destroy window
         ipcMain.handle('widget:hide', async () => {
-            console.log('[RecordingWidgetManager] Hide requested from widget');
-            this.hide();
+            console.log('[RecordingWidgetManager] Hide requested from widget - destroying window');
+            this.close();
             return { success: true };
         });
 
@@ -118,13 +118,13 @@ export class RecordingWidgetManager {
             if (this.onPromptDismissedCallback) {
                 try {
                     this.onPromptDismissedCallback();
-                    return { success: true };
                 } catch (error) {
                     console.error('[RecordingWidgetManager] Error in prompt dismissed callback:', error);
-                    return { success: false, error: String(error) };
                 }
             }
-            return { success: false, error: 'No callback registered' };
+            // Always destroy window after animation completed (IPC called after animation timeout)
+            this.close();
+            return { success: true };
         });
 
         // Handle working hours prompt accepted from widget
@@ -148,13 +148,13 @@ export class RecordingWidgetManager {
             if (this.onWorkingHoursSnoozedCallback) {
                 try {
                     this.onWorkingHoursSnoozedCallback();
-                    return { success: true };
                 } catch (error) {
                     console.error('[RecordingWidgetManager] Error in working hours snoozed callback:', error);
-                    return { success: false, error: String(error) };
                 }
             }
-            return { success: false, error: 'No callback registered' };
+            // Always destroy window after animation completed (IPC called after animation timeout)
+            this.close();
+            return { success: true };
         });
 
         // Handle working hours day off from widget
@@ -163,13 +163,13 @@ export class RecordingWidgetManager {
             if (this.onWorkingHoursDayOffCallback) {
                 try {
                     this.onWorkingHoursDayOffCallback();
-                    return { success: true };
                 } catch (error) {
                     console.error('[RecordingWidgetManager] Error in working hours day off callback:', error);
-                    return { success: false, error: String(error) };
                 }
             }
-            return { success: false, error: 'No callback registered' };
+            // Always destroy window after animation completed (IPC called after animation timeout)
+            this.close();
+            return { success: true };
         });
 
         console.log('[RecordingWidgetManager] IPC handlers registered');
@@ -319,16 +319,6 @@ export class RecordingWidgetManager {
     }
 
     /**
-     * Hide the recording widget
-     */
-    public hide(): void {
-        if (this.widgetWindow && !this.widgetWindow.isDestroyed()) {
-            this.widgetWindow.hide();
-        }
-        this.isShowing = false;
-    }
-
-    /**
      * Close and destroy the recording widget
      */
     public close(): void {
@@ -373,24 +363,46 @@ export class RecordingWidgetManager {
 
     /**
      * Send meeting-ended prompt to widget (instead of system dialog)
+     * Creates a new window if user had hidden/dismissed the widget during recording
      */
     public sendMeetingEndedPrompt(entryId: string, silenceDuration: number): void {
-        if (this.widgetWindow && !this.widgetWindow.isDestroyed()) {
-            console.log('[RecordingWidgetManager] Sending meeting-ended prompt to widget');
+        console.log('[RecordingWidgetManager] sendMeetingEndedPrompt called');
 
-            // Show the window if it was hidden (user may have dismissed it during recording)
+        // Helper to send the prompt message
+        const sendPromptMessage = () => {
+            if (this.widgetWindow && !this.widgetWindow.isDestroyed()) {
+                console.log('[RecordingWidgetManager] Sending meeting-ended prompt message to widget');
+                this.widgetWindow.webContents.send('widget:show-meeting-ended-prompt', {
+                    entryId,
+                    silenceDuration,
+                });
+            }
+        };
+
+        if (this.widgetWindow && !this.widgetWindow.isDestroyed()) {
+            console.log('[RecordingWidgetManager] Widget window exists, sending prompt');
+            // Window exists - just make sure it's visible and send the message
             if (!this.widgetWindow.isVisible()) {
                 console.log('[RecordingWidgetManager] Widget was hidden, showing for meeting-ended prompt');
                 this.widgetWindow.show();
                 this.isShowing = true;
             }
-
-            this.widgetWindow.webContents.send('widget:show-meeting-ended-prompt', {
-                entryId,
-                silenceDuration,
-            });
+            sendPromptMessage();
         } else {
-            console.warn('[RecordingWidgetManager] Cannot send meeting-ended prompt - widget window not available');
+            // Window was destroyed (user clicked Hide during recording) - create new one
+            console.log('[RecordingWidgetManager] Widget window not available, creating new one for meeting-ended prompt');
+            this.audioLevelsSentCount = 0;
+            this.createWindow();
+            this.isShowing = true;
+
+            // Wait for window to be ready before sending the prompt
+            if (this.widgetWindow) {
+                if (this.widgetWindow.webContents.isLoading()) {
+                    this.widgetWindow.webContents.once('did-finish-load', sendPromptMessage);
+                } else {
+                    sendPromptMessage();
+                }
+            }
         }
     }
 

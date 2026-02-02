@@ -349,20 +349,23 @@ export function RecordingWidget(): React.ReactElement {
     // Handle "Yes, Start" button click in prompt mode
     const handlePromptAccept = useCallback(async () => {
         console.log('[RecordingWidget] *** PROMPT ACCEPTED - USER WANTS TO START TIMER ***');
+        setIsHiding(true);
 
-        // Verify IPC is available before attempting call
-        if (!window.electron?.ipcRenderer?.invoke) {
-            console.error('[RecordingWidget] IPC not available - cannot send prompt accepted');
-            return;
-        }
+        // After animation completes, tell main process
+        setTimeout(async () => {
+            // Verify IPC is available before attempting call
+            if (!window.electron?.ipcRenderer?.invoke) {
+                console.error('[RecordingWidget] IPC not available - cannot send prompt accepted');
+                return;
+            }
 
-        try {
-            const result = await window.electron.ipcRenderer.invoke('widget:prompt-accepted', { timestamp: Date.now() });
-            console.log('[RecordingWidget] Prompt accepted sent to main, result:', result);
-            // Widget will be closed by main process, state change will happen when reopened for recording
-        } catch (error) {
-            console.error('[RecordingWidget] Error sending prompt accepted:', error);
-        }
+            try {
+                const result = await window.electron.ipcRenderer.invoke('widget:prompt-accepted', { timestamp: Date.now() });
+                console.log('[RecordingWidget] Prompt accepted sent to main, result:', result);
+            } catch (error) {
+                console.error('[RecordingWidget] Error sending prompt accepted:', error);
+            }
+        }, ANIMATION_EXIT_DURATION);
     }, []);
 
     // Handle "Dismiss" button click in prompt mode
@@ -390,19 +393,22 @@ export function RecordingWidget(): React.ReactElement {
     // Handle "Yes, Start" button click in working hours prompt mode
     const handleWorkingHoursStart = useCallback(async () => {
         console.log('[RecordingWidget] *** WORKING HOURS - USER WANTS TO START ***');
+        setIsHiding(true);
 
-        if (!window.electron?.ipcRenderer?.invoke) {
-            console.error('[RecordingWidget] IPC not available - cannot send working hours accepted');
-            return;
-        }
+        // After animation completes, tell main process
+        setTimeout(async () => {
+            if (!window.electron?.ipcRenderer?.invoke) {
+                console.error('[RecordingWidget] IPC not available - cannot send working hours accepted');
+                return;
+            }
 
-        try {
-            const result = await window.electron.ipcRenderer.invoke('widget:working-hours-accepted', { timestamp: Date.now() });
-            console.log('[RecordingWidget] Working hours accepted sent to main, result:', result);
-            // Widget will be hidden/switched to recording by main process
-        } catch (error) {
-            console.error('[RecordingWidget] Error sending working hours accepted:', error);
-        }
+            try {
+                const result = await window.electron.ipcRenderer.invoke('widget:working-hours-accepted', { timestamp: Date.now() });
+                console.log('[RecordingWidget] Working hours accepted sent to main, result:', result);
+            } catch (error) {
+                console.error('[RecordingWidget] Error sending working hours accepted:', error);
+            }
+        }, ANIMATION_EXIT_DURATION);
     }, []);
 
     // Handle "Snooze" button click in working hours prompt mode
