@@ -18,7 +18,7 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { corsHeaders } from '../_shared/cors.ts';
 import { createSupabaseClient, supabaseAdmin, extractToken } from '../_shared/supabase.ts';
-import { generateText, analyzeImage, extractJsonFromResponse } from '../_shared/gemini.ts';
+import { generateText, analyzeImage, analyzeImageBatch, extractJsonFromResponse, BatchImageInput, BatchImageResult } from '../_shared/gemini.ts';
 
 // Rate limits
 const RATE_LIMIT_FREE_DAILY = 50;
@@ -120,7 +120,7 @@ interface MeetingTranscriptionData {
 }
 
 interface RequestBody {
-    operation: 'analyze' | 'classify' | 'summarize';
+    operation: 'analyze' | 'analyze-batch' | 'classify' | 'summarize';
     // Task type for signal filtering (new approach)
     taskType?: AITaskType;
     // Whether to include user context even if not required
@@ -129,6 +129,8 @@ interface RequestBody {
     imageBase64?: string;
     appName?: string;
     windowTitle?: string;
+    // For analyze-batch
+    images?: Array<{ base64: string; mimeType: string; appName?: string; windowTitle?: string }>;
     // For classify
     description?: string;
     options?: Array<{ id: string; name: string }>;
@@ -180,6 +182,12 @@ interface ClassifyResponse {
 interface SummarizeResponse {
     success: boolean;
     summary?: string;
+    error?: string;
+}
+
+interface AnalyzeBatchResponse {
+    success: boolean;
+    results: BatchImageResult[];
     error?: string;
 }
 
@@ -271,7 +279,7 @@ serve(async (req) => {
             );
         }
 
-        let response: AnalyzeResponse | ClassifyResponse | SummarizeResponse;
+        let response: AnalyzeResponse | AnalyzeBatchResponse | ClassifyResponse | SummarizeResponse;
         let inputTokens = 0;
         let outputTokens = 0;
 
@@ -281,6 +289,17 @@ serve(async (req) => {
                 // Estimate tokens for image analysis (rough approximation)
                 inputTokens = body.imageBase64 ? Math.ceil(body.imageBase64.length / 4 / 4) : 0; // base64 to bytes to tokens
                 inputTokens += (body.appName?.length || 0) + (body.windowTitle?.length || 0);
+                break;
+
+            case 'analyze-batch':
+                response = await handleAnalyzeBatch(body);
+                // Estimate tokens for all images in batch
+                if (body.images) {
+                    for (const img of body.images) {
+                        inputTokens += Math.ceil(img.base64.length / 4 / 4); // base64 to bytes to tokens
+                        inputTokens += (img.appName?.length || 0) + (img.windowTitle?.length || 0);
+                    }
+                }
                 break;
 
             case 'classify':
@@ -307,6 +326,13 @@ serve(async (req) => {
                 outputTokens = response.description.length / 4;
             } else if ('summary' in response && response.summary) {
                 outputTokens = response.summary.length / 4;
+            } else if ('results' in response && response.results) {
+                // For batch responses, sum up description lengths
+                for (const result of response.results) {
+                    if (result.description) {
+                        outputTokens += result.description.length / 4;
+                    }
+                }
             } else {
                 outputTokens = 50; // Classification typically short
             }
@@ -381,6 +407,39 @@ async function handleAnalyze(body: RequestBody): Promise<AnalyzeResponse> {
         description: result.text.trim(),
         confidence: 0.9
     };
+}
+
+/**
+ * Handle batch screenshot analysis operation
+ * Analyzes multiple images in a single API call for efficiency
+ */
+async function handleAnalyzeBatch(body: RequestBody): Promise<AnalyzeBatchResponse> {
+    const { images } = body;
+
+    if (!images || images.length === 0) {
+        return { success: false, results: [], error: 'Missing or empty images array' };
+    }
+
+    console.log(`[GeminiProxy] Batch analyzing ${images.length} images`);
+
+    // Convert to BatchImageInput format
+    const batchInput: BatchImageInput[] = images.map(img => ({
+        base64: img.base64,
+        mimeType: img.mimeType,
+        appName: img.appName,
+        windowTitle: img.windowTitle
+    }));
+
+    const result = await analyzeImageBatch(batchInput);
+
+    if (!result.success) {
+        console.log(`[GeminiProxy] Batch analysis failed: ${result.error}`);
+    } else {
+        const successCount = result.results.filter(r => r.success).length;
+        console.log(`[GeminiProxy] Batch analysis completed: ${successCount}/${images.length} successful`);
+    }
+
+    return result;
 }
 
 /**

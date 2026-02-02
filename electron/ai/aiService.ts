@@ -86,6 +86,30 @@ export interface SummarizeResponse {
     error?: string;
 }
 
+// Batch analysis types
+export interface BatchAnalysisInput {
+    imagePath: string;
+    appName?: string;
+    windowTitle?: string;
+    requestId?: string;
+}
+
+export interface BatchAnalysisResult {
+    imagePath: string;
+    success: boolean;
+    description?: string;
+    confidence?: number;
+    error?: string;
+    errorCode?: AIErrorCode;
+    isRateLimited?: boolean;
+}
+
+export interface BatchAnalysisResponse {
+    success: boolean;
+    results: BatchAnalysisResult[];
+    error?: string;
+}
+
 // Error codes for client-side handling
 export const AI_ERROR_CODES = {
     // Authentication errors
@@ -924,6 +948,183 @@ class AIService {
         }
 
         return parts.join(' ') + '.';
+    }
+
+    /**
+     * Analyze multiple screenshots in a single API call for improved throughput
+     *
+     * This batches multiple screenshots into one Gemini API request, counting as
+     * a single rate-limited request while analyzing up to 10 images at once.
+     *
+     * @param inputs - Array of screenshot inputs with paths and optional metadata
+     * @returns BatchAnalysisResponse with results for each input
+     */
+    async analyzeScreenshotBatch(inputs: BatchAnalysisInput[]): Promise<BatchAnalysisResponse> {
+        if (inputs.length === 0) {
+            return { success: true, results: [] };
+        }
+
+        console.log(`[AIService] Batch analyzing ${inputs.length} screenshots`);
+
+        // Process all images (decrypt, resize, convert to base64)
+        const processedImages: Array<{
+            index: number;
+            imagePath: string;
+            base64?: string;
+            mimeType?: string;
+            appName?: string;
+            windowTitle?: string;
+            error?: string;
+        }> = [];
+
+        for (let i = 0; i < inputs.length; i++) {
+            const input = inputs[i];
+            try {
+                // Check if file exists
+                if (!fs.existsSync(input.imagePath)) {
+                    processedImages.push({
+                        index: i,
+                        imagePath: input.imagePath,
+                        error: 'Image file not found'
+                    });
+                    continue;
+                }
+
+                // Process and optimize the image
+                const imageResult = await processImageForAnalysis(input.imagePath);
+                if (!imageResult.success || !imageResult.base64) {
+                    processedImages.push({
+                        index: i,
+                        imagePath: input.imagePath,
+                        error: imageResult.error || 'Failed to process image'
+                    });
+                    continue;
+                }
+
+                processedImages.push({
+                    index: i,
+                    imagePath: input.imagePath,
+                    base64: imageResult.base64,
+                    mimeType: imageResult.mimeType,
+                    appName: input.appName,
+                    windowTitle: input.windowTitle
+                });
+            } catch (error) {
+                processedImages.push({
+                    index: i,
+                    imagePath: input.imagePath,
+                    error: error instanceof Error ? error.message : 'Processing error'
+                });
+            }
+        }
+
+        // Filter out images that failed processing
+        const validImages = processedImages.filter(img => img.base64 && img.mimeType);
+
+        if (validImages.length === 0) {
+            // All images failed processing, return all failures
+            return {
+                success: false,
+                results: processedImages.map(img => ({
+                    imagePath: img.imagePath,
+                    success: false,
+                    description: this.generateFallbackDescription(inputs[img.index].appName, inputs[img.index].windowTitle),
+                    error: img.error || 'Failed to process image'
+                })),
+                error: 'All images failed processing'
+            };
+        }
+
+        // Make the batch API request
+        const result = await this.makeRequest({
+            operation: 'analyze-batch',
+            images: validImages.map(img => ({
+                base64: img.base64!,
+                mimeType: img.mimeType!,
+                appName: img.appName,
+                windowTitle: img.windowTitle
+            }))
+        }) as {
+            success: boolean;
+            results?: Array<{
+                index: number;
+                success: boolean;
+                description?: string;
+                confidence?: number;
+                error?: string;
+            }>;
+            error?: string;
+        };
+
+        // Build the final results array, mapping back to original indices
+        const finalResults: BatchAnalysisResult[] = [];
+
+        // First, add results for images that failed processing
+        for (const img of processedImages) {
+            if (!img.base64) {
+                finalResults.push({
+                    imagePath: img.imagePath,
+                    success: false,
+                    description: this.generateFallbackDescription(inputs[img.index].appName, inputs[img.index].windowTitle),
+                    error: img.error || 'Failed to process image'
+                });
+            }
+        }
+
+        // Then, add results from the API response
+        if (result.results) {
+            for (let i = 0; i < validImages.length; i++) {
+                const validImg = validImages[i];
+                const apiResult = result.results[i];
+
+                if (apiResult && apiResult.success && apiResult.description) {
+                    finalResults.push({
+                        imagePath: validImg.imagePath,
+                        success: true,
+                        description: apiResult.description,
+                        confidence: apiResult.confidence
+                    });
+                } else {
+                    finalResults.push({
+                        imagePath: validImg.imagePath,
+                        success: false,
+                        description: this.generateFallbackDescription(validImg.appName, validImg.windowTitle),
+                        error: apiResult?.error || result.error || 'Analysis failed'
+                    });
+                }
+            }
+        } else {
+            // API call failed entirely, return fallbacks for all valid images
+            for (const img of validImages) {
+                finalResults.push({
+                    imagePath: img.imagePath,
+                    success: false,
+                    description: this.generateFallbackDescription(img.appName, img.windowTitle),
+                    error: result.error || 'Batch analysis failed'
+                });
+            }
+        }
+
+        // Sort results back to original order
+        finalResults.sort((a, b) => {
+            const indexA = inputs.findIndex(i => i.imagePath === a.imagePath);
+            const indexB = inputs.findIndex(i => i.imagePath === b.imagePath);
+            return indexA - indexB;
+        });
+
+        const successCount = finalResults.filter(r => r.success).length;
+        console.log(`[AIService] Batch analysis completed: ${successCount}/${inputs.length} successful`);
+
+        // Reset failure tracking if we had any success
+        if (successCount > 0) {
+            this.resetFailureTracking();
+            this.updateCircuitBreaker(true);
+        }
+
+        return {
+            success: successCount > 0,
+            results: finalResults
+        };
     }
 
     /**
