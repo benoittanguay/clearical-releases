@@ -185,7 +185,7 @@ export const WorklogCalendar: React.FC<WorklogCalendarProps> = ({
     }, [selectedDayEntries]);
 
     return (
-        <div className="flex flex-col h-full">
+        <div className="flex flex-col h-full pt-3">
             {/* Month Navigator */}
             <div className="flex items-center justify-between mb-4 px-2">
                 <button
