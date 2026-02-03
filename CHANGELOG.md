@@ -2,6 +2,19 @@
 
 All notable changes to Clearical will be documented in this file.
 
+## [1.7.34] - 2026-02-02
+
+### Features
+- **Screenshot Settings**: Added configurable screenshot cooldown per app/site (default 2 minutes)
+- **Browser Profiles**: Different browser profiles (e.g., Chrome "Work" vs "Personal") are now tracked separately for screenshot cooldowns
+- **Arc Browser**: Added support for Arc browser in activity tracking
+
+### Bug Fixes
+- **Worklog List**: Fixed spacing issue where "Today" header had extra gap from week header
+- **Worklog Calendar**: Added padding above calendar to prevent it from sitting against the header
+
+---
+
 ## [1.7.32] - 2025-02-01
 
 ### Bug Fixes
