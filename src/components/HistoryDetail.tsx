@@ -1209,17 +1209,13 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                 } else {
                     // Batch call failed entirely
                     console.error('[HistoryDetail] ❌ Batch analysis failed:', result?.error);
-                    for (const item of batchItems) {
-                        completed++;
-                        setRetryProgress({ completed, total: getFailedAnalysisScreenshots.length });
-                    }
+                    completed += batchItems.length;
+                    setRetryProgress({ completed, total: getFailedAnalysisScreenshots.length });
                 }
             } catch (error) {
                 console.error('[HistoryDetail] ❌ Batch retry error:', error);
-                for (const item of batchItems) {
-                    completed++;
-                    setRetryProgress({ completed, total: getFailedAnalysisScreenshots.length });
-                }
+                completed += batchItems.length;
+                setRetryProgress({ completed, total: getFailedAnalysisScreenshots.length });
             }
         };
 

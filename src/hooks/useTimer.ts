@@ -235,7 +235,6 @@ export function useTimer() {
     // Analysis queue for concurrency limiting
     const analysisQueue = useRef<Array<{path: string, timestamp: number}>>([]);
     const activeAnalysisCount = useRef<number>(0);
-    const MAX_CONCURRENT_ANALYSES = 1; // Use 1 for batch processing
 
     // Batch analysis configuration
     const SESSION_BATCH_SIZE = 5; // Max screenshots per batch for session analysis
