@@ -2,6 +2,18 @@
 
 All notable changes to Clearical will be documented in this file.
 
+## [1.7.36] - 2026-02-06
+
+### Bug Fixes
+- **Update Modal**: Fixed release notes not appearing in "What's New" modal after update (regex was matching sub-headings as stop points)
+- **Worklog List**: Fixed gap between sticky day headers and week headers
+
+### Improvements
+- **Browser Profiles**: Different browser profiles (e.g., Chrome "Work" vs "Personal") now appear as separate activity groups in time entry detail
+- **Worklog Calendar**: Days with logged hours use a subtle background tint to better distinguish them
+
+---
+
 ## [1.7.35] - 2026-02-06
 
 ### Bug Fixes
