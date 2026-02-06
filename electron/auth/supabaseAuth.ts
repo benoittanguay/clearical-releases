@@ -316,6 +316,8 @@ export class SupabaseAuthService {
             return { success: false, error: 'Auth service not initialized' };
         }
 
+        let oauthServer: { waitForCallback: () => Promise<{ code: string; state?: string }>; close: () => void } | null = null;
+
         try {
             console.log(`[SupabaseAuth] Starting OAuth flow for: ${provider}`);
 
@@ -346,13 +348,15 @@ export class SupabaseAuthService {
             }
 
             // Start callback server and wait for it to be ready
-            const oauthServer = await startOAuthCallbackServer(60000);
+            oauthServer = await startOAuthCallbackServer(60000);
 
             // Open system browser for authentication (server is now guaranteed to be listening)
             await shell.openExternal(data.url);
 
             // Wait for callback
             const { code } = await oauthServer.waitForCallback();
+            // Server auto-closes when callback is received
+            oauthServer = null;
 
             // Exchange code for session
             const { data: sessionData, error: sessionError } =
@@ -426,6 +430,15 @@ export class SupabaseAuthService {
                 success: false,
                 error: error instanceof Error ? error.message : 'Failed to sign in'
             };
+        } finally {
+            // Ensure OAuth server is closed in all paths (e.g. if exchangeCodeForSession fails)
+            if (oauthServer) {
+                try {
+                    oauthServer.close();
+                } catch {
+                    // Ignore close errors — server may already be closed
+                }
+            }
         }
     }
 

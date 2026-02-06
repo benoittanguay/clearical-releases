@@ -71,6 +71,16 @@ process.on('uncaughtException', (error: Error) => {
         return;
     }
 
+    // Handle server listen/bind permission errors gracefully
+    // These can escape http.Server error handlers in edge cases
+    if ('code' in error && (error as any).code === 'EPERM') {
+        const msg = error.message.toLowerCase();
+        if (msg.includes('listen') || msg.includes('server') || msg.includes('bind') || msg.includes('port')) {
+            console.error('[Main] Server permission error (handled gracefully):', error.message);
+            return;
+        }
+    }
+
     // For all other uncaught exceptions, log them and show error dialog
     console.error('[Main] Uncaught Exception:', error);
 
