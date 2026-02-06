@@ -121,23 +121,25 @@ export const UpdateNotification: React.FC<UpdateNotificationProps> = ({
     }
 
     return (
-        <div className="fixed bottom-4 right-4 max-w-sm bg-gray-800 border border-gray-700 rounded-xl shadow-2xl z-50 overflow-hidden">
+        <div className="fixed bottom-4 right-4 max-w-sm bg-[var(--color-bg-secondary)] border border-[var(--color-border-primary)] rounded-2xl shadow-2xl z-50 overflow-hidden">
             {/* Accent bar at top */}
-            <div className={`h-1 ${updateStatus.error ? 'bg-red-500' : updateStatus.downloaded ? 'bg-green-500' : 'bg-blue-500'}`} />
+            <div className={`h-1 ${updateStatus.error ? 'bg-[var(--color-error)]' : updateStatus.downloaded ? 'bg-[var(--color-success)]' : 'bg-[var(--color-accent)]'}`} />
 
             <div className="p-4">
                 {/* Header */}
                 <div className="flex items-start justify-between mb-3">
                     <div className="flex items-center">
-                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center mr-3 ${
-                            updateStatus.error ? 'bg-red-500/20' : updateStatus.downloaded ? 'bg-green-500/20' : 'bg-blue-500/20'
+                        <div className={`w-8 h-8 rounded-xl flex items-center justify-center mr-3 ${
+                            updateStatus.error ? 'bg-[var(--color-error-muted)]' : updateStatus.downloaded ? 'bg-[var(--color-success-muted)]' : 'bg-[var(--color-accent)]/10'
                         }`}>
-                            <svg className="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg className={`w-5 h-5 ${
+                                updateStatus.error ? 'text-[var(--color-error)]' : updateStatus.downloaded ? 'text-[var(--color-success)]' : 'text-[var(--color-accent)]'
+                            }`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                             </svg>
                         </div>
                         <div>
-                            <h3 className="text-sm font-semibold text-white">
+                            <h3 className="text-sm font-semibold text-[var(--color-text-primary)] font-display">
                                 {updateStatus.downloaded
                                     ? 'Update Ready'
                                     : updateStatus.downloading
@@ -147,13 +149,13 @@ export const UpdateNotification: React.FC<UpdateNotificationProps> = ({
                                             : 'Software Updates'}
                             </h3>
                             {updateStatus.version && (
-                                <p className="text-xs text-gray-400">v{updateStatus.version}</p>
+                                <p className="text-xs text-[var(--color-text-tertiary)]">v{updateStatus.version}</p>
                             )}
                         </div>
                     </div>
                     <button
                         onClick={handleDismiss}
-                        className="text-gray-500 hover:text-gray-300 transition-colors"
+                        className="text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)] transition-colors"
                     >
                         <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                             <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
@@ -163,12 +165,12 @@ export const UpdateNotification: React.FC<UpdateNotificationProps> = ({
 
                 {/* Error State */}
                 {updateStatus.error && (
-                    <div className="mb-3 p-2.5 bg-red-500/10 border border-red-500/30 rounded-lg">
-                        <p className="text-xs text-red-400 mb-2">{updateStatus.error}</p>
+                    <div className="mb-3 p-2.5 bg-[var(--color-error-muted)] border border-[var(--color-error)]/20 rounded-xl">
+                        <p className="text-xs text-[var(--color-error)] mb-2">{updateStatus.error}</p>
                         {updateStatus.error.includes('code signing') && (
                             <button
                                 onClick={() => window.open('https://github.com/benoittanguay/clearical-releases/releases', '_blank')}
-                                className="text-xs text-blue-400 hover:text-blue-300 transition-colors underline"
+                                className="text-xs text-[var(--color-accent)] hover:text-[var(--color-accent-hover)] transition-colors underline"
                             >
                                 Open releases page
                             </button>
@@ -179,16 +181,16 @@ export const UpdateNotification: React.FC<UpdateNotificationProps> = ({
                 {/* Download Progress */}
                 {updateStatus.downloading && updateStatus.downloadProgress && (
                     <div className="mb-3">
-                        <p className="text-xs text-gray-400 mb-2">
+                        <p className="text-xs text-[var(--color-text-secondary)] mb-2">
                             Downloading update...
                         </p>
-                        <div className="w-full bg-gray-700 rounded-full h-2">
+                        <div className="w-full bg-[var(--color-bg-tertiary)] rounded-full h-2">
                             <div
-                                className="bg-blue-500 h-2 rounded-full transition-all duration-300"
+                                className="bg-[var(--color-accent)] h-2 rounded-full transition-all duration-300"
                                 style={{ width: `${updateStatus.downloadProgress.percent}%` }}
                             />
                         </div>
-                        <p className="text-xs text-gray-500 mt-1">
+                        <p className="text-xs text-[var(--color-text-tertiary)] mt-1">
                             {Math.round(updateStatus.downloadProgress.percent)}%
                         </p>
                     </div>
@@ -197,19 +199,19 @@ export const UpdateNotification: React.FC<UpdateNotificationProps> = ({
                 {/* Update Downloaded - Ready to Install */}
                 {updateStatus.downloaded && (
                     <div className="mb-3">
-                        <p className="text-xs text-gray-400 mb-2">
+                        <p className="text-xs text-[var(--color-text-secondary)] mb-2">
                             Update downloaded and ready to install. Restart to apply the update.
                         </p>
                         {updateStatus.releaseNotes && (
                             <div>
                                 <button
                                     onClick={() => setShowDetails(!showDetails)}
-                                    className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
+                                    className="text-xs text-[var(--color-accent)] hover:text-[var(--color-accent-hover)] transition-colors"
                                 >
                                     {showDetails ? 'Hide' : 'Show'} release notes
                                 </button>
                                 {showDetails && (
-                                    <div className="mt-2 p-2 bg-gray-900/50 rounded-lg text-xs text-gray-400 max-h-24 overflow-y-auto">
+                                    <div className="mt-2 p-2 bg-[var(--color-bg-tertiary)] rounded-xl text-xs text-[var(--color-text-secondary)] max-h-24 overflow-y-auto">
                                         {updateStatus.releaseNotes}
                                     </div>
                                 )}
@@ -221,19 +223,19 @@ export const UpdateNotification: React.FC<UpdateNotificationProps> = ({
                 {/* Update Available - Not Yet Downloaded */}
                 {updateStatus.available && !updateStatus.downloaded && !updateStatus.downloading && (
                     <div className="mb-3">
-                        <p className="text-xs text-gray-400 mb-2">
+                        <p className="text-xs text-[var(--color-text-secondary)] mb-2">
                             A new version is available. Download now to get the latest features and fixes.
                         </p>
                         {updateStatus.releaseNotes && (
                             <div>
                                 <button
                                     onClick={() => setShowDetails(!showDetails)}
-                                    className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
+                                    className="text-xs text-[var(--color-accent)] hover:text-[var(--color-accent-hover)] transition-colors"
                                 >
                                     {showDetails ? 'Hide' : 'Show'} release notes
                                 </button>
                                 {showDetails && (
-                                    <div className="mt-2 p-2 bg-gray-900/50 rounded-lg text-xs text-gray-400 max-h-24 overflow-y-auto">
+                                    <div className="mt-2 p-2 bg-[var(--color-bg-tertiary)] rounded-xl text-xs text-[var(--color-text-secondary)] max-h-24 overflow-y-auto">
                                         {updateStatus.releaseNotes}
                                     </div>
                                 )}
@@ -249,13 +251,13 @@ export const UpdateNotification: React.FC<UpdateNotificationProps> = ({
                         <>
                             <button
                                 onClick={handleInstallUpdate}
-                                className="flex-1 bg-green-600 hover:bg-green-500 text-white px-3 py-2 rounded-lg text-xs font-medium transition-colors"
+                                className="flex-1 bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white px-3 py-2 rounded-full text-xs font-semibold font-mono transition-all hover:scale-105 active:scale-95"
                             >
                                 Install & Restart
                             </button>
                             <button
                                 onClick={handleDismiss}
-                                className="px-3 py-2 text-xs text-gray-400 hover:text-white transition-colors"
+                                className="px-3 py-2 text-xs font-mono text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)] transition-colors"
                             >
                                 Later
                             </button>
@@ -267,13 +269,13 @@ export const UpdateNotification: React.FC<UpdateNotificationProps> = ({
                         <>
                             <button
                                 onClick={handleDownloadUpdate}
-                                className="flex-1 bg-blue-600 hover:bg-blue-500 text-white px-3 py-2 rounded-lg text-xs font-medium transition-colors"
+                                className="flex-1 bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white px-3 py-2 rounded-full text-xs font-semibold font-mono transition-all hover:scale-105 active:scale-95"
                             >
                                 Download Update
                             </button>
                             <button
                                 onClick={handleDismiss}
-                                className="px-3 py-2 text-xs text-gray-400 hover:text-white transition-colors"
+                                className="px-3 py-2 text-xs font-mono text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)] transition-colors"
                             >
                                 Later
                             </button>
