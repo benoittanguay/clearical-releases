@@ -419,7 +419,7 @@ export function Settings({ onOpenJiraModal, onOpenTempoModal }: SettingsProps = 
                 <div className="flex items-center justify-between mb-3">
                     <h3 className="text-[10px] font-bold text-[var(--color-text-secondary)] uppercase tracking-wider font-display">Account</h3>
                     <div className="flex items-center gap-2">
-                        {subscription.isTrial && (
+                        {subscription.isTrial && subscription.trialDaysRemaining > 0 && (
                             <button
                                 onClick={handleUpgrade}
                                 disabled={isOpeningPortal}
