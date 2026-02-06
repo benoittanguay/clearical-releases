@@ -247,21 +247,29 @@ if [ -f "$BG_IMAGE" ]; then
 
     # Use AppleScript to configure Finder view: background, icon size, positions, window size
     # Icon positions match package.json dmg.contents: app at (130,200), Applications at (410,200)
+    # Note: Uses POSIX file path for background — HFS-style paths fail on newer macOS (-10006)
+    # Note: Non-fatal — Finder AppleScript can be flaky on newer macOS versions.
+    #       The Applications shortcut and background image are already on disk regardless.
     echo "  Configuring DMG window layout via AppleScript..."
-    osascript <<APPLESCRIPT
+    if osascript <<APPLESCRIPT 2>/dev/null
         tell application "Finder"
             tell disk "$VOLUME_NAME"
                 open
+                delay 3
                 set current view of container window to icon view
                 set toolbar visible of container window to false
                 set statusbar visible of container window to false
                 set bounds of container window to {100, 100, 640, 480}
+                delay 1
                 set theViewOptions to icon view options of container window
                 set arrangement of theViewOptions to not arranged
                 set icon size of theViewOptions to 80
-                set background picture of theViewOptions to file ".background:background.png"
+                set background picture of theViewOptions to (POSIX file "$MOUNT_POINT/.background/background.png")
+                delay 1
                 set position of item "Clearical.app" of container window to {130, 200}
+                delay 1
                 set position of item "Applications" of container window to {410, 200}
+                delay 1
                 close
                 open
                 update without registering applications
@@ -270,7 +278,11 @@ if [ -f "$BG_IMAGE" ]; then
             end tell
         end tell
 APPLESCRIPT
-    echo "  ✓ DMG layout configured"
+    then
+        echo "  ✓ DMG layout configured"
+    else
+        echo -e "${YELLOW}  ⚠ AppleScript layout partially failed (Finder quirk) — DMG still has Applications shortcut and background${NC}"
+    fi
 else
     echo -e "${YELLOW}  ⚠ Background image not found at $BG_IMAGE, creating plain DMG${NC}"
 fi
