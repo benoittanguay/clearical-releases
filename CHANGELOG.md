@@ -2,6 +2,24 @@
 
 All notable changes to Clearical will be documented in this file.
 
+## [1.7.35] - 2026-02-06
+
+### Bug Fixes
+- **Sign In with Apple**: Fixed EPERM errors showing native crash dialog when OAuth callback server can't bind port
+- **OAuth Server**: Added retry logic (3 attempts) for transient port conflicts during sign-in
+- **OAuth Server**: Moved error handler before listen() to prevent uncaught exceptions
+- **OAuth Server**: User-friendly error messages for firewall/permission and port-busy errors
+- **Security**: Fixed XSS vulnerability in OAuth callback error page (HTML-escaped error descriptions)
+- **Security**: Added settled guard to prevent promise double-resolution race condition
+- **OAuth Cleanup**: Server now properly closed in all error paths (prevents port leak on token exchange failure)
+
+### Improvements
+- **DMG Installer**: DMG now includes Applications shortcut and drag-arrow background for proper install UX
+- **Update Notification**: Restyled to match app's light cream aesthetic with design system tokens
+- **Toast Notifications**: Restyled from dark theme to light cream theme with proper accent colors
+
+---
+
 ## [1.7.34] - 2026-02-02
 
 ### Features
