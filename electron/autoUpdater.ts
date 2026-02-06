@@ -162,6 +162,17 @@ export class AutoUpdater {
                 return;
             }
 
+            // Check if this is a transient error (502, 503, timeouts, etc.)
+            if (this.isTransientError(error.message)) {
+                log.info('[AutoUpdater] Transient error, will retry on next scheduled check');
+                this.updateStatus = {
+                    available: false,
+                    downloaded: false,
+                    downloading: false,
+                };
+                return;
+            }
+
             // Check if this is a code signing error
             const isCodeSignError =
                 error.message.includes('code signature') ||
@@ -198,6 +209,19 @@ export class AutoUpdater {
      */
     public setMainWindow(window: BrowserWindow | null): void {
         this.mainWindow = window;
+    }
+
+    /**
+     * Check if an error message indicates a transient/retryable error
+     */
+    private isTransientError(message: string): boolean {
+        return message.includes('502') ||
+            message.includes('503') ||
+            message.includes('Bad Gateway') ||
+            message.includes('Service Unavailable') ||
+            message.includes('ETIMEDOUT') ||
+            message.includes('ECONNRESET') ||
+            message.includes('taking too long');
     }
 
     /**
@@ -280,6 +304,13 @@ export class AutoUpdater {
             if (is404Error) {
                 // Silently handle 404 errors - don't set error status
                 log.info('[AutoUpdater] Update repo not found (404) - silently ignoring');
+                this.updateStatus = {
+                    available: false,
+                    downloaded: false,
+                    downloading: false,
+                };
+            } else if (this.isTransientError(errorMessage)) {
+                log.info('[AutoUpdater] Transient error, will retry on next scheduled check');
                 this.updateStatus = {
                     available: false,
                     downloaded: false,

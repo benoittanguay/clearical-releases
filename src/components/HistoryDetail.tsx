@@ -1534,7 +1534,7 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                     await autoAssignWork(result.summary, result.metadata);
                 }
             } else {
-                throw new Error(result?.error || 'Failed to generate summary');
+                throw new Error((result?.error && result.error.trim()) || 'Failed to generate summary');
             }
 
         } catch (error) {

@@ -1916,6 +1916,9 @@ ipcMain.handle('tempo-api-request', requirePremium('Tempo Integration', async (e
         console.log('[Main] Tempo API request body preview:', JSON.stringify(body).substring(0, 200));
     }
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
+
     try {
         const requestBody = body && (method === 'POST' || method === 'PUT')
             ? (typeof body === 'string' ? body : JSON.stringify(body))
@@ -1932,7 +1935,9 @@ ipcMain.handle('tempo-api-request', requirePremium('Tempo Integration', async (e
                 ...headers,
             },
             body: requestBody,
+            signal: controller.signal,
         });
+        clearTimeout(timeoutId);
 
         const responseHeaders = Object.fromEntries(response.headers.entries());
         console.log('[Main] Tempo API response status:', response.status, response.statusText);
@@ -1967,10 +1972,14 @@ ipcMain.handle('tempo-api-request', requirePremium('Tempo Integration', async (e
         };
 
     } catch (error) {
+        clearTimeout(timeoutId);
         console.error('[Main] Tempo API request failed:', error);
+        const message = error instanceof Error
+            ? (error.name === 'AbortError' ? 'Request timed out after 30s' : error.message)
+            : 'Unknown error';
         return {
             success: false,
-            error: error instanceof Error ? error.message : 'Unknown error',
+            error: message,
         };
     }
 }));
@@ -1983,6 +1992,9 @@ ipcMain.handle('jira-api-request', requirePremium('Jira Integration', async (eve
         console.log('[Main] Jira API request body type:', typeof body);
         console.log('[Main] Jira API request body preview:', JSON.stringify(body).substring(0, 200));
     }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
 
     try {
         const requestBody = body && (method === 'POST' || method === 'PUT')
@@ -2000,7 +2012,9 @@ ipcMain.handle('jira-api-request', requirePremium('Jira Integration', async (eve
                 ...headers,
             },
             body: requestBody,
+            signal: controller.signal,
         });
+        clearTimeout(timeoutId);
 
         const responseHeaders = Object.fromEntries(response.headers.entries());
         console.log('[Main] Jira API response status:', response.status, response.statusText);
@@ -2035,10 +2049,14 @@ ipcMain.handle('jira-api-request', requirePremium('Jira Integration', async (eve
         };
 
     } catch (error) {
+        clearTimeout(timeoutId);
         console.error('[Main] Jira API request failed:', error);
+        const message = error instanceof Error
+            ? (error.name === 'AbortError' ? 'Request timed out after 30s' : error.message)
+            : 'Unknown error';
         return {
             success: false,
-            error: error instanceof Error ? error.message : 'Unknown error',
+            error: message,
         };
     }
 }));
@@ -2837,7 +2855,7 @@ ipcMain.handle('generate-activity-summary', async (event, context: {
                 }
             };
         } else {
-            throw new Error(result.error || 'Failed to generate summary');
+            throw new Error((result.error && result.error.trim()) || 'Failed to generate summary');
         }
     } catch (error) {
         console.error('[Main] generate-activity-summary failed:', error);
