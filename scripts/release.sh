@@ -200,8 +200,9 @@ else
 fi
 
 # Step 5: Create and notarize DMG
-# IMPORTANT: We create a fresh DMG from the stapled app, sign it, and notarize it separately
-# This ensures the DMG itself passes Gatekeeper checks
+# IMPORTANT: We create a styled DMG with Applications shortcut and drag-arrow background
+# from the stapled app, sign it, and notarize it separately.
+# This ensures the DMG itself passes Gatekeeper checks and provides a good install UX.
 echo ""
 echo -e "${BLUE}Step 5: Creating and notarizing DMG...${NC}"
 
@@ -209,10 +210,81 @@ echo -e "${BLUE}Step 5: Creating and notarizing DMG...${NC}"
 rm -f "dist/Clearical-arm64.dmg.blockmap" "dist/Clearical-arm64.zip.blockmap"
 rm -f "$DMG_PATH"  # Remove electron-builder's DMG, we'll create our own
 
-# Create fresh DMG from the stapled app
-echo "  Creating DMG from stapled app..."
-hdiutil create -volname "Clearical" -srcfolder "$APP_PATH" -ov -format UDZO "$DMG_PATH" 2>&1 | grep -v "^$" | tail -2
-echo "  ✓ DMG created"
+# --- Create styled DMG with Applications shortcut and background ---
+VOLUME_NAME="Clearical"
+DMG_TEMP="dist/.tmp-rw.dmg"
+BG_IMAGE="build/dmg-background@2x.png"
+
+# Calculate required size (app size + 20 MB headroom for background + metadata)
+APP_SIZE_KB=$(du -sk "$APP_PATH" | awk '{print $1}')
+DMG_SIZE_KB=$((APP_SIZE_KB + 20480))
+
+echo "  Creating writable DMG (${DMG_SIZE_KB} KB)..."
+rm -f "$DMG_TEMP"
+hdiutil create -size "${DMG_SIZE_KB}k" -volname "$VOLUME_NAME" -fs HFS+ -fsargs "-c c=64,a=16,e=16" "$DMG_TEMP" 2>&1 | tail -1
+
+echo "  Mounting writable DMG..."
+MOUNT_OUTPUT=$(hdiutil attach "$DMG_TEMP" -readwrite -noverify -noautoopen 2>&1)
+MOUNT_POINT=$(echo "$MOUNT_OUTPUT" | grep -o '/Volumes/.*' | head -1)
+
+if [ -z "$MOUNT_POINT" ]; then
+    echo -e "${RED}  Error: Failed to mount DMG${NC}"
+    echo "$MOUNT_OUTPUT"
+    exit 1
+fi
+
+echo "  Copying app to DMG..."
+cp -R "$APP_PATH" "$MOUNT_POINT/"
+
+echo "  Creating Applications shortcut..."
+ln -s /Applications "$MOUNT_POINT/Applications"
+
+# Copy background image into hidden .background folder
+if [ -f "$BG_IMAGE" ]; then
+    echo "  Setting DMG background image..."
+    mkdir -p "$MOUNT_POINT/.background"
+    cp "$BG_IMAGE" "$MOUNT_POINT/.background/background.png"
+
+    # Use AppleScript to configure Finder view: background, icon size, positions, window size
+    # Icon positions match package.json dmg.contents: app at (130,200), Applications at (410,200)
+    echo "  Configuring DMG window layout via AppleScript..."
+    osascript <<APPLESCRIPT
+        tell application "Finder"
+            tell disk "$VOLUME_NAME"
+                open
+                set current view of container window to icon view
+                set toolbar visible of container window to false
+                set statusbar visible of container window to false
+                set bounds of container window to {100, 100, 640, 480}
+                set theViewOptions to icon view options of container window
+                set arrangement of theViewOptions to not arranged
+                set icon size of theViewOptions to 80
+                set background picture of theViewOptions to file ".background:background.png"
+                set position of item "Clearical.app" of container window to {130, 200}
+                set position of item "Applications" of container window to {410, 200}
+                close
+                open
+                update without registering applications
+                delay 2
+                close
+            end tell
+        end tell
+APPLESCRIPT
+    echo "  ✓ DMG layout configured"
+else
+    echo -e "${YELLOW}  ⚠ Background image not found at $BG_IMAGE, creating plain DMG${NC}"
+fi
+
+# Ensure all writes are flushed, then unmount
+sync
+echo "  Unmounting writable DMG..."
+hdiutil detach "$MOUNT_POINT" -quiet 2>/dev/null || hdiutil detach "$MOUNT_POINT" -force 2>/dev/null
+
+# Convert writable DMG to compressed read-only DMG
+echo "  Compressing DMG..."
+hdiutil convert "$DMG_TEMP" -format UDZO -imagekey zlib-level=9 -o "$DMG_PATH" 2>&1 | tail -1
+rm -f "$DMG_TEMP"
+echo "  ✓ DMG created (with Applications shortcut and drag-arrow background)"
 
 # Sign the DMG
 echo "  Signing DMG..."
