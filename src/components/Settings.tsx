@@ -437,7 +437,7 @@ export function Settings({ onOpenJiraModal, onOpenTempoModal }: SettingsProps = 
                                 {isOpeningPortal ? 'Opening...' : 'Manage'}
                             </button>
                         )}
-                        {!subscription.isTrial && subscription.tier === 'free' && (
+                        {((!subscription.isTrial && subscription.tier === 'free') || (subscription.isTrial && subscription.trialDaysRemaining <= 0)) && (
                             <button
                                 onClick={handleUpgrade}
                                 disabled={isOpeningPortal}
@@ -459,12 +459,15 @@ export function Settings({ onOpenJiraModal, onOpenTempoModal }: SettingsProps = 
                     <div className="bg-[var(--color-bg-tertiary)] p-3 rounded-xl border border-[var(--color-border-primary)] transition-all duration-200 hover:border-[var(--color-accent)]/20">
                         <div className="text-sm font-medium text-[var(--color-text-primary)] mb-1">{user?.email || 'Unknown'}</div>
                         <div className="text-xs text-[var(--color-text-secondary)] font-mono">
-                            {subscription.isTrial && (
+                            {subscription.isTrial && subscription.trialDaysRemaining > 0 && (
                                 <>
                                     <span className="text-[var(--color-info)] font-semibold">TRIAL</span>
                                     <span className="mx-1.5">·</span>
                                     <span>{subscription.trialDaysRemaining} days remaining</span>
                                 </>
+                            )}
+                            {subscription.isTrial && subscription.trialDaysRemaining <= 0 && (
+                                <span>Free Plan</span>
                             )}
                             {!subscription.isTrial && subscription.tier === 'workplace' && subscription.isActive && (
                                 <span>Premium</span>

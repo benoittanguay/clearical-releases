@@ -786,7 +786,8 @@ ipcMain.handle('capture-screenshot', async () => {
 });
 
 // AI Screenshot Analysis (via Gemini cloud service)
-ipcMain.handle('analyze-screenshot', async (event, imagePath: string, requestId?: string) => {
+// PREMIUM FEATURE: Requires Workplace Plan subscription
+ipcMain.handle('analyze-screenshot', requirePremium('AI Analysis', async (event, imagePath: string, requestId?: string) => {
     console.log('[Main] analyze-screenshot requested for:', imagePath);
     console.log('[Main] Using Gemini cloud AI for screenshot analysis');
 
@@ -1003,10 +1004,11 @@ ipcMain.handle('analyze-screenshot', async (event, imagePath: string, requestId?
             analyzer: 'fallback'
         };
     }
-});
+}));
 
 // Batch screenshot analysis handler - analyzes multiple screenshots in a single API call
-ipcMain.handle('analyze-screenshot-batch', async (event, inputs: Array<{
+// PREMIUM FEATURE: Requires Workplace Plan subscription
+ipcMain.handle('analyze-screenshot-batch', requirePremium('AI Analysis', async (event, inputs: Array<{
     imagePath: string;
     appName?: string;
     windowTitle?: string;
@@ -1141,7 +1143,7 @@ ipcMain.handle('analyze-screenshot-batch', async (event, inputs: Array<{
             }
         }
     }
-});
+}));
 
 // Permission Handlers
 
@@ -2694,7 +2696,8 @@ ipcMain.handle('meeting:merge-audio-files', async (_event, micPath: string | nul
 });
 
 // AI Assignment Suggestion Handler
-ipcMain.handle('suggest-assignment', async (event, request: {
+// PREMIUM FEATURE: Requires Workplace Plan subscription
+ipcMain.handle('suggest-assignment', requirePremium('AI Analysis', async (event, request: {
     context: ActivityContext;
     buckets: any[];
     jiraIssues: LinkedJiraIssue[];
@@ -2736,10 +2739,11 @@ ipcMain.handle('suggest-assignment', async (event, request: {
             suggestion: null
         };
     }
-});
+}));
 
 // AI Activity Summary Generation Handler
-ipcMain.handle('generate-activity-summary', async (event, context: {
+// PREMIUM FEATURE: Requires Workplace Plan subscription
+ipcMain.handle('generate-activity-summary', requirePremium('AI Analysis', async (event, context: {
     entryId: string;  // Entry ID for signal aggregation
     screenshotDescriptions: string[];
     windowTitles: string[];
@@ -2874,10 +2878,11 @@ ipcMain.handle('generate-activity-summary', async (event, context: {
             error: error instanceof Error ? error.message : 'Unknown error'
         };
     }
-});
+}));
 
 // AI Tempo Account Selection Handler
-ipcMain.handle('select-tempo-account', async (event, request: {
+// PREMIUM FEATURE: Requires Workplace Plan subscription
+ipcMain.handle('select-tempo-account', requirePremium('AI Analysis', async (event, request: {
     issue: LinkedJiraIssue;
     accounts: TempoAccount[];
     description?: string;
@@ -2924,7 +2929,7 @@ ipcMain.handle('select-tempo-account', async (event, request: {
             selection: null
         };
     }
-});
+}));
 
 // ========================================================================
 // DATABASE IPC HANDLERS

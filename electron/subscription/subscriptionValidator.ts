@@ -150,7 +150,7 @@ export class SubscriptionValidator {
             // Save updated subscription
             await SubscriptionStorage.saveSubscription(subscription);
 
-            const isValid = isPremiumStatus(status);
+            const isValid = isPremiumStatus(status, subscription.trialEndsAt);
 
             this.emitEvent({
                 type: SubscriptionEventType.VALIDATION_SUCCESS,
@@ -324,7 +324,7 @@ export class SubscriptionValidator {
 
             await SubscriptionStorage.saveSubscription(updatedSubscription);
 
-            const isValid = isPremiumStatus(updatedSubscription.status);
+            const isValid = isPremiumStatus(updatedSubscription.status, updatedSubscription.trialEndsAt);
 
             this.emitEvent({
                 type: SubscriptionEventType.VALIDATION_SUCCESS,
@@ -551,11 +551,11 @@ export class SubscriptionValidator {
      */
     private isSubscriptionValid(subscription: Subscription): boolean {
         // Check subscription status
-        if (!isPremiumStatus(subscription.status)) {
+        if (!isPremiumStatus(subscription.status, subscription.trialEndsAt)) {
             return false;
         }
 
-        // Check if trial has expired
+        // Additional trial validation (redundant but kept for safety)
         if (subscription.status === SubscriptionStatus.TRIAL) {
             return this.isTrialValid(subscription);
         }

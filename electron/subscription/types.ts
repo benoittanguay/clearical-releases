@@ -311,11 +311,15 @@ export function getFeaturesForPlan(plan: SubscriptionPlan): SubscriptionFeatures
 }
 
 /**
- * Helper function to determine if subscription status allows premium features
+ * Helper function to determine if subscription status allows premium features.
+ * For trial subscriptions, also checks if the trial has expired.
  */
-export function isPremiumStatus(status: SubscriptionStatus): boolean {
+export function isPremiumStatus(status: SubscriptionStatus, trialEndsAt?: number): boolean {
+    if (status === SubscriptionStatus.TRIAL) {
+        // Trial must have a valid end date and not be expired
+        return !!trialEndsAt && Date.now() < trialEndsAt;
+    }
     return [
-        SubscriptionStatus.TRIAL,
         SubscriptionStatus.ACTIVE,
         SubscriptionStatus.PAST_DUE, // Grace period - keep features enabled
     ].includes(status);

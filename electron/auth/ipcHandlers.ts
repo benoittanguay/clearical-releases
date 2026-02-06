@@ -68,7 +68,7 @@ async function updateTranscriptionPremiumStatus(): Promise<void> {
 
     try {
         const validationResult = await subscriptionValidator.validate();
-        const premium = isPremiumStatus(validationResult.subscription?.status);
+        const premium = isPremiumStatus(validationResult.subscription?.status, validationResult.subscription?.trialEndsAt);
         transcriptionService.setPremiumStatus(premium);
 
         // If premium, also fetch Groq usage from edge function

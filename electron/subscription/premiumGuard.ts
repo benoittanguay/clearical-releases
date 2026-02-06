@@ -68,8 +68,8 @@ export async function isPremiumUser(): Promise<boolean> {
         }
 
         // Check if status allows premium features
-        // Trial, Active, and Past Due (grace period) all grant premium access
-        return isPremiumStatus(subscription.status as SubscriptionStatus);
+        // Active and Past Due (grace period) grant premium access; Trial only if not expired
+        return isPremiumStatus(subscription.status as SubscriptionStatus, subscription.trialEndsAt);
     } catch (error) {
         console.error('[PremiumGuard] Error checking premium status:', error);
         return false;
