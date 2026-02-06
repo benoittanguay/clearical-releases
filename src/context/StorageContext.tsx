@@ -36,7 +36,7 @@ interface StorageContextType {
     updateEntry: (id: string, updates: Partial<TimeEntry>) => void;
     removeEntry: (id: string) => void;
     removeActivityFromEntry: (entryId: string, activityIndex: number) => void;
-    removeAllActivitiesForApp: (entryId: string, appName: string) => void;
+    removeAllActivitiesForApp: (entryId: string, appName: string, browserProfile?: string) => void;
     removeScreenshotFromEntry: (screenshotPath: string) => void;
     addManualActivityToEntry: (entryId: string, description: string, duration: number) => void;
     createEntryFromActivity: (sourceEntryId: string, activityIndex: number) => Promise<string | null>;
@@ -312,12 +312,12 @@ export const StorageProvider: React.FC<{ children: React.ReactNode }> = ({ child
         }
     };
 
-    const removeAllActivitiesForApp = async (entryId: string, appName: string) => {
+    const removeAllActivitiesForApp = async (entryId: string, appName: string, browserProfile?: string) => {
         const entry = entries.find(e => e.id === entryId);
         if (!entry || !entry.windowActivity) return;
 
         const filteredActivity = entry.windowActivity.filter(
-            activity => activity.appName !== appName
+            activity => !(activity.appName === appName && activity.browserProfile === browserProfile)
         );
 
         // Recalculate total duration based on remaining activities

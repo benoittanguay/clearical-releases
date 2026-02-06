@@ -223,7 +223,7 @@ export function useTimer() {
     const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const windowPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const screenshotIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-    const lastWindowRef = useRef<{ appName: string, windowTitle: string, bundleId?: string, timestamp: number } | null>(null);
+    const lastWindowRef = useRef<{ appName: string, windowTitle: string, bundleId?: string, browserProfile?: string, timestamp: number } | null>(null);
     const currentActivityScreenshots = useRef<string[]>([]);
     const currentActivityScreenshotDescriptions = useRef<{ [path: string]: string }>({});
     const currentActivityScreenshotVisionData = useRef<{ [path: string]: VisionFrameworkRawData }>({});
@@ -773,6 +773,7 @@ export function useTimer() {
                             appName: lastWindowRef.current.appName,
                             windowTitle: lastWindowRef.current.windowTitle,
                             bundleId: lastWindowRef.current.bundleId,
+                            browserProfile: lastWindowRef.current.browserProfile || undefined,
                             timestamp: lastWindowRef.current.timestamp,
                             duration: 0, // Will be calculated properly on stop
                             screenshotPaths: currentActivityScreenshots.current.length > 0 ? [...currentActivityScreenshots.current] : undefined,
@@ -797,10 +798,12 @@ export function useTimer() {
                     lastScreenshotTime.current = 0;
 
                     // Update to new window
+                    const detectedProfile = result.bundleId ? extractBrowserProfile(result.windowTitle, result.bundleId) : null;
                     lastWindowRef.current = {
                         appName: result.appName,
                         windowTitle: result.windowTitle,
                         bundleId: result.bundleId,
+                        browserProfile: detectedProfile || undefined,
                         timestamp: now
                     };
 

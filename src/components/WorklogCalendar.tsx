@@ -301,7 +301,9 @@ export const WorklogCalendar: React.FC<WorklogCalendarProps> = ({
                             className="relative flex flex-col items-start justify-start p-2 rounded-lg transition-all no-drag"
                             style={{
                                 minHeight: '60px',
-                                backgroundColor: hasEntries ? 'rgba(255, 72, 0, 0.15)' : 'transparent',
+                                backgroundColor: hasEntries
+                                    ? today ? 'rgba(255, 72, 0, 0.15)' : 'var(--color-border-primary)'
+                                    : 'transparent',
                                 border: selected
                                     ? '2px solid var(--color-accent)'
                                     : '1px solid var(--color-border-primary)',
