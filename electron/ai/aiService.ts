@@ -763,7 +763,7 @@ class AIService {
         return {
             success: false,
             summary: this.generateFallbackFromSignals(filteredSignals),
-            error: result.error || 'Task failed'
+            error: (result.error && result.error.trim()) || 'AI summary generation failed'
         };
     }
 
