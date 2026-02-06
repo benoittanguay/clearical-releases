@@ -69,6 +69,7 @@ export interface WindowActivity {
     appName: string;
     windowTitle: string;
     bundleId?: string; // App bundle identifier (e.g., com.google.Chrome) - used for blacklist filtering
+    browserProfile?: string; // Browser user profile name (e.g., "Work", "Personal") - used for activity grouping
     timestamp: number;
     duration: number;
     screenshotPaths?: string[];

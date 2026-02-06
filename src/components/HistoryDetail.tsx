@@ -277,7 +277,9 @@ interface HistoryDetailProps {
 }
 
 interface AppGroup {
-    appName: string;
+    appName: string;         // Raw app name (e.g., "Google Chrome")
+    browserProfile?: string; // Browser profile name if any (e.g., "Work")
+    displayName: string;     // Display name (e.g., "Google Chrome (Work)")
     totalDuration: number;
     activities: WindowActivity[];
     icon?: string;
@@ -910,8 +912,10 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
         }
     };
 
-    const handleCreateEntryFromApp = async (appName: string) => {
-        const appActivities = entry.windowActivity?.filter(activity => activity.appName === appName) || [];
+    const handleCreateEntryFromApp = async (appName: string, browserProfile?: string) => {
+        const appActivities = entry.windowActivity?.filter(activity =>
+            activity.appName === appName && activity.browserProfile === browserProfile
+        ) || [];
         if (appActivities.length === 0) return;
 
         try {
@@ -1005,10 +1009,10 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
         await handleDeleteTranscription(transcription.transcriptionId);
     };
 
-    const handleDeleteApp = async (appName: string) => {
+    const handleDeleteApp = async (appName: string, browserProfile?: string) => {
         // Check if there will be remaining activities after deletion
         const remainingActivities = entry.windowActivity?.filter(
-            activity => activity.appName !== appName
+            activity => !(activity.appName === appName && activity.browserProfile === browserProfile)
         ) || [];
         const remainingActivitiesCount = remainingActivities.length;
 
@@ -1017,7 +1021,7 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
             activity.screenshotDescriptions && Object.keys(activity.screenshotDescriptions).length > 0
         );
 
-        await removeAllActivitiesForApp(entry.id, appName);
+        await removeAllActivitiesForApp(entry.id, appName, browserProfile);
 
         // Wait a brief moment for state to update
         await new Promise(resolve => setTimeout(resolve, 100));
@@ -1941,18 +1945,26 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
         const groups = new Map<string, AppGroup>();
 
         entry.windowActivity.forEach(activity => {
-            const appName = activity.appName;
+            // Group by appName + browserProfile so different browser profiles are split
+            const groupKey = activity.browserProfile
+                ? `${activity.appName}|||${activity.browserProfile}`
+                : activity.appName;
+            const displayName = activity.browserProfile
+                ? `${activity.appName} (${activity.browserProfile})`
+                : activity.appName;
 
-            if (!groups.has(appName)) {
-                groups.set(appName, {
-                    appName,
+            if (!groups.has(groupKey)) {
+                groups.set(groupKey, {
+                    appName: activity.appName,
+                    browserProfile: activity.browserProfile,
+                    displayName,
                     totalDuration: 0,
                     activities: [],
                     icon: undefined
                 });
             }
 
-            const group = groups.get(appName)!;
+            const group = groups.get(groupKey)!;
             group.totalDuration += activity.duration;
             group.activities.push(activity);
         });
@@ -1969,20 +1981,26 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
     // Load app icons
     useEffect(() => {
         const loadIcons = async () => {
-            const uniqueApps = new Set(appGroups.map(g => g.appName));
-            const iconPromises = Array.from(uniqueApps).map(async (appName) => {
+            // Map display name → raw app name for icon lookup
+            const appNameMap = new Map<string, string>();
+            appGroups.forEach(g => {
+                if (!appNameMap.has(g.displayName)) {
+                    appNameMap.set(g.displayName, g.appName);
+                }
+            });
+            const iconPromises = Array.from(appNameMap.entries()).map(async ([displayName, rawAppName]) => {
                 // @ts-ignore
                 if (window.electron?.ipcRenderer?.getAppIcon) {
                     try {
-                        console.log(`[Renderer] Loading icon for app: ${appName}`);
+                        console.log(`[Renderer] Loading icon for app: ${rawAppName}`);
                         // @ts-ignore
-                        const icon = await window.electron.ipcRenderer.getAppIcon(appName);
-                        console.log(`[Renderer] Icon result for ${appName}:`, icon ? 'Found' : 'Not found');
+                        const icon = await window.electron.ipcRenderer.getAppIcon(rawAppName);
+                        console.log(`[Renderer] Icon result for ${rawAppName}:`, icon ? 'Found' : 'Not found');
                         if (icon) {
-                            setAppIcons(prev => new Map(prev).set(appName, icon));
+                            setAppIcons(prev => new Map(prev).set(displayName, icon));
                         }
                     } catch (error) {
-                        console.error(`[Renderer] Failed to load icon for ${appName}:`, error);
+                        console.error(`[Renderer] Failed to load icon for ${rawAppName}:`, error);
                     }
                 } else {
                     console.warn(`[Renderer] getAppIcon not available in electron API`);
@@ -2661,14 +2679,14 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                 ) : (
                     <div className="space-y-3">
                         {appGroups.map(group => {
-                            const isExpanded = expandedApps.has(group.appName);
-                            const icon = appIcons.get(group.appName);
+                            const isExpanded = expandedApps.has(group.displayName);
+                            const icon = appIcons.get(group.displayName);
 
                             return (
-                                <div key={group.appName} className="border rounded-lg overflow-hidden" style={{ backgroundColor: 'var(--color-bg-secondary)', borderColor: 'var(--color-border-primary)', borderRadius: 'var(--radius-xl)', boxShadow: 'var(--shadow-sm)' }}>
+                                <div key={group.displayName} className="border rounded-lg overflow-hidden" style={{ backgroundColor: 'var(--color-bg-secondary)', borderColor: 'var(--color-border-primary)', borderRadius: 'var(--radius-xl)', boxShadow: 'var(--shadow-sm)' }}>
                                     {/* App Header */}
                                     <button
-                                        onClick={() => toggleApp(group.appName)}
+                                        onClick={() => toggleApp(group.displayName)}
                                         className="w-full flex items-center justify-between p-3 transition-all"
                                         data-hoverable
                                         data-default-bg="transparent"
@@ -2702,7 +2720,7 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                                             >
                                                 <polyline points="9 18 15 12 9 6" />
                                             </svg>
-                                            {group.appName === 'Manual Entry' ? (
+                                            {group.displayName === 'Manual Entry' ? (
                                                 <div className="w-6 h-6 rounded flex items-center justify-center flex-shrink-0" style={{ backgroundColor: 'var(--color-bg-primary)' }}>
                                                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--color-accent)' }}>
                                                         <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
@@ -2711,14 +2729,14 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                                             ) : icon ? (
                                                 <img
                                                     src={icon}
-                                                    alt={group.appName}
+                                                    alt={group.displayName}
                                                     className="w-6 h-6 rounded flex-shrink-0"
                                                     onError={(e) => {
-                                                        console.error(`[Renderer] Failed to load icon image for ${group.appName}`);
+                                                        console.error(`[Renderer] Failed to load icon image for ${group.displayName}`);
                                                         e.currentTarget.style.display = 'none';
                                                     }}
                                                     onLoad={() => {
-                                                        console.log(`[Renderer] Successfully loaded icon for ${group.appName}`);
+                                                        console.log(`[Renderer] Successfully loaded icon for ${group.displayName}`);
                                                     }}
                                                 />
                                             ) : (
@@ -2730,7 +2748,7 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                                                 </div>
                                             )}
                                             <div className="flex-1 min-w-0">
-                                                <div className="font-semibold truncate" style={{ color: 'var(--color-text-primary)' }}>{group.appName}</div>
+                                                <div className="font-semibold truncate" style={{ color: 'var(--color-text-primary)' }}>{group.displayName}</div>
                                                 <div className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
                                                     {group.activities.length} {group.activities.length === 1 ? 'activity' : 'activities'}
                                                 </div>
@@ -2743,7 +2761,7 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                                             <button
                                                 onClick={(e) => {
                                                     e.stopPropagation();
-                                                    handleCreateEntryFromApp(group.appName);
+                                                    handleCreateEntryFromApp(group.appName, group.browserProfile);
                                                 }}
                                                 className="p-1.5 rounded-lg transition-all active:scale-95"
                                                 style={{
@@ -2780,8 +2798,8 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                                                 </svg>
                                             </button>
                                             <DeleteButton
-                                                onDelete={() => handleDeleteApp(group.appName)}
-                                                confirmMessage={`Delete all ${group.appName} activities?`}
+                                                onDelete={() => handleDeleteApp(group.appName, group.browserProfile)}
+                                                confirmMessage={`Delete all ${group.displayName} activities?`}
                                                 size="sm"
                                                 variant="subtle"
                                             />
