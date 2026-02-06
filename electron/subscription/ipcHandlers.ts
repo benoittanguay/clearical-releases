@@ -21,6 +21,7 @@ import {
     SubscriptionPlan,
     SubscriptionStatus,
     DEFAULT_SUBSCRIPTION_CONFIG,
+    isPremiumStatus,
 } from './index.js';
 import { DeviceFingerprintService } from './deviceFingerprint.js';
 import { getConfig } from '../config.js';
@@ -257,23 +258,24 @@ async function handleGetSubscriptionStatus(): Promise<{
             subscription = cachedSubscription;
         }
 
-        // Check if subscription allows premium features
-        const isPremium = ['trial', 'active', 'past_due'].includes(subscription.status);
+        // Check if subscription allows premium features (trial must not be expired)
+        const isPremium = isPremiumStatus(subscription.status as SubscriptionStatus, subscription.trialEndsAt);
 
-        // Determine tier based on plan or trial status
-        const tier: 'free' | 'workplace' =
+        // Determine tier: only grant workplace if actually premium
+        const tier: 'free' | 'workplace' = isPremium && (
             subscription.status === 'trial' ||
             subscription.plan === SubscriptionPlan.WORKPLACE_MONTHLY ||
             subscription.plan === SubscriptionPlan.WORKPLACE_YEARLY
-                ? 'workplace'
-                : 'free';
+        ) ? 'workplace' : 'free';
 
-        // Build features array from feature flags
+        // Only expose features if user has premium access
         const features: string[] = [];
-        if (subscription.features.jiraIntegration) features.push('jira');
-        if (subscription.features.tempoIntegration) features.push('tempo');
-        if (subscription.features.aiAnalysis) features.push('ai');
-        if (subscription.features.advancedReporting) features.push('reporting');
+        if (isPremium) {
+            if (subscription.features.jiraIntegration) features.push('jira');
+            if (subscription.features.tempoIntegration) features.push('tempo');
+            if (subscription.features.aiAnalysis) features.push('ai');
+            if (subscription.features.advancedReporting) features.push('reporting');
+        }
 
         return {
             tier,
