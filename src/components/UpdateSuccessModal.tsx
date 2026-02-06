@@ -36,17 +36,21 @@ export function UpdateSuccessModal({ isOpen, onClose, version, releaseNotes: ini
                                 let notes = data.body;
 
                                 // Try to extract the relevant section
-                                const whatsNewMatch = notes.match(/## What's New\s*([\s\S]*?)(?=##|$)/i);
+                                // Use lookahead that only stops at level-2 headings (## X), not level-3 (### X)
+                                const whatsNewMatch = notes.match(/## What's New\s*([\s\S]*?)(?=\n## [^#]|$)/i);
                                 if (whatsNewMatch) {
                                     notes = whatsNewMatch[1].trim();
                                 }
 
                                 // Clean up markdown formatting for plain text display
                                 notes = notes
+                                    .replace(/^###\s+/gm, '') // Remove ### headings markup (keep text)
+                                    .replace(/^---+$/gm, '') // Remove horizontal rules
                                     .replace(/\*\*/g, '') // Remove bold
                                     .replace(/\*/g, '•') // Convert bullets
                                     .replace(/^-\s/gm, '• ') // Convert dashes to bullets
                                     .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1') // Remove links, keep text
+                                    .replace(/\n{3,}/g, '\n\n') // Collapse multiple blank lines
                                     .trim();
 
                                 setReleaseNotes(notes || 'See commit history for changes in this release.');
