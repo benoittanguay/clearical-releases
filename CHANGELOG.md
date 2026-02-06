@@ -2,6 +2,16 @@
 
 All notable changes to Clearical will be documented in this file.
 
+## [1.7.37] - 2026-02-06
+
+### Bug Fixes
+- **Subscription**: Fixed premium features (Tempo, Jira, AI) remaining accessible after trial period ends
+- **Subscription**: Backend API guards now correctly block expired trial requests
+- **Settings**: Account section now correctly shows "Free Plan" with Upgrade button when trial expires
+- **Security**: Added premium guards to 5 AI handlers that were previously unprotected
+
+---
+
 ## [1.7.36] - 2026-02-06
 
 ### Bug Fixes
