@@ -31,10 +31,6 @@ export function Settings({ onOpenJiraModal, onOpenTempoModal }: SettingsProps = 
     const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null);
     const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
     const [analyticsEnabled, setAnalyticsEnabled] = useState(true);
-    const [calendarConnected, setCalendarConnected] = useState(false);
-    const [calendarEmail, setCalendarEmail] = useState<string | null>(null);
-    const [calendarLoading, setCalendarLoading] = useState(true);
-    const [calendarConnecting, setCalendarConnecting] = useState(false);
 
     const handleOpenJiraModal = () => {
         if (onOpenJiraModal) {
@@ -45,66 +41,6 @@ export function Settings({ onOpenJiraModal, onOpenTempoModal }: SettingsProps = 
     const handleOpenTempoModal = () => {
         if (onOpenTempoModal) {
             onOpenTempoModal();
-        }
-    };
-
-    // Check calendar connection status
-    const checkCalendarConnection = async () => {
-        setCalendarLoading(true);
-        try {
-            const result = await window.electron.ipcRenderer.calendar.isConnected();
-            if (result.success) {
-                setCalendarConnected(result.connected);
-                if (result.connected) {
-                    const accountResult = await window.electron.ipcRenderer.calendar.getAccount();
-                    if (accountResult.success) {
-                        setCalendarEmail(accountResult.email);
-                    }
-                }
-            }
-        } catch (err) {
-            console.error('[Settings] Failed to check calendar connection:', err);
-        } finally {
-            setCalendarLoading(false);
-        }
-    };
-
-    const handleCalendarConnect = async () => {
-        setCalendarConnecting(true);
-        try {
-            analytics.track('calendar.connect_initiated');
-            const result = await window.electron.ipcRenderer.calendar.connect();
-            if (result.success) {
-                analytics.track('calendar.connect_success');
-                await checkCalendarConnection();
-            } else {
-                analytics.track('calendar.connect_failed', { error: result.error });
-            }
-        } catch (err) {
-            console.error('[Settings] Failed to connect calendar:', err);
-            analytics.track('calendar.connect_error', { error: String(err) });
-        } finally {
-            setCalendarConnecting(false);
-        }
-    };
-
-    const handleCalendarDisconnect = async () => {
-        if (!confirm('Are you sure you want to disconnect your Google Calendar?')) {
-            return;
-        }
-        setCalendarConnecting(true);
-        try {
-            analytics.track('calendar.disconnect_initiated');
-            const result = await window.electron.ipcRenderer.calendar.disconnect();
-            if (result.success) {
-                analytics.track('calendar.disconnect_success');
-                setCalendarConnected(false);
-                setCalendarEmail(null);
-            }
-        } catch (err) {
-            console.error('[Settings] Failed to disconnect calendar:', err);
-        } finally {
-            setCalendarConnecting(false);
         }
     };
 
@@ -130,11 +66,6 @@ export function Settings({ onOpenJiraModal, onOpenTempoModal }: SettingsProps = 
         // Poll every few seconds in case user changed it
         const interval = setInterval(checkPermission, 2000);
         return () => clearInterval(interval);
-    }, []);
-
-    // Check calendar connection on mount
-    useEffect(() => {
-        checkCalendarConnection();
     }, []);
 
     // Get app version and update status on mount
@@ -1064,49 +995,6 @@ export function Settings({ onOpenJiraModal, onOpenTempoModal }: SettingsProps = 
                                     className="px-3 py-1 bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white text-xs rounded-lg transition-all"
                                 >
                                     Configure
-                                </button>
-                            )}
-                        </div>
-                    </div>
-
-                    {/* Google Calendar Status */}
-                    <div className="flex items-center justify-between bg-[var(--color-bg-tertiary)] p-2.5 rounded-lg border border-[var(--color-border-primary)]">
-                        <div className="flex-1">
-                            <div className="text-sm font-medium text-[var(--color-text-primary)]">
-                                Google Calendar
-                            </div>
-                            <div className="text-xs text-[var(--color-text-secondary)]">
-                                {calendarLoading
-                                    ? 'Checking connection...'
-                                    : calendarConnected
-                                        ? calendarEmail || 'Connected'
-                                        : 'Integration disabled'
-                                }
-                            </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <span className={`text-[10px] px-2 py-1 rounded-full font-semibold font-mono tracking-wide ${
-                                calendarConnected
-                                    ? 'bg-[var(--color-success-muted)] text-[var(--color-success)]'
-                                    : 'bg-[var(--color-bg-quaternary)] text-[var(--color-text-tertiary)]'
-                            }`}>
-                                {calendarConnected ? 'CONNECTED' : 'DISABLED'}
-                            </span>
-                            {calendarConnected ? (
-                                <button
-                                    onClick={handleCalendarDisconnect}
-                                    disabled={calendarConnecting}
-                                    className="px-3 py-1 bg-[var(--color-error)] hover:bg-[var(--color-error)]/90 disabled:opacity-50 text-white text-xs rounded-lg transition-all"
-                                >
-                                    {calendarConnecting ? 'Disconnecting...' : 'Disconnect'}
-                                </button>
-                            ) : (
-                                <button
-                                    onClick={handleCalendarConnect}
-                                    disabled={calendarConnecting || calendarLoading}
-                                    className="px-3 py-1 bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] disabled:opacity-50 text-white text-xs rounded-lg transition-all"
-                                >
-                                    {calendarConnecting ? 'Connecting...' : 'Connect'}
                                 </button>
                             )}
                         </div>
