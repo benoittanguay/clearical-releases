@@ -31,6 +31,12 @@ export function Settings({ onOpenJiraModal, onOpenTempoModal }: SettingsProps = 
     const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null);
     const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
     const [analyticsEnabled, setAnalyticsEnabled] = useState(true);
+    const [transcriptionUsage, setTranscriptionUsage] = useState<{
+        monthlyUsedSeconds: number;
+        monthlyLimitSeconds: number;
+        remainingSeconds: number;
+    } | null>(null);
+    const [usageLoading, setUsageLoading] = useState(true);
 
     const handleOpenJiraModal = () => {
         if (onOpenJiraModal) {
@@ -187,6 +193,23 @@ export function Settings({ onOpenJiraModal, onOpenTempoModal }: SettingsProps = 
             }
         };
         loadAnalyticsPreference();
+    }, []);
+
+    // Fetch transcription usage on mount
+    useEffect(() => {
+        const fetchUsage = async () => {
+            try {
+                const result = await window.electron.ipcRenderer.meeting.getTranscriptionUsage();
+                if (result.success && result.usage) {
+                    setTranscriptionUsage(result.usage);
+                }
+            } catch (err) {
+                console.error('[Settings] Failed to fetch transcription usage:', err);
+            } finally {
+                setUsageLoading(false);
+            }
+        };
+        fetchUsage();
     }, []);
 
     // Track when settings is opened
@@ -408,6 +431,40 @@ export function Settings({ onOpenJiraModal, onOpenTempoModal }: SettingsProps = 
                             )}
                         </div>
                     </div>
+
+                    {/* AI Usage */}
+                    {usageLoading ? (
+                        <div className="bg-[var(--color-bg-tertiary)] p-3 rounded-xl border border-[var(--color-border-primary)] animate-pulse">
+                            <div className="h-4 bg-[var(--color-bg-quaternary)] rounded w-1/3 mb-2"></div>
+                            <div className="h-3 bg-[var(--color-bg-quaternary)] rounded w-2/3 mb-2"></div>
+                            <div className="h-1.5 bg-[var(--color-bg-quaternary)] rounded-full w-full"></div>
+                        </div>
+                    ) : transcriptionUsage ? (() => {
+                        const usedHours = transcriptionUsage.monthlyUsedSeconds / 3600;
+                        const limitHours = transcriptionUsage.monthlyLimitSeconds / 3600;
+                        const percentage = limitHours > 0 ? Math.min((usedHours / limitHours) * 100, 100) : 0;
+                        const barColor = percentage > 90 ? 'var(--color-error)' : percentage > 75 ? 'var(--color-warning)' : 'var(--color-accent)';
+                        return (
+                            <div className="bg-[var(--color-bg-tertiary)] p-3 rounded-xl border border-[var(--color-border-primary)] transition-all duration-200 hover:border-[var(--color-accent)]/20">
+                                <div className="flex items-center justify-between mb-0.5">
+                                    <div className="text-sm font-medium text-[var(--color-text-primary)]">AI Usage</div>
+                                    <div className="text-sm font-mono text-[var(--color-text-primary)]">
+                                        {usedHours % 1 === 0 ? usedHours.toFixed(0) : usedHours.toFixed(1)} / {limitHours % 1 === 0 ? limitHours.toFixed(0) : limitHours.toFixed(1)} hrs
+                                    </div>
+                                </div>
+                                <div className="text-xs text-[var(--color-text-secondary)] mb-2">Meeting transcription this month</div>
+                                <div className="flex items-center gap-2">
+                                    <div className="flex-1 h-1.5 bg-[var(--color-bg-quaternary)] rounded-full overflow-hidden">
+                                        <div
+                                            className="h-full rounded-full transition-all duration-500"
+                                            style={{ width: `${percentage}%`, backgroundColor: barColor }}
+                                        />
+                                    </div>
+                                    <span className="text-[10px] font-mono text-[var(--color-text-tertiary)] min-w-[28px] text-right">{Math.round(percentage)}%</span>
+                                </div>
+                            </div>
+                        );
+                    })() : null}
 
                     {/* User role input */}
                     <div>
