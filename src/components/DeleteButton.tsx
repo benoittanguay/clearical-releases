@@ -30,10 +30,10 @@ export function DeleteButton({
         setIsDeleting(true);
         try {
             await onDelete();
-            setShowModal(false);
         } catch (error) {
             console.error('Delete failed:', error);
         } finally {
+            setShowModal(false);
             setIsDeleting(false);
         }
     };

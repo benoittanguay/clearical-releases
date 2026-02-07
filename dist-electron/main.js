@@ -58,6 +58,15 @@ process.on('uncaughtException', (error) => {
         // Silently ignore these errors to prevent crash dialogs
         return;
     }
+    // Handle server listen/bind permission errors gracefully
+    // These can escape http.Server error handlers in edge cases
+    if ('code' in error && error.code === 'EPERM') {
+        const msg = error.message.toLowerCase();
+        if (msg.includes('listen') || msg.includes('server') || msg.includes('bind') || msg.includes('port')) {
+            console.error('[Main] Server permission error (handled gracefully):', error.message);
+            return;
+        }
+    }
     // For all other uncaught exceptions, log them and show error dialog
     console.error('[Main] Uncaught Exception:', error);
     // In production, we might want to show an error dialog
@@ -691,7 +700,8 @@ ipcMain.handle('capture-screenshot', async () => {
     return null;
 });
 // AI Screenshot Analysis (via Gemini cloud service)
-ipcMain.handle('analyze-screenshot', async (event, imagePath, requestId) => {
+// PREMIUM FEATURE: Requires Workplace Plan subscription
+ipcMain.handle('analyze-screenshot', requirePremium('AI Analysis', async (event, imagePath, requestId) => {
     console.log('[Main] analyze-screenshot requested for:', imagePath);
     console.log('[Main] Using Gemini cloud AI for screenshot analysis');
     // Check if the image file exists
@@ -889,7 +899,123 @@ ipcMain.handle('analyze-screenshot', async (event, imagePath, requestId) => {
             analyzer: 'fallback'
         };
     }
-});
+}));
+// Batch screenshot analysis handler - analyzes multiple screenshots in a single API call
+// PREMIUM FEATURE: Requires Workplace Plan subscription
+ipcMain.handle('analyze-screenshot-batch', requirePremium('AI Analysis', async (event, inputs) => {
+    console.log(`[Main] analyze-screenshot-batch requested for ${inputs.length} screenshots`);
+    if (!inputs || inputs.length === 0) {
+        return { success: true, results: [] };
+    }
+    // Process each input to prepare for batch analysis
+    const batchInputs = [];
+    const tempFiles = [];
+    for (const input of inputs) {
+        let analyzeImagePath = input.imagePath;
+        // Check if file exists
+        if (!fs.existsSync(input.imagePath)) {
+            console.log(`[Main] Image file not found: ${input.imagePath}`);
+            continue;
+        }
+        // Decrypt if encrypted
+        try {
+            if (isFileEncrypted(input.imagePath)) {
+                console.log(`[Main] Decrypting screenshot for batch: ${path.basename(input.imagePath)}`);
+                const decryptedData = await decryptFile(input.imagePath);
+                const originalFilename = path.basename(input.imagePath);
+                const tempPath = path.join(app.getPath('temp'), `batch_${Date.now()}_${originalFilename}`);
+                await fs.promises.writeFile(tempPath, decryptedData);
+                analyzeImagePath = tempPath;
+                tempFiles.push(tempPath);
+            }
+        }
+        catch (decryptError) {
+            console.error(`[Main] Failed to decrypt screenshot: ${input.imagePath}`, decryptError);
+            // Continue with original path - might be unencrypted
+        }
+        // Parse app name and window title from filename if not provided
+        let appName = input.appName;
+        let windowTitle = input.windowTitle;
+        if (!appName || !windowTitle) {
+            try {
+                const filename = path.basename(analyzeImagePath, '.png');
+                if (filename.includes('|||')) {
+                    const parts = filename.split('|||');
+                    if (parts.length >= 3) {
+                        appName = appName || parts[1] || undefined;
+                        windowTitle = windowTitle || parts[2] || undefined;
+                    }
+                }
+            }
+            catch (parseError) {
+                // Ignore parse errors
+            }
+        }
+        batchInputs.push({
+            imagePath: analyzeImagePath,
+            appName,
+            windowTitle,
+            requestId: input.requestId
+        });
+    }
+    if (batchInputs.length === 0) {
+        return {
+            success: false,
+            results: inputs.map(input => ({
+                imagePath: input.imagePath,
+                success: false,
+                description: 'Screenshot captured',
+                error: 'Failed to process image'
+            })),
+            error: 'All images failed processing'
+        };
+    }
+    try {
+        // Call the batch analysis method
+        const result = await aiService.analyzeScreenshotBatch(batchInputs);
+        console.log(`[Main] Batch analysis completed: ${result.results.filter(r => r.success).length}/${batchInputs.length} successful`);
+        // Map results back to original image paths (for encrypted files)
+        const finalResults = result.results.map((r, i) => {
+            const originalInput = inputs.find(input => {
+                const batchInput = batchInputs[i];
+                return batchInput && (input.imagePath === batchInput.imagePath ||
+                    path.basename(input.imagePath) === path.basename(batchInput.imagePath).replace(/^batch_\d+_/, ''));
+            });
+            return {
+                ...r,
+                imagePath: originalInput?.imagePath || r.imagePath
+            };
+        });
+        return {
+            success: result.success,
+            results: finalResults
+        };
+    }
+    catch (error) {
+        console.error('[Main] Batch analysis error:', error);
+        return {
+            success: false,
+            results: inputs.map(input => ({
+                imagePath: input.imagePath,
+                success: false,
+                description: 'Screenshot captured',
+                error: error instanceof Error ? error.message : 'Batch analysis failed'
+            })),
+            error: error instanceof Error ? error.message : 'Batch analysis failed'
+        };
+    }
+    finally {
+        // Clean up temp files
+        for (const tempFile of tempFiles) {
+            try {
+                await fs.promises.unlink(tempFile);
+            }
+            catch (cleanupError) {
+                console.warn(`[Main] Failed to cleanup temp file: ${tempFile}`, cleanupError);
+            }
+        }
+    }
+}));
 // Permission Handlers
 /**
  * Tests if screen recording permission actually works by attempting to capture.
@@ -1606,6 +1732,8 @@ ipcMain.handle('tempo-api-request', requirePremium('Tempo Integration', async (e
         console.log('[Main] Tempo API request body type:', typeof body);
         console.log('[Main] Tempo API request body preview:', JSON.stringify(body).substring(0, 200));
     }
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
     try {
         const requestBody = body && (method === 'POST' || method === 'PUT')
             ? (typeof body === 'string' ? body : JSON.stringify(body))
@@ -1620,7 +1748,9 @@ ipcMain.handle('tempo-api-request', requirePremium('Tempo Integration', async (e
                 ...headers,
             },
             body: requestBody,
+            signal: controller.signal,
         });
+        clearTimeout(timeoutId);
         const responseHeaders = Object.fromEntries(response.headers.entries());
         console.log('[Main] Tempo API response status:', response.status, response.statusText);
         let responseData;
@@ -1651,10 +1781,14 @@ ipcMain.handle('tempo-api-request', requirePremium('Tempo Integration', async (e
         };
     }
     catch (error) {
+        clearTimeout(timeoutId);
         console.error('[Main] Tempo API request failed:', error);
+        const message = error instanceof Error
+            ? (error.name === 'AbortError' ? 'Request timed out after 30s' : error.message)
+            : 'Unknown error';
         return {
             success: false,
-            error: error instanceof Error ? error.message : 'Unknown error',
+            error: message,
         };
     }
 }));
@@ -1666,6 +1800,8 @@ ipcMain.handle('jira-api-request', requirePremium('Jira Integration', async (eve
         console.log('[Main] Jira API request body type:', typeof body);
         console.log('[Main] Jira API request body preview:', JSON.stringify(body).substring(0, 200));
     }
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
     try {
         const requestBody = body && (method === 'POST' || method === 'PUT')
             ? (typeof body === 'string' ? body : JSON.stringify(body))
@@ -1680,7 +1816,9 @@ ipcMain.handle('jira-api-request', requirePremium('Jira Integration', async (eve
                 ...headers,
             },
             body: requestBody,
+            signal: controller.signal,
         });
+        clearTimeout(timeoutId);
         const responseHeaders = Object.fromEntries(response.headers.entries());
         console.log('[Main] Jira API response status:', response.status, response.statusText);
         let responseData;
@@ -1711,10 +1849,14 @@ ipcMain.handle('jira-api-request', requirePremium('Jira Integration', async (eve
         };
     }
     catch (error) {
+        clearTimeout(timeoutId);
         console.error('[Main] Jira API request failed:', error);
+        const message = error instanceof Error
+            ? (error.name === 'AbortError' ? 'Request timed out after 30s' : error.message)
+            : 'Unknown error';
         return {
             success: false,
-            error: error instanceof Error ? error.message : 'Unknown error',
+            error: message,
         };
     }
 }));
@@ -2287,7 +2429,8 @@ ipcMain.handle('meeting:merge-audio-files', async (_event, micPath, systemPath, 
     }
 });
 // AI Assignment Suggestion Handler
-ipcMain.handle('suggest-assignment', async (event, request) => {
+// PREMIUM FEATURE: Requires Workplace Plan subscription
+ipcMain.handle('suggest-assignment', requirePremium('AI Analysis', async (event, request) => {
     console.log('[Main] suggest-assignment requested');
     console.log('[Main] Context:', {
         description: request.context.description?.substring(0, 50) + '...',
@@ -2317,9 +2460,10 @@ ipcMain.handle('suggest-assignment', async (event, request) => {
             suggestion: null
         };
     }
-});
+}));
 // AI Activity Summary Generation Handler
-ipcMain.handle('generate-activity-summary', async (event, context) => {
+// PREMIUM FEATURE: Requires Workplace Plan subscription
+ipcMain.handle('generate-activity-summary', requirePremium('AI Analysis', async (event, context) => {
     console.log('[Main] generate-activity-summary requested for entry:', context.entryId);
     console.log('[Main] Screenshot descriptions:', context.screenshotDescriptions.length);
     console.log('[Main] Window titles:', context.windowTitles?.length || 0);
@@ -2397,7 +2541,7 @@ ipcMain.handle('generate-activity-summary', async (event, context) => {
             };
         }
         else {
-            throw new Error(result.error || 'Failed to generate summary');
+            throw new Error((result.error && result.error.trim()) || 'Failed to generate summary');
         }
     }
     catch (error) {
@@ -2407,9 +2551,10 @@ ipcMain.handle('generate-activity-summary', async (event, context) => {
             error: error instanceof Error ? error.message : 'Unknown error'
         };
     }
-});
+}));
 // AI Tempo Account Selection Handler
-ipcMain.handle('select-tempo-account', async (event, request) => {
+// PREMIUM FEATURE: Requires Workplace Plan subscription
+ipcMain.handle('select-tempo-account', requirePremium('AI Analysis', async (event, request) => {
     console.log('[Main] select-tempo-account requested');
     console.log('[Main] Issue:', request.issue.key);
     console.log('[Main] Available accounts:', request.accounts.length);
@@ -2443,7 +2588,7 @@ ipcMain.handle('select-tempo-account', async (event, request) => {
             selection: null
         };
     }
-});
+}));
 // ========================================================================
 // DATABASE IPC HANDLERS
 // ========================================================================
