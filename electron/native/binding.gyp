@@ -9,6 +9,7 @@
         "src/system_audio_capture.mm",
         "src/mic_capture.mm",
         "src/speech_transcriber.mm",
+        "src/screenshot_capture.mm",
         "src/index.mm"
       ],
       "include_dirs": [
@@ -34,7 +35,10 @@
               "-framework CoreMedia",
               "-framework Accelerate",
               "-framework Speech",
-              "-framework AudioToolbox"
+              "-framework AudioToolbox",
+              "-framework CoreGraphics",
+              "-framework ImageIO",
+              "-framework UniformTypeIdentifiers"
             ]
           }
         }]

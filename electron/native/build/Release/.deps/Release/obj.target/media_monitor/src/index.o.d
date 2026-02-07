@@ -8,7 +8,8 @@ Release/obj.target/media_monitor/src/index.o: ../src/index.mm \
   /Users/benoittanguay/Documents/Anti/TimePortal/electron/native/node_modules/node-addon-api/napi-inl.h \
   /Users/benoittanguay/Documents/Anti/TimePortal/electron/native/node_modules/node-addon-api/napi-inl.deprecated.h \
   ../src/media_monitor.h ../src/system_audio_capture.h \
-  ../src/mic_capture.h ../src/speech_transcriber.h
+  ../src/mic_capture.h ../src/speech_transcriber.h \
+  ../src/screenshot_capture.h
 ../src/index.mm:
 /Users/benoittanguay/Documents/Anti/TimePortal/electron/native/node_modules/node-addon-api/napi.h:
 /Users/benoittanguay/Library/Caches/node-gyp/22.17.1/include/node/node_api.h:
@@ -21,3 +22,4 @@ Release/obj.target/media_monitor/src/index.o: ../src/index.mm \
 ../src/system_audio_capture.h:
 ../src/mic_capture.h:
 ../src/speech_transcriber.h:
+../src/screenshot_capture.h:

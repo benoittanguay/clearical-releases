@@ -223,7 +223,7 @@ export function useTimer() {
     const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const windowPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const screenshotIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-    const lastWindowRef = useRef<{ appName: string, windowTitle: string, bundleId?: string, browserProfile?: string, timestamp: number } | null>(null);
+    const lastWindowRef = useRef<{ appName: string, windowTitle: string, bundleId?: string, pid?: number, browserProfile?: string, timestamp: number } | null>(null);
     const currentActivityScreenshots = useRef<string[]>([]);
     const currentActivityScreenshotDescriptions = useRef<{ [path: string]: string }>({});
     const currentActivityScreenshotVisionData = useRef<{ [path: string]: VisionFrameworkRawData }>({});
@@ -361,7 +361,14 @@ export function useTimer() {
 
             try {
                 // @ts-ignore
-                const path = await window.electron.ipcRenderer.captureScreenshot();
+                const path = await window.electron.ipcRenderer.captureScreenshot(
+                    currentWindow ? {
+                        appName: currentWindow.appName,
+                        windowTitle: currentWindow.windowTitle,
+                        bundleId: currentWindow.bundleId || '',
+                        pid: currentWindow.pid || 0
+                    } : undefined
+                );
                 if (!path) {
                     console.log('[Renderer] ❌ Screenshot capture failed - no path returned');
                     return null;
@@ -803,6 +810,7 @@ export function useTimer() {
                         appName: result.appName,
                         windowTitle: result.windowTitle,
                         bundleId: result.bundleId,
+                        pid: result.pid,
                         browserProfile: detectedProfile || undefined,
                         timestamp: now
                     };
