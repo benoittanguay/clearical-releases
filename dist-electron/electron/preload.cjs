@@ -22,8 +22,9 @@ electron_1.contextBridge.exposeInMainWorld('electron', {
         invoke: (channel, ...args) => electron_1.ipcRenderer.invoke(channel, ...args),
         // Auth OAuth
         signInWithOAuth: (provider) => electron_1.ipcRenderer.invoke('auth:sign-in-oauth', provider),
-        captureScreenshot: () => electron_1.ipcRenderer.invoke('capture-screenshot'),
+        captureScreenshot: (windowInfo) => electron_1.ipcRenderer.invoke('capture-screenshot', windowInfo),
         analyzeScreenshot: (imagePath, requestId) => electron_1.ipcRenderer.invoke('analyze-screenshot', imagePath, requestId),
+        analyzeScreenshotBatch: (inputs) => electron_1.ipcRenderer.invoke('analyze-screenshot-batch', inputs),
         generateActivitySummary: (context) => electron_1.ipcRenderer.invoke('generate-activity-summary', context),
         analyzeSplits: (activityData) => electron_1.ipcRenderer.invoke('ai:analyze-splits', activityData),
         getActiveWindow: () => electron_1.ipcRenderer.invoke('get-active-window'),
