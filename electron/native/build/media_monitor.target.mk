@@ -117,6 +117,7 @@ OBJS := \
 	$(obj).target/$(TARGET)/src/system_audio_capture.o \
 	$(obj).target/$(TARGET)/src/mic_capture.o \
 	$(obj).target/$(TARGET)/src/speech_transcriber.o \
+	$(obj).target/$(TARGET)/src/screenshot_capture.o \
 	$(obj).target/$(TARGET)/src/index.o
 
 # Add to the list of files we specially track dependencies for.
@@ -181,7 +182,10 @@ LIBS := \
 	-framework CoreMedia \
 	-framework Accelerate \
 	-framework Speech \
-	-framework AudioToolbox
+	-framework AudioToolbox \
+	-framework CoreGraphics \
+	-framework ImageIO \
+	-framework UniformTypeIdentifiers
 
 $(builddir)/media_monitor.node: GYP_LDFLAGS := $(LDFLAGS_$(BUILDTYPE))
 $(builddir)/media_monitor.node: LIBS := $(LIBS)

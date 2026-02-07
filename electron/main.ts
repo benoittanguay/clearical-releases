@@ -357,432 +357,65 @@ if (!fs.existsSync(SCREENSHOTS_DIR)) {
     fs.mkdirSync(SCREENSHOTS_DIR, { recursive: true });
 }
 
-ipcMain.handle('capture-screenshot', async () => {
-    console.log('[Main] capture-screenshot requested');
+ipcMain.handle('capture-screenshot', async (_event, windowInfo?: { appName: string; windowTitle: string; bundleId: string; pid: number }) => {
+    console.log('[Main] capture-screenshot requested', windowInfo ? `for ${windowInfo.appName} (pid=${windowInfo.pid})` : '(no window info)');
 
+    // Check screen recording permission
     if (process.platform === 'darwin') {
         const status = systemPreferences.getMediaAccessStatus('screen');
         console.log('[Main] Current Screen Access Status:', status);
     }
 
-    // Helper function for robust screen capture fallback
-    // This ensures we ALWAYS get a screenshot when called, using the full screen if window matching fails
-    const captureScreenFallback = async (
-        currentWindow: { appName: string; windowTitle: string; bundleId: string } | null,
-        reason: string
-    ): Promise<string | null> => {
-        console.log(`[Main] Using screen capture fallback (reason: ${reason})`);
-        try {
-            const screenSources = await desktopCapturer.getSources({
-                types: ['screen'],
-                thumbnailSize: { width: 1920, height: 1080 }
-            });
+    // Guard: return null if no window info or no PID
+    if (!windowInfo || !windowInfo.pid) {
+        console.log('[Main] No window info or PID provided, skipping screenshot');
+        return null;
+    }
 
-            if (screenSources.length > 0) {
-                const image = screenSources[0].thumbnail.toPNG();
-                const timestamp = Date.now();
-                // Use the active window info from AppleScript for proper attribution
-                const appNameSafe = (currentWindow?.appName || 'Unknown').replace(/[\/\\:*?"<>|]/g, '_');
-                const windowTitleSafe = (currentWindow?.windowTitle || 'Unknown').replace(/[\/\\:*?"<>|]/g, '_').substring(0, 100);
-                const filename = `${timestamp}|||${appNameSafe}|||${windowTitleSafe}.png`;
-                const filePath = path.join(SCREENSHOTS_DIR, filename);
+    // Check if the active app is blacklisted
+    const blacklistService = BlacklistService.getInstance();
+    if (windowInfo.bundleId && blacklistService.isAppBlacklisted(windowInfo.bundleId)) {
+        console.log(`[Main] capture-screenshot - App is blacklisted (${windowInfo.appName}, ${windowInfo.bundleId}), skipping screenshot`);
+        return null;
+    }
 
-                try {
-                    await saveEncryptedFile(filePath, image);
-                    console.log('[Main] Screen screenshot saved (encrypted, fallback):', filePath);
-                } catch (encryptError) {
-                    console.error('[Main] Failed to encrypt screenshot, saving unencrypted:', encryptError);
-                    await fs.promises.writeFile(filePath, image);
-                    console.log('[Main] Screen screenshot saved (unencrypted fallback):', filePath);
-                }
-                return filePath;
-            }
-            console.error('[Main] No screen sources available for fallback');
-            return null;
-        } catch (error) {
-            console.error('[Main] Screen capture fallback failed:', error);
-            return null;
-        }
-    };
+    // Skip screenshots when Clearical itself is the frontmost app
+    const appNameLower = windowInfo.appName.toLowerCase();
+    if (appNameLower === 'clearical' || appNameLower === 'time-portal' || appNameLower === 'timeportal' || windowInfo.bundleId === 'io.clearical.app') {
+        console.log(`[Main] capture-screenshot - Clearical app is frontmost, skipping to avoid self-capture`);
+        return null;
+    }
 
     try {
-        // IMPORTANT: To avoid race conditions, we capture window sources FIRST,
-        // then immediately get the active window info. This minimizes the window
-        // where the user could switch apps between detection and capture.
+        // Capture the specific window by PID using native CGWindowListCreateImage
+        const image = mediaMonitor.captureWindowScreenshot(windowInfo.pid, windowInfo.windowTitle);
 
-        // Step 1: Get all window sources immediately
-        const sources = await desktopCapturer.getSources({
-            types: ['window'],
-            thumbnailSize: { width: 1920, height: 1080 },
-            fetchWindowIcons: true
-        });
-        const captureTimestamp = Date.now(); // Record when we captured
-        console.log('[Main] Window sources captured at:', captureTimestamp, 'count:', sources.length);
-
-        // Step 2: IMMEDIATELY get current active window info (minimize race window)
-        let currentWindow: { appName: string; windowTitle: string; bundleId: string } | null = null;
-        try {
-            if (process.platform === 'darwin') {
-                const { exec } = await import('child_process');
-                const { promisify } = await import('util');
-                const execAsync = promisify(exec);
-
-                // Get active app name, window title, and bundle ID
-                // Enhanced to handle empty titles, missing values, and apps with no windows
-                // Uses multiple strategies for Electron apps (Cursor, VS Code, etc.) which may not expose window titles via standard API
-                const result = await execAsync(`osascript -e '
-                    tell application "System Events"
-                        set frontApp to first application process whose frontmost is true
-                        set appName to name of frontApp
-                        set bundleId to bundle identifier of frontApp
-                        set windowTitle to ""
-
-                        -- Strategy 1: Try to get title from front window (standard approach)
-                        set windowCount to 0
-                        try
-                            set windowCount to count of windows of frontApp
-                        end try
-
-                        if windowCount > 0 then
-                            try
-                                set windowTitle to title of front window of frontApp
-                                if windowTitle is missing value then
-                                    set windowTitle to ""
-                                end if
-                            on error
-                                set windowTitle to ""
-                            end try
-                        end if
-
-                        -- Strategy 2: For Electron apps, try AXTitle from UI elements
-                        -- Electron apps often have the title in a different accessibility element
-                        if windowTitle is "" then
-                            try
-                                set uiElements to UI elements of frontApp
-                                repeat with elem in uiElements
-                                    try
-                                        set elemRole to role of elem
-                                        if elemRole is "AXWindow" then
-                                            set axTitle to value of attribute "AXTitle" of elem
-                                            if axTitle is not missing value and axTitle is not "" then
-                                                set windowTitle to axTitle
-                                                exit repeat
-                                            end if
-                                        end if
-                                    end try
-                                end repeat
-                            end try
-                        end if
-
-                        -- Strategy 3: Try getting title from the first window directly via AXTitle attribute
-                        if windowTitle is "" and windowCount > 0 then
-                            try
-                                set firstWindow to window 1 of frontApp
-                                set axTitle to value of attribute "AXTitle" of firstWindow
-                                if axTitle is not missing value and axTitle is not "" then
-                                    set windowTitle to axTitle
-                                end if
-                            end try
-                        end if
-
-                        -- Strategy 4: For Electron apps, the document title is sometimes in AXDocument
-                        if windowTitle is "" then
-                            try
-                                set firstWindow to window 1 of frontApp
-                                set docTitle to value of attribute "AXDocument" of firstWindow
-                                if docTitle is not missing value and docTitle is not "" then
-                                    -- Extract filename from path if it looks like a path
-                                    if docTitle contains "/" then
-                                        set AppleScript'"'"'s text item delimiters to "/"
-                                        set pathParts to text items of docTitle
-                                        set windowTitle to last item of pathParts
-                                        set AppleScript'"'"'s text item delimiters to ""
-                                    else
-                                        set windowTitle to docTitle
-                                    end if
-                                end if
-                            end try
-                        end if
-
-                        return appName & "|||" & windowTitle & "|||" & bundleId
-                    end tell
-                '`);
-
-                const parts = result.stdout.trim().split('|||');
-                const appName = parts[0] || 'Unknown';
-                const windowTitle = parts[1] || 'Unknown';
-                const bundleId = parts[2] || '';
-
-                currentWindow = { appName, windowTitle, bundleId };
-                console.log('[Main] capture-screenshot - Active window:', currentWindow);
-
-                // Check if the active app is blacklisted
-                const blacklistService = BlacklistService.getInstance();
-                if (bundleId && blacklistService.isAppBlacklisted(bundleId)) {
-                    console.log(`[Main] capture-screenshot - App is blacklisted (${appName}, ${bundleId}), skipping screenshot`);
-                    return null;
-                }
-
-                // Skip screenshots when Clearical itself is the frontmost app
-                // This prevents race conditions where the app gains focus during screenshot capture
-                const appNameLower = appName.toLowerCase();
-                if (appNameLower === 'clearical' || appNameLower === 'time-portal' || appNameLower === 'timeportal' || bundleId === 'io.clearical.app') {
-                    console.log(`[Main] capture-screenshot - Clearical app is frontmost, skipping to avoid self-capture`);
-                    return null;
-                }
-            }
-        } catch (error) {
-            console.log('[Main] Could not get active window info for screenshot:', error);
-        }
-
-        console.log('[Main] Window sources found:', sources.length);
-
-        // Log all available windows for debugging
-        console.log('[Main] Available windows:');
-        sources.forEach((source, index) => {
-            const size = source.thumbnail.getSize();
-            console.log(`[Main] ${index}: "${source.name}" (${size.width}x${size.height})`);
-        });
-
-        // Filter out the Clearical app window itself and very small windows
-        const validSources = sources.filter(source => {
-            const lowerName = source.name.toLowerCase();
-            const size = source.thumbnail.getSize();
-
-            // Filter out the actual Clearical app window
-            if (lowerName === 'time-portal' || lowerName === 'timeportal' || lowerName === 'clearical') {
-                console.log('[Main] Filtering out Clearical app window:', source.name);
-                return false;
-            }
-
-            // Filter out Electron windows (these are usually the Clearical app or dev tools)
-            if (lowerName === 'electron' || source.name === 'Electron') {
-                console.log('[Main] Filtering out Electron window:', source.name);
-                return false;
-            }
-
-            // Filter out very small windows (likely toolbar or menu items)
-            if (size.width < 200 || size.height < 100) {
-                console.log('[Main] Filtering out small window:', source.name, `(${size.width}x${size.height})`);
-                return false;
-            }
-            
-            // Filter out empty or unnamed windows
-            if (!source.name || source.name.trim() === '') {
-                console.log('[Main] Filtering out unnamed window');
-                return false;
-            }
-            
-            // Log which windows pass the filter
-            console.log('[Main] Window passed filtering:', source.name, `(${size.width}x${size.height})`);
-            return true;
-        });
-
-        console.log('[Main] Valid window sources after filtering:', validSources.length);
-        if (validSources.length > 0) {
-            console.log('[Main] Valid windows:');
-            validSources.forEach((source, index) => {
-                const size = source.thumbnail.getSize();
-                console.log(`[Main] ${index}: "${source.name}" (${size.width}x${size.height})`);
-            });
-        }
-
-        if (validSources.length > 0) {
-            // Try to find the window that matches the active window
-            // Track match confidence for debugging and validation
-            let targetSource = null;
-            let matchConfidence: 'exact' | 'app_match' | 'partial' | 'single_window' | 'lenient' | 'none' = 'none';
-
-            if (currentWindow && currentWindow.appName && currentWindow.windowTitle) {
-                console.log('[Main] Looking for window match - App:', currentWindow.appName, 'Title:', currentWindow.windowTitle);
-
-                // Strategy 1: Exact window title match (highest confidence)
-                const exactTitleMatch = validSources.find(source =>
-                    source.name === currentWindow.windowTitle
-                );
-
-                if (exactTitleMatch) {
-                    targetSource = exactTitleMatch;
-                    matchConfidence = 'exact';
-                    console.log('[Main] Found exact window title match:', targetSource.name);
-                } else {
-                    // Strategy 2: Match windows that contain the app name
-                    const appNameMatches = validSources.filter(source => {
-                        const sourceLower = source.name.toLowerCase();
-                        const appNameLower = currentWindow.appName.toLowerCase();
-
-                        // Check if the window name contains the app name or vice versa
-                        return sourceLower.includes(appNameLower) || appNameLower.includes(sourceLower);
-                    });
-
-                    if (appNameMatches.length > 0) {
-                        // If multiple matches, prefer the one with the window title
-                        const titleMatch = appNameMatches.find(source =>
-                            source.name.includes(currentWindow.windowTitle) ||
-                            currentWindow.windowTitle.includes(source.name)
-                        );
-
-                        targetSource = titleMatch || appNameMatches[0];
-                        matchConfidence = 'app_match';
-                        console.log('[Main] Found app name match:', targetSource.name, 'from', appNameMatches.length, 'candidates');
-                    } else {
-                        // Strategy 3: Enhanced partial title matching for browsers
-                        let partialMatch = null;
-
-                        // Try matching by removing browser-specific suffixes
-                        const cleanTitle = currentWindow.windowTitle
-                            .replace(/ - Audio playing.*/i, '')  // Remove "- Audio playing - Browser"
-                            .replace(/ - Google Chrome$/i, '')   // Remove "- Google Chrome"
-                            .replace(/ - Safari$/i, '')          // Remove "- Safari"
-                            .replace(/ - Firefox$/i, '')         // Remove "- Firefox"
-                            .replace(/ - Brave$/i, '')           // Remove "- Brave"
-                            .replace(/ - Opera$/i, '')           // Remove "- Opera"
-                            .trim();
-
-                        console.log('[Main] Cleaned title for matching:', cleanTitle);
-
-                        partialMatch = validSources.find(source => {
-                            // Direct partial match
-                            if (source.name.includes(cleanTitle) || cleanTitle.includes(source.name)) {
-                                return true;
-                            }
-
-                            // Try matching the first significant part (before " - ")
-                            const sourceMainPart = source.name.split(' - ')[0];
-                            const titleMainPart = cleanTitle.split(' - ')[0];
-
-                            if (sourceMainPart.length > 10 && titleMainPart.length > 10) {
-                                return sourceMainPart.includes(titleMainPart) || titleMainPart.includes(sourceMainPart);
-                            }
-
-                            return false;
-                        });
-
-                        if (partialMatch) {
-                            targetSource = partialMatch;
-                            matchConfidence = 'partial';
-                            console.log('[Main] Found partial window title match:', partialMatch.name);
-                        } else {
-                            console.log('[Main] No window match found. App:', currentWindow.appName, 'Title:', currentWindow.windowTitle);
-                            console.log('[Main] Available windows:', validSources.map(s => s.name));
-                        }
-                    }
-                }
-            } else {
-                console.log('[Main] No active window info available');
-            }
-            
-            // If we still don't have a target, use conservative fallback strategies
-            // IMPORTANT: We prioritize accuracy over capturing something - a skipped
-            // capture is better than a misattributed one
-            if (!targetSource) {
-                console.log('[Main] No matching window found for app:', currentWindow?.appName || 'unknown');
-                console.log('[Main] Available windows:', validSources.map(s => `"${s.name}"`).join(', '));
-
-                // Fallback strategy 1: If there's only one valid window, use it
-                // This is safe because there's no ambiguity
-                if (validSources.length === 1) {
-                    targetSource = validSources[0];
-                    matchConfidence = 'single_window';
-                    console.log('[Main] Using single available window as fallback:', targetSource.name);
-                } else if (validSources.length > 1 && currentWindow?.appName) {
-                    // Fallback strategy 2: Try lenient app name matching
-                    // Look for any window containing significant words from the app name
-                    const appNameWords = currentWindow.appName.toLowerCase().split(/\s+/);
-                    const possibleMatches = validSources.filter(source => {
-                        const sourceLower = source.name.toLowerCase();
-                        return appNameWords.some(word => word.length > 3 && sourceLower.includes(word));
-                    });
-
-                    if (possibleMatches.length === 1) {
-                        // Only use lenient match if it's unambiguous (single match)
-                        targetSource = possibleMatches[0];
-                        matchConfidence = 'lenient';
-                        console.log('[Main] Using lenient app name match (unambiguous):', targetSource.name);
-                    } else if (possibleMatches.length > 1) {
-                        // Multiple lenient matches - ambiguous, use screen capture fallback
-                        console.log('[Main] Multiple lenient matches found, using screen capture fallback:',
-                            possibleMatches.map(s => s.name).join(', '));
-                        return captureScreenFallback(currentWindow, 'multiple_lenient_matches');
-                    } else {
-                        // No matches at all - use screen capture fallback with active window info
-                        console.log('[Main] No window matches detected app, using screen capture fallback.');
-                        console.log('[Main] Active app was:', currentWindow.appName);
-                        console.log('[Main] Available windows were:', validSources.map(s => s.name).join(', '));
-                        return captureScreenFallback(currentWindow, 'no_window_match');
-                    }
-                }
-
-                // If still no target after safe fallbacks, use screen capture
-                if (!targetSource) {
-                    console.log('[Main] No suitable window found, using screen capture fallback');
-                    return captureScreenFallback(currentWindow, 'no_suitable_window');
-                }
-            }
-            
-            // Final validation: Verify the captured window reasonably belongs to the detected app
-            // This catches edge cases where the window switched between capture and detection
-            if (currentWindow?.appName && matchConfidence !== 'exact') {
-                const windowNameLower = targetSource.name.toLowerCase();
-                const appNameLower = currentWindow.appName.toLowerCase();
-
-                // For non-exact matches, verify there's SOME relationship between app and window
-                const hasAppRelation =
-                    windowNameLower.includes(appNameLower) ||
-                    appNameLower.includes(windowNameLower) ||
-                    // Check for common app name patterns (e.g., "Code" in "Visual Studio Code")
-                    appNameLower.split(/\s+/).some(word => word.length > 3 && windowNameLower.includes(word)) ||
-                    // Single window fallback is acceptable - no ambiguity
-                    matchConfidence === 'single_window';
-
-                if (!hasAppRelation && matchConfidence !== 'single_window') {
-                    console.log('[Main] VALIDATION FAILED: Captured window does not appear to belong to detected app');
-                    console.log('[Main] App:', currentWindow.appName, '| Window:', targetSource.name, '| Match type:', matchConfidence);
-                    console.log('[Main] Using screen capture fallback due to possible race condition');
-                    return captureScreenFallback(currentWindow, 'validation_failed_race_condition');
-                }
-            }
-
-            console.log('[Main] Capturing window:', targetSource.name,
-                       `(${targetSource.thumbnail.getSize().width}x${targetSource.thumbnail.getSize().height})`,
-                       '| Match confidence:', matchConfidence);
-
-            const image = targetSource.thumbnail.toPNG();
-
-            // Create a more descriptive filename with app name and timestamp
-            // Format: timestamp|||AppName|||WindowTitle.png
-            // Using ||| as delimiter to preserve spaces in app names and window titles
-            const timestamp = Date.now();
-            const appNameSafe = (currentWindow?.appName || 'Unknown').replace(/[\/\\:*?"<>|]/g, '_');
-            const windowTitleSafe = targetSource.name.replace(/[\/\\:*?"<>|]/g, '_').substring(0, 100);
-            const filename = `${timestamp}|||${appNameSafe}|||${windowTitleSafe}.png`;
-            const filePath = path.join(SCREENSHOTS_DIR, filename);
-
-            // Save screenshot with encryption
-            try {
-                await saveEncryptedFile(filePath, image);
-                console.log('[Main] Window screenshot saved (encrypted):', filePath, '| Match:', matchConfidence);
-            } catch (encryptError) {
-                console.error('[Main] Failed to encrypt screenshot, saving unencrypted:', encryptError);
-                // Fallback to unencrypted if encryption fails
-                await fs.promises.writeFile(filePath, image);
-                console.log('[Main] Window screenshot saved (unencrypted fallback):', filePath);
-            }
-            return filePath;
-        } else {
-            console.log('[Main] No valid window sources found for screenshot');
-            return captureScreenFallback(currentWindow, 'no_valid_window_sources');
-        }
-    } catch (error) {
-        console.error('[Main] Failed to capture screenshot:', error);
-        // Even on error, try to capture something
-        try {
-            return await captureScreenFallback(null, 'error_recovery');
-        } catch {
+        if (!image) {
+            console.log(`[Main] Native capture returned null for PID ${windowInfo.pid}`);
             return null;
         }
+
+        // Save encrypted PNG with descriptive filename
+        // Format: timestamp|||AppName|||WindowTitle.png
+        const timestamp = Date.now();
+        const appNameSafe = windowInfo.appName.replace(/[\/\\:*?"<>|]/g, '_');
+        const windowTitleSafe = windowInfo.windowTitle.replace(/[\/\\:*?"<>|]/g, '_').substring(0, 100);
+        const filename = `${timestamp}|||${appNameSafe}|||${windowTitleSafe}.png`;
+        const filePath = path.join(SCREENSHOTS_DIR, filename);
+
+        try {
+            await saveEncryptedFile(filePath, image);
+            console.log('[Main] Window screenshot saved (encrypted, native):', filePath);
+        } catch (encryptError) {
+            console.error('[Main] Failed to encrypt screenshot, saving unencrypted:', encryptError);
+            await fs.promises.writeFile(filePath, image);
+            console.log('[Main] Window screenshot saved (unencrypted fallback):', filePath);
+        }
+        return filePath;
+    } catch (error) {
+        console.error('[Main] Failed to capture screenshot:', error);
+        return null;
     }
-    return null;
 });
 
 // AI Screenshot Analysis (via Gemini cloud service)
@@ -1473,6 +1106,7 @@ ipcMain.handle('get-active-window', async () => {
                     set frontApp to first application process whose frontmost is true
                     set appName to name of frontApp
                     set bundleId to bundle identifier of frontApp
+                    set appPID to unix id of frontApp
                     set windowTitle to ""
 
                     -- Strategy 1: Try to get title from front window (standard approach)
@@ -1540,7 +1174,7 @@ ipcMain.handle('get-active-window', async () => {
                         end try
                     end if
 
-                    return appName & "|||" & windowTitle & "|||" & bundleId
+                    return appName & "|||" & windowTitle & "|||" & bundleId & "|||" & appPID
                 end tell
             '`);
 
@@ -1548,6 +1182,7 @@ ipcMain.handle('get-active-window', async () => {
             const appName = parts[0] || 'Unknown';
             const rawWindowTitle = parts[1];
             const bundleId = parts[2] || '';
+            const pid = parseInt(parts[3], 10) || 0;
 
             // Check if we got an actual window title
             const windowTitle = (rawWindowTitle && rawWindowTitle.trim() !== '') ? rawWindowTitle : 'Unknown';
@@ -1559,14 +1194,14 @@ ipcMain.handle('get-active-window', async () => {
                 console.warn('[Main] Grant Accessibility permission in System Settings > Privacy & Security > Accessibility');
             }
 
-            console.log('[Main] get-active-window result:', { appName, windowTitle, bundleId, rawWindowTitle });
-            return { appName, windowTitle, bundleId };
+            console.log('[Main] get-active-window result:', { appName, windowTitle, bundleId, pid, rawWindowTitle });
+            return { appName, windowTitle, bundleId, pid };
         } catch (error) {
             console.error('[Main] Failed to get active window:', error);
-            return { appName: 'Unknown', windowTitle: 'Unknown', bundleId: '' };
+            return { appName: 'Unknown', windowTitle: 'Unknown', bundleId: '', pid: 0 };
         }
     }
-    return { appName: 'Not supported', windowTitle: 'Not supported', bundleId: '' };
+    return { appName: 'Not supported', windowTitle: 'Not supported', bundleId: '', pid: 0 };
 });
 
 ipcMain.handle('check-accessibility-permission', () => {

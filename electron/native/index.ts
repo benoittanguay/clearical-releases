@@ -355,6 +355,16 @@ class MediaMonitorWrapper extends EventEmitter {
             return null;
         }
     }
+
+    captureWindowScreenshot(pid: number, windowTitle?: string): Buffer | null {
+        if (!this.native) return null;
+        try {
+            return this.native.captureWindowScreenshot(pid, windowTitle || '') || null;
+        } catch (err) {
+            console.error('[MediaMonitor] Failed to capture window screenshot:', err);
+            return null;
+        }
+    }
 }
 
 // Export singleton instance

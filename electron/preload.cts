@@ -22,7 +22,8 @@ contextBridge.exposeInMainWorld('electron', {
         // Auth OAuth
         signInWithOAuth: (provider: 'google' | 'azure' | 'apple') =>
             ipcRenderer.invoke('auth:sign-in-oauth', provider),
-        captureScreenshot: () => ipcRenderer.invoke('capture-screenshot'),
+        captureScreenshot: (windowInfo?: { appName: string; windowTitle: string; bundleId: string; pid: number }) =>
+            ipcRenderer.invoke('capture-screenshot', windowInfo),
         analyzeScreenshot: (imagePath: string, requestId?: string) => ipcRenderer.invoke('analyze-screenshot', imagePath, requestId),
         analyzeScreenshotBatch: (inputs: Array<{
             imagePath: string;

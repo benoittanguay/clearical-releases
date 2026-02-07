@@ -5,6 +5,7 @@
 #include "system_audio_capture.h"
 #include "mic_capture.h"
 #include "speech_transcriber.h"
+#include "screenshot_capture.h"
 
 // Store reference to JS callback function for media state
 static Napi::ThreadSafeFunction tsfn;
@@ -779,6 +780,35 @@ Napi::Value TranscribeAudioBuffer(const Napi::CallbackInfo& info) {
     return resultObj;
 }
 
+// Screenshot capture via CGWindowListCreateImage
+
+Napi::Value CaptureWindowScreenshot(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+
+    if (info.Length() < 1 || !info[0].IsNumber()) {
+        Napi::TypeError::New(env, "PID (number) required as first argument").ThrowAsJavaScriptException();
+        return env.Null();
+    }
+
+    pid_t pid = static_cast<pid_t>(info[0].As<Napi::Number>().Int32Value());
+
+    NSString *windowTitle = nil;
+    if (info.Length() >= 2 && info[1].IsString()) {
+        std::string title = info[1].As<Napi::String>().Utf8Value();
+        if (!title.empty()) {
+            windowTitle = [NSString stringWithUTF8String:title.c_str()];
+        }
+    }
+
+    NSData *pngData = [ScreenshotCapture captureWindowWithPID:pid windowTitle:windowTitle];
+
+    if (!pngData) {
+        return env.Null();
+    }
+
+    return Napi::Buffer<uint8_t>::Copy(env, (const uint8_t *)pngData.bytes, pngData.length);
+}
+
 Napi::Object Init(Napi::Env env, Napi::Object exports) {
     // Media monitoring
     exports.Set("start", Napi::Function::New(env, Start));
@@ -814,6 +844,9 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
     exports.Set("getSupportedTranscriptionLanguages", Napi::Function::New(env, GetSupportedTranscriptionLanguages));
     exports.Set("transcribeAudioFile", Napi::Function::New(env, TranscribeAudioFile));
     exports.Set("transcribeAudioBuffer", Napi::Function::New(env, TranscribeAudioBuffer));
+
+    // Screenshot capture
+    exports.Set("captureWindowScreenshot", Napi::Function::New(env, CaptureWindowScreenshot));
 
     return exports;
 }

@@ -135,7 +135,7 @@ export interface ElectronAPI {
             };
             error?: string;
         }>;
-        captureScreenshot: () => Promise<string | null>;
+        captureScreenshot: (windowInfo?: { appName: string; windowTitle: string; bundleId: string; pid: number }) => Promise<string | null>;
         analyzeScreenshot: (imagePath: string, requestId?: string) => Promise<ScreenshotAnalysisResult>;
         generateActivitySummary: (context: {
             entryId: string;
@@ -166,7 +166,7 @@ export interface ElectronAPI {
             suggestions: SplitSuggestion[];
             error?: string;
         }>;
-        getActiveWindow: () => Promise<{ appName: string; windowTitle: string; bundleId: string }>;
+        getActiveWindow: () => Promise<{ appName: string; windowTitle: string; bundleId: string; pid: number }>;
         getEnvironmentInfo: () => Promise<{ isDevelopment: boolean; buildEnv: string; isPackaged: boolean; version: string }>;
         // Main process log file access
         getMainLogPath: () => Promise<string>;
