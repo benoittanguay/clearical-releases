@@ -2969,89 +2969,135 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                 )}
 
                 {/* Pending Transcription Section - Failed transcription with retry option */}
-                {entry.pendingTranscription && (
+                {entry.pendingTranscription && (() => {
+                    const isQuotaExceeded = entry.pendingTranscription.error?.toLowerCase().includes('transcription limit') &&
+                        entry.pendingTranscription.error?.toLowerCase().includes('exceeded');
+                    return (
                     <div className="mt-3 rounded-lg border p-4" style={{
                         backgroundColor: 'var(--color-bg-secondary)',
-                        borderColor: 'var(--color-border-primary)',
+                        borderColor: isQuotaExceeded ? 'var(--color-accent)' : 'var(--color-border-primary)',
                         borderRadius: 'var(--radius-xl)',
                     }}>
                         <div className="flex items-start justify-between gap-3">
                             <div className="flex-1">
                                 <div className="flex items-center gap-2 mb-2">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--color-text-tertiary)' }}>
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: isQuotaExceeded ? 'var(--color-accent)' : 'var(--color-text-tertiary)' }}>
                                         <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
                                         <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
                                         <line x1="12" x2="12" y1="19" y2="22"/>
                                     </svg>
                                     <h4 className="text-sm font-semibold" style={{ color: 'var(--color-text-primary)' }}>
-                                        Audio Recording Available
+                                        {isQuotaExceeded ? 'Meeting Recorded' : 'Audio Recording Available'}
                                     </h4>
                                     <span className="px-2 py-0.5 text-xs rounded" style={{
-                                        backgroundColor: 'rgba(251, 191, 36, 0.1)',
-                                        color: 'rgb(217, 119, 6)',
+                                        backgroundColor: isQuotaExceeded ? 'rgba(var(--color-accent-rgb, 139, 92, 246), 0.1)' : 'rgba(251, 191, 36, 0.1)',
+                                        color: isQuotaExceeded ? 'var(--color-accent)' : 'rgb(217, 119, 6)',
                                     }}>
-                                        Transcription Failed
+                                        {isQuotaExceeded ? 'Limit Reached' : 'Transcription Failed'}
                                     </span>
                                 </div>
-                                {entry.pendingTranscription.error && (
-                                    <p className="text-xs mb-3" style={{ color: 'var(--color-text-tertiary)' }}>
-                                        Error: {entry.pendingTranscription.error}
-                                    </p>
-                                )}
-                                <p className="text-xs mb-1" style={{ color: 'var(--color-text-secondary)' }}>
-                                    An audio recording was saved, but the transcription service was unavailable.
-                                </p>
-                                {entry.pendingTranscription.attemptedAt && (
-                                    <p className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
-                                        Last attempted: {new Date(entry.pendingTranscription.attemptedAt).toLocaleString()}
-                                    </p>
-                                )}
-                            </div>
-                            <button
-                                onClick={handleRetryTranscription}
-                                disabled={isRetryingTranscription || (transcriptionProgress?.entryId === entry.id && transcriptionProgress?.status === 'transcribing')}
-                                className="px-3 py-2 text-xs rounded-lg transition-all flex items-center gap-2 border whitespace-nowrap"
-                                style={{
-                                    backgroundColor: (isRetryingTranscription || (transcriptionProgress?.entryId === entry.id && transcriptionProgress?.status === 'transcribing')) ? 'var(--color-bg-tertiary)' : 'var(--color-bg-secondary)',
-                                    borderColor: 'var(--color-border-primary)',
-                                    color: (isRetryingTranscription || (transcriptionProgress?.entryId === entry.id && transcriptionProgress?.status === 'transcribing')) ? 'var(--color-text-tertiary)' : 'var(--color-text-secondary)',
-                                    cursor: (isRetryingTranscription || (transcriptionProgress?.entryId === entry.id && transcriptionProgress?.status === 'transcribing')) ? 'not-allowed' : 'pointer',
-                                }}
-                                onMouseEnter={(e) => {
-                                    if (!isRetryingTranscription && !(transcriptionProgress?.entryId === entry.id && transcriptionProgress?.status === 'transcribing')) {
-                                        e.currentTarget.style.borderColor = 'var(--color-accent)';
-                                        e.currentTarget.style.color = 'var(--color-accent)';
-                                    }
-                                }}
-                                onMouseLeave={(e) => {
-                                    if (!isRetryingTranscription && !(transcriptionProgress?.entryId === entry.id && transcriptionProgress?.status === 'transcribing')) {
-                                        e.currentTarget.style.borderColor = 'var(--color-border-primary)';
-                                        e.currentTarget.style.color = 'var(--color-text-secondary)';
-                                    }
-                                }}
-                            >
-                                {(isRetryingTranscription || (transcriptionProgress?.entryId === entry.id && transcriptionProgress?.status === 'transcribing')) ? (
+                                {isQuotaExceeded ? (
                                     <>
-                                        <svg className="animate-spin" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                            <path d="M21 12a9 9 0 1 1-6.219-8.56" />
-                                        </svg>
-                                        Transcribing...
+                                        <p className="text-xs mb-1" style={{ color: 'var(--color-text-secondary)' }}>
+                                            This meeting was recorded but couldn't be transcribed because you've reached your monthly free plan limit.
+                                        </p>
+                                        <p className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+                                            Upgrade to Premium for more transcription hours and get this recording transcribed.
+                                        </p>
                                     </>
                                 ) : (
                                     <>
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                            <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
-                                            <path d="M21 3v5h-5" />
-                                            <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
-                                            <path d="M8 16H3v5" />
-                                        </svg>
-                                        Retry Transcription
+                                        {entry.pendingTranscription.error && (
+                                            <p className="text-xs mb-3" style={{ color: 'var(--color-text-tertiary)' }}>
+                                                Error: {entry.pendingTranscription.error}
+                                            </p>
+                                        )}
+                                        <p className="text-xs mb-1" style={{ color: 'var(--color-text-secondary)' }}>
+                                            An audio recording was saved, but the transcription service was unavailable.
+                                        </p>
+                                        {entry.pendingTranscription.attemptedAt && (
+                                            <p className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+                                                Last attempted: {new Date(entry.pendingTranscription.attemptedAt).toLocaleString()}
+                                            </p>
+                                        )}
                                     </>
                                 )}
-                            </button>
+                            </div>
+                            {isQuotaExceeded ? (
+                                <button
+                                    onClick={async () => {
+                                        if (!user?.email) return;
+                                        const result = await upgrade(user.email);
+                                        if (!result.success) {
+                                            console.error('[HistoryDetail] Failed to start upgrade:', result.error);
+                                        }
+                                    }}
+                                    className="px-3 py-2 text-xs rounded-lg transition-all flex items-center gap-2 whitespace-nowrap font-medium"
+                                    style={{
+                                        backgroundColor: 'var(--color-accent)',
+                                        color: 'white',
+                                        cursor: 'pointer',
+                                    }}
+                                    onMouseEnter={(e) => {
+                                        e.currentTarget.style.backgroundColor = 'var(--color-accent-hover)';
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        e.currentTarget.style.backgroundColor = 'var(--color-accent)';
+                                    }}
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <path d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                    </svg>
+                                    Upgrade
+                                </button>
+                            ) : (
+                                <button
+                                    onClick={handleRetryTranscription}
+                                    disabled={isRetryingTranscription || (transcriptionProgress?.entryId === entry.id && transcriptionProgress?.status === 'transcribing')}
+                                    className="px-3 py-2 text-xs rounded-lg transition-all flex items-center gap-2 border whitespace-nowrap"
+                                    style={{
+                                        backgroundColor: (isRetryingTranscription || (transcriptionProgress?.entryId === entry.id && transcriptionProgress?.status === 'transcribing')) ? 'var(--color-bg-tertiary)' : 'var(--color-bg-secondary)',
+                                        borderColor: 'var(--color-border-primary)',
+                                        color: (isRetryingTranscription || (transcriptionProgress?.entryId === entry.id && transcriptionProgress?.status === 'transcribing')) ? 'var(--color-text-tertiary)' : 'var(--color-text-secondary)',
+                                        cursor: (isRetryingTranscription || (transcriptionProgress?.entryId === entry.id && transcriptionProgress?.status === 'transcribing')) ? 'not-allowed' : 'pointer',
+                                    }}
+                                    onMouseEnter={(e) => {
+                                        if (!isRetryingTranscription && !(transcriptionProgress?.entryId === entry.id && transcriptionProgress?.status === 'transcribing')) {
+                                            e.currentTarget.style.borderColor = 'var(--color-accent)';
+                                            e.currentTarget.style.color = 'var(--color-accent)';
+                                        }
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        if (!isRetryingTranscription && !(transcriptionProgress?.entryId === entry.id && transcriptionProgress?.status === 'transcribing')) {
+                                            e.currentTarget.style.borderColor = 'var(--color-border-primary)';
+                                            e.currentTarget.style.color = 'var(--color-text-secondary)';
+                                        }
+                                    }}
+                                >
+                                    {(isRetryingTranscription || (transcriptionProgress?.entryId === entry.id && transcriptionProgress?.status === 'transcribing')) ? (
+                                        <>
+                                            <svg className="animate-spin" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                                            </svg>
+                                            Transcribing...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+                                                <path d="M21 3v5h-5" />
+                                                <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+                                                <path d="M8 16H3v5" />
+                                            </svg>
+                                            Retry Transcription
+                                        </>
+                                    )}
+                                </button>
+                            )}
                         </div>
                     </div>
-                )}
+                    );
+                })()}
 
                 {/* Transcription Section - Each recording displayed as separate activity entry */}
                 {(entry.transcriptions || (entry.transcription ? [entry.transcription] : [])).map((transcription, index) => {
