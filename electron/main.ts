@@ -2398,9 +2398,15 @@ ipcMain.handle(MEETING_IPC_CHANNELS.SAVE_AUDIO_AND_TRANSCRIBE, async (_event, en
         const result = await transcriptionService.transcribe(audioBase64, entryId, actualMimeType);
 
         if (result.success) {
-            // Transcription succeeded - optionally clean up audio file
-            // For now, keep it for reference
-            console.log('[Main] Transcription succeeded, audio saved at:', audioPath);
+            // Transcription succeeded - clean up audio file to save disk space
+            if (audioPath && fs.existsSync(audioPath)) {
+                try {
+                    fs.unlinkSync(audioPath);
+                    console.log('[Main] Transcription succeeded, cleaned up audio file:', audioPath);
+                } catch (cleanupErr) {
+                    console.warn('[Main] Failed to clean up audio file:', audioPath, cleanupErr);
+                }
+            }
             return {
                 success: true,
                 audioPath,
@@ -2458,7 +2464,15 @@ ipcMain.handle('meeting:retry-transcription', async (_event, entryId: string, au
         const result = await transcriptionService.transcribe(audioBase64, entryId, mimeType);
 
         if (result.success) {
-            console.log('[Main] Retry transcription succeeded for:', entryId);
+            // Clean up audio file after successful retry transcription
+            if (audioPath && fs.existsSync(audioPath)) {
+                try {
+                    fs.unlinkSync(audioPath);
+                    console.log('[Main] Retry transcription succeeded, cleaned up audio file:', audioPath);
+                } catch (cleanupErr) {
+                    console.warn('[Main] Failed to clean up audio file after retry:', audioPath, cleanupErr);
+                }
+            }
             return {
                 success: true,
                 transcription: {
