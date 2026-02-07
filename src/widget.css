@@ -795,6 +795,22 @@ body {
     border-color: #5A5A5A;
 }
 
+/* Exit animation for prompt/working-hours modes - reverse of slideAndRevealIn */
+@keyframes slideAndRevealOut {
+    0% {
+        transform: translateY(0);
+        clip-path: inset(0 0 0 0 round 0 0 24px 24px);
+    }
+    40% {
+        transform: translateY(0);
+        clip-path: inset(0 42% 0 42% round 0 0 24px 24px);
+    }
+    100% {
+        transform: translateY(-100%);
+        clip-path: inset(0 42% 0 42% round 0 0 24px 24px);
+    }
+}
+
 /* Hiding animation for prompt mode */
 .audio-widget.prompt-mode.hiding {
     animation: slideAndRevealOut 0.35s cubic-bezier(0.4, 0, 0.2, 1) forwards;
