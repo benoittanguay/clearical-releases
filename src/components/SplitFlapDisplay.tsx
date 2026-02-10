@@ -61,7 +61,6 @@ export const SplitFlapDigit: React.FC<SplitFlapDigitProps> = ({ digit, prevDigit
   useEffect(() => {
     // Only animate if the digit actually changed
     if (digit !== prevDigit) {
-      console.log(`🔄 FLIP TRIGGERED: "${prevDigit}" → "${digit}"`);
       setIsFlipping(true);
       // Increment key to force new DOM elements and restart animation
       setAnimationKey(prev => prev + 1);
@@ -69,7 +68,6 @@ export const SplitFlapDigit: React.FC<SplitFlapDigitProps> = ({ digit, prevDigit
       // End animation after animations complete (300ms delay + 500ms bottom = 800ms)
       // Add small buffer for animation-fill-mode: forwards to settle
       const endTimer = setTimeout(() => {
-        console.log(`✅ FLIP COMPLETE: "${digit}"`);
         setIsFlipping(false);
       }, 850);
 

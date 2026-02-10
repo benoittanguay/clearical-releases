@@ -246,6 +246,7 @@ export function useTimer() {
     // Rate limit and backoff tracking
     const consecutiveFailures = useRef<number>(0);
     const queuePausedUntil = useRef<number>(0);
+    const analysisPermDisabled = useRef<boolean>(false); // Permanently disabled on subscription/auth errors
     const MAX_CONSECUTIVE_FAILURES_BEFORE_PAUSE = 3;
     const QUEUE_PAUSE_DURATION_MS = 60000; // 1 minute pause after multiple failures
     const FAILURE_BACKOFF_BASE_MS = 2000; // 2 second base delay after failure
@@ -482,6 +483,17 @@ export function useTimer() {
                     console.error('[Renderer] User needs to sign in from Settings to enable AI features');
                 }
 
+                // Check if this is a permanent error (subscription, auth) that won't resolve by retrying
+                const isPermanentError = errorMsg.toLowerCase().includes('premium subscription') ||
+                    errorMsg.toLowerCase().includes('upgrade to access') ||
+                    errorMsg.toLowerCase().includes('not authenticated') ||
+                    errorMsg.toLowerCase().includes('session expired');
+
+                if (isPermanentError) {
+                    analysisPermDisabled.current = true;
+                    console.log(`[Renderer] 🛑 Analysis permanently disabled for this session: ${errorMsg}`);
+                }
+
                 // Check if this looks like a rate limit error
                 const isRateLimited = analysisResult?.isRateLimited ||
                     errorMsg.toLowerCase().includes('rate limit') ||
@@ -657,6 +669,12 @@ export function useTimer() {
         };
 
         const analyzeScreenshotAsync = (path: string, timestamp: number) => {
+            // Skip analysis entirely if permanently disabled (subscription/auth error)
+            if (analysisPermDisabled.current) {
+                currentActivityScreenshotDescriptions.current[path] = FALLBACK_SCREENSHOT_DESCRIPTION;
+                return;
+            }
+
             console.log(`[Renderer] 📥 Queuing AI analysis for batch: ${path.split('/').pop()}`);
 
             // Add to pending batch
@@ -925,6 +943,7 @@ export function useTimer() {
         activeAnalysisCount.current = 0; // Reset active count
         consecutiveFailures.current = 0; // Reset failure tracking
         queuePausedUntil.current = 0; // Clear any queue pause
+        analysisPermDisabled.current = false; // Allow analysis for new session
         pendingBatch.current = []; // Clear pending batch
         isBatchProcessing.current = false; // Reset batch processing flag
         if (batchTimeoutRef.current) {
@@ -1281,6 +1300,7 @@ export function useTimer() {
         activeAnalysisCount.current = 0; // Reset active count
         consecutiveFailures.current = 0; // Reset failure tracking
         queuePausedUntil.current = 0; // Clear any queue pause
+        analysisPermDisabled.current = false; // Allow analysis for new session
         pendingBatch.current = []; // Clear pending batch
         isBatchProcessing.current = false; // Reset batch processing flag
         if (batchTimeoutRef.current) {
