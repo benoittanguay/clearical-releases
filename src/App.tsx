@@ -1762,8 +1762,9 @@ function App() {
                           <div key={weekKey} className="mb-6 last:mb-0">
                             {/* Week Header - Sticky and more prominent */}
                             <div
-                              className="sticky top-0 z-20 px-4 py-2 -mx-4 flex items-center justify-between"
+                              className="sticky top-0 z-20 px-4 -mx-4 flex items-center justify-between"
                               style={{
+                                height: '36px',
                                 backgroundColor: 'var(--color-bg-primary)',
                                 borderBottom: '1px solid var(--color-border-primary)',
                                 backdropFilter: 'blur(8px)'
@@ -1785,9 +1786,24 @@ function App() {
                                       e.stopPropagation();
                                       handleBulkLogToTempo(weekKey);
                                     }}
-                                    className="no-drag flex items-center gap-1.5 px-3 py-1.5 bg-transparent hover:bg-[var(--color-bg-ghost-hover)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] text-xs rounded-lg transition-all border border-[var(--color-border-primary)]"
+                                    className="px-2.5 py-1 text-xs rounded-md transition-all active:scale-95 flex items-center gap-1 border"
+                                    style={{
+                                      backgroundColor: 'transparent',
+                                      color: 'var(--color-text-secondary)',
+                                      borderColor: 'var(--color-border-primary)',
+                                      transitionDuration: 'var(--duration-fast)',
+                                      transitionTimingFunction: 'var(--ease-out)',
+                                    }}
+                                    onMouseEnter={(e) => {
+                                      e.currentTarget.style.backgroundColor = 'var(--color-bg-ghost-hover)';
+                                      e.currentTarget.style.color = 'var(--color-text-primary)';
+                                    }}
+                                    onMouseLeave={(e) => {
+                                      e.currentTarget.style.backgroundColor = 'transparent';
+                                      e.currentTarget.style.color = 'var(--color-text-secondary)';
+                                    }}
                                   >
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                       <circle cx="12" cy="12" r="10" />
                                       <polyline points="12 6 12 12 16 14" />
                                     </svg>
@@ -1827,11 +1843,12 @@ function App() {
                                   <div key={dateKey} className={dayIndex > 0 ? 'mt-3' : ''}>
                                     {/* Date Separator Header - Sticky below week header */}
                                     <div
-                                      className="sticky z-10 px-4 py-2 -mx-4 flex items-center justify-between"
+                                      className="sticky z-10 px-4 -mx-4 flex items-center justify-between"
                                       style={{
+                                        height: '36px',
                                         backgroundColor: 'var(--color-bg-secondary)',
                                         borderBottom: '1px solid var(--color-border-primary)',
-                                        top: '35px',
+                                        top: '36px',
                                         marginTop: dayIndex === 0 ? '-1px' : undefined
                                       }}
                                     >
@@ -1845,9 +1862,24 @@ function App() {
                                               e.stopPropagation();
                                               handleBulkLogToTempo(dateKey);
                                             }}
-                                            className="no-drag flex items-center gap-1.5 px-3 py-1.5 bg-transparent hover:bg-[var(--color-bg-ghost-hover)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] text-xs rounded-lg transition-all border border-[var(--color-border-primary)]"
+                                            className="px-2.5 py-1 text-xs rounded-md transition-all active:scale-95 flex items-center gap-1 border"
+                                            style={{
+                                              backgroundColor: 'transparent',
+                                              color: 'var(--color-text-secondary)',
+                                              borderColor: 'var(--color-border-primary)',
+                                              transitionDuration: 'var(--duration-fast)',
+                                              transitionTimingFunction: 'var(--ease-out)',
+                                            }}
+                                            onMouseEnter={(e) => {
+                                              e.currentTarget.style.backgroundColor = 'var(--color-bg-ghost-hover)';
+                                              e.currentTarget.style.color = 'var(--color-text-primary)';
+                                            }}
+                                            onMouseLeave={(e) => {
+                                              e.currentTarget.style.backgroundColor = 'transparent';
+                                              e.currentTarget.style.color = 'var(--color-text-secondary)';
+                                            }}
                                           >
-                                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                               <circle cx="12" cy="12" r="10" />
                                               <polyline points="12 6 12 12 16 14" />
                                             </svg>
@@ -1981,7 +2013,7 @@ function App() {
                                         }}
                                         className="flex items-center justify-center p-2.5 rounded-lg cursor-pointer"
                                         style={{
-                                          backgroundColor: '#FAF5EE',
+                                          backgroundColor: 'transparent',
                                           border: '1.5px dashed var(--color-border-primary)',
                                           transition: 'all var(--duration-base) var(--ease-out)'
                                         }}
@@ -1992,7 +2024,7 @@ function App() {
                                           if (label) label.style.color = 'var(--color-text-primary)';
                                         }}
                                         onMouseLeave={(e) => {
-                                          e.currentTarget.style.backgroundColor = '#FAF5EE';
+                                          e.currentTarget.style.backgroundColor = 'transparent';
                                           e.currentTarget.style.borderColor = 'var(--color-border-primary)';
                                           const label = e.currentTarget.querySelector('[data-add-label]') as HTMLElement;
                                           if (label) label.style.color = 'var(--color-text-secondary)';
