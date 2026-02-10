@@ -3795,7 +3795,11 @@ function createWindow() {
         width: 570,
         height: 660,
         show: false, // Don't show immediately - we'll position and show after tray is ready
-        frame: false,
+        // Use hidden title bar style to show native macOS traffic light buttons
+        // This satisfies App Store requirement for window controls while maintaining custom UI
+        titleBarStyle: 'hiddenInset',
+        // Position traffic light buttons in the top-left
+        trafficLightPosition: { x: 16, y: 16 },
         resizable: true,
         minWidth: 400,
         minHeight: 300,
@@ -3855,6 +3859,150 @@ function createWindow() {
             win?.hide();
         }
     });
+}
+
+/**
+ * Create macOS application menu
+ * Required by App Store guidelines to provide window management options
+ */
+function createApplicationMenu() {
+    const isMac = process.platform === 'darwin';
+
+    const template: Electron.MenuItemConstructorOptions[] = [
+        // App menu (macOS only)
+        ...(isMac ? [{
+            label: app.name,
+            submenu: [
+                { role: 'about' as const },
+                { type: 'separator' as const },
+                {
+                    label: 'Settings...',
+                    accelerator: 'Cmd+,',
+                    click: () => {
+                        if (win && !win.isDestroyed()) {
+                            win.show();
+                            win.focus();
+                            win.webContents.send('navigate-to-settings');
+                        }
+                    }
+                },
+                { type: 'separator' as const },
+                { role: 'services' as const },
+                { type: 'separator' as const },
+                { role: 'hide' as const },
+                { role: 'hideOthers' as const },
+                { role: 'unhide' as const },
+                { type: 'separator' as const },
+                { role: 'quit' as const }
+            ]
+        }] : []),
+        // File menu
+        {
+            label: 'File',
+            submenu: [
+                isMac ? { role: 'close' as const } : { role: 'quit' as const }
+            ]
+        },
+        // Edit menu
+        {
+            label: 'Edit',
+            submenu: [
+                { role: 'undo' as const },
+                { role: 'redo' as const },
+                { type: 'separator' as const },
+                { role: 'cut' as const },
+                { role: 'copy' as const },
+                { role: 'paste' as const },
+                ...(isMac ? [
+                    { role: 'pasteAndMatchStyle' as const },
+                    { role: 'delete' as const },
+                    { role: 'selectAll' as const },
+                    { type: 'separator' as const },
+                    {
+                        label: 'Speech',
+                        submenu: [
+                            { role: 'startSpeaking' as const },
+                            { role: 'stopSpeaking' as const }
+                        ]
+                    }
+                ] : [
+                    { role: 'delete' as const },
+                    { type: 'separator' as const },
+                    { role: 'selectAll' as const }
+                ])
+            ]
+        },
+        // View menu
+        {
+            label: 'View',
+            submenu: [
+                { role: 'reload' as const },
+                { role: 'forceReload' as const },
+                { role: 'toggleDevTools' as const },
+                { type: 'separator' as const },
+                { role: 'resetZoom' as const },
+                { role: 'zoomIn' as const },
+                { role: 'zoomOut' as const },
+                { type: 'separator' as const },
+                { role: 'togglefullscreen' as const }
+            ]
+        },
+        // Window menu (REQUIRED by App Store)
+        {
+            label: 'Window',
+            submenu: [
+                {
+                    label: 'Show Clearical',
+                    accelerator: 'Cmd+0',
+                    click: () => {
+                        if (win) {
+                            if (win.isMinimized()) {
+                                win.restore();
+                            }
+                            showWindowBelowTray();
+                        } else {
+                            // Recreate window if it was destroyed
+                            createWindow();
+                            setTimeout(() => showWindowBelowTray(), 150);
+                        }
+                    }
+                },
+                { type: 'separator' as const },
+                { role: 'minimize' as const },
+                { role: 'zoom' as const },
+                ...(isMac ? [
+                    { type: 'separator' as const },
+                    { role: 'front' as const },
+                    { type: 'separator' as const },
+                    { role: 'window' as const }
+                ] : [
+                    { role: 'close' as const }
+                ])
+            ]
+        },
+        // Help menu
+        {
+            role: 'help' as const,
+            submenu: [
+                {
+                    label: 'Learn More',
+                    click: async () => {
+                        await shell.openExternal('https://clearical.app');
+                    }
+                },
+                {
+                    label: 'Report an Issue',
+                    click: async () => {
+                        await shell.openExternal('https://clearical.app/support');
+                    }
+                }
+            ]
+        }
+    ];
+
+    const menu = Menu.buildFromTemplate(template);
+    Menu.setApplicationMenu(menu);
+    console.log('[Main] Application menu created');
 }
 
 // Track if cleanup has already been initiated to prevent multiple cleanups
@@ -3986,6 +4134,9 @@ app.whenReady().then(() => {
     } catch (error) {
         console.error('[Main] Failed to initialize recording manager:', error);
     }
+
+    // Create application menu (required by App Store)
+    createApplicationMenu();
 
     // Create tray first to ensure it's fully initialized before window positioning
     createTray();
