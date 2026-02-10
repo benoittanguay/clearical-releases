@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { DeleteButton } from './DeleteButton';
 import { useScreenshotAnalysis } from '../context/ScreenshotAnalysisContext';
 
@@ -31,61 +31,16 @@ interface ScreenshotGalleryProps {
     onScreenshotDeleted?: (screenshotPath: string) => void;
 }
 
+// Build a protocol URL for a screenshot file path
+function getScreenshotUrl(filePath: string): string {
+    return `clearical-screenshot://screenshot?path=${encodeURIComponent(filePath)}`;
+}
+
 export function ScreenshotGallery({ screenshotPaths, metadata, onClose, onScreenshotDeleted }: ScreenshotGalleryProps) {
     const [selectedIndex, setSelectedIndex] = useState(0);
     const [showMetadata, setShowMetadata] = useState(false);
-    // Raw vision data is always shown, no toggle needed
-    const [loadedImages, setLoadedImages] = useState<Map<string, string>>(new Map());
+    const [failedImages, setFailedImages] = useState<Set<string>>(new Set());
     const { isAnalyzing } = useScreenshotAnalysis();
-
-    // Load images via IPC
-    useEffect(() => {
-        const loadImages = async () => {
-            console.log('[ScreenshotGallery] Loading images for paths:', screenshotPaths);
-            // @ts-ignore - window.electron is defined in preload
-            console.log('[ScreenshotGallery] Electron API available:', !!window.electron?.ipcRenderer?.getScreenshot);
-
-            const imagePromises = screenshotPaths.map(async (path) => {
-                if (loadedImages.has(path)) {
-                    console.log('[ScreenshotGallery] Using cached image for:', path);
-                    return { path, dataUrl: loadedImages.get(path)! };
-                }
-
-                console.log('[ScreenshotGallery] Loading image:', path);
-                try {
-                    // @ts-ignore
-                    if (window.electron?.ipcRenderer?.getScreenshot) {
-                        // @ts-ignore
-                        const dataUrl = await window.electron.ipcRenderer.getScreenshot(path);
-                        console.log('[ScreenshotGallery] Received dataUrl for:', path, dataUrl ? 'SUCCESS' : 'NULL');
-                        return { path, dataUrl };
-                    } else {
-                        console.error('[ScreenshotGallery] getScreenshot method not available');
-                    }
-                } catch (error) {
-                    console.error('[ScreenshotGallery] Failed to load screenshot:', path, error);
-                }
-                return { path, dataUrl: null };
-            });
-
-            const results = await Promise.all(imagePromises);
-            const newImageMap = new Map(loadedImages);
-            
-            results.forEach(({ path, dataUrl }) => {
-                if (dataUrl) {
-                    newImageMap.set(path, dataUrl);
-                    console.log('[ScreenshotGallery] Added to image map:', path);
-                }
-            });
-
-            console.log('[ScreenshotGallery] Total loaded images:', newImageMap.size);
-            setLoadedImages(newImageMap);
-        };
-
-        if (screenshotPaths.length > 0) {
-            loadImages();
-        }
-    }, [screenshotPaths]);
 
     if (screenshotPaths.length === 0) {
         return null;
@@ -143,17 +98,24 @@ export function ScreenshotGallery({ screenshotPaths, metadata, onClose, onScreen
         }
     };
 
-    const handleDownload = () => {
-        const dataUrl = loadedImages.get(currentScreenshot);
-        if (dataUrl) {
+    const handleDownload = async () => {
+        try {
+            const screenshotUrl = getScreenshotUrl(currentScreenshot);
+            const response = await fetch(screenshotUrl);
+            if (!response.ok) throw new Error(`Failed to fetch: ${response.status}`);
+            const blob = await response.blob();
+            const objectUrl = URL.createObjectURL(blob);
             const timestamp = currentMetadata?.timestamp || Date.now();
             const filename = `screenshot-${new Date(timestamp).toISOString().replace(/[:.]/g, '-')}.png`;
             const link = document.createElement('a');
-            link.href = dataUrl;
+            link.href = objectUrl;
             link.download = filename;
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
+            URL.revokeObjectURL(objectUrl);
+        } catch (error) {
+            console.error('[ScreenshotGallery] Download failed:', error);
         }
     };
 
@@ -290,28 +252,23 @@ export function ScreenshotGallery({ screenshotPaths, metadata, onClose, onScreen
                 className="max-w-full max-h-full p-4 modal-content"
                 onClick={(e) => e.stopPropagation()}
             >
-                {loadedImages.get(currentScreenshot) ? (
+                {!failedImages.has(currentScreenshot) ? (
                     <img
-                        src={loadedImages.get(currentScreenshot)}
+                        src={getScreenshotUrl(currentScreenshot)}
                         alt={`Screenshot ${selectedIndex + 1}`}
                         className="max-w-full max-h-[90vh] object-contain rounded-lg"
                         style={{ boxShadow: 'var(--shadow-xl)' }}
+                        onError={() => setFailedImages(prev => new Set(prev).add(currentScreenshot))}
                     />
                 ) : (
                     <div className="max-w-full max-h-[90vh] flex items-center justify-center bg-gray-800 rounded-lg p-8">
                         <div className="text-gray-400 text-center animate-fade-in">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mx-auto mb-2 spinner">
-                                <circle cx="12" cy="12" r="3"/>
-                                <circle cx="12" cy="1" r="1"/>
-                                <circle cx="12" cy="23" r="1"/>
-                                <circle cx="4.22" cy="4.22" r="1"/>
-                                <circle cx="19.78" cy="19.78" r="1"/>
-                                <circle cx="1" cy="12" r="1"/>
-                                <circle cx="23" cy="12" r="1"/>
-                                <circle cx="4.22" cy="19.78" r="1"/>
-                                <circle cx="19.78" cy="4.22" r="1"/>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mx-auto mb-2">
+                                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                                <circle cx="8.5" cy="8.5" r="1.5"/>
+                                <polyline points="21 15 16 10 5 21"/>
                             </svg>
-                            <p>Loading screenshot...</p>
+                            <p>Failed to load screenshot</p>
                         </div>
                     </div>
                 )}
@@ -694,21 +651,11 @@ export function ScreenshotGallery({ screenshotPaths, metadata, onClose, onScreen
                                 boxShadow: index === selectedIndex ? 'var(--glow-green)' : 'none'
                             }}
                         >
-                            {loadedImages.get(path) ? (
-                                <img
-                                    src={loadedImages.get(path)}
-                                    alt={`Thumbnail ${index + 1}`}
-                                    className="w-full h-full object-cover"
-                                />
-                            ) : (
-                                <div className="w-full h-full bg-gray-700 flex items-center justify-center">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-500">
-                                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-                                        <circle cx="8.5" cy="8.5" r="1.5" />
-                                        <polyline points="21 15 16 10 5 21" />
-                                    </svg>
-                                </div>
-                            )}
+                            <img
+                                src={getScreenshotUrl(path)}
+                                alt={`Thumbnail ${index + 1}`}
+                                className="w-full h-full object-cover"
+                            />
                         </button>
                     ))}
                 </div>

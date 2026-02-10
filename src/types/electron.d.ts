@@ -327,6 +327,10 @@ export interface ElectronAPI {
         db: {
             // Entries
             getAllEntries: () => Promise<{ success: boolean; data: TimeEntry[]; error?: string }>;
+            getEntriesByDateRange: (startTime: number, endTime: number) => Promise<{ success: boolean; data: TimeEntry[]; error?: string }>;
+            getEntriesByBucket: (bucketId: string) => Promise<{ success: boolean; data: TimeEntry[]; error?: string }>;
+            getEntriesByJiraKey: (jiraKey: string) => Promise<{ success: boolean; data: TimeEntry[]; error?: string }>;
+            getEntryCount: () => Promise<{ success: boolean; data: number; error?: string }>;
             getEntry: (id: string) => Promise<{ success: boolean; data: TimeEntry | null; error?: string }>;
             insertEntry: (entry: TimeEntry) => Promise<{ success: boolean; error?: string }>;
             updateEntry: (id: string, updates: Partial<TimeEntry>) => Promise<{ success: boolean; error?: string }>;

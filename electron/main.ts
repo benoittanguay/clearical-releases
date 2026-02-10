@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Tray, Menu, screen, nativeImage, ipcMain, systemPreferences, shell, desktopCapturer, dialog, powerMonitor } from 'electron';
+import { app, BrowserWindow, Tray, Menu, screen, nativeImage, ipcMain, systemPreferences, shell, desktopCapturer, dialog, powerMonitor, protocol } from 'electron';
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
@@ -137,6 +137,18 @@ if (process.defaultApp) {
     // Production: register normally
     app.setAsDefaultProtocolClient(PROTOCOL_NAME);
 }
+
+// Register custom protocol for serving decrypted screenshots directly
+// This must be called before app.whenReady()
+protocol.registerSchemesAsPrivileged([{
+    scheme: 'clearical-screenshot',
+    privileges: {
+        standard: true,
+        secure: true,
+        supportFetchAPI: true,
+        corsEnabled: false,
+    }
+}]);
 
 // Handle protocol URL on macOS (app already running)
 app.on('open-url', (event, url) => {
@@ -2611,6 +2623,46 @@ ipcMain.handle('db:get-all-entries', async () => {
     }
 });
 
+ipcMain.handle('db:get-entries-by-date-range', async (event, startTime: number, endTime: number) => {
+    try {
+        const db = DatabaseService.getInstance();
+        return { success: true, data: db.getEntriesByDateRange(startTime, endTime) };
+    } catch (error) {
+        console.error('[Main] db:get-entries-by-date-range failed:', error);
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error', data: [] };
+    }
+});
+
+ipcMain.handle('db:get-entries-by-bucket', async (event, bucketId: string) => {
+    try {
+        const db = DatabaseService.getInstance();
+        return { success: true, data: db.getEntriesByBucketId(bucketId) };
+    } catch (error) {
+        console.error('[Main] db:get-entries-by-bucket failed:', error);
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error', data: [] };
+    }
+});
+
+ipcMain.handle('db:get-entries-by-jira-key', async (event, jiraKey: string) => {
+    try {
+        const db = DatabaseService.getInstance();
+        return { success: true, data: db.getEntriesByJiraKey(jiraKey) };
+    } catch (error) {
+        console.error('[Main] db:get-entries-by-jira-key failed:', error);
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error', data: [] };
+    }
+});
+
+ipcMain.handle('db:get-entry-count', async () => {
+    try {
+        const db = DatabaseService.getInstance();
+        return { success: true, data: db.getEntryCount() };
+    } catch (error) {
+        console.error('[Main] db:get-entry-count failed:', error);
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error', data: 0 };
+    }
+});
+
 ipcMain.handle('db:get-entry', async (event, id: string) => {
     try {
         const db = DatabaseService.getInstance();
@@ -4088,6 +4140,43 @@ app.whenReady().then(() => {
         console.error('[Main] Failed to initialize encryption:', error);
         console.warn('[Main] Screenshots will be saved unencrypted as fallback');
     }
+
+    // Register clearical-screenshot:// protocol handler
+    // Serves decrypted screenshots directly to <img> tags without base64 IPC transfer
+    protocol.handle('clearical-screenshot', async (request) => {
+        try {
+            const url = new URL(request.url);
+            const filePath = decodeURIComponent(url.searchParams.get('path') || '');
+
+            if (!filePath) {
+                return new Response('Missing path parameter', { status: 400 });
+            }
+
+            if (!fs.existsSync(filePath)) {
+                return new Response('File not found', { status: 404 });
+            }
+
+            // Read and decrypt (supports both encrypted and unencrypted)
+            let fileBuffer: Buffer;
+            try {
+                fileBuffer = await decryptFile(filePath);
+            } catch (decryptError) {
+                // Fallback to raw read if decryption fails
+                fileBuffer = await fs.promises.readFile(filePath);
+            }
+
+            return new Response(fileBuffer, {
+                headers: {
+                    'Content-Type': 'image/png',
+                    'Cache-Control': 'private, max-age=3600',
+                }
+            });
+        } catch (error) {
+            console.error('[Main] clearical-screenshot protocol error:', error);
+            return new Response('Internal error', { status: 500 });
+        }
+    });
+    console.log('[Main] clearical-screenshot:// protocol registered');
 
     // Initialize auth system (Supabase)
     try {

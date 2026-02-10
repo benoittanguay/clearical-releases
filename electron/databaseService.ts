@@ -258,6 +258,41 @@ export class DatabaseService {
         return rows.map(row => this.rowToEntry(row));
     }
 
+    public getEntriesByDateRange(startTime: number, endTime: number): TimeEntry[] {
+        const stmt = this.db.prepare(
+            'SELECT * FROM entries WHERE start_time >= ? AND start_time <= ? ORDER BY start_time DESC'
+        );
+        const rows = stmt.all(startTime, endTime);
+        return rows.map(row => this.rowToEntry(row));
+    }
+
+    public getEntriesByBucketId(bucketId: string): TimeEntry[] {
+        const stmt = this.db.prepare(
+            `SELECT * FROM entries WHERE
+                (json_extract(assignment, '$.type') = 'bucket' AND json_extract(assignment, '$.bucket.id') = ?)
+                OR bucket_id = ?
+            ORDER BY start_time DESC`
+        );
+        const rows = stmt.all(bucketId, bucketId);
+        return rows.map(row => this.rowToEntry(row));
+    }
+
+    public getEntriesByJiraKey(jiraKey: string): TimeEntry[] {
+        const stmt = this.db.prepare(
+            `SELECT * FROM entries WHERE
+                (json_extract(assignment, '$.type') = 'jira' AND json_extract(assignment, '$.jiraIssue.key') = ?)
+                OR json_extract(linked_jira_issue, '$.key') = ?
+            ORDER BY start_time DESC`
+        );
+        const rows = stmt.all(jiraKey, jiraKey);
+        return rows.map(row => this.rowToEntry(row));
+    }
+
+    public getEntryCount(): number {
+        const result = this.db.prepare('SELECT COUNT(*) as count FROM entries').get() as any;
+        return result.count;
+    }
+
     public getEntry(id: string): TimeEntry | null {
         const stmt = this.db.prepare('SELECT * FROM entries WHERE id = ?');
         const row = stmt.get(id);

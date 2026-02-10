@@ -27,19 +27,20 @@ import { BucketDetailView } from './components/BucketDetailView';
 import { JiraDetailView } from './components/JiraDetailView';
 import { RecordingControls } from './components/RecordingControls';
 import { WorklogCalendar } from './components/WorklogCalendar';
-import type { WorkAssignment, TimeBucket, LinkedJiraIssue } from './context/StorageContext';
+import type { WorkAssignment, TimeBucket, LinkedJiraIssue, TimeEntry } from './context/StorageContext';
 import './App.css'
 
 type View = 'chrono' | 'worklog' | 'buckets' | 'settings' | 'worklog-detail' | 'bucket-detail' | 'jira-detail';
 
 function App() {
-  const { buckets, entries, addEntry, addBucket, removeBucket, renameBucket, createFolder, moveBucket, updateEntry, removeEntry, unlinkJiraIssueFromBucket } = useStorage();
+  const { buckets, entries, fetchEntriesByBucket, fetchEntriesByJiraKey, fetchEntriesForExport, addEntry, addBucket, removeBucket, renameBucket, createFolder, moveBucket, updateEntry, removeEntry, unlinkJiraIssueFromBucket } = useStorage();
   const { settings, updateSettings } = useSettings();
   const [selectedAssignment, setSelectedAssignment] = useState<WorkAssignment | null>(null);
   const [currentView, setCurrentView] = useState<View>('chrono');
   const [selectedEntry, setSelectedEntry] = useState<string | null>(null);
   const [selectedBucket, setSelectedBucket] = useState<TimeBucket | null>(null);
   const [selectedJiraIssue, setSelectedJiraIssue] = useState<LinkedJiraIssue | null>(null);
+  const [detailViewEntries, setDetailViewEntries] = useState<TimeEntry[]>([]);
   const [showExportDialog, setShowExportDialog] = useState(false);
   const [showCreateBucketModal, setShowCreateBucketModal] = useState(false);
   const [showCreateFolderModal, setShowCreateFolderModal] = useState(false);
@@ -1430,9 +1431,11 @@ function App() {
                       onDelete={removeBucket}
                       onUnlinkJira={unlinkJiraIssueFromBucket}
                       onMove={moveBucket}
-                      onBucketClick={(bucket) => {
+                      onBucketClick={async (bucket) => {
                         setSelectedBucket(bucket);
                         setCurrentView('bucket-detail');
+                        const bucketEntries = await fetchEntriesByBucket(bucket.id);
+                        setDetailViewEntries(bucketEntries);
                       }}
                     />
                   </>
@@ -1441,9 +1444,10 @@ function App() {
                 {bucketsTab === 'jira' && (settings.jira?.enabled || settings.tempo?.enabled) && (
                   <div className="mt-2">
                     <JiraIssuesSection
-                      onIssueClick={(issue) => {
+                      onIssueClick={async (issue) => {
+                        const jiraKey = issue.key;
                         setSelectedJiraIssue({
-                          key: issue.key,
+                          key: jiraKey,
                           summary: issue.fields.summary,
                           issueType: issue.fields.issuetype.name,
                           status: issue.fields.status.name,
@@ -1451,6 +1455,8 @@ function App() {
                           projectName: issue.fields.project.name
                         });
                         setCurrentView('jira-detail');
+                        const jiraEntries = await fetchEntriesByJiraKey(jiraKey);
+                        setDetailViewEntries(jiraEntries);
                       }}
                       onRefreshReady={(fn) => setJiraRefreshFn(() => fn)}
                     />
@@ -1504,7 +1510,7 @@ function App() {
           {currentView === 'bucket-detail' && selectedBucket && (
             <BucketDetailView
               bucket={selectedBucket}
-              entries={entries}
+              entries={detailViewEntries}
               buckets={buckets}
               formatTime={formatTime}
               onBack={() => setCurrentView('buckets')}
@@ -1521,7 +1527,7 @@ function App() {
           {currentView === 'jira-detail' && selectedJiraIssue && (
             <JiraDetailView
               jiraIssue={selectedJiraIssue}
-              entries={entries}
+              entries={detailViewEntries}
               buckets={buckets}
               formatTime={formatTime}
               onBack={() => setCurrentView('buckets')}
@@ -1678,7 +1684,7 @@ function App() {
                       };
 
                       // Group entries by date first
-                      const sortedEntries = entries.sort((a, b) => b.startTime - a.startTime);
+                      const sortedEntries = [...entries].sort((a, b) => b.startTime - a.startTime);
                       const groupedByDate = new Map<string, typeof sortedEntries>();
 
                       sortedEntries.forEach(entry => {
@@ -2063,6 +2069,7 @@ function App() {
         <ExportDialog
           entries={entries}
           buckets={buckets}
+          fetchEntriesForExport={fetchEntriesForExport}
           onClose={() => setShowExportDialog(false)}
           onExport={() => {
             // Could show a success notification here

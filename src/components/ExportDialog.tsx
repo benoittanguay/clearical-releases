@@ -9,9 +9,10 @@ interface ExportDialogProps {
     onClose: () => void;
     onExport: () => void;
     fixedBucketId?: string;
+    fetchEntriesForExport?: (startTime: number, endTime: number) => Promise<TimeEntry[]>;
 }
 
-export function ExportDialog({ entries, buckets, onClose, onExport, fixedBucketId }: ExportDialogProps) {
+export function ExportDialog({ entries: initialEntries, buckets, onClose, onExport, fixedBucketId, fetchEntriesForExport }: ExportDialogProps) {
     const [dateFrom, setDateFrom] = useState<string>('');
     const [dateTo, setDateTo] = useState<string>('');
     const [selectedBucketIds, setSelectedBucketIds] = useState<string[]>(fixedBucketId ? [fixedBucketId] : []);
@@ -20,6 +21,10 @@ export function ExportDialog({ entries, buckets, onClose, onExport, fixedBucketI
     const [issueKey, setIssueKey] = useState('');
     const [isExporting, setIsExporting] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [dbEntries, setDbEntries] = useState<TimeEntry[] | null>(null);
+
+    // Use DB-fetched entries when available, otherwise fall back to prop
+    const entries = dbEntries ?? initialEntries;
 
     // Set default date range to last 30 days
     useEffect(() => {
@@ -29,7 +34,23 @@ export function ExportDialog({ entries, buckets, onClose, onExport, fixedBucketI
 
         setDateTo(today.toISOString().split('T')[0]);
         setDateFrom(thirtyDaysAgo.toISOString().split('T')[0]);
+
+        // Fetch entries for default range from DB
+        if (fetchEntriesForExport) {
+            const startMs = thirtyDaysAgo.getTime();
+            const endMs = new Date(today.toISOString().split('T')[0] + 'T23:59:59.999').getTime();
+            fetchEntriesForExport(startMs, endMs).then(setDbEntries);
+        }
     }, []);
+
+    // Re-fetch entries when date range changes
+    useEffect(() => {
+        if (!fetchEntriesForExport || !dateFrom || !dateTo) return;
+        const startMs = new Date(dateFrom + 'T00:00:00').getTime();
+        const endMs = new Date(dateTo + 'T23:59:59.999').getTime();
+        if (isNaN(startMs) || isNaN(endMs)) return;
+        fetchEntriesForExport(startMs, endMs).then(setDbEntries);
+    }, [dateFrom, dateTo]);
 
     // Track when export dialog is opened
     useEffect(() => {
