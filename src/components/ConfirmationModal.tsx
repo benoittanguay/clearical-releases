@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 
 interface ConfirmationModalProps {
     isOpen: boolean;
@@ -44,7 +45,10 @@ export function ConfirmationModal({
 
     const isDanger = confirmVariant === 'danger';
 
-    return (
+    // Render via portal to document.body so the modal is outside any parent
+    // interactive elements in the DOM tree — prevents click events from leaking
+    // back to underlying buttons when the modal closes.
+    return createPortal(
         <div
             className="fixed inset-0 flex items-center justify-center z-50"
             onClick={(e) => {
@@ -164,7 +168,7 @@ export function ConfirmationModal({
                     <div className="p-4 flex gap-3">
                         {/* Cancel Button */}
                         <button
-                            onClick={onClose}
+                            onClick={(e) => { e.stopPropagation(); onClose(); }}
                             disabled={isLoading}
                             className="flex-1 px-4 py-2.5 text-sm font-medium transition-all duration-150 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
                             style={{
@@ -191,7 +195,7 @@ export function ConfirmationModal({
                         {/* Confirm Button */}
                         <button
                             ref={confirmButtonRef}
-                            onClick={onConfirm}
+                            onClick={(e) => { e.stopPropagation(); onConfirm(); }}
                             disabled={isLoading}
                             className="flex-1 px-4 py-2.5 text-sm font-semibold text-white transition-all duration-150 active:scale-[0.98] disabled:cursor-not-allowed flex items-center justify-center gap-2"
                             style={{
@@ -279,6 +283,7 @@ export function ConfirmationModal({
                     }
                 }
             `}</style>
-        </div>
+        </div>,
+        document.body
     );
 }
