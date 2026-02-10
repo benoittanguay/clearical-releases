@@ -1088,14 +1088,11 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
 
         console.log(`[HistoryDetail] Retrying AI analysis for ${getFailedAnalysisScreenshots.length} screenshots`);
 
-        // Track successful updates for the current batch (saved incrementally)
+        // Accumulate ALL successful updates across batches (never cleared between saves)
         const batchUpdates = new Map<string, {
             description: string;
             visionData: { confidence?: number; detectedText?: string[]; objects?: string[]; extraction?: any };
         }>();
-
-        // Track total successes across all batches for final message
-        let totalSuccesses = 0;
 
         // Helper function to save current batch updates to database
         // This ensures progress is persisted even if user navigates away
@@ -1138,8 +1135,10 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                 onUpdate(entry.id, { windowActivity: updatedActivity });
             }
 
-            totalSuccesses += batchUpdates.size;
-            batchUpdates.clear();
+            // NOTE: Do NOT clear batchUpdates here. The `entry` in this closure is stale
+            // (captured when handleRetryAIAnalysis started). Each save must re-apply ALL
+            // accumulated updates on top of the original entry to avoid overwriting
+            // previous batches' results.
         };
 
         // Process screenshots in batches using the batch API
@@ -1219,7 +1218,7 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
         showToast({
             type: 'success',
             title: 'Retry completed',
-            message: `AI analysis retry completed. ${totalSuccesses} of ${getFailedAnalysisScreenshots.length} screenshots successfully analyzed.`,
+            message: `AI analysis retry completed. ${batchUpdates.size} of ${getFailedAnalysisScreenshots.length} screenshots successfully analyzed.`,
             duration: 3000
         });
     };
