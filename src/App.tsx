@@ -493,8 +493,11 @@ function App() {
         // Wait for any pending transcriptions from the recording session (with timeout)
         // This handles the race condition where transcription may still be in progress
         // Each recording is stored separately for better navigation
-        console.log('[App] Waiting for transcription to complete (if recording was active)...');
-        const pendingTranscriptions = sessionId ? await waitForTranscriptions(sessionId, 15000) : [];
+        // Scale timeout with recording duration: 30s base + 1s per minute recorded, max 120s
+        const recordingMinutes = elapsed / 60000;
+        const transcriptionTimeout = Math.min(30000 + recordingMinutes * 1000, 120000);
+        console.log('[App] Waiting for transcription to complete (if recording was active)... timeout:', transcriptionTimeout, 'ms for', recordingMinutes.toFixed(1), 'min recording');
+        const pendingTranscriptions = sessionId ? await waitForTranscriptions(sessionId, transcriptionTimeout) : [];
         if (pendingTranscriptions.length > 0) {
           console.log('[App] Found', pendingTranscriptions.length, 'transcription(s) from recording session');
         } else {
@@ -732,6 +735,28 @@ function App() {
     };
   }, []);
 
+  // Listen for recording start events from main process (media detection auto-start)
+  // This keeps App.tsx's isAudioRecording state in sync when recording starts externally
+  useEffect(() => {
+    const onStartFn = window.electron?.ipcRenderer?.meeting?.onRecordingShouldStart;
+    if (!onStartFn) return;
+
+    console.log('[App] Setting up recording start listener');
+    const unsubscribe = onStartFn((data: { entryId: string; timestamp: number }) => {
+      console.log('[App] Recording started externally (media detection):', data);
+      // Only update if we don't already have an active session
+      if (!recordingSessionIdRef.current) {
+        const sessionId = `session-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+        recordingSessionIdRef.current = sessionId;
+        lastRecordingSessionIdRef.current = sessionId;
+        setIsAudioRecording(true);
+        console.log('[App] Synced recording state from external start, sessionId:', sessionId);
+      }
+    });
+
+    return () => { unsubscribe?.(); };
+  }, []);
+
   // Listen for widget prompt to start timer (meeting detected but timer not running)
   useEffect(() => {
     // @ts-ignore
@@ -754,10 +779,13 @@ function App() {
           return;
         }
 
-        // If timer is not running, start it first
+        // If timer is not running, start it; if paused, resume it
         if (!isRunning) {
           console.log('[Renderer] Starting timer from widget prompt');
           startTimer();
+        } else if (isPaused) {
+          console.log('[Renderer] Timer paused, resuming from widget prompt');
+          resumeTimer();
         } else {
           console.log('[Renderer] Timer already running, just starting recording');
         }
@@ -794,7 +822,7 @@ function App() {
         if (unsubscribe) unsubscribe();
       };
     }
-  }, [isRunning, checkPermissions, startTimer, setActiveRecordingEntry]);
+  }, [isRunning, isPaused, checkPermissions, startTimer, resumeTimer, setActiveRecordingEntry]);
 
   // Listen for working hours prompt to start timer (daily reminder)
   useEffect(() => {
