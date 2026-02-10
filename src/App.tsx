@@ -1614,6 +1614,19 @@ function App() {
                     onDeleteEntry={removeEntry}
                     onBulkLogToTempo={handleBulkLogToTempo}
                     tempoEnabled={settings.tempo?.enabled}
+                    onAddEntry={async (day: Date) => {
+                      const d = new Date(day);
+                      d.setHours(9, 0, 0, 0);
+                      const startTime = d.getTime();
+                      const duration = 60 * 60 * 1000;
+                      const newEntry = await addEntry({
+                        startTime,
+                        endTime: startTime + duration,
+                        duration,
+                      });
+                      setSelectedEntry(newEntry.id);
+                      setCurrentView('worklog-detail');
+                    }}
                   />
                 ) : (
                   <div>
@@ -1923,6 +1936,51 @@ function App() {
                                           </div>
                                         );
                                       })}
+                                      {/* Add Entry Card */}
+                                      <div
+                                        onClick={async () => {
+                                          const dayDate = new Date(parseInt(dateKey));
+                                          dayDate.setHours(9, 0, 0, 0);
+                                          const startTime = dayDate.getTime();
+                                          const duration = 60 * 60 * 1000; // 1 hour
+                                          const newEntry = await addEntry({
+                                            startTime,
+                                            endTime: startTime + duration,
+                                            duration,
+                                          });
+                                          setSelectedEntry(newEntry.id);
+                                          setCurrentView('worklog-detail');
+                                        }}
+                                        className="flex items-center justify-center p-2.5 rounded-lg cursor-pointer"
+                                        style={{
+                                          backgroundColor: '#FAF5EE',
+                                          border: '1.5px dashed var(--color-border-primary)',
+                                          transition: 'all var(--duration-base) var(--ease-out)'
+                                        }}
+                                        onMouseEnter={(e) => {
+                                          e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)';
+                                          e.currentTarget.style.borderColor = 'var(--color-border-secondary)';
+                                          const label = e.currentTarget.querySelector('[data-add-label]') as HTMLElement;
+                                          if (label) label.style.color = 'var(--color-text-primary)';
+                                        }}
+                                        onMouseLeave={(e) => {
+                                          e.currentTarget.style.backgroundColor = '#FAF5EE';
+                                          e.currentTarget.style.borderColor = 'var(--color-border-primary)';
+                                          const label = e.currentTarget.querySelector('[data-add-label]') as HTMLElement;
+                                          if (label) label.style.color = 'var(--color-text-secondary)';
+                                        }}
+                                      >
+                                        <div
+                                          data-add-label
+                                          className="flex items-center gap-1.5 text-xs font-medium"
+                                          style={{ color: 'var(--color-text-secondary)', fontFamily: 'var(--font-body)', transition: 'color var(--duration-base) var(--ease-out)' }}
+                                        >
+                                          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                            <path d="M7 2.5V11.5M2.5 7H11.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                                          </svg>
+                                          Add Entry
+                                        </div>
+                                      </div>
                                     </div>
                                   </div>
                                 );

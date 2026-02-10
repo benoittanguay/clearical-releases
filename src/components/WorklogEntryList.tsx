@@ -12,6 +12,8 @@ interface WorklogEntryListProps {
     tempoEnabled?: boolean;
     /** When true, simplifies the UI for detail views (hides redundant Jira info, shows only day-level Log to Tempo) */
     isDetailView?: boolean;
+    /** Optional callback to add a new entry for a given day (timestamp). Card is only rendered when provided. */
+    onAddEntry?: (dateTimestamp: number) => void;
 }
 
 export const WorklogEntryList: React.FC<WorklogEntryListProps> = ({
@@ -22,7 +24,8 @@ export const WorklogEntryList: React.FC<WorklogEntryListProps> = ({
     onDeleteEntry,
     onBulkLogToTempo,
     tempoEnabled = false,
-    isDetailView = false
+    isDetailView = false,
+    onAddEntry
 }) => {
     // Helper function to get the start of week (Monday) for a given date
     const getWeekStart = (date: Date): Date => {
@@ -338,6 +341,40 @@ export const WorklogEntryList: React.FC<WorklogEntryListProps> = ({
                                                     </div>
                                                 );
                                             })}
+                                            {onAddEntry && (
+                                                <div
+                                                    onClick={() => onAddEntry(parseInt(dateKey))}
+                                                    className="flex items-center justify-center p-2.5 rounded-lg cursor-pointer"
+                                                    style={{
+                                                        backgroundColor: '#FAF5EE',
+                                                        border: '1.5px dashed var(--color-border-primary)',
+                                                        transition: 'all var(--duration-base) var(--ease-out)'
+                                                    }}
+                                                    onMouseEnter={(e) => {
+                                                        e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)';
+                                                        e.currentTarget.style.borderColor = 'var(--color-border-secondary)';
+                                                        const label = e.currentTarget.querySelector('[data-add-label]') as HTMLElement;
+                                                        if (label) label.style.color = 'var(--color-text-primary)';
+                                                    }}
+                                                    onMouseLeave={(e) => {
+                                                        e.currentTarget.style.backgroundColor = '#FAF5EE';
+                                                        e.currentTarget.style.borderColor = 'var(--color-border-primary)';
+                                                        const label = e.currentTarget.querySelector('[data-add-label]') as HTMLElement;
+                                                        if (label) label.style.color = 'var(--color-text-secondary)';
+                                                    }}
+                                                >
+                                                    <div
+                                                        data-add-label
+                                                        className="flex items-center gap-1.5 text-xs font-medium"
+                                                        style={{ color: 'var(--color-text-secondary)', fontFamily: 'var(--font-body)', transition: 'color var(--duration-base) var(--ease-out)' }}
+                                                    >
+                                                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                                            <path d="M7 2.5V11.5M2.5 7H11.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                                                        </svg>
+                                                        Add Entry
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                 );

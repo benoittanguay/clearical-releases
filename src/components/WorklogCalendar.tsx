@@ -14,6 +14,7 @@ interface WorklogCalendarProps {
     onDeleteEntry: (entryId: string) => void;
     onBulkLogToTempo?: (dateKey: string) => void;
     tempoEnabled?: boolean;
+    onAddEntry?: (day: Date) => void;
 }
 
 export const WorklogCalendar: React.FC<WorklogCalendarProps> = ({
@@ -27,7 +28,8 @@ export const WorklogCalendar: React.FC<WorklogCalendarProps> = ({
     onEntryClick,
     onDeleteEntry,
     onBulkLogToTempo,
-    tempoEnabled = false
+    tempoEnabled = false,
+    onAddEntry
 }) => {
     // Helper to get rounded duration (15-minute increments)
     const getRoundedDuration = (duration: number) =>
@@ -364,6 +366,7 @@ export const WorklogCalendar: React.FC<WorklogCalendarProps> = ({
                     onDeleteEntry={onDeleteEntry}
                     onBulkLogToTempo={onBulkLogToTempo}
                     tempoEnabled={tempoEnabled}
+                    onAddEntry={onAddEntry}
                 />
             )}
         </div>
@@ -382,6 +385,7 @@ const SelectedDayModal: React.FC<{
     onDeleteEntry: (entryId: string) => void;
     onBulkLogToTempo?: (dateKey: string) => void;
     tempoEnabled?: boolean;
+    onAddEntry?: (day: Date) => void;
 }> = ({
     selectedDay,
     entries,
@@ -392,7 +396,8 @@ const SelectedDayModal: React.FC<{
     onEntryClick,
     onDeleteEntry,
     onBulkLogToTempo,
-    tempoEnabled = false
+    tempoEnabled = false,
+    onAddEntry
 }) => {
     const getRoundedDuration = (duration: number) =>
         Math.ceil(duration / (15 * 60 * 1000)) * (15 * 60 * 1000);
@@ -483,16 +488,15 @@ const SelectedDayModal: React.FC<{
 
                 {/* Content */}
                 <div className="flex-1 overflow-y-auto px-6 pb-6">
-                    {entries.length === 0 ? (
-                        <div
-                            className="text-sm py-8 text-center"
-                            style={{ color: 'var(--color-text-tertiary)' }}
-                        >
-                            No activities on this day
-                        </div>
-                    ) : (
-                        <div className="space-y-2">
-                            {entries.map(entry => {
+                    <div className="space-y-2">
+                        {entries.length === 0 ? (
+                            <div
+                                className="text-sm py-8 text-center"
+                                style={{ color: 'var(--color-text-tertiary)' }}
+                            >
+                                No activities on this day
+                            </div>
+                        ) : entries.map(entry => {
                                 const assignment = entry.assignment ||
                                     (entry.linkedJiraIssue ? {
                                         type: 'jira' as const,
@@ -595,8 +599,44 @@ const SelectedDayModal: React.FC<{
                                     </div>
                                 );
                             })}
-                        </div>
-                    )}
+                        {onAddEntry && (
+                            <div
+                                onClick={() => {
+                                    onAddEntry(selectedDay);
+                                    onClose();
+                                }}
+                                className="flex items-center justify-center p-2.5 rounded-lg cursor-pointer"
+                                style={{
+                                    backgroundColor: '#FAF5EE',
+                                    border: '1.5px dashed var(--color-border-primary)',
+                                    transition: 'all var(--duration-base) var(--ease-out)'
+                                }}
+                                onMouseEnter={(e) => {
+                                    e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)';
+                                    e.currentTarget.style.borderColor = 'var(--color-border-secondary)';
+                                    const label = e.currentTarget.querySelector('[data-add-label]') as HTMLElement;
+                                    if (label) label.style.color = 'var(--color-text-primary)';
+                                }}
+                                onMouseLeave={(e) => {
+                                    e.currentTarget.style.backgroundColor = '#FAF5EE';
+                                    e.currentTarget.style.borderColor = 'var(--color-border-primary)';
+                                    const label = e.currentTarget.querySelector('[data-add-label]') as HTMLElement;
+                                    if (label) label.style.color = 'var(--color-text-secondary)';
+                                }}
+                            >
+                                <div
+                                    data-add-label
+                                    className="flex items-center gap-1.5 text-xs font-medium"
+                                    style={{ color: 'var(--color-text-secondary)', fontFamily: 'var(--font-body)', transition: 'color var(--duration-base) var(--ease-out)' }}
+                                >
+                                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                        <path d="M7 2.5V11.5M2.5 7H11.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                                    </svg>
+                                    Add Entry
+                                </div>
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
         </div>
