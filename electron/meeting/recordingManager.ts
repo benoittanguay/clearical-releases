@@ -451,6 +451,14 @@ export class RecordingManager extends EventEmitter {
             return;
         }
 
+        // If timer is paused, show prompt instead of auto-starting
+        // User should explicitly choose to resume timer and start recording
+        if (this.isTimerRunningCallback && !this.isTimerRunningCallback()) {
+            console.log('[RecordingManager] *** Timer is paused - showing prompt to resume ***');
+            this.showPromptWidget();
+            return;
+        }
+
         if (this.isRendererRecording) {
             console.log('[RecordingManager] *** SKIPPING: Already recording ***');
             return;

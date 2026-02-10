@@ -3978,7 +3978,7 @@ app.whenReady().then(() => {
         // Set up callback for recording manager to check timer state
         // This prevents showing prompts when timer is already running
         recordingManager.setIsTimerRunningCallback(() => {
-            return timerState.isRunning;
+            return timerState.isRunning && !timerState.isPaused;
         });
 
         recordingManager.start();

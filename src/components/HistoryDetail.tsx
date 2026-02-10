@@ -1527,11 +1527,11 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
             // Mark generation as failed to prevent infinite auto-retry loop
             setGenerationFailed(true);
 
-            // If auth error, refresh auth status to update UI state
+            // If auth error, log but don't cascade sign-out — transient token expiry
+            // should not nuke the session for all non-AI features
             if (errorMessage.toLowerCase().includes('not authenticated') ||
                 errorMessage.toLowerCase().includes('session expired')) {
-                console.log('[HistoryDetail] Auth error detected, refreshing auth status');
-                await refreshAuthStatus();
+                console.log('[HistoryDetail] Auth error detected - showing error only (not cascading sign-out)');
             }
 
             showToast({
