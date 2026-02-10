@@ -2681,10 +2681,13 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
 
                             return (
                                 <div key={group.displayName} className="border rounded-lg overflow-hidden" style={{ backgroundColor: 'var(--color-bg-secondary)', borderColor: 'var(--color-border-primary)', borderRadius: 'var(--radius-xl)', boxShadow: 'var(--shadow-sm)' }}>
-                                    {/* App Header */}
-                                    <button
+                                    {/* App Header - uses div instead of button to avoid invalid nested buttons (DeleteButton, create-entry) */}
+                                    <div
                                         onClick={() => toggleApp(group.displayName)}
-                                        className="w-full flex items-center justify-between p-3 transition-all"
+                                        role="button"
+                                        tabIndex={0}
+                                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleApp(group.displayName); } }}
+                                        className="w-full flex items-center justify-between p-3 transition-all cursor-pointer"
                                         data-hoverable
                                         data-default-bg="transparent"
                                         data-default-border=""
@@ -2801,7 +2804,7 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                                                 variant="subtle"
                                             />
                                         </div>
-                                    </button>
+                                    </div>
 
                                     {/* Activities List */}
                                     {isExpanded && (
