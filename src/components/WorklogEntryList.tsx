@@ -135,9 +135,9 @@ export const WorklogEntryList: React.FC<WorklogEntryListProps> = ({
 
                 return (
                     <div key={weekKey} className="mb-6 last:mb-0">
-                        {/* Week Header - Sticky and more prominent */}
+                        {/* Week Header - Sticky with fixed height for consistent positioning */}
                         <div
-                            className="sticky top-0 z-20 px-2.5 py-2 flex items-center justify-between"
+                            className="sticky top-0 z-20 px-2.5 h-9 flex items-center justify-between"
                             style={{
                                 backgroundColor: 'var(--color-bg-primary)',
                                 backdropFilter: 'blur(8px)',
@@ -161,7 +161,7 @@ export const WorklogEntryList: React.FC<WorklogEntryListProps> = ({
                                             e.stopPropagation();
                                             onBulkLogToTempo(weekKey);
                                         }}
-                                        className="no-drag flex items-center gap-1.5 px-3 py-1.5 bg-transparent hover:bg-[var(--color-bg-ghost-hover)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] text-xs rounded-lg transition-all border border-[var(--color-border-primary)]"
+                                        className="no-drag flex items-center gap-1 px-2.5 py-1 bg-transparent hover:bg-[var(--color-bg-ghost-hover)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] text-xs rounded-md transition-all border border-[var(--color-border-primary)]"
                                     >
                                         <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                             <circle cx="12" cy="12" r="10"/>
@@ -201,13 +201,13 @@ export const WorklogEntryList: React.FC<WorklogEntryListProps> = ({
 
                                 return (
                                     <div key={dateKey} className={dayIndex > 0 ? 'mt-3' : ''}>
-                                        {/* Date Separator Header - Sticky below week header */}
+                                        {/* Date Separator Header - Sticky below week header (top = week header h-9 = 36px) */}
                                         <div
-                                            className="sticky z-10 px-2.5 py-2 flex items-center justify-between"
+                                            className="sticky z-10 px-2.5 h-9 flex items-center justify-between"
                                             style={{
                                                 backgroundColor: 'var(--color-bg-secondary)',
                                                 borderBottom: '1px solid var(--color-border-primary)',
-                                                top: '35px' // Height of week header (py-2 = 16px + text ~18px + border 1px)
+                                                top: '36px'
                                             }}
                                         >
                                             <h3 className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>
@@ -220,7 +220,7 @@ export const WorklogEntryList: React.FC<WorklogEntryListProps> = ({
                                                             e.stopPropagation();
                                                             onBulkLogToTempo(dateKey);
                                                         }}
-                                                        className="no-drag flex items-center gap-1.5 px-3 py-1.5 bg-transparent hover:bg-[var(--color-bg-ghost-hover)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] text-xs rounded-lg transition-all border border-[var(--color-border-primary)]"
+                                                        className="no-drag flex items-center gap-1 px-2.5 py-1 bg-transparent hover:bg-[var(--color-bg-ghost-hover)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] text-xs rounded-md transition-all border border-[var(--color-border-primary)]"
                                                     >
                                                         <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                                             <circle cx="12" cy="12" r="10"/>
