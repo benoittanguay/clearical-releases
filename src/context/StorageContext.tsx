@@ -16,9 +16,17 @@ export type {
     TimeEntry
 };
 
+// Default: load 90 days of entries
+const DEFAULT_LOOKBACK_DAYS = 90;
+
 interface StorageContextType {
     buckets: TimeBucket[];
     entries: TimeEntry[];
+    loadedRange: { start: number; end: number } | null;
+    loadEntriesForRange: (startTime: number, endTime: number) => Promise<void>;
+    fetchEntriesByBucket: (bucketId: string) => Promise<TimeEntry[]>;
+    fetchEntriesByJiraKey: (jiraKey: string) => Promise<TimeEntry[]>;
+    fetchEntriesForExport: (startTime: number, endTime: number) => Promise<TimeEntry[]>;
     addBucket: (name: string, color: string, parentId?: string | null) => void;
     removeBucket: (id: string) => void;
     renameBucket: (id: string, newName: string) => void;
@@ -47,7 +55,78 @@ const StorageContext = createContext<StorageContextType | undefined>(undefined);
 export const StorageProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [buckets, setBuckets] = useState<TimeBucket[]>([]);
     const [entries, setEntries] = useState<TimeEntry[]>([]);
+    const [loadedRange, setLoadedRange] = useState<{ start: number; end: number } | null>(null);
     const [, setIsLoading] = useState(true);
+
+    // Calculate the default date range (last N days)
+    const getDefaultRange = () => {
+        const now = Date.now();
+        const start = now - (DEFAULT_LOOKBACK_DAYS * 24 * 60 * 60 * 1000);
+        // Add 1 day buffer into the future for timezone edge cases
+        const end = now + (24 * 60 * 60 * 1000);
+        return { start, end };
+    };
+
+    // Load entries for a specific date range (replaces current entries)
+    const loadEntriesForRange = async (startTime: number, endTime: number) => {
+        try {
+            const entriesResult = await window.electron.ipcRenderer.db.getEntriesByDateRange(startTime, endTime);
+            if (entriesResult.success && entriesResult.data) {
+                console.log('[StorageContext] Loaded entries for range:', entriesResult.data.length);
+                setEntries(entriesResult.data);
+                setLoadedRange({ start: startTime, end: endTime });
+            } else {
+                console.error('[StorageContext] Failed to load entries for range:', entriesResult.error);
+            }
+        } catch (error) {
+            console.error('[StorageContext] Error loading entries for range:', error);
+        }
+    };
+
+    // Fetch entries by bucket ID directly from DB (for BucketDetailView)
+    const fetchEntriesByBucket = async (bucketId: string): Promise<TimeEntry[]> => {
+        try {
+            const result = await window.electron.ipcRenderer.db.getEntriesByBucket(bucketId);
+            if (result.success && result.data) {
+                return result.data;
+            }
+            console.error('[StorageContext] Failed to fetch entries by bucket:', result.error);
+            return [];
+        } catch (error) {
+            console.error('[StorageContext] Error fetching entries by bucket:', error);
+            return [];
+        }
+    };
+
+    // Fetch entries by Jira key directly from DB (for JiraDetailView)
+    const fetchEntriesByJiraKey = async (jiraKey: string): Promise<TimeEntry[]> => {
+        try {
+            const result = await window.electron.ipcRenderer.db.getEntriesByJiraKey(jiraKey);
+            if (result.success && result.data) {
+                return result.data;
+            }
+            console.error('[StorageContext] Failed to fetch entries by jira key:', result.error);
+            return [];
+        } catch (error) {
+            console.error('[StorageContext] Error fetching entries by jira key:', error);
+            return [];
+        }
+    };
+
+    // Fetch entries for a date range directly from DB (for ExportDialog)
+    const fetchEntriesForExport = async (startTime: number, endTime: number): Promise<TimeEntry[]> => {
+        try {
+            const result = await window.electron.ipcRenderer.db.getEntriesByDateRange(startTime, endTime);
+            if (result.success && result.data) {
+                return result.data;
+            }
+            console.error('[StorageContext] Failed to fetch entries for export:', result.error);
+            return [];
+        } catch (error) {
+            console.error('[StorageContext] Error fetching entries for export:', error);
+            return [];
+        }
+    };
 
     // Load from SQLite database
     useEffect(() => {
@@ -82,11 +161,13 @@ export const StorageProvider: React.FC<{ children: React.ReactNode }> = ({ child
                     setBuckets([]);
                 }
 
-                // Load entries from database
-                const entriesResult = await window.electron.ipcRenderer.db.getAllEntries();
+                // Load entries for default date range (last 90 days)
+                const range = getDefaultRange();
+                const entriesResult = await window.electron.ipcRenderer.db.getEntriesByDateRange(range.start, range.end);
                 if (entriesResult.success && entriesResult.data) {
-                    console.log('[StorageContext] Loaded entries from database:', entriesResult.data.length);
+                    console.log('[StorageContext] Loaded entries for default range:', entriesResult.data.length);
                     setEntries(entriesResult.data);
+                    setLoadedRange(range);
                 } else {
                     console.error('[StorageContext] Failed to load entries:', entriesResult.error);
                     setEntries([]);
@@ -538,6 +619,11 @@ export const StorageProvider: React.FC<{ children: React.ReactNode }> = ({ child
         <StorageContext.Provider value={{
             buckets,
             entries,
+            loadedRange,
+            loadEntriesForRange,
+            fetchEntriesByBucket,
+            fetchEntriesByJiraKey,
+            fetchEntriesForExport,
             addBucket,
             removeBucket,
             renameBucket,

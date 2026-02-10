@@ -28,6 +28,61 @@ interface WindowActivity {
     screenshotVisionData?: { [path: string]: VisionFrameworkRawData };
 }
 
+// Maximum number of window activities to keep in memory per session.
+// Beyond this, oldest activities are consolidated to save memory.
+const MAX_WINDOW_ACTIVITIES = 200;
+
+/**
+ * Consolidate window activities when the array exceeds MAX_WINDOW_ACTIVITIES.
+ * Merges consecutive same-app activities at the front (oldest) of the array,
+ * and strips heavyweight screenshot analysis data from old entries.
+ * Keeps the most recent half of activities untouched.
+ */
+function consolidateActivities(activities: WindowActivity[]): WindowActivity[] {
+    if (activities.length <= MAX_WINDOW_ACTIVITIES) return activities;
+
+    const keepRecentCount = Math.floor(MAX_WINDOW_ACTIVITIES / 2);
+    const oldActivities = activities.slice(0, activities.length - keepRecentCount);
+    const recentActivities = activities.slice(activities.length - keepRecentCount);
+
+    // Merge consecutive same-app activities and strip analysis data from old activities
+    const consolidated: WindowActivity[] = [];
+    let current: WindowActivity | null = null;
+
+    for (const activity of oldActivities) {
+        if (current && current.appName === activity.appName && current.bundleId === activity.bundleId) {
+            // Merge into current: accumulate duration, keep earliest timestamp, keep screenshot paths but drop analysis
+            current = {
+                ...current,
+                duration: current.duration + activity.duration,
+                screenshotPaths: [
+                    ...(current.screenshotPaths || []),
+                    ...(activity.screenshotPaths || [])
+                ].slice(0, 3), // Keep at most 3 screenshot paths from merged activities
+                screenshotDescriptions: undefined,
+                screenshotVisionData: undefined,
+            };
+        } else {
+            if (current) {
+                consolidated.push(current);
+            }
+            // Strip heavyweight data from old activities
+            current = {
+                ...activity,
+                screenshotDescriptions: undefined,
+                screenshotVisionData: undefined,
+            };
+        }
+    }
+    if (current) {
+        consolidated.push(current);
+    }
+
+    const result = [...consolidated, ...recentActivities];
+    console.log(`[Timer] Consolidated ${activities.length} activities to ${result.length} (${consolidated.length} old + ${recentActivities.length} recent)`);
+    return result;
+}
+
 export interface PermissionCheckResult {
     hasAccessibility: boolean;
     hasScreenRecording: boolean;
@@ -813,7 +868,7 @@ export function useTimer() {
                             descriptionsCount: Object.keys(currentActivityScreenshotDescriptions.current).length
                         });
 
-                        setWindowActivity(prev => [...prev, newActivity]);
+                        setWindowActivity(prev => consolidateActivities([...prev, newActivity]));
                     }
 
                     // Reset for new activity

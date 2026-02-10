@@ -177,6 +177,10 @@ contextBridge.exposeInMainWorld('electron', {
         db: {
             // Entries
             getAllEntries: () => ipcRenderer.invoke('db:get-all-entries'),
+            getEntriesByDateRange: (startTime: number, endTime: number) => ipcRenderer.invoke('db:get-entries-by-date-range', startTime, endTime),
+            getEntriesByBucket: (bucketId: string) => ipcRenderer.invoke('db:get-entries-by-bucket', bucketId),
+            getEntriesByJiraKey: (jiraKey: string) => ipcRenderer.invoke('db:get-entries-by-jira-key', jiraKey),
+            getEntryCount: () => ipcRenderer.invoke('db:get-entry-count'),
             getEntry: (id: string) => ipcRenderer.invoke('db:get-entry', id),
             insertEntry: (entry: any) => ipcRenderer.invoke('db:insert-entry', entry),
             updateEntry: (id: string, updates: any) => ipcRenderer.invoke('db:update-entry', id, updates),

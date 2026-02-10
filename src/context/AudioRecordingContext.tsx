@@ -636,10 +636,21 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
             });
 
             let dataChunkCount = 0;
+            // Maximum in-memory audio chunks to keep when file-based recording is active.
+            // Each chunk is ~1 second at 128kbps = ~16KB. 30 chunks = ~480KB fallback buffer.
+            const MAX_FALLBACK_CHUNKS = 30;
+
             mediaRecorder.ondataavailable = (event) => {
                 dataChunkCount++;
                 if (event.data.size > 0) {
                     audioChunksRef.current.push(event.data);
+
+                    // When file-based recording is active, the in-memory chunks are only a fallback.
+                    // Trim to keep only the last MAX_FALLBACK_CHUNKS to prevent unbounded memory growth.
+                    if (isFileRecordingActiveRef.current && audioChunksRef.current.length > MAX_FALLBACK_CHUNKS) {
+                        audioChunksRef.current = audioChunksRef.current.slice(-MAX_FALLBACK_CHUNKS);
+                    }
+
                     // Log every 10 chunks (~10 seconds)
                     if (dataChunkCount % 10 === 1) {
                         console.log('[AudioRecordingContext] MediaRecorder data chunk #' + dataChunkCount + ', size:', event.data.size, 'bytes, total chunks:', audioChunksRef.current.length);
