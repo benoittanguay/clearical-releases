@@ -878,7 +878,7 @@ function App() {
           }}
         >
         {/* Logo */}
-        <div className="mb-6 select-none">
+        <div className="mb-6 mt-6 select-none">
           <img
             src="./icon.png"
             alt="Clearical"

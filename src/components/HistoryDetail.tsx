@@ -289,7 +289,7 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
     const { removeActivityFromEntry, removeAllActivitiesForApp, removeScreenshotFromEntry, addManualActivityToEntry, setEntryAssignment, createEntryFromActivity, entries } = useStorage();
     const { settings, updateSettings } = useSettings();
     const { hasFeature, upgrade } = useSubscription();
-    const { user, refreshAuthStatus } = useAuth();
+    const { user } = useAuth();
     const { showToast } = useToast();
     const jiraCache = useJiraCache();
     const { roundTime, isRoundingEnabled } = useTimeRounding();

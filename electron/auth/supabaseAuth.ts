@@ -344,13 +344,42 @@ export class SupabaseAuthService {
 
             if (error || !data.url) {
                 console.error('[SupabaseAuth] Failed to generate OAuth URL:', error);
-                return { success: false, error: error?.message || 'Failed to start sign in' };
+
+                // Check for provider not enabled error
+                const errorMessage = error?.message || 'Failed to start sign in';
+                if (errorMessage.includes('Unsupported provider') || errorMessage.includes('provider is not enabled')) {
+                    const providerName = provider === 'apple' ? 'Apple' : provider === 'google' ? 'Google' : 'Microsoft';
+                    return {
+                        success: false,
+                        error: `Sign in with ${providerName} is not enabled. Please contact support.`
+                    };
+                }
+
+                return { success: false, error: errorMessage };
             }
 
             // Start callback server and wait for it to be ready
-            oauthServer = await startOAuthCallbackServer(60000);
+            console.log(`[SupabaseAuth] Starting OAuth callback server for ${provider}...`);
+            try {
+                oauthServer = await startOAuthCallbackServer(60000);
+                console.log('[SupabaseAuth] OAuth callback server started successfully');
+            } catch (serverError) {
+                console.error('[SupabaseAuth] Failed to start OAuth callback server:', serverError);
+                const errorMessage = serverError instanceof Error ? serverError.message : 'Unknown error';
+
+                // Provide helpful error message for sandboxing issues
+                if (errorMessage.includes('EPERM') || errorMessage.includes('EACCES') || errorMessage.includes('firewall')) {
+                    return {
+                        success: false,
+                        error: 'Unable to start local authentication server. This may be due to security settings. Please ensure the app has proper network permissions and try again.'
+                    };
+                }
+
+                return { success: false, error: errorMessage };
+            }
 
             // Open system browser for authentication (server is now guaranteed to be listening)
+            console.log(`[SupabaseAuth] Opening browser for ${provider} authentication...`);
             await shell.openExternal(data.url);
 
             // Wait for callback

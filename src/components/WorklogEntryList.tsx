@@ -164,9 +164,21 @@ export const WorklogEntryList: React.FC<WorklogEntryListProps> = ({
                                             e.stopPropagation();
                                             onBulkLogToTempo(weekKey);
                                         }}
-                                        className="no-drag flex items-center gap-1 px-2.5 py-1 bg-transparent hover:bg-[var(--color-bg-ghost-hover)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] text-xs rounded-md transition-all border border-[var(--color-border-primary)]"
+                                        className="px-2.5 py-1 text-white text-xs rounded-md transition-all active:scale-95 flex items-center gap-1"
+                                        style={{
+                                            backgroundColor: 'var(--color-surface-dark)',
+                                            transitionDuration: 'var(--duration-fast)',
+                                            transitionTimingFunction: 'var(--ease-out)',
+                                            opacity: 1
+                                        }}
+                                        onMouseEnter={(e) => {
+                                            e.currentTarget.style.backgroundColor = '#3a3a3a';
+                                        }}
+                                        onMouseLeave={(e) => {
+                                            e.currentTarget.style.backgroundColor = 'var(--color-surface-dark)';
+                                        }}
                                     >
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                             <circle cx="12" cy="12" r="10"/>
                                             <path d="M12 6v6l4 2"/>
                                         </svg>
@@ -223,9 +235,21 @@ export const WorklogEntryList: React.FC<WorklogEntryListProps> = ({
                                                             e.stopPropagation();
                                                             onBulkLogToTempo(dateKey);
                                                         }}
-                                                        className="no-drag flex items-center gap-1 px-2.5 py-1 bg-transparent hover:bg-[var(--color-bg-ghost-hover)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] text-xs rounded-md transition-all border border-[var(--color-border-primary)]"
+                                                        className="px-2.5 py-1 text-white text-xs rounded-md transition-all active:scale-95 flex items-center gap-1"
+                                                        style={{
+                                                            backgroundColor: 'var(--color-surface-dark)',
+                                                            transitionDuration: 'var(--duration-fast)',
+                                                            transitionTimingFunction: 'var(--ease-out)',
+                                                            opacity: 1
+                                                        }}
+                                                        onMouseEnter={(e) => {
+                                                            e.currentTarget.style.backgroundColor = '#3a3a3a';
+                                                        }}
+                                                        onMouseLeave={(e) => {
+                                                            e.currentTarget.style.backgroundColor = 'var(--color-surface-dark)';
+                                                        }}
                                                     >
-                                                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                                             <circle cx="12" cy="12" r="10"/>
                                                             <path d="M12 6v6l4 2"/>
                                                         </svg>
