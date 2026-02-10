@@ -410,7 +410,7 @@ export function Settings({ onOpenJiraModal, onOpenTempoModal }: SettingsProps = 
                 </div>
                 <div className="space-y-2.5">
                     {/* User info */}
-                    <div className="bg-[var(--color-bg-tertiary)] p-3 rounded-xl border border-[var(--color-border-primary)] transition-all duration-200 hover:border-[var(--color-accent)]/20">
+                    <div className="p-3 rounded-xl transition-all duration-200">
                         <div className="text-sm font-medium text-[var(--color-text-primary)] mb-1">{user?.email || 'Unknown'}</div>
                         <div className="text-xs text-[var(--color-text-secondary)] font-mono">
                             {subscription.isTrial && subscription.trialDaysRemaining > 0 && (
@@ -434,7 +434,7 @@ export function Settings({ onOpenJiraModal, onOpenTempoModal }: SettingsProps = 
 
                     {/* AI Usage */}
                     {usageLoading ? (
-                        <div className="bg-[var(--color-bg-tertiary)] p-3 rounded-xl border border-[var(--color-border-primary)] animate-pulse">
+                        <div className="p-3 rounded-xl animate-pulse">
                             <div className="h-4 bg-[var(--color-bg-quaternary)] rounded w-1/3 mb-2"></div>
                             <div className="h-3 bg-[var(--color-bg-quaternary)] rounded w-2/3 mb-2"></div>
                             <div className="h-1.5 bg-[var(--color-bg-quaternary)] rounded-full w-full"></div>
@@ -445,7 +445,7 @@ export function Settings({ onOpenJiraModal, onOpenTempoModal }: SettingsProps = 
                         const percentage = limitHours > 0 ? Math.min((usedHours / limitHours) * 100, 100) : 0;
                         const barColor = percentage > 90 ? 'var(--color-error)' : percentage > 75 ? 'var(--color-warning)' : 'var(--color-accent)';
                         return (
-                            <div className="bg-[var(--color-bg-tertiary)] p-3 rounded-xl border border-[var(--color-border-primary)] transition-all duration-200 hover:border-[var(--color-accent)]/20">
+                            <div className="p-3 rounded-xl transition-all duration-200">
                                 <div className="flex items-center justify-between mb-0.5">
                                     <div className="text-sm font-medium text-[var(--color-text-primary)]">AI Usage</div>
                                     <div className="text-sm font-mono text-[var(--color-text-primary)]">
@@ -532,7 +532,7 @@ export function Settings({ onOpenJiraModal, onOpenTempoModal }: SettingsProps = 
 
                 <div className="space-y-3">
                     {/* Enable/Disable Toggle */}
-                    <div className="flex items-center justify-between bg-[var(--color-bg-tertiary)] p-2.5 rounded-lg border border-[var(--color-border-primary)]">
+                    <div className="flex items-center justify-between p-2.5 rounded-lg">
                         <div>
                             <div className="text-sm font-medium text-[var(--color-text-primary)]">Daily Reminder</div>
                             <div className="text-xs text-[var(--color-text-secondary)]">Get prompted to start your day at a set time</div>
@@ -566,7 +566,7 @@ export function Settings({ onOpenJiraModal, onOpenTempoModal }: SettingsProps = 
                     {tempSettings.workingHours?.enabled && (
                         <>
                             {/* Start Time */}
-                            <div className="bg-[var(--color-bg-tertiary)] p-2.5 rounded-lg border border-[var(--color-border-primary)]">
+                            <div className="p-2.5 rounded-lg">
                                 <div className="flex items-center justify-between">
                                     <div>
                                         <div className="text-sm font-medium text-[var(--color-text-primary)]">Start Time</div>
@@ -596,7 +596,7 @@ export function Settings({ onOpenJiraModal, onOpenTempoModal }: SettingsProps = 
                             </div>
 
                             {/* End Time */}
-                            <div className="bg-[var(--color-bg-tertiary)] p-2.5 rounded-lg border border-[var(--color-border-primary)]">
+                            <div className="p-2.5 rounded-lg">
                                 <div className="flex items-center justify-between">
                                     <div>
                                         <div className="text-sm font-medium text-[var(--color-text-primary)]">End Time</div>
@@ -626,7 +626,7 @@ export function Settings({ onOpenJiraModal, onOpenTempoModal }: SettingsProps = 
                             </div>
 
                             {/* Working Days */}
-                            <div className="bg-[var(--color-bg-tertiary)] p-2.5 rounded-lg border border-[var(--color-border-primary)]">
+                            <div className="p-2.5 rounded-lg">
                                 <div className="text-sm font-medium text-[var(--color-text-primary)] mb-2">Working Days</div>
                                 <div className="flex gap-2">
                                     {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, index) => {
@@ -847,7 +847,7 @@ export function Settings({ onOpenJiraModal, onOpenTempoModal }: SettingsProps = 
 
                 <div className="space-y-3">
                     {/* Auto-generate descriptions */}
-                    <div className="flex items-center justify-between bg-[var(--color-bg-tertiary)] p-2.5 rounded-lg border border-[var(--color-border-primary)]">
+                    <div className="flex items-center justify-between p-2.5 rounded-lg">
                         <div>
                             <div className="text-sm font-medium text-[var(--color-text-primary)]">Auto-generate Descriptions</div>
                             <div className="text-xs text-[var(--color-text-secondary)]">Automatically create descriptions from screenshots</div>
@@ -875,7 +875,7 @@ export function Settings({ onOpenJiraModal, onOpenTempoModal }: SettingsProps = 
                     </div>
 
                     {/* Auto-assign work */}
-                    <div className="flex items-center justify-between bg-[var(--color-bg-tertiary)] p-2.5 rounded-lg border border-[var(--color-border-primary)]">
+                    <div className="flex items-center justify-between p-2.5 rounded-lg">
                         <div>
                             <div className="text-sm font-medium text-[var(--color-text-primary)]">Auto-assign Work</div>
                             <div className="text-xs text-[var(--color-text-secondary)]">Automatically assign entries to buckets or Jira issues</div>
@@ -903,7 +903,7 @@ export function Settings({ onOpenJiraModal, onOpenTempoModal }: SettingsProps = 
                     </div>
 
                     {/* Auto-select Tempo accounts */}
-                    <div className="flex items-center justify-between bg-[var(--color-bg-tertiary)] p-2.5 rounded-lg border border-[var(--color-border-primary)]">
+                    <div className="flex items-center justify-between p-2.5 rounded-lg">
                         <div>
                             <div className="text-sm font-medium text-[var(--color-text-primary)]">Auto-select Tempo Accounts</div>
                             <div className="text-xs text-[var(--color-text-secondary)]">Automatically select Tempo accounts for Jira issues</div>
@@ -931,7 +931,7 @@ export function Settings({ onOpenJiraModal, onOpenTempoModal }: SettingsProps = 
                     </div>
 
                     {/* Auto-record meetings */}
-                    <div className="flex items-center justify-between bg-[var(--color-bg-tertiary)] p-2.5 rounded-lg border border-[var(--color-border-primary)]">
+                    <div className="flex items-center justify-between p-2.5 rounded-lg">
                         <div>
                             <div className="text-sm font-medium text-[var(--color-text-primary)]">Auto-record Meetings</div>
                             <div className="text-xs text-[var(--color-text-secondary)]">Automatically record audio when mic/camera is in use</div>
@@ -976,7 +976,7 @@ export function Settings({ onOpenJiraModal, onOpenTempoModal }: SettingsProps = 
 
                 <div className="space-y-2">
                     {/* Jira Status */}
-                    <div className={`flex items-center justify-between bg-[var(--color-bg-tertiary)] p-2.5 rounded-lg border border-[var(--color-border-primary)] ${!hasJiraAccess ? 'opacity-60' : ''}`}>
+                    <div className={`flex items-center justify-between p-2.5 rounded-lg ${!hasJiraAccess ? 'opacity-60' : ''}`}>
                         <div className="flex-1">
                             <div className="flex items-center gap-2">
                                 <div className="text-sm font-medium text-[var(--color-text-primary)]">
@@ -1017,7 +1017,7 @@ export function Settings({ onOpenJiraModal, onOpenTempoModal }: SettingsProps = 
                     </div>
 
                     {/* Tempo Status */}
-                    <div className={`flex items-center justify-between bg-[var(--color-bg-tertiary)] p-2.5 rounded-lg border border-[var(--color-border-primary)] ${!hasTempoAccess ? 'opacity-60' : ''}`}>
+                    <div className={`flex items-center justify-between p-2.5 rounded-lg ${!hasTempoAccess ? 'opacity-60' : ''}`}>
                         <div className="flex-1">
                             <div className="flex items-center gap-2">
                                 <div className="text-sm font-medium text-[var(--color-text-primary)]">
@@ -1081,7 +1081,7 @@ export function Settings({ onOpenJiraModal, onOpenTempoModal }: SettingsProps = 
 
                     <div className="space-y-3">
                         {/* Auto-sync toggle */}
-                        <div className="flex items-center justify-between bg-[var(--color-bg-tertiary)] p-2.5 rounded-lg border border-[var(--color-border-primary)]">
+                        <div className="flex items-center justify-between p-2.5 rounded-lg">
                             <div>
                                 <div className="text-sm font-medium text-[var(--color-text-primary)]">Automatic Sync</div>
                                 <div className="text-xs text-[var(--color-text-secondary)]">Periodically sync Jira data in background</div>
@@ -1107,7 +1107,7 @@ export function Settings({ onOpenJiraModal, onOpenTempoModal }: SettingsProps = 
 
                         {/* Sync interval selector */}
                         {tempSettings.jira?.autoSync && (
-                            <div className="bg-[var(--color-bg-tertiary)] p-2.5 rounded-lg border border-[var(--color-border-primary)]">
+                            <div className="p-2.5 rounded-lg">
                                 <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
                                     Sync Interval
                                 </label>
@@ -1152,7 +1152,7 @@ export function Settings({ onOpenJiraModal, onOpenTempoModal }: SettingsProps = 
 
                         {/* Sync status */}
                         {syncStatus && (
-                            <div className="bg-[var(--color-bg-tertiary)] p-2.5 rounded-lg border border-[var(--color-border-primary)]">
+                            <div className="p-2.5 rounded-lg">
                                 <div className="flex items-center justify-between mb-2">
                                     <div className="text-sm font-medium text-[var(--color-text-primary)]">Sync Status</div>
                                     <span className={`text-[10px] px-2 py-1 rounded-full font-semibold font-mono tracking-wide ${
@@ -1203,7 +1203,7 @@ export function Settings({ onOpenJiraModal, onOpenTempoModal }: SettingsProps = 
 
             <div className="bg-[var(--color-bg-secondary)] p-4 rounded-2xl mb-3 border border-[var(--color-border-primary)]">
                 <h3 className="text-[10px] font-bold text-[var(--color-text-secondary)] uppercase tracking-wider mb-3 font-display">Permissions</h3>
-                <div className="flex items-center justify-between bg-[var(--color-bg-tertiary)] p-2.5 rounded-lg border border-[var(--color-border-primary)]">
+                <div className="flex items-center justify-between p-2.5 rounded-lg">
                     <div className="flex-1">
                         <div className="text-sm font-medium text-[var(--color-text-primary)]">Screen Recording</div>
                         <div className="text-xs text-[var(--color-text-secondary)]">Required for screenshots</div>
@@ -1297,7 +1297,7 @@ export function Settings({ onOpenJiraModal, onOpenTempoModal }: SettingsProps = 
 
                 <div className="space-y-2">
                     {/* Current Version */}
-                    <div className="flex items-center justify-between bg-[var(--color-bg-tertiary)] p-2.5 rounded-lg border border-[var(--color-border-primary)]">
+                    <div className="flex items-center justify-between p-2.5 rounded-lg">
                         <div>
                             <div className="text-sm font-medium text-[var(--color-text-primary)]">Current Version</div>
                             <div className="text-xs text-[var(--color-text-secondary)]">Clearical</div>
@@ -1340,7 +1340,7 @@ export function Settings({ onOpenJiraModal, onOpenTempoModal }: SettingsProps = 
             {/* Privacy Settings */}
             <div className="bg-[var(--color-bg-secondary)] p-4 rounded-2xl mb-3 border border-[var(--color-border-primary)]">
                 <h3 className="text-[10px] font-bold text-[var(--color-text-secondary)] uppercase tracking-wider mb-3 font-display">Privacy</h3>
-                <div className="flex items-center justify-between bg-[var(--color-bg-tertiary)] p-2.5 rounded-lg border border-[var(--color-border-primary)]">
+                <div className="flex items-center justify-between p-2.5 rounded-lg">
                     <div>
                         <div className="text-sm font-medium text-[var(--color-text-primary)]">Help improve Clearical</div>
                         <div className="text-xs text-[var(--color-text-secondary)]">Send anonymous usage data to help us improve the app</div>
