@@ -8,12 +8,13 @@ interface ExportDialogProps {
     buckets: TimeBucket[];
     onClose: () => void;
     onExport: () => void;
+    fixedBucketId?: string;
 }
 
-export function ExportDialog({ entries, buckets, onClose, onExport }: ExportDialogProps) {
+export function ExportDialog({ entries, buckets, onClose, onExport, fixedBucketId }: ExportDialogProps) {
     const [dateFrom, setDateFrom] = useState<string>('');
     const [dateTo, setDateTo] = useState<string>('');
-    const [selectedBucketIds, setSelectedBucketIds] = useState<string[]>([]);
+    const [selectedBucketIds, setSelectedBucketIds] = useState<string[]>(fixedBucketId ? [fixedBucketId] : []);
     const [includeDescription, setIncludeDescription] = useState(true);
     const [includeIssueKey, setIncludeIssueKey] = useState(false);
     const [issueKey, setIssueKey] = useState('');
@@ -218,6 +219,7 @@ export function ExportDialog({ entries, buckets, onClose, onExport }: ExportDial
                     </div>
 
                     {/* Bucket Filter */}
+                    {!fixedBucketId && (
                     <div>
                         <div className="flex items-center justify-between mb-3">
                             <label className="text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider" style={{ fontFamily: 'var(--font-display)' }}>Buckets</label>
@@ -246,6 +248,7 @@ export function ExportDialog({ entries, buckets, onClose, onExport }: ExportDial
                             ))}
                         </div>
                     </div>
+                    )}
 
                     {/* Options */}
                     <div className="space-y-2.5">
