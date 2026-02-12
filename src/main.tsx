@@ -1,3 +1,4 @@
+import * as Sentry from '@sentry/react'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
@@ -15,6 +16,17 @@ import { AudioRecordingProvider } from './context/AudioRecordingContext.tsx'
 import { ErrorBoundary } from './components/ErrorBoundary.tsx'
 import { SplitAnimationOverlay } from './components/SplitAnimationOverlay.tsx'
 import { AuthGate } from './components/AuthGate.tsx'
+
+Sentry.init({
+  dsn: 'https://a01158cfbc2b8cf42152325063d94287@o4510863269625856.ingest.us.sentry.io/4510863272378368',
+  sendDefaultPii: true,
+  integrations: [
+    Sentry.browserTracingIntegration(),
+  ],
+  tracesSampleRate: 1.0,
+  tracePropagationTargets: ['localhost', /^https:\/\/.*\.supabase\.co/],
+  enableLogs: true,
+});
 
 // Import seed script to expose console commands in development
 if (import.meta.env.DEV) {
