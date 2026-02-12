@@ -2026,7 +2026,15 @@ ipcMain.handle(MEETING_IPC_CHANNELS.SAVE_AUDIO_AND_TRANSCRIBE, async (_event, en
             console.log('[Main] Audio file saved:', audioPath, 'size:', audioBuffer.length);
         }
 
-        // 2. Attempt transcription
+        // 2. Ensure auth session is fresh before transcription (long recordings can outlast tokens)
+        try {
+            const authService = getAuthService();
+            await authService.proactiveRefresh();
+        } catch (refreshError) {
+            console.warn('[Main] Auth refresh before transcription failed:', refreshError);
+        }
+
+        // 3. Attempt transcription
         const { getTranscriptionService } = await import('./meeting/transcriptionService.js');
         const transcriptionService = getTranscriptionService();
 
@@ -2091,6 +2099,14 @@ ipcMain.handle('meeting:retry-transcription', async (_event, entryId: string, au
         const audioBuffer = fs.readFileSync(audioPath);
         const audioBase64 = audioBuffer.toString('base64');
         console.log('[Main] Loaded audio file for retry:', audioPath, 'size:', audioBuffer.length);
+
+        // Ensure auth session is fresh before retry transcription
+        try {
+            const authService = getAuthService();
+            await authService.proactiveRefresh();
+        } catch (refreshError) {
+            console.warn('[Main] Auth refresh before retry transcription failed:', refreshError);
+        }
 
         // Attempt transcription
         const { getTranscriptionService } = await import('./meeting/transcriptionService.js');
