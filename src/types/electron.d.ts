@@ -79,6 +79,7 @@ export interface ActivityDataForSplitting {
     endTime: number;
     duration: number;
     screenshots: Array<{ timestamp: number; description: string }>;
+    manuallyTriggered?: boolean;
 }
 
 export interface UpdateStatus {

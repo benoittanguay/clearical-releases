@@ -339,6 +339,7 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
     const [splitSuggestions, setSplitSuggestions] = useState<SplitSuggestion[]>([]);
     const [isAnalyzingSplits, setIsAnalyzingSplits] = useState(false);
     const [showNoSplitsModal, setShowNoSplitsModal] = useState(false);
+    const splitsDismissedRef = useRef(false);
 
     // AI Analysis retry state
     const [isRetryingAnalysis, setIsRetryingAnalysis] = useState(false);
@@ -1548,7 +1549,11 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
     // Handler for suggesting splits
     // isAutoPrompted: true when triggered automatically for long sessions
     const handleSuggestSplits = async (isAutoPrompted: boolean = false) => {
+        splitsDismissedRef.current = false;
         setIsAnalyzingSplits(true);
+        // Show the modal immediately so the user can see the loading state
+        // and dismiss with "Keep as One Entry" without waiting
+        setShowSplittingAssistant(true);
         try {
             // Gather activity data with screenshots
             const screenshots: Array<{ timestamp: number; description: string }> = [];
@@ -1574,14 +1579,20 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                 startTime: entry.startTime,
                 endTime: entry.startTime + entry.duration,
                 duration: entry.duration,
-                screenshots
+                screenshots,
+                manuallyTriggered: !isAutoPrompted
             };
 
             const result = await window.electron.ipcRenderer.analyzeSplits(activityData);
 
+            // User dismissed while analysis was in progress — discard results
+            if (splitsDismissedRef.current) {
+                console.log('[HistoryDetail] Splits dismissed by user during analysis, discarding results');
+                return;
+            }
+
             if (result.success && result.suggestions.length > 0) {
                 setSplitSuggestions(result.suggestions);
-                setShowSplittingAssistant(true);
 
                 analytics.track('splits_suggested', {
                     entry_id: entry.id,
@@ -1589,7 +1600,8 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                     duration: entry.duration
                 });
             } else {
-                // No splits found
+                // No splits found — close the modal
+                setShowSplittingAssistant(false);
                 console.log('[HistoryDetail] No splits suggested for entry:', entry.id);
 
                 if (isAutoPrompted) {
@@ -1628,12 +1640,15 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
             }
         } catch (error) {
             console.error('Failed to analyze splits:', error);
-            showToast({
-                type: 'error',
-                title: 'Analysis Failed',
-                message: 'Failed to analyze splits. Please try again.',
-                duration: 5000
-            });
+            if (!splitsDismissedRef.current) {
+                setShowSplittingAssistant(false);
+                showToast({
+                    type: 'error',
+                    title: 'Analysis Failed',
+                    message: 'Failed to analyze splits. Please try again.',
+                    duration: 5000
+                });
+            }
         } finally {
             setIsAnalyzingSplits(false);
         }
@@ -3234,7 +3249,10 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                     }}
                     suggestions={splitSuggestions}
                     isLoading={isAnalyzingSplits}
-                    onClose={() => setShowSplittingAssistant(false)}
+                    onClose={() => {
+                        splitsDismissedRef.current = true;
+                        setShowSplittingAssistant(false);
+                    }}
                     onApply={handleApplySplits}
                 />
             )}

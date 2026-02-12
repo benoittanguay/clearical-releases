@@ -3408,12 +3408,13 @@ function buildSplitAnalysisPrompt(
         currentEvent: string | null;
         recentEvents: string[];
         upcomingEvents: string[];
-    }
+    },
+    manuallyTriggered: boolean = false
 ): string {
     const formatTime = (timestamp: number) => new Date(timestamp).toLocaleTimeString();
     const formatDuration = (ms: number) => `${Math.round(ms / 60000)} minutes`;
 
-    let prompt = `Analyze the following sequence of work activities and identify points where the user clearly switched to a different project or task.
+    let prompt = `Analyze the following sequence of work activities and identify points where the user switched between different tasks or areas of work. The goal is to produce granular time entries that accurately reflect how time was spent — it is better to over-split into smaller entries (they can always be grouped later) than to leave a long session as one vague block.
 
 **Time Range:** ${formatTime(activityData.startTime)} - ${formatTime(activityData.endTime)} (${formatDuration(activityData.duration)})
 
@@ -3434,13 +3435,32 @@ function buildSplitAnalysisPrompt(
         prompt += `${i + 1}. [${formatTime(screenshot.timestamp)}] ${screenshot.description}\n`;
     });
 
-    prompt += `\n**Instructions:**
-1. Identify semantic boundaries where the user switched to a DIFFERENT project, task, or meeting
-2. DO NOT split for minor app switches within the same project (e.g., switching from IDE to browser while debugging)
-3. DO split when there's clear evidence of changing focus (e.g., switching from coding Project A to reviewing Project B)
-4. Consider calendar events as strong signals for context switches
-5. Each suggested split should have a clear description of what work was done in that segment
-6. Provide a confidence score (0.0 to 1.0) based on how clear the switch is
+    if (manuallyTriggered) {
+        prompt += `\n**Important Context:** The user manually requested this split analysis, which means they believe this session contains multiple distinct tasks. Be generous with splitting — look for any reasonable boundary including:`;
+        prompt += `
+- Switching between different projects, repos, or codebases
+- Shifting between different types of work (coding vs reviewing vs communicating vs researching)
+- Calendar events that overlap with the session (meetings, standups, etc.)
+- Gaps or transitions in activity that suggest a context switch
+- Working on different features, tickets, or topics within the same project
+- Switching between different communication threads or channels
+
+Even subtle shifts in focus should be treated as split points. When in doubt, split.`;
+    } else {
+        prompt += `\n**Instructions:**`;
+        prompt += `
+- Split when the user shifts between different projects, tasks, meetings, or areas of work
+- Split when there is a calendar event that represents a distinct block of time (e.g., a meeting)
+- Split when the type of work changes meaningfully (e.g., coding → code review → Slack conversations)
+- Split when working on different features or tickets, even within the same project
+- Do NOT split for trivial app switches that are part of the same workflow (e.g., IDE ↔ browser while debugging the same issue)
+- When in doubt, prefer splitting — smaller accurate entries are more useful than one large vague entry`;
+    }
+
+    prompt += `
+
+Each suggested split should have a clear, concise description of the work done in that segment.
+Provide a confidence score (0.0 to 1.0) based on how clear the boundary is.
 
 **Output Format:**
 Return a JSON array of split suggestions. Each suggestion should have:
@@ -3448,8 +3468,8 @@ Return a JSON array of split suggestions. Each suggestion should have:
   "startTime": <timestamp in ms>,
   "endTime": <timestamp in ms>,
   "description": "<concise description of work done in this segment>",
-  "suggestedBucket": null,  // Will be filled in later by assignment AI
-  "suggestedJiraKey": null, // Will be filled in later by assignment AI
+  "suggestedBucket": null,
+  "suggestedJiraKey": null,
   "confidence": <0.0 to 1.0>
 }
 
@@ -3533,6 +3553,7 @@ ipcMain.handle('ai:analyze-splits', async (_, activityData: {
     endTime: number;
     duration: number;
     screenshots: Array<{ timestamp: number; description: string }>;
+    manuallyTriggered?: boolean;
 }) => {
     try {
         console.log('[Main] ai:analyze-splits called for activity:', activityData.id);
@@ -3561,7 +3582,7 @@ ipcMain.handle('ai:analyze-splits', async (_, activityData: {
         // 3. Build analysis prompt with all signals
         // Note: Split analysis requires a specific prompt format for JSON output,
         // so we use a custom prompt builder rather than the generic signal-based approach
-        const prompt = buildSplitAnalysisPrompt(activityData, calendarContext);
+        const prompt = buildSplitAnalysisPrompt(activityData, calendarContext, activityData.manuallyTriggered ?? false);
 
         // 4. Call AI service to analyze and suggest splits
         // Build task request for 'split_suggestion' task type
