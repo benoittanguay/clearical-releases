@@ -3768,96 +3768,101 @@ function createTray() {
     });
 }
 
-function getWindowPosition() {
-    const windowBounds = win?.getBounds();
-    const trayBounds = tray?.getBounds();
+// --- Window bounds persistence ---
+const windowStatePath = path.join(app.getPath('userData'), 'window-state.json');
+let saveBoundsTimer: ReturnType<typeof setTimeout> | null = null;
 
-    if (!windowBounds || !trayBounds) {
-        console.warn('[Main] Cannot calculate window position - missing bounds', {
-            hasWindowBounds: !!windowBounds,
-            hasTrayBounds: !!trayBounds,
-            trayBounds
-        });
-        return null;
+interface WindowState {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+}
+
+function loadWindowState(): WindowState | null {
+    try {
+        if (fs.existsSync(windowStatePath)) {
+            const data = JSON.parse(fs.readFileSync(windowStatePath, 'utf-8')) as WindowState;
+            // Validate saved bounds are on a visible display
+            const display = screen.getDisplayMatching(data);
+            const { x, y, width, height } = display.workArea;
+            // Check that at least part of the window is visible
+            if (data.x + data.width > x && data.x < x + width &&
+                data.y + data.height > y && data.y < y + height) {
+                return data;
+            }
+            console.log('[Main] Saved window bounds are off-screen, ignoring');
+        }
+    } catch (err) {
+        console.warn('[Main] Failed to load window state:', err);
     }
+    return null;
+}
 
-    const x = Math.round(trayBounds.x + (trayBounds.width / 2) - (windowBounds.width / 2));
-    const y = Math.round(trayBounds.y + trayBounds.height + 4);
+function saveWindowState() {
+    if (!win || win.isDestroyed() || win.isMinimized()) return;
+    const bounds = win.getBounds();
+    try {
+        fs.writeFileSync(windowStatePath, JSON.stringify(bounds));
+    } catch (err) {
+        console.warn('[Main] Failed to save window state:', err);
+    }
+}
 
-    return { x, y };
+function debouncedSaveWindowState() {
+    if (saveBoundsTimer) clearTimeout(saveBoundsTimer);
+    saveBoundsTimer = setTimeout(saveWindowState, 300);
 }
 
 function toggleWindow() {
     if (win?.isVisible()) {
         win.hide();
     } else {
-        const position = getWindowPosition();
-        if (position) {
-            win?.setPosition(position.x, position.y, false);
-        } else {
-            console.warn('[Main] Unable to position window, showing at last known position');
-        }
         win?.show();
         win?.focus();
     }
-}
-
-function showWindowBelowTray() {
-    if (!win || !tray) {
-        console.warn('[Main] Cannot show window - window or tray not initialized');
-        return;
-    }
-
-    const position = getWindowPosition();
-    if (!position) {
-        console.warn('[Main] Cannot show window - tray bounds not available yet, will retry');
-        // Retry after a short delay to allow tray to fully initialize
-        setTimeout(() => {
-            showWindowBelowTray();
-        }, 50);
-        return;
-    }
-
-    win.setPosition(position.x, position.y, false);
-    win.show();
-    win.focus();
-    console.log('[Main] Window shown below tray icon at position:', position);
 }
 
 function createWindow() {
     const preloadPath = path.join(__dirname, 'preload.cjs');
     console.log('[Main] Preload Path:', preloadPath);
 
+    const savedState = loadWindowState();
+
     win = new BrowserWindow({
-        width: 570,
-        height: 660,
-        show: false, // Don't show immediately - we'll position and show after tray is ready
-        // Use hidden title bar style to show native macOS traffic light buttons
-        // This satisfies App Store requirement for window controls while maintaining custom UI
+        width: savedState?.width ?? 640,
+        height: savedState?.height ?? 660,
+        x: savedState?.x,
+        y: savedState?.y,
+        show: false,
         titleBarStyle: 'hiddenInset',
-        // Position traffic light buttons in the top-left
         trafficLightPosition: { x: 16, y: 16 },
         resizable: true,
         minWidth: 400,
         minHeight: 300,
         movable: true,
-        minimizable: true,  // Enable minimize to dock
+        minimizable: true,
         maximizable: false,
         fullscreenable: false,
-        skipTaskbar: false, // Show in dock
+        skipTaskbar: false,
         webPreferences: {
             preload: preloadPath,
             nodeIntegration: false,
             contextIsolation: true,
             webSecurity: true,
             sandbox: false,
-            devTools: true  // Enable for debugging
+            devTools: true
         },
     });
 
-    // Position window off-screen initially to prevent flash at (0,0)
-    // This prevents the window from appearing in lower-left corner before repositioning
-    win.setPosition(-9999, -9999);
+    // Center on first launch (no saved state)
+    if (!savedState) {
+        win.center();
+    }
+
+    // Persist window bounds on move/resize
+    win.on('move', debouncedSaveWindowState);
+    win.on('resize', debouncedSaveWindowState);
 
     // In test mode or production, load from built files
     // In development (not test), load from Vite dev server
@@ -3891,11 +3896,6 @@ function createWindow() {
         });
     }
 
-    win.on('blur', () => {
-        if (!win?.webContents.isDevToolsOpened()) {
-            win?.hide();
-        }
-    });
 }
 
 /**
@@ -3996,11 +3996,12 @@ function createApplicationMenu() {
                             if (win.isMinimized()) {
                                 win.restore();
                             }
-                            showWindowBelowTray();
+                            win.show();
+                            win.focus();
                         } else {
-                            // Recreate window if it was destroyed
                             createWindow();
-                            setTimeout(() => showWindowBelowTray(), 150);
+                            win?.show();
+                            win?.focus();
                         }
                     }
                 },
@@ -4070,12 +4071,11 @@ app.on('activate', () => {
     if (win === null) {
         createTray();
         createWindow();
-        // Give tray time to initialize before showing window
-        setTimeout(() => {
-            showWindowBelowTray();
-        }, 150);
+        win?.show();
+        win?.focus();
     } else {
-        toggleWindow();
+        win.show();
+        win.focus();
     }
 });
 
@@ -4175,17 +4175,14 @@ app.whenReady().then(() => {
     // Create application menu (required by App Store)
     createApplicationMenu();
 
-    // Create tray first to ensure it's fully initialized before window positioning
     createTray();
-
-    // Create window (it will be positioned off-screen initially)
     createWindow();
 
-    // Now that both tray and window are created, show the window below the tray icon
-    // The showWindowBelowTray function has built-in retry logic if tray bounds aren't ready
-    // We use a small delay to ensure the tray icon is fully rendered by the OS
+    // Show the window at saved position (or centered on first launch)
+    win?.show();
+    win?.focus();
+
     setTimeout(() => {
-        showWindowBelowTray();
 
         // Initialize working hours scheduler after window is ready
         // This allows the scheduler to use the main window for IPC
