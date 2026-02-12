@@ -317,7 +317,9 @@ export function SplittingAssistant({
             Splitting Assistant
           </h1>
           <p className="text-sm text-[var(--color-text-secondary)] mb-4">
-            AI has detected multiple projects in this recording. Review and adjust the suggested splits.
+            {isLoading
+              ? 'Analyzing your session for distinct tasks...'
+              : 'Review and adjust the suggested splits, or keep everything as one entry.'}
           </p>
 
           <div className="flex items-center gap-4 p-4 bg-[var(--color-bg-secondary)] border border-[var(--color-border-primary)] rounded-xl">
@@ -560,16 +562,17 @@ export function SplittingAssistant({
         <div className="p-6 pt-4 border-t border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] flex-shrink-0">
           <div className="flex justify-between items-center">
             <div className="text-xs text-[var(--color-text-secondary)]">
-              {segments.length} segments will be created from this recording
+              {isLoading
+                ? 'Analyzing session...'
+                : `${segments.length} segments will be created from this recording`}
             </div>
             <div className="flex gap-3">
               <button
                 onClick={onClose}
-                disabled={isLoading}
-                className="px-5 py-2.5 text-sm font-medium rounded-full bg-[var(--color-bg-tertiary)] text-[var(--color-text-primary)] hover:bg-[var(--color-bg-quaternary)] transition-all disabled:opacity-50"
+                className="px-5 py-2.5 text-sm font-medium rounded-full bg-[var(--color-bg-tertiary)] text-[var(--color-text-primary)] hover:bg-[var(--color-bg-quaternary)] transition-all"
                 style={{ fontFamily: 'var(--font-body)' }}
               >
-                Cancel
+                Keep as One Entry
               </button>
               <button
                 onClick={handleApply}

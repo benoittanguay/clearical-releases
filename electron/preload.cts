@@ -53,6 +53,7 @@ contextBridge.exposeInMainWorld('electron', {
             endTime: number;
             duration: number;
             screenshots: Array<{ timestamp: number; description: string }>;
+            manuallyTriggered?: boolean;
         }) => ipcRenderer.invoke('ai:analyze-splits', activityData),
         getActiveWindow: () => ipcRenderer.invoke('get-active-window'),
         checkAccessibilityPermission: () => ipcRenderer.invoke('check-accessibility-permission'),
