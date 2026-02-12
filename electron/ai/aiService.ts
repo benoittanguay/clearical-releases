@@ -440,14 +440,24 @@ class AIService {
         if (timeUntilExpiry < TOKEN_REFRESH_THRESHOLD_MS) {
             console.log(`[AIService] Token expires in ${Math.round(timeUntilExpiry / 1000)}s, refreshing proactively...`);
             try {
-                // Force a token refresh by getting a new session
-                session = await authService.getSession();
-                if (!session) {
-                    console.error('[AIService] Token refresh failed - no session returned');
-                    return null;
+                // Force an actual token refresh (not just getSession which may return cached)
+                const refreshed = await authService.refreshSession();
+                if (refreshed) {
+                    session = await authService.getSession();
+                    if (!session) {
+                        console.error('[AIService] Token refresh succeeded but no session returned');
+                        return null;
+                    }
+                    console.log('[AIService] Token refreshed successfully, new expiry:',
+                        new Date(session.expiresAt).toISOString());
+                } else {
+                    console.error('[AIService] Token refresh failed');
+                    // If token is already expired, we can't proceed
+                    if (timeUntilExpiry <= 0) {
+                        return null;
+                    }
+                    console.log('[AIService] Using existing token despite refresh failure');
                 }
-                console.log('[AIService] Token refreshed successfully, new expiry:',
-                    new Date(session.expiresAt).toISOString());
             } catch (error) {
                 console.error('[AIService] Token refresh error:', error);
                 // If refresh fails but we still have time, use existing token
