@@ -27,10 +27,11 @@ import { BucketDetailView } from './components/BucketDetailView';
 import { JiraDetailView } from './components/JiraDetailView';
 import { RecordingControls } from './components/RecordingControls';
 import { WorklogCalendar } from './components/WorklogCalendar';
+import { ReportsView } from './components/reports/ReportsView';
 import type { WorkAssignment, TimeBucket, LinkedJiraIssue, TimeEntry } from './context/StorageContext';
 import './App.css'
 
-type View = 'chrono' | 'worklog' | 'buckets' | 'settings' | 'worklog-detail' | 'bucket-detail' | 'jira-detail';
+type View = 'chrono' | 'worklog' | 'buckets' | 'reports' | 'settings' | 'worklog-detail' | 'bucket-detail' | 'jira-detail';
 
 function App() {
   const { buckets, entries, fetchEntriesByBucket, fetchEntriesByJiraKey, fetchEntriesForExport, addEntry, addBucket, removeBucket, renameBucket, createFolder, moveBucket, updateEntry, removeEntry, unlinkJiraIssueFromBucket } = useStorage();
@@ -1025,6 +1026,51 @@ function App() {
               Buckets
             </span>
           </button>
+
+          {/* Reports */}
+          <button
+            onClick={() => setCurrentView('reports')}
+            className="flex flex-col items-center gap-1.5 group w-full px-4 relative"
+            style={{
+              transition: 'var(--transition-colors)',
+            }}
+          >
+            <div
+              className="p-2.5 rounded-xl relative"
+              style={{
+                backgroundColor: currentView === 'reports' ? 'var(--color-accent-muted)' : 'transparent',
+                color: currentView === 'reports' ? 'var(--color-accent)' : 'var(--color-text-secondary)',
+                transition: 'all var(--duration-base) var(--ease-out)',
+                boxShadow: currentView === 'reports' ? 'var(--glow-accent)' : 'none',
+              }}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="20" x2="18" y2="10" />
+                <line x1="12" y1="20" x2="12" y2="4" />
+                <line x1="6" y1="20" x2="6" y2="14" />
+              </svg>
+              {currentView === 'reports' && (
+                <div
+                  className="absolute inset-0 rounded-xl"
+                  style={{
+                    background: 'var(--color-accent-muted)',
+                    filter: 'blur(8px)',
+                    zIndex: -1,
+                  }}
+                />
+              )}
+            </div>
+            <span
+              className="text-[10px] font-medium uppercase tracking-wider"
+              style={{
+                fontFamily: 'var(--font-display)',
+                color: currentView === 'reports' ? 'var(--color-accent)' : 'var(--color-text-secondary)',
+                transition: 'var(--transition-colors)',
+              }}
+            >
+              Reports
+            </span>
+          </button>
         </div>
 
         {/* Settings - Bottom aligned */}
@@ -1538,6 +1584,13 @@ function App() {
               onDeleteEntry={removeEntry}
               onBulkLogToTempo={handleBulkLogToTempo}
               tempoEnabled={settings.tempo?.enabled}
+            />
+          )}
+
+          {currentView === 'reports' && (
+            <ReportsView
+              buckets={buckets}
+              fetchEntriesForExport={fetchEntriesForExport}
             />
           )}
 
