@@ -50,13 +50,14 @@ function consolidateActivities(activities: WindowActivity[]): WindowActivity[] {
     let current: WindowActivity | null = null;
 
     for (const activity of oldActivities) {
-        if (current && current.appName === activity.appName && current.bundleId === activity.bundleId) {
+        if (current !== null && current.appName === activity.appName && current.bundleId === activity.bundleId) {
             // Merge into current: accumulate duration, keep earliest timestamp, keep screenshot paths but drop analysis
+            const prev: WindowActivity = current;
             current = {
-                ...current,
-                duration: current.duration + activity.duration,
+                ...prev,
+                duration: prev.duration + activity.duration,
                 screenshotPaths: [
-                    ...(current.screenshotPaths || []),
+                    ...(prev.screenshotPaths || []),
                     ...(activity.screenshotPaths || [])
                 ].slice(0, 3), // Keep at most 3 screenshot paths from merged activities
                 screenshotDescriptions: undefined,
