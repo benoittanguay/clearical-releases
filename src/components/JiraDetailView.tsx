@@ -43,7 +43,7 @@ export const JiraDetailView: React.FC<JiraDetailViewProps> = ({
 
     return (
         <>
-            {/* Fixed Header */}
+            {/* Fixed Header - matches Worklog page header pattern */}
             <div
                 className="flex-shrink-0 px-6 py-4 z-20 drag-handle"
                 style={{
@@ -123,7 +123,7 @@ export const JiraDetailView: React.FC<JiraDetailViewProps> = ({
                             {jiraIssue.summary}
                         </p>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-4 no-drag">
                         <span
                             className="text-sm font-mono"
                             style={{
@@ -146,9 +146,9 @@ export const JiraDetailView: React.FC<JiraDetailViewProps> = ({
                 </div>
             </div>
 
-            {/* Scrollable Content Area */}
+            {/* Scrollable Content Area - matches Worklog layout */}
             <div
-                className="flex-1 overflow-y-auto px-4 pb-4"
+                className="flex-1 overflow-y-auto pb-4"
                 style={{ backgroundColor: 'var(--color-bg-primary)' }}
             >
                 <WorklogEntryList

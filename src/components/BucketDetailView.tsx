@@ -46,7 +46,7 @@ export const BucketDetailView: React.FC<BucketDetailViewProps> = ({
 
     return (
         <>
-            {/* Fixed Header */}
+            {/* Fixed Header - matches Worklog page header pattern */}
             <div
                 className="flex-shrink-0 px-6 py-4 z-20 drag-handle"
                 style={{
@@ -99,7 +99,7 @@ export const BucketDetailView: React.FC<BucketDetailViewProps> = ({
                             {bucket.name}
                         </h2>
                     </div>
-                    <div className="ml-auto flex items-center gap-3">
+                    <div className="ml-auto flex items-center gap-4 no-drag">
                         <span
                             className="text-sm font-mono"
                             style={{
@@ -121,10 +121,10 @@ export const BucketDetailView: React.FC<BucketDetailViewProps> = ({
                         {filteredEntries.length > 0 && (
                             <button
                                 onClick={() => setShowExportDialog(true)}
-                                className="no-drag flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-full transition-all active:scale-95 bg-green-600 hover:bg-green-500 text-white"
+                                className="px-4 py-2 bg-green-600 hover:bg-green-500 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2"
                                 title="Export CSV"
                             >
-                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                                     <polyline points="7 10 12 15 17 10" />
                                     <line x1="12" y1="15" x2="12" y2="3" />
@@ -136,9 +136,9 @@ export const BucketDetailView: React.FC<BucketDetailViewProps> = ({
                 </div>
             </div>
 
-            {/* Scrollable Content Area */}
+            {/* Scrollable Content Area - matches Worklog layout */}
             <div
-                className="flex-1 overflow-y-auto px-4 pb-4"
+                className="flex-1 overflow-y-auto pb-4"
                 style={{ backgroundColor: 'var(--color-bg-primary)' }}
             >
                 <WorklogEntryList
