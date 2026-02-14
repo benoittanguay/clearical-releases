@@ -6,11 +6,11 @@
  */
 
 import { createClient, SupabaseClient, Session, User } from '@supabase/supabase-js';
-import { app, shell } from 'electron';
+import { app } from 'electron';
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
-import { startOAuthCallbackServer, OAuthProvider } from './oauthServer.js';
+import { startOAuthWindow, OAuthProvider } from './oauthServer.js';
 import { storeCredential } from '../credentialStorage.js';
 
 export interface AuthUser {
@@ -358,33 +358,14 @@ export class SupabaseAuthService {
                 return { success: false, error: errorMessage };
             }
 
-            // Start callback server and wait for it to be ready
-            console.log(`[SupabaseAuth] Starting OAuth callback server for ${provider}...`);
-            try {
-                oauthServer = await startOAuthCallbackServer(60000);
-                console.log('[SupabaseAuth] OAuth callback server started successfully');
-            } catch (serverError) {
-                console.error('[SupabaseAuth] Failed to start OAuth callback server:', serverError);
-                const errorMessage = serverError instanceof Error ? serverError.message : 'Unknown error';
+            // Open in-app OAuth window (intercepts redirect back to localhost)
+            console.log(`[SupabaseAuth] Opening OAuth window for ${provider}...`);
+            oauthServer = startOAuthWindow(data.url, 60000);
+            console.log('[SupabaseAuth] OAuth window opened');
 
-                // Provide helpful error message for sandboxing issues
-                if (errorMessage.includes('EPERM') || errorMessage.includes('EACCES') || errorMessage.includes('firewall')) {
-                    return {
-                        success: false,
-                        error: 'Unable to start local authentication server. This may be due to security settings. Please ensure the app has proper network permissions and try again.'
-                    };
-                }
-
-                return { success: false, error: errorMessage };
-            }
-
-            // Open system browser for authentication (server is now guaranteed to be listening)
-            console.log(`[SupabaseAuth] Opening browser for ${provider} authentication...`);
-            await shell.openExternal(data.url);
-
-            // Wait for callback
+            // Wait for the OAuth redirect to be intercepted
             const { code } = await oauthServer.waitForCallback();
-            // Server auto-closes when callback is received
+            // Window auto-closes when callback is intercepted
             oauthServer = null;
 
             // Exchange code for session
@@ -460,12 +441,12 @@ export class SupabaseAuthService {
                 error: error instanceof Error ? error.message : 'Failed to sign in'
             };
         } finally {
-            // Ensure OAuth server is closed in all paths (e.g. if exchangeCodeForSession fails)
+            // Ensure OAuth window is closed in all paths (e.g. if exchangeCodeForSession fails)
             if (oauthServer) {
                 try {
                     oauthServer.close();
                 } catch {
-                    // Ignore close errors — server may already be closed
+                    // Ignore close errors — window may already be closed
                 }
             }
         }
