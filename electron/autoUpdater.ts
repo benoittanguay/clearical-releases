@@ -71,7 +71,7 @@ export class AutoUpdater {
     private setupAutoUpdater(): void {
         // Configure auto-updater
         autoUpdater.autoDownload = this.autoDownload;
-        autoUpdater.autoInstallOnAppQuit = true; // Install when app quits
+        autoUpdater.autoInstallOnAppQuit = false; // Don't auto-install on quit — triggers macOS password prompt
         autoUpdater.allowPrerelease = this.allowPrerelease;
 
         // Event: Checking for updates
