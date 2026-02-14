@@ -238,6 +238,12 @@ export class AutoUpdater {
      * Called after app is ready
      */
     public start(): void {
+        // Skip update checks in MAS builds - App Store handles updates
+        if ((process as any).mas) {
+            log.info('[AutoUpdater] Skipping update checks in Mac App Store build');
+            return;
+        }
+
         // Skip update checks in development
         if (!app.isPackaged) {
             log.info('[AutoUpdater] Skipping update checks in development mode');
