@@ -20,7 +20,7 @@ export function ReportTimeByBucket({ bucketBreakdowns }: ReportTimeByBucketProps
     if (bucketBreakdowns.length === 0) {
         return (
             <div className="rounded-xl p-6 border" style={{ backgroundColor: 'var(--color-bg-secondary)', borderColor: 'var(--color-border-primary)' }}>
-                <h3 className="text-sm font-semibold mb-4" style={{ fontFamily: 'var(--font-display)', color: 'var(--color-text-primary)' }}>Time by Bucket</h3>
+                <h3 className="text-sm font-semibold mb-4" style={{ fontFamily: 'var(--font-display)', color: 'var(--color-text-primary)' }}>Time by Assignment</h3>
                 <div className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>No data available</div>
             </div>
         );
@@ -35,7 +35,7 @@ export function ReportTimeByBucket({ bucketBreakdowns }: ReportTimeByBucketProps
 
     return (
         <div className="rounded-xl p-6 border" style={{ backgroundColor: 'var(--color-bg-secondary)', borderColor: 'var(--color-border-primary)' }}>
-            <h3 className="text-sm font-semibold mb-4" style={{ fontFamily: 'var(--font-display)', color: 'var(--color-text-primary)' }}>Time by Bucket</h3>
+            <h3 className="text-sm font-semibold mb-4" style={{ fontFamily: 'var(--font-display)', color: 'var(--color-text-primary)' }}>Time by Assignment</h3>
 
             <div style={{ width: '100%', height: Math.max(bucketBreakdowns.length * 36, 100) }}>
                 <ResponsiveContainer>
@@ -50,7 +50,7 @@ export function ReportTimeByBucket({ bucketBreakdowns }: ReportTimeByBucketProps
                         <YAxis
                             dataKey="name"
                             type="category"
-                            width={120}
+                            width={160}
                             tick={{ fontSize: 11, fontFamily: 'var(--font-mono)', fill: 'var(--color-text-secondary)' }}
                             axisLine={false}
                             tickLine={false}

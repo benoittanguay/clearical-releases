@@ -77,6 +77,16 @@ export interface ReportData {
     totalTranscriptionWords: number;
 }
 
+// Generate a deterministic color from a string (for Jira issues)
+function stringToColor(str: string): string {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+        hash = str.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const hue = ((hash % 360) + 360) % 360;
+    return `hsl(${hue}, 55%, 50%)`;
+}
+
 export function useReportData(entries: TimeEntry[], buckets: TimeBucket[]): ReportData {
     return useMemo(() => {
         const bucketMap = new Map<string, TimeBucket>();
@@ -87,12 +97,15 @@ export function useReportData(entries: TimeEntry[], buckets: TimeBucket[]): Repo
         // Summary accumulators
         let totalTime = 0;
         const daysSet = new Set<string>();
-        const bucketTimeMap = new Map<string, { time: number; count: number }>();
+        const assignmentTimeMap = new Map<string, { time: number; count: number }>();
         const appTimeMap = new Map<string, number>();
         const hourlyTime = new Array(24).fill(0);
         const dailyMap = new Map<string, { total: number; byBucket: Record<string, number> }>();
         let totalContextSwitches = 0;
         let totalActivityTime = 0;
+
+        // Track Jira issue metadata for display
+        const jiraIssueInfo = new Map<string, { key: string; summary: string; color: string }>();
 
         // Focus session tracking
         const allActivitySessions: { appName: string; duration: number; timestamp: number; bucketId: string | null }[] = [];
@@ -108,20 +121,48 @@ export function useReportData(entries: TimeEntry[], buckets: TimeBucket[]): Repo
             const dateStr = new Date(entry.startTime).toISOString().split('T')[0];
             daysSet.add(dateStr);
 
-            // Bucket breakdown
-            const bucketKey = entry.assignment?.bucket?.id || entry.bucketId || '__unassigned__';
-            const existing = bucketTimeMap.get(bucketKey) || { time: 0, count: 0 };
+            // Assignment breakdown — handle both bucket and jira assignments
+            let assignmentKey: string;
+            let assignmentName: string;
+
+            if (entry.assignment?.type === 'jira' && entry.assignment.jiraIssue) {
+                const issue = entry.assignment.jiraIssue;
+                assignmentKey = `jira:${issue.key}`;
+                assignmentName = `${issue.key} - ${issue.summary}`;
+                if (!jiraIssueInfo.has(assignmentKey)) {
+                    jiraIssueInfo.set(assignmentKey, {
+                        key: issue.key,
+                        summary: issue.summary,
+                        color: stringToColor(issue.key),
+                    });
+                }
+            } else if (entry.linkedJiraIssue) {
+                const issue = entry.linkedJiraIssue;
+                assignmentKey = `jira:${issue.key}`;
+                assignmentName = `${issue.key} - ${issue.summary}`;
+                if (!jiraIssueInfo.has(assignmentKey)) {
+                    jiraIssueInfo.set(assignmentKey, {
+                        key: issue.key,
+                        summary: issue.summary,
+                        color: stringToColor(issue.key),
+                    });
+                }
+            } else {
+                assignmentKey = entry.assignment?.bucket?.id || entry.bucketId || '__unassigned__';
+                assignmentName = entry.assignment?.bucket?.name
+                    || (entry.bucketId ? bucketMap.get(entry.bucketId)?.name : null)
+                    || 'Unassigned';
+            }
+
+            const existing = assignmentTimeMap.get(assignmentKey) || { time: 0, count: 0 };
             existing.time += entry.duration;
             existing.count += 1;
-            bucketTimeMap.set(bucketKey, existing);
+            assignmentTimeMap.set(assignmentKey, existing);
 
             // Daily trend
             const dailyEntry = dailyMap.get(dateStr) || { total: 0, byBucket: {} };
             dailyEntry.total += entry.duration;
-            const bucketNameForDaily = entry.assignment?.bucket?.name
-                || (entry.bucketId ? bucketMap.get(entry.bucketId)?.name : null)
-                || 'Unassigned';
-            dailyEntry.byBucket[bucketNameForDaily] = (dailyEntry.byBucket[bucketNameForDaily] || 0) + entry.duration;
+            dailyEntry.byBucket[assignmentName] = (dailyEntry.byBucket[assignmentName] || 0) + entry.duration;
             dailyMap.set(dateStr, dailyEntry);
 
             // Window activities
@@ -186,12 +227,18 @@ export function useReportData(entries: TimeEntry[], buckets: TimeBucket[]): Repo
             }
         }
 
-        // Bucket breakdowns
+        // Assignment breakdowns (buckets + Jira issues)
         const bucketBreakdowns: BucketBreakdown[] = [];
-        for (const [key, data] of bucketTimeMap) {
+        for (const [key, data] of assignmentTimeMap) {
             let name = 'Unassigned';
             let color = '#9CA3AF';
-            if (key !== '__unassigned__') {
+            if (key.startsWith('jira:')) {
+                const jiraInfo = jiraIssueInfo.get(key);
+                if (jiraInfo) {
+                    name = `${jiraInfo.key} - ${jiraInfo.summary}`;
+                    color = jiraInfo.color;
+                }
+            } else if (key !== '__unassigned__') {
                 const bucket = bucketMap.get(key);
                 if (bucket) {
                     name = bucket.name;

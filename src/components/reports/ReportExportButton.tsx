@@ -35,9 +35,9 @@ function generateReportCSV(data: ReportData, dateFrom: string, dateTo: string): 
     lines.push(`Meeting Time,${escapeCSVField(formatDuration(data.meetingTime))}`);
     lines.push('');
 
-    // Bucket breakdown
-    lines.push('Time by Bucket');
-    lines.push('Bucket,Time,Entries,Percentage');
+    // Assignment breakdown
+    lines.push('Time by Assignment');
+    lines.push('Assignment,Time,Entries,Percentage');
     for (const b of data.bucketBreakdowns) {
         lines.push(`${escapeCSVField(b.bucketName)},${escapeCSVField(formatDuration(b.totalTime))},${b.entryCount},${b.percentage.toFixed(1)}%`);
     }
