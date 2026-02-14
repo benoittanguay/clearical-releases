@@ -2183,8 +2183,8 @@ function App() {
         }}
       />
 
-      {/* Auto-Update Notification - shows when updates are available */}
-      <UpdateNotification showManualCheck={false} />
+      {/* Auto-Update Notification - shows when updates are available (not in MAS builds) */}
+      {!window.electron?.isMas && <UpdateNotification showManualCheck={false} />}
 
       {/* Update Success Modal - shows after successful auto-update */}
       <UpdateSuccessModal

@@ -8,6 +8,7 @@ try {
 }
 
 contextBridge.exposeInMainWorld('electron', {
+    isMas: !!(process as any).mas,
     ipcRenderer: {
         send: (channel: string, data: any) => ipcRenderer.send(channel, data),
         on: (channel: string, func: (...args: any[]) => void) => {

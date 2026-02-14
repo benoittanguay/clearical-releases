@@ -119,6 +119,7 @@ export interface InstalledApp {
 }
 
 export interface ElectronAPI {
+    isMas: boolean;
     ipcRenderer: {
         send: (channel: string, data: any) => void;
         on: (channel: string, func: (...args: any[]) => void) => () => void;
