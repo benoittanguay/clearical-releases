@@ -68,7 +68,8 @@ export function initializeSubscription(): void {
         });
 
         // Start webhook server if webhooks are enabled and we have a secret
-        if (config.enableWebhooks && config.stripeWebhookSecret) {
+        // Skip in MAS builds - no local servers allowed
+        if (config.enableWebhooks && config.stripeWebhookSecret && !(process as any).mas) {
             const stripeClient = subscriptionValidator.getStripeClient();
             webhookServer = new WebhookServer(config, stripeClient);
             webhookServer.start().then(() => {
