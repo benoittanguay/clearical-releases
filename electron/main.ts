@@ -4054,8 +4054,8 @@ function createApplicationMenu() {
                             win.focus();
                         } else {
                             createWindow();
-                            win?.show();
-                            win?.focus();
+                            win!.show();
+                            win!.focus();
                         }
                     }
                 },
@@ -4125,8 +4125,8 @@ app.on('activate', () => {
     if (win === null) {
         createTray();
         createWindow();
-        win?.show();
-        win?.focus();
+        win!.show();
+        win!.focus();
     } else {
         win.show();
         win.focus();
