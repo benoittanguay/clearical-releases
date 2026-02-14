@@ -3733,7 +3733,9 @@ async function cleanupAndQuit(): Promise<void> {
         await cleanupSubscription();
 
         // 2. Cleanup auto-updater interval
-        updater.cleanup();
+        if (!(process as any).mas) {
+            updater.cleanup();
+        }
 
         // 3. Destroy tray icon
         if (tray) {
@@ -4301,10 +4303,12 @@ app.whenReady().then(() => {
         }
     }, 150);
 
-    // Initialize auto-updater
-    // Set main window reference so updater can send status updates
-    updater.setMainWindow(win);
-    // Start auto-update checks (with delay)
-    updater.start();
-    console.log('[Main] Auto-updater initialized');
+    // Initialize auto-updater (skip for Mac App Store builds)
+    if (!(process as any).mas) {
+        updater.setMainWindow(win);
+        updater.start();
+        console.log('[Main] Auto-updater initialized');
+    } else {
+        console.log('[Main] Skipping auto-updater (Mac App Store build)');
+    }
 });
