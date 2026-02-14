@@ -2,7 +2,7 @@
  * Transcription Service
  *
  * Handles audio transcription via Groq Whisper API.
- * Automatically chunks large files (>24MB) using ffmpeg for transcription.
+ * Automatically chunks large files (>24MB) using bundled ffmpeg for transcription.
  */
 
 import { createClient, SupabaseClient, Session } from '@supabase/supabase-js';
@@ -63,6 +63,7 @@ export class TranscriptionService extends EventEmitter {
     private session: Session | null = null;
     private supabaseUrl: string = '';
     private isPremium: boolean = false;
+    private refreshAuthCallback: (() => Promise<void>) | null = null;
 
     private constructor() {
         super();
@@ -110,6 +111,15 @@ export class TranscriptionService extends EventEmitter {
     public setPremiumStatus(isPremium: boolean): void {
         this.isPremium = isPremium;
         console.log('[TranscriptionService] Premium status set:', isPremium);
+    }
+
+    /**
+     * Set the auth refresh callback
+     * Called on 401 errors to refresh the auth token
+     */
+    public setRefreshAuthCallback(callback: () => Promise<void>): void {
+        this.refreshAuthCallback = callback;
+        console.log('[TranscriptionService] Auth refresh callback registered');
     }
 
     /**
@@ -205,7 +215,7 @@ export class TranscriptionService extends EventEmitter {
                 language: '',
                 duration: 0,
                 wordCount: 0,
-                error: `Audio file too large (${fileSizeMB}MB). Maximum is 25MB. Install ffmpeg (brew install ffmpeg) for automatic splitting, or use shorter recordings.`,
+                error: `Audio file too large (${fileSizeMB}MB). Maximum is 25MB. Audio splitting is unavailable - please use shorter recordings.`,
             };
         }
 
@@ -232,43 +242,51 @@ export class TranscriptionService extends EventEmitter {
         const ext = path.extname(filePath).toLowerCase();
         const mimeType = this.getMimeType(ext);
 
-        // Transcribe each chunk
-        const chunkResults: TranscriptionResult[] = [];
-        let lastDetectedLanguage = language || 'en';
+        // Transcribe chunks with parallel processing
+        const chunkResults: (TranscriptionResult | null)[] = new Array(chunks.length).fill(null);
+        let detectedLanguage = language || 'en';
 
-        for (let i = 0; i < chunks.length; i++) {
-            const chunk = chunks[i];
-            console.log(`[TranscriptionService] Transcribing chunk ${i + 1}/${chunks.length}: ${chunk.filePath}`);
+        // First chunk processes alone to detect language
+        if (chunks.length > 0) {
+            console.log(`[TranscriptionService] Transcribing chunk 1/${chunks.length} (language detection)`);
+            const firstChunkBuffer = await fs.promises.readFile(chunks[0].filePath);
+            const firstChunkBase64 = firstChunkBuffer.toString('base64');
 
-            // Read chunk and convert to base64
-            const chunkBuffer = await fs.promises.readFile(chunk.filePath);
-            const chunkBase64 = chunkBuffer.toString('base64');
-
-            // Transcribe chunk
-            const chunkResult = await this.transcribeWithGroq(
-                chunkBase64,
-                `${entryId}-chunk-${i}`,
+            const firstResult = await this.transcribeWithGroq(
+                firstChunkBase64,
+                `${entryId}-chunk-0`,
                 mimeType,
-                lastDetectedLanguage
+                detectedLanguage
             );
 
-            if (chunkResult.success) {
-                // Use detected language for subsequent chunks
-                if (chunkResult.language) {
-                    lastDetectedLanguage = chunkResult.language;
-                }
-                chunkResults.push(chunkResult);
+            if (firstResult.success) {
+                detectedLanguage = firstResult.language || detectedLanguage;
+                chunkResults[0] = firstResult;
+                console.log(`[TranscriptionService] Chunk 1 complete, detected language: ${detectedLanguage}`);
             } else {
-                console.error(`[TranscriptionService] Chunk ${i + 1} failed:`, chunkResult.error);
-                // Continue with remaining chunks - partial transcription is better than none
+                console.error('[TranscriptionService] Chunk 1 failed:', firstResult.error);
             }
+        }
+
+        // Process remaining chunks in parallel batches of 3
+        if (chunks.length > 1) {
+            await this.processChunksInParallel(
+                chunks.slice(1),
+                chunkResults,
+                1, // Start index offset
+                entryId,
+                mimeType,
+                detectedLanguage
+            );
         }
 
         // Clean up chunk files
         cleanupChunks(chunks);
 
-        // Merge results
-        if (chunkResults.length === 0) {
+        // Filter out failed chunks and merge results
+        const successfulResults: TranscriptionResult[] = chunkResults.filter((r): r is TranscriptionResult => r !== null && r.success);
+
+        if (successfulResults.length === 0) {
             return {
                 success: false,
                 transcriptionId: '',
@@ -281,7 +299,22 @@ export class TranscriptionService extends EventEmitter {
             };
         }
 
-        const mergedResult = this.mergeChunkResults(chunkResults, chunks, entryId);
+        // Map successful results back to their original indices for proper time offsetting
+        const resultChunkPairs = chunkResults
+            .map((result, index) => ({ result, chunk: chunks[index] }))
+            .filter((pair): pair is { result: TranscriptionResult; chunk: AudioChunk } =>
+                pair.result !== null && pair.result.success
+            );
+
+        const successfulChunks = resultChunkPairs.map(p => p.chunk);
+
+        // Log partial failure warning if applicable
+        if (successfulResults.length < chunks.length) {
+            const failedCount = chunks.length - successfulResults.length;
+            console.warn(`[TranscriptionService] ${failedCount} of ${chunks.length} chunks failed - returning partial transcription`);
+        }
+
+        const mergedResult = this.mergeChunkResults(successfulResults, successfulChunks, entryId);
 
         this.emit(MEETING_EVENTS.TRANSCRIPTION_COMPLETE, {
             entryId,
@@ -290,6 +323,70 @@ export class TranscriptionService extends EventEmitter {
         });
 
         return mergedResult;
+    }
+
+    /**
+     * Process chunks in parallel with concurrency limit of 3
+     */
+    private async processChunksInParallel(
+        chunks: AudioChunk[],
+        resultsArray: (TranscriptionResult | null)[],
+        startIndex: number,
+        entryId: string,
+        mimeType: string,
+        language: string
+    ): Promise<void> {
+        const CONCURRENCY_LIMIT = 3;
+        const totalChunks = chunks.length;
+
+        // Process in batches
+        for (let batchStart = 0; batchStart < totalChunks; batchStart += CONCURRENCY_LIMIT) {
+            const batchEnd = Math.min(batchStart + CONCURRENCY_LIMIT, totalChunks);
+            const batchSize = batchEnd - batchStart;
+
+            console.log(`[TranscriptionService] Processing batch: chunks ${batchStart + 1}-${batchEnd} of ${totalChunks} (batch size: ${batchSize})`);
+
+            // Create promises for this batch
+            const batchPromises = [];
+            for (let i = batchStart; i < batchEnd; i++) {
+                const chunk = chunks[i];
+                const chunkIndex = startIndex + i;
+
+                const promise = (async () => {
+                    try {
+                        console.log(`[TranscriptionService] Transcribing chunk ${chunkIndex + 1}/${startIndex + totalChunks}: ${chunk.filePath}`);
+
+                        // Read chunk and convert to base64
+                        const chunkBuffer = await fs.promises.readFile(chunk.filePath);
+                        const chunkBase64 = chunkBuffer.toString('base64');
+
+                        // Transcribe chunk
+                        const result = await this.transcribeWithGroq(
+                            chunkBase64,
+                            `${entryId}-chunk-${chunkIndex}`,
+                            mimeType,
+                            language
+                        );
+
+                        if (result.success) {
+                            resultsArray[chunkIndex] = result;
+                            console.log(`[TranscriptionService] Chunk ${chunkIndex + 1} complete`);
+                        } else {
+                            console.error(`[TranscriptionService] Chunk ${chunkIndex + 1} failed:`, result.error);
+                        }
+                    } catch (error) {
+                        console.error(`[TranscriptionService] Chunk ${chunkIndex + 1} error:`, error);
+                    }
+                })();
+
+                batchPromises.push(promise);
+            }
+
+            // Wait for all chunks in this batch to complete
+            await Promise.all(batchPromises);
+
+            console.log(`[TranscriptionService] Batch complete: ${batchEnd} of ${totalChunks} chunks processed`);
+        }
     }
 
     /**
@@ -504,102 +601,9 @@ export class TranscriptionService extends EventEmitter {
         }
 
         try {
-            // Call the Supabase Edge Function
-            console.log('[TranscriptionService] Calling edge function, audio size:', Math.round(audioBase64.length / 1024), 'KB');
-            const response = await fetch(`${this.supabaseUrl}/functions/v1/groq-transcribe`, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${this.session.access_token}`,
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    audioBase64,
-                    mimeType,
-                    entryId,
-                    language,
-                }),
-            });
-
-            // Log response status for debugging
-            console.log('[TranscriptionService] Edge function response status:', response.status, response.statusText);
-
-            // Handle non-OK responses
-            if (!response.ok) {
-                let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
-                try {
-                    const errorBody = await response.json() as { error?: string };
-                    if (errorBody && typeof errorBody.error === 'string') {
-                        errorMessage = errorBody.error;
-                    }
-                } catch {
-                    // Response wasn't JSON, use the status message
-                }
-                console.error('[TranscriptionService] Edge function error:', errorMessage);
-                this.emit(MEETING_EVENTS.TRANSCRIPTION_ERROR, {
-                    entryId,
-                    error: errorMessage,
-                });
-                return {
-                    success: false,
-                    transcriptionId: '',
-                    segments: [],
-                    fullText: '',
-                    language: '',
-                    duration: 0,
-                    wordCount: 0,
-                    error: errorMessage,
-                };
-            }
-
-            const result = await response.json() as TranscriptionApiResult;
-            console.log('[TranscriptionService] Edge function result:', { success: result.success, hasTranscription: !!result.transcription, error: result.error });
-
-            if (!result.success || !result.transcription) {
-                const errorMessage = result.error || 'Transcription failed (no transcription in response)';
-                console.error('[TranscriptionService] Transcription failed:', errorMessage);
-                this.emit(MEETING_EVENTS.TRANSCRIPTION_ERROR, {
-                    entryId,
-                    error: errorMessage,
-                });
-                return {
-                    success: false,
-                    transcriptionId: '',
-                    segments: [],
-                    fullText: '',
-                    language: '',
-                    duration: 0,
-                    wordCount: 0,
-                    error: errorMessage,
-                };
-            }
-
-            const transcription = result.transcription;
-            const wordCount = transcription.text.split(/\s+/).filter(w => w.length > 0).length;
-            const transcriptionId = `${entryId}-${Date.now()}`;
-
-            console.log('[TranscriptionService] Transcription complete:', {
-                language: transcription.language,
-                duration: transcription.duration,
-                wordCount,
-            });
-
-            const transcriptionResult: TranscriptionResult = {
-                success: true,
-                transcriptionId,
-                segments: transcription.segments || [],
-                fullText: transcription.text,
-                language: transcription.language,
-                duration: transcription.duration,
-                wordCount,
-            };
-
-            this.emit(MEETING_EVENTS.TRANSCRIPTION_COMPLETE, {
-                entryId,
-                transcription: transcriptionResult,
-                usage: result.usage,
-            });
-
-            return transcriptionResult;
+            // Call the API with retry on 401
+            const result = await this.callGroqApiWithRetry(audioBase64, mimeType, entryId, language);
+            return result;
         } catch (error) {
             console.error('[TranscriptionService] Error:', error);
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -618,6 +622,157 @@ export class TranscriptionService extends EventEmitter {
                 error: errorMessage,
             };
         }
+    }
+
+    /**
+     * Call Groq API with retry on 401 (token expiration)
+     */
+    private async callGroqApiWithRetry(
+        audioBase64: string,
+        mimeType: string,
+        entryId: string,
+        language?: string
+    ): Promise<TranscriptionResult> {
+        // First attempt
+        let response = await this.callGroqApi(audioBase64, mimeType, entryId, language);
+
+        // If 401 and we have a refresh callback, try refreshing once
+        if (response.status === 401 && this.refreshAuthCallback) {
+            console.log('[TranscriptionService] Got 401, attempting token refresh...');
+            try {
+                await this.refreshAuthCallback();
+                console.log('[TranscriptionService] Token refreshed, retrying transcription...');
+
+                // Retry once after refresh
+                response = await this.callGroqApi(audioBase64, mimeType, entryId, language);
+            } catch (refreshError) {
+                console.error('[TranscriptionService] Token refresh failed:', refreshError);
+                // Continue with the original 401 response handling
+            }
+        }
+
+        // Parse and return the response
+        return this.parseGroqResponse(response, entryId);
+    }
+
+    /**
+     * Make a single API call to Groq transcription service
+     */
+    private async callGroqApi(
+        audioBase64: string,
+        mimeType: string,
+        entryId: string,
+        language?: string
+    ): Promise<Response> {
+        console.log('[TranscriptionService] Calling edge function, audio size:', Math.round(audioBase64.length / 1024), 'KB');
+
+        if (!this.session?.access_token) {
+            throw new Error('No access token available');
+        }
+
+        const response = await fetch(`${this.supabaseUrl}/functions/v1/groq-transcribe`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${this.session.access_token}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                audioBase64,
+                mimeType,
+                entryId,
+                language,
+            }),
+        });
+
+        console.log('[TranscriptionService] Edge function response status:', response.status, response.statusText);
+        return response;
+    }
+
+    /**
+     * Parse Groq API response into TranscriptionResult
+     */
+    private async parseGroqResponse(response: Response, entryId: string): Promise<TranscriptionResult> {
+        // Handle non-OK responses
+        if (!response.ok) {
+            let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+            try {
+                const errorBody = await response.json() as { error?: string };
+                if (errorBody && typeof errorBody.error === 'string') {
+                    errorMessage = errorBody.error;
+                }
+            } catch {
+                // Response wasn't JSON, use the status message
+            }
+            console.error('[TranscriptionService] Edge function error:', errorMessage);
+            this.emit(MEETING_EVENTS.TRANSCRIPTION_ERROR, {
+                entryId,
+                error: errorMessage,
+            });
+            return {
+                success: false,
+                transcriptionId: '',
+                segments: [],
+                fullText: '',
+                language: '',
+                duration: 0,
+                wordCount: 0,
+                error: errorMessage,
+            };
+        }
+
+        const result = await response.json() as TranscriptionApiResult;
+        console.log('[TranscriptionService] Edge function result:', {
+            success: result.success,
+            hasTranscription: !!result.transcription,
+            error: result.error
+        });
+
+        if (!result.success || !result.transcription) {
+            const errorMessage = result.error || 'Transcription failed (no transcription in response)';
+            console.error('[TranscriptionService] Transcription failed:', errorMessage);
+            this.emit(MEETING_EVENTS.TRANSCRIPTION_ERROR, {
+                entryId,
+                error: errorMessage,
+            });
+            return {
+                success: false,
+                transcriptionId: '',
+                segments: [],
+                fullText: '',
+                language: '',
+                duration: 0,
+                wordCount: 0,
+                error: errorMessage,
+            };
+        }
+
+        const transcription = result.transcription;
+        const wordCount = transcription.text.split(/\s+/).filter(w => w.length > 0).length;
+        const transcriptionId = `${entryId}-${Date.now()}`;
+
+        console.log('[TranscriptionService] Transcription complete:', {
+            language: transcription.language,
+            duration: transcription.duration,
+            wordCount,
+        });
+
+        const transcriptionResult: TranscriptionResult = {
+            success: true,
+            transcriptionId,
+            segments: transcription.segments || [],
+            fullText: transcription.text,
+            language: transcription.language,
+            duration: transcription.duration,
+            wordCount,
+        };
+
+        this.emit(MEETING_EVENTS.TRANSCRIPTION_COMPLETE, {
+            entryId,
+            transcription: transcriptionResult,
+            usage: result.usage,
+        });
+
+        return transcriptionResult;
     }
 
     /**

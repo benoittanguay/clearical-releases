@@ -4,7 +4,7 @@
  * Splits large audio files into smaller chunks for transcription services
  * that have file size limits (e.g., Groq's 25MB limit).
  *
- * Requires ffmpeg to be installed on the system (brew install ffmpeg).
+ * Uses bundled ffmpeg-static binary, with fallback to system ffmpeg.
  */
 
 import * as fs from 'fs';
@@ -14,6 +14,75 @@ import { spawn } from 'child_process';
 
 // Maximum file size for Groq API (25MB with 1MB safety margin)
 export const MAX_CHUNK_SIZE_BYTES = 24 * 1024 * 1024; // 24MB to be safe
+
+/**
+ * Get the path to the ffmpeg binary
+ * Priority: 1) Bundled ffmpeg-static, 2) System ffmpeg
+ */
+function getFfmpegPath(): string {
+    try {
+        // Try to use bundled ffmpeg-static
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const ffmpegStatic = require('ffmpeg-static');
+        let ffmpegPath = ffmpegStatic as string;
+
+        // In production builds with asar, we need to use the unpacked path
+        if (app.isPackaged && ffmpegPath.includes('app.asar')) {
+            ffmpegPath = ffmpegPath.replace('app.asar', 'app.asar.unpacked');
+        }
+
+        // Verify the bundled binary exists and is executable
+        if (fs.existsSync(ffmpegPath)) {
+            try {
+                fs.accessSync(ffmpegPath, fs.constants.X_OK);
+                console.log('[AudioChunker] Using bundled ffmpeg:', ffmpegPath);
+                return ffmpegPath;
+            } catch {
+                console.warn('[AudioChunker] Bundled ffmpeg not executable, falling back to system');
+            }
+        } else {
+            console.warn('[AudioChunker] Bundled ffmpeg not found at:', ffmpegPath, ', falling back to system');
+        }
+    } catch (error) {
+        console.warn('[AudioChunker] Failed to load ffmpeg-static, falling back to system ffmpeg:', error);
+    }
+
+    // Fallback to system ffmpeg
+    return 'ffmpeg';
+}
+
+/**
+ * Get the path to the ffprobe binary
+ * ffmpeg-static only provides ffmpeg, not ffprobe
+ * For ffprobe, we always use the system binary
+ */
+function getFfprobePath(): string {
+    // ffmpeg-static doesn't include ffprobe, so we use system ffprobe
+    // If bundled ffmpeg is available, ffprobe should also be available in the same location
+    try {
+        const ffmpegPath = getFfmpegPath();
+        if (ffmpegPath !== 'ffmpeg') {
+            // Try to find ffprobe in the same directory as ffmpeg
+            const ffmpegDir = path.dirname(ffmpegPath);
+            const ffprobePath = path.join(ffmpegDir, 'ffprobe');
+
+            if (fs.existsSync(ffprobePath)) {
+                try {
+                    fs.accessSync(ffprobePath, fs.constants.X_OK);
+                    console.log('[AudioChunker] Using bundled ffprobe:', ffprobePath);
+                    return ffprobePath;
+                } catch {
+                    // Not executable, fall through to system
+                }
+            }
+        }
+    } catch {
+        // Error checking for bundled ffprobe, fall through to system
+    }
+
+    // Fallback to system ffprobe
+    return 'ffprobe';
+}
 
 // Target chunk duration in seconds (10 minutes = ~9.6MB at 128kbps)
 export const TARGET_CHUNK_DURATION_SECONDS = 600; // 10 minutes
@@ -38,18 +107,22 @@ export interface AudioChunk {
 }
 
 /**
- * Check if ffmpeg is available on the system
+ * Check if ffmpeg is available (bundled or system)
  */
 export async function isFfmpegAvailable(): Promise<boolean> {
     return new Promise((resolve) => {
-        const ffmpeg = spawn('ffmpeg', ['-version']);
+        const ffmpegPath = getFfmpegPath();
+        const ffmpeg = spawn(ffmpegPath, ['-version']);
 
         ffmpeg.on('error', () => {
-            console.log('[AudioChunker] ffmpeg not available on system');
+            console.log('[AudioChunker] ffmpeg not available:', ffmpegPath);
             resolve(false);
         });
 
         ffmpeg.on('close', (code) => {
+            if (code === 0) {
+                console.log('[AudioChunker] ffmpeg available:', ffmpegPath);
+            }
             resolve(code === 0);
         });
 
@@ -69,7 +142,8 @@ export async function isFfmpegAvailable(): Promise<boolean> {
  */
 export async function getAudioDuration(filePath: string): Promise<number | null> {
     return new Promise((resolve) => {
-        const ffprobe = spawn('ffprobe', [
+        const ffprobePath = getFfprobePath();
+        const ffprobe = spawn(ffprobePath, [
             '-v', 'error',
             '-show_entries', 'format=duration,bit_rate',
             '-of', 'default=noprint_wrappers=1',
@@ -271,7 +345,8 @@ async function extractAudioSegment(
     durationSeconds: number
 ): Promise<boolean> {
     return new Promise((resolve) => {
-        const ffmpeg = spawn('ffmpeg', [
+        const ffmpegPath = getFfmpegPath();
+        const ffmpeg = spawn(ffmpegPath, [
             '-y',                           // Overwrite output
             '-i', inputPath,                // Input file
             '-ss', startSeconds.toString(), // Start time
@@ -406,7 +481,8 @@ export async function mergeAudioFiles(
     // Probe input files to log their actual properties
     const probeFile = async (filePath: string, label: string) => {
         return new Promise<void>((resolve) => {
-            const ffprobe = spawn('ffprobe', [
+            const ffprobePath = getFfprobePath();
+            const ffprobe = spawn(ffprobePath, [
                 '-v', 'error',
                 '-select_streams', 'a:0',
                 '-show_entries', 'stream=sample_rate,channels,duration',
@@ -485,7 +561,8 @@ export async function mergeAudioFiles(
 
         console.log('[AudioChunker] Running ffmpeg with args:', ffmpegArgs.join(' '));
 
-        const ffmpeg = spawn('ffmpeg', ffmpegArgs);
+        const ffmpegPath = getFfmpegPath();
+        const ffmpeg = spawn(ffmpegPath, ffmpegArgs);
 
         let stderr = '';
         ffmpeg.stderr.on('data', (data) => {
@@ -564,7 +641,8 @@ export async function convertToWebm(
     }
 
     return new Promise((resolve) => {
-        const ffmpeg = spawn('ffmpeg', [
+        const ffmpegPath = getFfmpegPath();
+        const ffmpeg = spawn(ffmpegPath, [
             '-y',
             '-i', inputPath,
             '-af', 'aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo',

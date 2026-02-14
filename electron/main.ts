@@ -1994,12 +1994,123 @@ function getAudioExtension(mimeType: string): string {
     return mimeToExt[mimeType] || 'webm';
 }
 
+/**
+ * Compress audio file for transcription to reduce upload size
+ * Uses ffmpeg to convert to WebM/Opus format optimized for speech
+ *
+ * @param inputPath - Path to the input audio file
+ * @param outputPath - Path for the compressed output file
+ * @returns Compression result with success status, output path, and compression stats
+ */
+async function compressAudioForTranscription(
+    inputPath: string,
+    outputPath: string
+): Promise<{ success: boolean; outputPath?: string; error?: string; compressionRatio?: string }> {
+    console.log('[AudioCompression] Compressing audio for transcription:', inputPath);
+
+    // Check if input file exists
+    if (!fs.existsSync(inputPath)) {
+        return {
+            success: false,
+            error: 'Input file not found'
+        };
+    }
+
+    // Check if ffmpeg is available
+    const { isFfmpegAvailable } = await import('./meeting/audioChunker.js');
+    const ffmpegAvailable = await isFfmpegAvailable();
+    if (!ffmpegAvailable) {
+        console.log('[AudioCompression] ffmpeg not available, skipping compression');
+        return {
+            success: false,
+            error: 'ffmpeg not available'
+        };
+    }
+
+    // Get input file size for logging
+    const inputStats = fs.statSync(inputPath);
+    const inputSizeMB = Math.round(inputStats.size / 1024 / 1024 * 10) / 10;
+    console.log('[AudioCompression] Input file size:', inputSizeMB, 'MB');
+
+    // Create output directory if needed
+    const outputDir = path.dirname(outputPath);
+    if (!fs.existsSync(outputDir)) {
+        fs.mkdirSync(outputDir, { recursive: true });
+    }
+
+    return new Promise((resolve) => {
+        const { spawn } = require('child_process');
+
+        // ffmpeg command optimized for speech transcription:
+        // - libopus codec (best for speech)
+        // - 32kbps bitrate (excellent quality for speech, very small file)
+        // - 16kHz sample rate (Whisper's expected input)
+        // - Mono channel (speech doesn't need stereo)
+        const ffmpeg = spawn('ffmpeg', [
+            '-y',                           // Overwrite output
+            '-i', inputPath,                // Input file
+            '-c:a', 'libopus',              // Opus codec
+            '-b:a', '32k',                  // 32kbps bitrate
+            '-ar', '16000',                 // 16kHz sample rate
+            '-ac', '1',                     // Mono (1 channel)
+            outputPath
+        ]);
+
+        let stderr = '';
+        ffmpeg.stderr.on('data', (data: Buffer) => {
+            stderr += data.toString();
+        });
+
+        ffmpeg.on('error', (err: Error) => {
+            console.error('[AudioCompression] ffmpeg error:', err);
+            resolve({
+                success: false,
+                error: `ffmpeg error: ${err.message}`
+            });
+        });
+
+        ffmpeg.on('close', (code: number) => {
+            if (code === 0) {
+                // Get output file size and calculate compression ratio
+                const outputStats = fs.statSync(outputPath);
+                const outputSizeMB = Math.round(outputStats.size / 1024 / 1024 * 10) / 10;
+                const compressionRatio = `${inputSizeMB}MB → ${outputSizeMB}MB (${Math.round((1 - outputStats.size / inputStats.size) * 100)}% reduction)`;
+
+                console.log('[AudioCompression] Compression successful:', compressionRatio);
+                resolve({
+                    success: true,
+                    outputPath,
+                    compressionRatio
+                });
+            } else {
+                console.error('[AudioCompression] ffmpeg failed with code:', code);
+                console.error('[AudioCompression] stderr:', stderr.slice(-500));
+                resolve({
+                    success: false,
+                    error: `ffmpeg exited with code ${code}`
+                });
+            }
+        });
+
+        // Timeout after 5 minutes for long recordings
+        setTimeout(() => {
+            console.error('[AudioCompression] ffmpeg compression timeout');
+            ffmpeg.kill();
+            resolve({
+                success: false,
+                error: 'Compression timeout'
+            });
+        }, 300000);
+    });
+}
+
 ipcMain.handle(MEETING_IPC_CHANNELS.SAVE_AUDIO_AND_TRANSCRIBE, async (_event, entryId: string, audioDataOrPath: string, mimeType?: string, isFilePath?: boolean) => {
     console.log('[Main] SAVE_AUDIO_AND_TRANSCRIBE called for entry:', entryId, 'isFilePath:', isFilePath);
 
     const actualMimeType = mimeType || 'audio/webm';
     let audioPath: string | undefined;
     let audioBase64: string;
+    let compressedPath: string | undefined;
 
     try {
         // Handle file path vs base64 data
@@ -2038,7 +2149,39 @@ ipcMain.handle(MEETING_IPC_CHANNELS.SAVE_AUDIO_AND_TRANSCRIBE, async (_event, en
             console.log('[Main] Audio file saved:', audioPath, 'size:', audioBuffer.length);
         }
 
-        // 2. Ensure auth session is fresh before transcription (long recordings can outlast tokens)
+        // 2. Compress audio before transcription to reduce upload size
+        let transcriptionMimeType = actualMimeType;
+        let transcriptionBase64 = audioBase64;
+
+        // Check file size threshold (10MB) and file type
+        const audioSizeBytes = Buffer.byteLength(audioBase64, 'base64');
+        const audioSizeMB = Math.round(audioSizeBytes / 1024 / 1024 * 10) / 10;
+        const shouldCompress = audioSizeMB > 10 || actualMimeType === 'audio/wav';
+
+        if (shouldCompress && audioPath) {
+            console.log(`[Main] Audio file is ${audioSizeMB}MB, attempting compression...`);
+            const timestamp = Date.now();
+            const compressedFilename = `${entryId}-${timestamp}-compressed.webm`;
+            compressedPath = path.join(RECORDINGS_DIR, compressedFilename);
+
+            const compressionResult = await compressAudioForTranscription(audioPath, compressedPath);
+
+            if (compressionResult.success && compressionResult.outputPath) {
+                // Compression succeeded - use compressed file for transcription
+                console.log('[Main] Using compressed audio for transcription:', compressionResult.compressionRatio);
+                const compressedBuffer = fs.readFileSync(compressedPath);
+                transcriptionBase64 = compressedBuffer.toString('base64');
+                transcriptionMimeType = 'audio/webm';
+            } else {
+                // Compression failed - fall back to original file
+                console.log('[Main] Compression failed, using original file:', compressionResult.error);
+                compressedPath = undefined; // Don't try to clean up a file that doesn't exist
+            }
+        } else {
+            console.log(`[Main] Audio file is ${audioSizeMB}MB, skipping compression (threshold: 10MB)`);
+        }
+
+        // 3. Ensure auth session is fresh before transcription (long recordings can outlast tokens)
         try {
             const authService = getAuthService();
             await authService.proactiveRefresh();
@@ -2046,20 +2189,29 @@ ipcMain.handle(MEETING_IPC_CHANNELS.SAVE_AUDIO_AND_TRANSCRIBE, async (_event, en
             console.warn('[Main] Auth refresh before transcription failed:', refreshError);
         }
 
-        // 3. Attempt transcription
+        // 4. Attempt transcription
         const { getTranscriptionService } = await import('./meeting/transcriptionService.js');
         const transcriptionService = getTranscriptionService();
 
-        const result = await transcriptionService.transcribe(audioBase64, entryId, actualMimeType);
+        const result = await transcriptionService.transcribe(transcriptionBase64, entryId, transcriptionMimeType);
 
         if (result.success) {
-            // Transcription succeeded - clean up audio file to save disk space
+            // Transcription succeeded - clean up audio files to save disk space
             if (audioPath && fs.existsSync(audioPath)) {
                 try {
                     fs.unlinkSync(audioPath);
                     console.log('[Main] Transcription succeeded, cleaned up audio file:', audioPath);
                 } catch (cleanupErr) {
                     console.warn('[Main] Failed to clean up audio file:', audioPath, cleanupErr);
+                }
+            }
+            // Clean up compressed file if it exists
+            if (compressedPath && fs.existsSync(compressedPath)) {
+                try {
+                    fs.unlinkSync(compressedPath);
+                    console.log('[Main] Cleaned up compressed audio file:', compressedPath);
+                } catch (cleanupErr) {
+                    console.warn('[Main] Failed to clean up compressed file:', compressedPath, cleanupErr);
                 }
             }
             return {
@@ -2077,6 +2229,15 @@ ipcMain.handle(MEETING_IPC_CHANNELS.SAVE_AUDIO_AND_TRANSCRIBE, async (_event, en
         } else {
             // Transcription failed but audio file is saved
             console.log('[Main] Transcription failed but audio saved at:', audioPath);
+            // Clean up compressed file on failure (keep original for retry)
+            if (compressedPath && fs.existsSync(compressedPath)) {
+                try {
+                    fs.unlinkSync(compressedPath);
+                    console.log('[Main] Cleaned up compressed file after transcription failure:', compressedPath);
+                } catch (cleanupErr) {
+                    console.warn('[Main] Failed to clean up compressed file:', compressedPath, cleanupErr);
+                }
+            }
             return {
                 success: false,
                 audioPath,
@@ -2086,11 +2247,68 @@ ipcMain.handle(MEETING_IPC_CHANNELS.SAVE_AUDIO_AND_TRANSCRIBE, async (_event, en
         }
     } catch (error) {
         console.error('[Main] SAVE_AUDIO_AND_TRANSCRIBE error:', error);
+        // Clean up compressed file on exception (keep original for retry)
+        if (compressedPath && fs.existsSync(compressedPath)) {
+            try {
+                fs.unlinkSync(compressedPath);
+                console.log('[Main] Cleaned up compressed file after error:', compressedPath);
+            } catch (cleanupErr) {
+                console.warn('[Main] Failed to clean up compressed file:', compressedPath, cleanupErr);
+            }
+        }
         return {
             success: false,
             audioPath, // May be undefined if save failed
             mimeType: actualMimeType,
             error: error instanceof Error ? error.message : 'Unknown error',
+        };
+    }
+});
+
+// Pending transcription store IPC handlers
+ipcMain.handle('meeting:save-pending-transcription', async (_event, sessionId: string, transcriptions: any[]) => {
+    console.log('[Main] SAVE_PENDING_TRANSCRIPTION called for session:', sessionId, 'count:', transcriptions.length);
+    try {
+        const { save } = await import('./meeting/pendingTranscriptionStore.js');
+        save(sessionId, transcriptions);
+        return { success: true };
+    } catch (error) {
+        console.error('[Main] Failed to save pending transcription:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Failed to save',
+        };
+    }
+});
+
+ipcMain.handle('meeting:load-pending-transcriptions', async () => {
+    console.log('[Main] LOAD_PENDING_TRANSCRIPTIONS called');
+    try {
+        const { load } = await import('./meeting/pendingTranscriptionStore.js');
+        const transcriptions = load();
+        console.log('[Main] Loaded pending transcriptions for', Object.keys(transcriptions).length, 'sessions');
+        return { success: true, transcriptions };
+    } catch (error) {
+        console.error('[Main] Failed to load pending transcriptions:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Failed to load',
+            transcriptions: {},
+        };
+    }
+});
+
+ipcMain.handle('meeting:remove-pending-transcription', async (_event, sessionId: string) => {
+    console.log('[Main] REMOVE_PENDING_TRANSCRIPTION called for session:', sessionId);
+    try {
+        const { remove } = await import('./meeting/pendingTranscriptionStore.js');
+        remove(sessionId);
+        return { success: true };
+    } catch (error) {
+        console.error('[Main] Failed to remove pending transcription:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Failed to remove',
         };
     }
 });
@@ -4133,7 +4351,7 @@ app.on('activate', () => {
     }
 });
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
     // Initialize encryption key on app startup
     try {
         getEncryptionKey();
@@ -4191,6 +4409,22 @@ app.whenReady().then(() => {
         });
     } catch (error) {
         console.error('[Main] Failed to initialize auth:', error);
+    }
+
+    // Initialize transcription service with auth refresh callback
+    try {
+        const { getTranscriptionService } = await import('./meeting/transcriptionService.js');
+        const transcriptionService = getTranscriptionService();
+
+        // Register auth refresh callback for token expiration handling
+        transcriptionService.setRefreshAuthCallback(async () => {
+            const authService = getAuthService();
+            await authService.proactiveRefresh();
+        });
+
+        console.log('[Main] Transcription service initialized with auth refresh callback');
+    } catch (error) {
+        console.error('[Main] Failed to initialize transcription service:', error);
     }
 
     // Set up system wake/unlock detection for token refresh
@@ -4259,6 +4493,20 @@ app.whenReady().then(() => {
 
         recordingManager.start();
         console.log('[Main] Recording manager initialized (mic/camera detection)');
+
+        // Set up periodic cleanup of old pending transcriptions (every 6 hours)
+        // Clean up transcriptions older than 24 hours to handle crash recovery scenarios
+        const cleanupInterval = 6 * 60 * 60 * 1000; // 6 hours
+        const maxAge = 24 * 60 * 60 * 1000; // 24 hours
+        setInterval(async () => {
+            try {
+                const { cleanupOld } = await import('./meeting/pendingTranscriptionStore.js');
+                cleanupOld(maxAge);
+            } catch (error) {
+                console.error('[Main] Failed to cleanup old pending transcriptions:', error);
+            }
+        }, cleanupInterval);
+        console.log('[Main] Pending transcription cleanup scheduled (every 6h, max age 24h)');
     } catch (error) {
         console.error('[Main] Failed to initialize recording manager:', error);
     }
