@@ -180,10 +180,13 @@ export class GoogleCalendarProvider implements CalendarProvider {
         },
       });
 
-      const handleRedirect = (_event: Electron.Event, url: string) => {
+      const handleRedirect = (event: Electron.Event, url: string) => {
         if (!url.startsWith('http://localhost:3847/oauth/callback')) return;
         if (settled) return;
         settled = true;
+
+        event.preventDefault();
+        clearTimeout(timeout);
 
         const parsed = new URL(url);
         const code = parsed.searchParams.get('code');
@@ -204,11 +207,20 @@ export class GoogleCalendarProvider implements CalendarProvider {
       authWindow.webContents.on('will-redirect', handleRedirect);
 
       authWindow.on('closed', () => {
+        clearTimeout(timeout);
         if (!settled) {
           settled = true;
           reject(new Error('Authentication cancelled'));
         }
       });
+
+      const timeout = setTimeout(() => {
+        if (!settled) {
+          settled = true;
+          if (!authWindow.isDestroyed()) authWindow.close();
+          reject(new Error('Authentication timed out. Please try again.'));
+        }
+      }, 120000);
 
       authWindow.loadURL(authUrl);
     });
