@@ -1,7 +1,6 @@
 // electron/calendar/googleCalendarProvider.ts
 
 import { BrowserWindow } from 'electron';
-import http from 'http';
 import { CalendarProvider, CalendarEvent, FocusTimeEventInput, CalendarTokens } from './types.js';
 import { getCredential, storeCredential, deleteCredential } from '../credentialStorage.js';
 
@@ -168,27 +167,29 @@ export class GoogleCalendarProvider implements CalendarProvider {
 
   private openAuthWindow(authUrl: string): Promise<string> {
     return new Promise((resolve, reject) => {
+      let settled = false;
+
       const authWindow = new BrowserWindow({
         width: 500,
         height: 700,
         show: true,
+        title: 'Connect Google Calendar',
         webPreferences: {
           nodeIntegration: false,
           contextIsolation: true,
         },
       });
 
-      // Create a simple HTTP server to catch the redirect
-      const server = http.createServer((req, res) => {
-        const reqUrl = new URL(req.url || '', `http://localhost:3847`);
-        const code = reqUrl.searchParams.get('code');
-        const error = reqUrl.searchParams.get('error');
+      const handleRedirect = (_event: Electron.Event, url: string) => {
+        if (!url.startsWith('http://localhost:3847/oauth/callback')) return;
+        if (settled) return;
+        settled = true;
 
-        res.writeHead(200, { 'Content-Type': 'text/html' });
-        res.end('<html><body><h1>You can close this window</h1><script>window.close()</script></body></html>');
+        const parsed = new URL(url);
+        const code = parsed.searchParams.get('code');
+        const error = parsed.searchParams.get('error');
 
-        server.close();
-        authWindow.close();
+        if (!authWindow.isDestroyed()) authWindow.close();
 
         if (error) {
           reject(new Error(`OAuth error: ${error}`));
@@ -197,16 +198,19 @@ export class GoogleCalendarProvider implements CalendarProvider {
         } else {
           reject(new Error('No authorization code received'));
         }
-      });
+      };
 
-      server.listen(3847, () => {
-        authWindow.loadURL(authUrl);
-      });
+      authWindow.webContents.on('will-navigate', handleRedirect);
+      authWindow.webContents.on('will-redirect', handleRedirect);
 
       authWindow.on('closed', () => {
-        server.close();
-        reject(new Error('Authentication cancelled'));
+        if (!settled) {
+          settled = true;
+          reject(new Error('Authentication cancelled'));
+        }
       });
+
+      authWindow.loadURL(authUrl);
     });
   }
 
