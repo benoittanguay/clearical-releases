@@ -66,7 +66,7 @@ function App() {
   const SPLITTING_PROMPT_THRESHOLD_MS = 45 * 60 * 1000;
 
   const { isRunning, isPaused, elapsed, start: startTimer, stop: stopTimer, pause: pauseTimer, resume: resumeTimer, formatTime, checkPermissions, setActiveRecordingEntry } = useTimer();
-  const { clearPendingTranscription, waitForTranscriptions, getPendingAudio, clearPendingAudio } = useAudioRecording();
+  const { clearPendingTranscription, getPendingTranscriptions, getPendingAudio, clearPendingAudio, onTranscriptionComplete } = useAudioRecording();
   const { roundTime, isRoundingEnabled } = useTimeRounding();
   const recordingSessionIdRef = useRef<string | null>(null);
   // Keep track of session ID even after recording stops, for transcription retrieval when timer stops
@@ -492,18 +492,13 @@ function App() {
         // Stop timer and save entry - await to ensure AI analyses complete
         const finalActivity = await stopTimer();
 
-        // Wait for any pending transcriptions from the recording session (with timeout)
-        // This handles the race condition where transcription may still be in progress
-        // Each recording is stored separately for better navigation
-        // Scale timeout with recording duration: 30s base + 1s per minute recorded, max 120s
-        const recordingMinutes = elapsed / 60000;
-        const transcriptionTimeout = Math.min(30000 + recordingMinutes * 1000, 120000);
-        console.log('[App] Waiting for transcription to complete (if recording was active)... timeout:', transcriptionTimeout, 'ms for', recordingMinutes.toFixed(1), 'min recording');
-        const pendingTranscriptions = sessionId ? await waitForTranscriptions(sessionId, transcriptionTimeout) : [];
+        // Check for any already-completed transcriptions (no timeout - immediate check)
+        // If transcription is still in progress, it will be attached later via event callback
+        const pendingTranscriptions = sessionId ? getPendingTranscriptions(sessionId) : [];
         if (pendingTranscriptions.length > 0) {
-          console.log('[App] Found', pendingTranscriptions.length, 'transcription(s) from recording session');
+          console.log('[App] Found', pendingTranscriptions.length, 'completed transcription(s) from recording session');
         } else {
-          console.log('[App] No transcription available (no recording or timed out)');
+          console.log('[App] No completed transcription yet (will attach later if still transcribing)');
         }
 
         // Check for pending audio (failed transcription)
@@ -518,7 +513,7 @@ function App() {
           duration: elapsed,
           assignment: selectedAssignment || undefined,
           windowActivity: finalActivity,
-          // Store transcriptions as array for separate display
+          // Store transcriptions as array for separate display (only if already completed)
           transcriptions: pendingTranscriptions.length > 0 ? pendingTranscriptions : undefined,
           // Keep legacy field for backwards compatibility
           transcription: pendingTranscriptions.length === 1 ? pendingTranscriptions[0] : undefined,
@@ -533,6 +528,13 @@ function App() {
         // Clear the pending audio after it's been saved to entry
         if (sessionId && pendingAudio) {
           clearPendingAudio(sessionId);
+        }
+
+        // If transcription is still pending (not in pendingTranscriptions), set up event listener
+        // to attach it when it completes
+        if (sessionId && pendingTranscriptions.length === 0 && !pendingAudio) {
+          console.log('[App] Transcription may still be in progress - will attach via event when complete');
+          // The event handler will be registered in a separate effect below
         }
 
         // Clear the last recording session ID after it's been used
@@ -758,6 +760,50 @@ function App() {
 
     return () => { unsubscribe?.(); };
   }, []);
+
+  // Event-driven transcription attachment
+  // When transcription completes after entry is created, attach it to the entry
+  useEffect(() => {
+    console.log('[App] Setting up transcription completion listener');
+
+    const unsubscribe = onTranscriptionComplete(async (sessionId, transcriptions) => {
+      console.log('[App] Transcription completed for session:', sessionId, 'count:', transcriptions.length);
+
+      // Find the most recent entry that doesn't have transcriptions yet
+      // and was created around the same time as this session
+      const recentEntries = entries.filter(e => {
+        const entryAge = Date.now() - e.endTime;
+        // Look for entries created in the last 5 minutes without transcriptions
+        return entryAge < 5 * 60 * 1000 && !e.transcriptions && !e.transcription;
+      }).sort((a, b) => b.endTime - a.endTime);
+
+      if (recentEntries.length > 0) {
+        const targetEntry = recentEntries[0];
+        console.log('[App] Attaching transcription to entry:', targetEntry.id);
+
+        try {
+          await updateEntry(targetEntry.id, {
+            transcriptions,
+            transcription: transcriptions.length === 1 ? transcriptions[0] : undefined,
+          });
+
+          // Clear from pending storage
+          clearPendingTranscription(sessionId);
+
+          console.log('[App] Successfully attached transcription to entry');
+        } catch (error) {
+          console.error('[App] Failed to attach transcription to entry:', error);
+        }
+      } else {
+        console.log('[App] No suitable entry found for transcription attachment');
+      }
+    });
+
+    return () => {
+      console.log('[App] Cleaning up transcription completion listener');
+      unsubscribe();
+    };
+  }, [entries, updateEntry, clearPendingTranscription, onTranscriptionComplete]);
 
   // Listen for widget prompt to start timer (meeting detected but timer not running)
   useEffect(() => {

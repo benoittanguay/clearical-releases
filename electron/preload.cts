@@ -279,6 +279,13 @@ contextBridge.exposeInMainWorld('electron', {
                 ipcRenderer.invoke('meeting:retry-transcription', entryId, audioPath, mimeType),
             getTranscriptionUsage: () =>
                 ipcRenderer.invoke('meeting:get-transcription-usage'),
+            // Pending transcription persistence
+            savePendingTranscription: (sessionId: string, transcriptions: any[]) =>
+                ipcRenderer.invoke('meeting:save-pending-transcription', sessionId, transcriptions),
+            loadPendingTranscriptions: () =>
+                ipcRenderer.invoke('meeting:load-pending-transcriptions'),
+            removePendingTranscription: (sessionId: string) =>
+                ipcRenderer.invoke('meeting:remove-pending-transcription', sessionId),
             // System audio capture (for capturing what others say in meetings)
             isSystemAudioAvailable: () =>
                 ipcRenderer.invoke('meeting:is-system-audio-available'),

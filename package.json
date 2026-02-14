@@ -23,7 +23,8 @@
     "asarUnpack": [
       "**/*.node",
       "**/better-sqlite3/**/*",
-      "electron/native/build/**/*"
+      "electron/native/build/**/*",
+      "**/ffmpeg-static/**/*"
     ],
     "files": [
       "package.json",
@@ -225,6 +226,7 @@
     "dotenv": "^17.2.3",
     "electron-log": "^5.4.3",
     "electron-updater": "^6.7.3",
+    "ffmpeg-static": "^5.2.0",
     "plist": "^3.1.0",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",

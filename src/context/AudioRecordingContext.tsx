@@ -74,6 +74,11 @@ interface AudioRecordingContextValue {
      * Clear pending audio after it's been handled
      */
     clearPendingAudio: (sessionId: string) => void;
+    /**
+     * Register callback for when transcription completes
+     * Used to attach transcriptions to entries after they're created
+     */
+    onTranscriptionComplete: (callback: (sessionId: string, transcriptions: EntryTranscription[]) => void) => () => void;
 }
 
 const AudioRecordingContext = createContext<AudioRecordingContextValue | null>(null);
@@ -107,6 +112,30 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
     const pendingTranscriptionsRef = useRef<Map<string, EntryTranscription[]>>(new Map());
     // Store pending audio files (when transcription failed) for later retry
     const pendingAudioRef = useRef<Map<string, PendingTranscription>>(new Map());
+    // Store callbacks for transcription completion events
+    const transcriptionCallbacksRef = useRef<Set<(sessionId: string, transcriptions: EntryTranscription[]) => void>>(new Set());
+
+    // Load pending transcriptions from disk on mount (crash recovery)
+    useEffect(() => {
+        const loadPersisted = async () => {
+            try {
+                const result = await window.electron?.ipcRenderer?.meeting?.loadPendingTranscriptions?.();
+                if (result?.success && result.transcriptions) {
+                    const persistedCount = Object.keys(result.transcriptions).length;
+                    if (persistedCount > 0) {
+                        console.log('[AudioRecordingContext] Recovered', persistedCount, 'pending transcription session(s) from disk');
+                        // Merge with in-memory state
+                        for (const [sessionId, transcriptions] of Object.entries(result.transcriptions)) {
+                            pendingTranscriptionsRef.current.set(sessionId, transcriptions as EntryTranscription[]);
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('[AudioRecordingContext] Failed to load persisted transcriptions:', error);
+            }
+        };
+        loadPersisted();
+    }, []);
 
     // Cleanup old pending transcriptions to prevent memory leaks
     // Transcriptions older than 5 minutes are likely orphaned (entry was never created)
@@ -122,6 +151,10 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
                 const allOld = transcriptions.every(t => now - t.createdAt > PENDING_TRANSCRIPTION_MAX_AGE_MS);
                 if (allOld) {
                     pendingTranscriptionsRef.current.delete(sessionId);
+                    // Also remove from disk
+                    window.electron?.ipcRenderer?.meeting?.removePendingTranscription?.(sessionId).catch((err: Error) => {
+                        console.error('[AudioRecordingContext] Failed to remove old transcription from disk:', err);
+                    });
                     cleanedCount++;
                 }
             }
@@ -943,6 +976,23 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
                         pendingTranscriptionsRef.current.set(entryId, existingTranscriptions);
                         console.log('[AudioRecordingContext] Total transcriptions for session:', existingTranscriptions.length);
 
+                        // Persist to disk for crash recovery
+                        try {
+                            await window.electron?.ipcRenderer?.meeting?.savePendingTranscription?.(entryId, [transcription]);
+                            console.log('[AudioRecordingContext] Persisted transcription to disk');
+                        } catch (persistError) {
+                            console.error('[AudioRecordingContext] Failed to persist transcription:', persistError);
+                        }
+
+                        // Notify callbacks (for event-driven attachment)
+                        transcriptionCallbacksRef.current.forEach(callback => {
+                            try {
+                                callback(entryId, existingTranscriptions);
+                            } catch (callbackError) {
+                                console.error('[AudioRecordingContext] Transcription callback error:', callbackError);
+                            }
+                        });
+
                         // Note: The entry may not exist yet as it's created when the timer stops.
                         // The transcription is stored as pending and will be attached to the entry
                         // when it's created via waitForTranscription() in App.tsx.
@@ -1093,6 +1143,10 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
      */
     const clearPendingTranscription = useCallback((sessionId: string): void => {
         pendingTranscriptionsRef.current.delete(sessionId);
+        // Also remove from disk
+        window.electron?.ipcRenderer?.meeting?.removePendingTranscription?.(sessionId).catch((err: Error) => {
+            console.error('[AudioRecordingContext] Failed to remove transcription from disk:', err);
+        });
     }, []);
 
     /**
@@ -1257,6 +1311,13 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
                 existingTranscriptions.push(transcription);
                 pendingTranscriptionsRef.current.set(entryId, existingTranscriptions);
 
+                // Persist to disk
+                try {
+                    await window.electron?.ipcRenderer?.meeting?.savePendingTranscription?.(entryId, [transcription]);
+                } catch (persistError) {
+                    console.error('[AudioRecordingContext] Failed to persist retry transcription:', persistError);
+                }
+
                 // Clear pending audio since transcription succeeded
                 pendingAudioRef.current.delete(entryId);
 
@@ -1298,6 +1359,19 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
             });
             return null;
         }
+    }, []);
+
+    /**
+     * Register callback for transcription completion
+     * Returns unsubscribe function
+     */
+    const onTranscriptionComplete = useCallback((callback: (sessionId: string, transcriptions: EntryTranscription[]) => void): (() => void) => {
+        transcriptionCallbacksRef.current.add(callback);
+        console.log('[AudioRecordingContext] Registered transcription completion callback');
+        return () => {
+            transcriptionCallbacksRef.current.delete(callback);
+            console.log('[AudioRecordingContext] Unregistered transcription completion callback');
+        };
     }, []);
 
     // Subscribe to recording events from main process
@@ -1452,6 +1526,7 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
         getPendingAudio,
         retryTranscription,
         clearPendingAudio,
+        onTranscriptionComplete,
     };
 
     return (
