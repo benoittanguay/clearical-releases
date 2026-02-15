@@ -127,6 +127,7 @@ export function SplittingAssistant({
   } | null>(null);
 
   const timelineRef = useRef<HTMLDivElement>(null);
+  const [analysisPhase, setAnalysisPhase] = useState(0);
 
   // Load buckets and transform initial suggestions
   useEffect(() => {
@@ -175,6 +176,18 @@ export function SplittingAssistant({
     window.addEventListener('keydown', handleEscape);
     return () => window.removeEventListener('keydown', handleEscape);
   }, [isLoading, editingSegmentId, onClose]);
+
+  // Progressive analysis phase animation during loading
+  useEffect(() => {
+    if (!isLoading) {
+      setAnalysisPhase(0);
+      return;
+    }
+    const timer = setInterval(() => {
+      setAnalysisPhase(prev => Math.min(prev + 1, 3));
+    }, 2500);
+    return () => clearInterval(timer);
+  }, [isLoading]);
 
   // Convert timestamp to percentage position on timeline
   const timeToPercent = (timestamp: number): number => {
@@ -299,6 +312,126 @@ export function SplittingAssistant({
     setSelectedSegmentId(segmentId);
   };
 
+  const analysisSteps = [
+    'Reading session data',
+    'Scanning window activity',
+    'Identifying task boundaries',
+    'Generating suggestions',
+  ];
+
+  // Loading visualization
+  const loadingVisualization = (
+    <div className="flex flex-col items-center py-8">
+      {/* Animated Timeline */}
+      <div className="w-full mb-10">
+        <div className="relative h-14 rounded-xl overflow-hidden" style={{ background: 'var(--color-bg-tertiary)' }}>
+          {/* Ghost segments - appear in phase 3 */}
+          <div
+            className="absolute inset-0 flex"
+            style={{
+              opacity: analysisPhase >= 3 ? 1 : 0,
+              transition: 'opacity 0.8s ease-out',
+            }}
+          >
+            <div style={{ width: '35%', background: 'rgba(59, 130, 246, 0.08)' }} />
+            <div style={{ width: '33%', background: 'rgba(34, 197, 94, 0.08)' }} />
+            <div style={{ width: '32%', background: 'rgba(249, 115, 22, 0.08)' }} />
+          </div>
+
+          {/* Potential split markers - appear in phase 2 */}
+          <div
+            className="absolute top-1 bottom-1 w-0.5 rounded-full"
+            style={{
+              left: '35%',
+              background: 'var(--color-accent)',
+              opacity: analysisPhase >= 2 ? 0.35 : 0,
+              transform: analysisPhase >= 2 ? 'scaleY(1)' : 'scaleY(0.3)',
+              transition: 'all 0.6s ease-out',
+            }}
+          />
+          <div
+            className="absolute top-1 bottom-1 w-0.5 rounded-full"
+            style={{
+              left: '68%',
+              background: 'var(--color-accent)',
+              opacity: analysisPhase >= 2 ? 0.35 : 0,
+              transform: analysisPhase >= 2 ? 'scaleY(1)' : 'scaleY(0.3)',
+              transition: 'all 0.6s ease-out 0.3s',
+            }}
+          />
+
+          {/* Scan line sweep */}
+          <div
+            className="absolute inset-0"
+            style={{
+              background: 'linear-gradient(90deg, transparent 25%, rgba(255, 72, 0, 0.05) 37%, rgba(255, 72, 0, 0.15) 50%, rgba(255, 72, 0, 0.05) 63%, transparent 75%)',
+              backgroundSize: '200% 100%',
+              animation: 'shimmer 2.5s ease-in-out infinite',
+            }}
+          />
+        </div>
+
+        {/* Time labels */}
+        <div className="flex justify-between text-[11px] mt-3 px-1" style={{ color: 'var(--color-text-tertiary)', fontFamily: 'var(--font-mono)' }}>
+          <span>{formatTime(activity.startTime)}</span>
+          <span>{formatTime(activity.endTime)}</span>
+        </div>
+      </div>
+
+      {/* Analysis Steps */}
+      <div className="space-y-3.5 w-full max-w-xs">
+        {analysisSteps.map((step, i) => {
+          const isCompleted = i < analysisPhase;
+          const isCurrent = i === analysisPhase;
+
+          return (
+            <div
+              key={i}
+              className="flex items-center gap-3"
+              style={{
+                opacity: i > analysisPhase ? 0.3 : 1,
+                transition: 'opacity 0.4s ease-out',
+              }}
+            >
+              <div className="flex-shrink-0 w-5 h-5 flex items-center justify-center">
+                {isCompleted ? (
+                  <div
+                    className="w-5 h-5 rounded-full flex items-center justify-center animate-scale-in"
+                    style={{ background: 'var(--color-accent)' }}
+                  >
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                  </div>
+                ) : isCurrent ? (
+                  <div
+                    className="w-5 h-5 rounded-full animate-pulse-ring"
+                    style={{ background: 'var(--color-accent)' }}
+                  />
+                ) : (
+                  <div
+                    className="w-2.5 h-2.5 rounded-full"
+                    style={{ background: 'var(--color-border-secondary)' }}
+                  />
+                )}
+              </div>
+              <span
+                className="text-sm"
+                style={{
+                  color: isCurrent ? 'var(--color-text-primary)' : isCompleted ? 'var(--color-text-secondary)' : 'var(--color-text-tertiary)',
+                  fontWeight: isCurrent ? 500 : 400,
+                  fontFamily: 'var(--font-body)',
+                }}
+              >
+                {step}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+
   return (
     <div
       className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 animate-fade-in"
@@ -329,20 +462,36 @@ export function SplittingAssistant({
             <div className="text-sm text-[var(--color-text-secondary)]">
               {formatTimeRange(activity.startTime, activity.endTime)}
             </div>
-            <div
-              className="ml-auto px-3 py-1 rounded-full text-xs font-semibold"
-              style={{
-                background: 'var(--color-accent-muted)',
-                color: 'var(--color-accent)',
-              }}
-            >
-              {segments.length} splits suggested
-            </div>
+            {isLoading ? (
+              <div
+                className="ml-auto px-3 py-1 rounded-full text-xs font-semibold animate-pulse flex items-center gap-1.5"
+                style={{
+                  background: 'var(--color-accent-muted)',
+                  color: 'var(--color-accent)',
+                }}
+              >
+                <div className="w-1.5 h-1.5 rounded-full" style={{ background: 'var(--color-accent)' }} />
+                Analyzing
+              </div>
+            ) : (
+              <div
+                className="ml-auto px-3 py-1 rounded-full text-xs font-semibold"
+                style={{
+                  background: 'var(--color-accent-muted)',
+                  color: 'var(--color-accent)',
+                }}
+              >
+                {segments.length} splits suggested
+              </div>
+            )}
           </div>
         </div>
 
         {/* Scrollable Content */}
         <div className="flex-1 overflow-y-auto p-6">
+          {isLoading && loadingVisualization}
+
+          {!isLoading && (<>
           {/* Timeline Container */}
           <div className="bg-[var(--color-bg-secondary)] border border-[var(--color-border-primary)] rounded-xl p-6 mb-6 shadow-sm">
             <h2
@@ -556,15 +705,14 @@ export function SplittingAssistant({
               );
             })}
           </div>
+          </>)}
         </div>
 
         {/* Footer Actions */}
         <div className="p-6 pt-4 border-t border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] flex-shrink-0">
           <div className="flex justify-between items-center">
             <div className="text-xs text-[var(--color-text-secondary)]">
-              {isLoading
-                ? 'Analyzing session...'
-                : `${segments.length} segments will be created from this recording`}
+              {!isLoading && `${segments.length} segments will be created from this recording`}
             </div>
             <div className="flex gap-3">
               <button

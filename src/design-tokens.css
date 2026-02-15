@@ -404,6 +404,12 @@
   100% { background-position: 200% 0; }
 }
 
+@keyframes pulseRing {
+  0% { box-shadow: 0 0 0 0 rgba(255, 72, 0, 0.35); }
+  70% { box-shadow: 0 0 0 6px rgba(255, 72, 0, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(255, 72, 0, 0); }
+}
+
 @keyframes gradientShift {
   0% { background-position: 0% 50%; }
   50% { background-position: 100% 50%; }
@@ -427,6 +433,7 @@
 .animate-spin { animation: spin 1s var(--ease-linear) infinite; }
 .animate-bounce { animation: bounce 1s var(--ease-in-out) infinite; }
 .animate-float { animation: float 4s var(--ease-in-out) infinite; }
+.animate-pulse-ring { animation: pulseRing 1.5s ease-out infinite; }
 
 /* Animation delays */
 .delay-75 { animation-delay: 75ms; }
