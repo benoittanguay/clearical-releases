@@ -13,30 +13,33 @@ interface TabData {
 
 interface JiraIssuesSectionProps {
     onIssueClick?: (issue: JiraIssue) => void;
-    onRefreshReady?: (refreshFn: () => void) => void;
+    onOpenJiraConfig?: () => void;
 }
 
-export function JiraIssuesSection({ onIssueClick, onRefreshReady }: JiraIssuesSectionProps = {}) {
+export function JiraIssuesSection({ onIssueClick, onOpenJiraConfig }: JiraIssuesSectionProps = {}) {
     const { settings } = useSettings();
     const { hasFeature } = useSubscription();
     const { projects, isActive, totalIssuesFound } = useCrawlerProgress();
     const jiraCache = useJiraCache();
-    const [activeTab, setActiveTab] = useState<string>('assigned');
+    const [activeTab, setActiveTab] = useState<string>('search');
     const [searchQuery, setSearchQuery] = useState('');
     const [tabData, setTabData] = useState<Record<string, TabData>>({});
     const [showSyncStatus, setShowSyncStatus] = useState(true);
+    const [projectNames, setProjectNames] = useState<Record<string, string>>({});
 
-    // Get available tabs - simple, no complex dependencies
+    // Get available tabs - search first, then assigned, then projects
     const getAvailableTabs = () => {
-        const tabs = [{ key: 'assigned', label: 'Assigned to Me' }];
-        
+        const tabs = [
+            { key: 'search', label: 'Search' },
+            { key: 'assigned', label: 'Assigned to Me' },
+        ];
+
         if (settings.jira?.selectedProjects?.length) {
             settings.jira.selectedProjects.forEach(project => {
-                tabs.push({ key: `project-${project}`, label: project });
+                tabs.push({ key: `project-${project}`, label: projectNames[project] || project });
             });
         }
-        
-        tabs.push({ key: 'search', label: 'Search' });
+
         return tabs;
     };
 
@@ -73,6 +76,15 @@ export function JiraIssuesSection({ onIssueClick, onRefreshReady }: JiraIssuesSe
                 issues = await jiraCache.getProjectIssues(projectKey);
             } else {
                 issues = [];
+            }
+
+            // Extract project name from first issue if available
+            if (tabKey.startsWith('project-') && issues.length > 0) {
+                const projectKey = tabKey.replace('project-', '');
+                const name = issues[0].fields.project.name;
+                if (name && name !== projectKey) {
+                    setProjectNames(prev => ({ ...prev, [projectKey]: name }));
+                }
             }
 
             setTabData(prev => ({
@@ -159,19 +171,11 @@ export function JiraIssuesSection({ onIssueClick, onRefreshReady }: JiraIssuesSe
         }
     };
 
-    // Expose refresh function to parent
-    useEffect(() => {
-        onRefreshReady?.(handleRefresh);
-    }, [activeTab, onRefreshReady]);
-
     // Initialize first tab
     // Note: Background sync is handled by JiraSyncScheduler via JiraCacheContext
     // Do NOT call syncAllData here as it bypasses the scheduler's interval settings
     useEffect(() => {
-        const tabs = getAvailableTabs();
-        if (tabs.length > 0) {
-            setActiveTab(tabs[0].key);
-        }
+        setActiveTab('search');
     }, []); // Run only once on mount
 
 
@@ -373,270 +377,342 @@ export function JiraIssuesSection({ onIssueClick, onRefreshReady }: JiraIssuesSe
                 </div>
             )}
 
-            {/* Tab Navigation */}
-            <div className="flex space-x-1 mb-3 overflow-x-auto">
-                {tabs.map((tab) => (
-                    <button
-                        key={tab.key}
-                        onClick={() => setActiveTab(tab.key)}
-                        className="px-2.5 py-1.5 text-xs font-medium rounded-lg transition-all flex items-center gap-1.5 whitespace-nowrap"
-                        style={{
-                            backgroundColor: activeTab === tab.key ? 'var(--color-accent)' : 'var(--color-bg-tertiary)',
-                            color: activeTab === tab.key ? '#FFFFFF' : 'var(--color-text-primary)',
-                            fontFamily: 'var(--font-body)',
-                            borderRadius: 'var(--radius-lg)',
-                            transitionDuration: 'var(--duration-base)',
-                            transitionTimingFunction: 'var(--ease-out)'
-                        }}
-                        onMouseEnter={(e) => {
-                            if (activeTab !== tab.key) {
-                                e.currentTarget.style.backgroundColor = 'var(--color-bg-quaternary)';
-                            }
-                        }}
-                        onMouseLeave={(e) => {
-                            if (activeTab !== tab.key) {
-                                e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)';
-                            }
-                        }}
-                    >
-                        {tab.label}
-                        {tabData[tab.key]?.loading ? (
-                            <div className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin"></div>
-                        ) : (
-                            tabData[tab.key]?.issues && (
-                                <span className="ml-1">({tabData[tab.key].issues.length})</span>
-                            )
-                        )}
-                    </button>
-                ))}
-            </div>
-
-            {/* Search Input */}
-            {activeTab === 'search' && (
-                <div className="flex gap-2 mb-3">
-                    <input
-                        type="text"
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-                        placeholder="Search issues by text..."
-                        className="flex-1 text-sm rounded px-3 py-2 focus:outline-none transition-all"
-                        style={{
-                            backgroundColor: 'var(--color-bg-secondary)',
-                            border: '1px solid var(--color-border-primary)',
-                            color: 'var(--color-text-primary)',
-                            fontFamily: 'var(--font-body)',
-                            transitionDuration: 'var(--duration-base)',
-                            transitionTimingFunction: 'var(--ease-out)'
-                        }}
-                        onFocus={(e) => {
-                            e.currentTarget.style.borderColor = 'var(--color-accent)';
-                            e.currentTarget.style.boxShadow = 'var(--focus-ring)';
-                        }}
-                        onBlur={(e) => {
-                            e.currentTarget.style.borderColor = 'var(--color-border-primary)';
-                            e.currentTarget.style.boxShadow = 'none';
-                        }}
-                    />
-                    <button
-                        onClick={handleSearch}
-                        disabled={currentTabData.loading || !searchQuery.trim()}
-                        className="px-3 py-1.5 text-sm rounded transition-all"
-                        style={{
-                            backgroundColor: currentTabData.loading || !searchQuery.trim()
-                                ? 'var(--color-bg-tertiary)'
-                                : 'var(--color-accent)',
-                            color: currentTabData.loading || !searchQuery.trim()
-                                ? 'var(--color-text-tertiary)'
-                                : '#FFFFFF',
-                            fontFamily: 'var(--font-body)',
-                            cursor: currentTabData.loading || !searchQuery.trim() ? 'not-allowed' : 'pointer',
-                            transitionDuration: 'var(--duration-base)',
-                            transitionTimingFunction: 'var(--ease-out)'
-                        }}
-                        onMouseEnter={(e) => {
-                            if (!currentTabData.loading && searchQuery.trim()) {
-                                e.currentTarget.style.opacity = '0.9';
-                            }
-                        }}
-                        onMouseLeave={(e) => {
-                            if (!currentTabData.loading && searchQuery.trim()) {
-                                e.currentTarget.style.opacity = '1';
-                            }
-                        }}
-                    >
-                        {currentTabData.loading ? 'Searching...' : 'Search'}
-                    </button>
-                </div>
-            )}
-
-            {/* Error State */}
-            {currentTabData.error && (
-                <div className="rounded-lg p-2.5 mb-3 border"
+            {/* Two-column layout: sidebar + content */}
+            <div className="flex gap-3">
+                {/* Left Sidebar */}
+                <div className="w-48 flex-shrink-0 rounded-xl border p-3"
                      style={{
-                         backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                         borderColor: 'rgba(239, 68, 68, 0.3)',
-                         borderRadius: 'var(--radius-lg)'
+                         backgroundColor: 'var(--color-bg-secondary)',
+                         borderColor: 'var(--color-border-primary)',
+                         borderRadius: 'var(--radius-xl)'
                      }}>
-                    <p className="text-sm"
-                       style={{
-                           color: 'var(--color-error)',
-                           fontFamily: 'var(--font-body)'
-                       }}>
-                        {currentTabData.error}
-                    </p>
-                    <button
-                        onClick={() => loadTabData(activeTab)}
-                        className="mt-2 text-xs underline transition-colors"
-                        style={{
-                            color: 'var(--color-error)',
-                            fontFamily: 'var(--font-body)',
-                            transitionDuration: 'var(--duration-fast)'
-                        }}
-                        onMouseEnter={(e) => e.currentTarget.style.color = 'var(--color-text-primary)'}
-                        onMouseLeave={(e) => e.currentTarget.style.color = 'var(--color-error)'}
-                    >
-                        Retry
-                    </button>
+                    {/* Refresh + Gear buttons */}
+                    <div className="flex items-center gap-1.5 mb-3 pb-3 border-b"
+                         style={{ borderColor: 'var(--color-border-primary)' }}>
+                        <button
+                            onClick={handleRefresh}
+                            className="p-1.5 rounded-lg transition-all"
+                            style={{
+                                color: 'var(--color-text-secondary)',
+                                backgroundColor: 'transparent',
+                                transitionDuration: 'var(--duration-base)',
+                                transitionTimingFunction: 'var(--ease-out)'
+                            }}
+                            onMouseEnter={(e) => {
+                                e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)';
+                                e.currentTarget.style.color = 'var(--color-text-primary)';
+                            }}
+                            onMouseLeave={(e) => {
+                                e.currentTarget.style.backgroundColor = 'transparent';
+                                e.currentTarget.style.color = 'var(--color-text-secondary)';
+                            }}
+                            title="Refresh issues"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                            </svg>
+                        </button>
+                        {onOpenJiraConfig && (
+                            <button
+                                onClick={onOpenJiraConfig}
+                                className="p-1.5 rounded-lg transition-all"
+                                style={{
+                                    color: 'var(--color-text-secondary)',
+                                    backgroundColor: 'transparent',
+                                    transitionDuration: 'var(--duration-base)',
+                                    transitionTimingFunction: 'var(--ease-out)'
+                                }}
+                                onMouseEnter={(e) => {
+                                    e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)';
+                                    e.currentTarget.style.color = 'var(--color-text-primary)';
+                                }}
+                                onMouseLeave={(e) => {
+                                    e.currentTarget.style.backgroundColor = 'transparent';
+                                    e.currentTarget.style.color = 'var(--color-text-secondary)';
+                                }}
+                                title="Jira settings"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+                                    <circle cx="12" cy="12" r="3" />
+                                </svg>
+                            </button>
+                        )}
+                    </div>
+
+                    {/* Vertical tab list */}
+                    <div className="space-y-1">
+                        {tabs.map((tab) => (
+                            <button
+                                key={tab.key}
+                                onClick={() => setActiveTab(tab.key)}
+                                className="w-full text-left px-2.5 py-2 text-xs font-medium rounded-lg transition-all flex items-center justify-between"
+                                style={{
+                                    backgroundColor: activeTab === tab.key ? 'var(--color-accent)' : 'transparent',
+                                    color: activeTab === tab.key ? '#FFFFFF' : 'var(--color-text-primary)',
+                                    fontFamily: 'var(--font-body)',
+                                    borderRadius: 'var(--radius-lg)',
+                                    transitionDuration: 'var(--duration-base)',
+                                    transitionTimingFunction: 'var(--ease-out)'
+                                }}
+                                onMouseEnter={(e) => {
+                                    if (activeTab !== tab.key) {
+                                        e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)';
+                                    }
+                                }}
+                                onMouseLeave={(e) => {
+                                    if (activeTab !== tab.key) {
+                                        e.currentTarget.style.backgroundColor = 'transparent';
+                                    }
+                                }}
+                            >
+                                <span className="truncate">{tab.label}</span>
+                                {tabData[tab.key]?.loading ? (
+                                    <div className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin flex-shrink-0 ml-1"></div>
+                                ) : (
+                                    tabData[tab.key]?.issues && tabData[tab.key].issues.length > 0 && (
+                                        <span className="text-xs flex-shrink-0 ml-1" style={{
+                                            opacity: activeTab === tab.key ? 0.8 : 0.6
+                                        }}>
+                                            {tabData[tab.key].issues.length}
+                                        </span>
+                                    )
+                                )}
+                            </button>
+                        ))}
+                    </div>
                 </div>
-            )}
 
-            {/* Issues List */}
-            <div className="rounded-xl p-4 border"
-                 style={{
-                     backgroundColor: 'var(--color-bg-secondary)',
-                     borderColor: 'var(--color-border-primary)',
-                     borderRadius: 'var(--radius-xl)'
-                 }}>
-                {currentTabData.loading ? (
-                    <div className="flex items-center justify-center py-8">
-                        <div className="w-8 h-8 border-2 rounded-full animate-spin"
+                {/* Right Content */}
+                <div className="flex-1 min-w-0">
+                    {/* Search Input */}
+                    {activeTab === 'search' && (
+                        <div className="flex gap-2 mb-3">
+                            <input
+                                type="text"
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                                placeholder="Search issues by text..."
+                                className="flex-1 text-sm rounded px-3 py-2 focus:outline-none transition-all"
+                                style={{
+                                    backgroundColor: 'var(--color-bg-secondary)',
+                                    border: '1px solid var(--color-border-primary)',
+                                    color: 'var(--color-text-primary)',
+                                    fontFamily: 'var(--font-body)',
+                                    transitionDuration: 'var(--duration-base)',
+                                    transitionTimingFunction: 'var(--ease-out)'
+                                }}
+                                onFocus={(e) => {
+                                    e.currentTarget.style.borderColor = 'var(--color-accent)';
+                                    e.currentTarget.style.boxShadow = 'var(--focus-ring)';
+                                }}
+                                onBlur={(e) => {
+                                    e.currentTarget.style.borderColor = 'var(--color-border-primary)';
+                                    e.currentTarget.style.boxShadow = 'none';
+                                }}
+                            />
+                            <button
+                                onClick={handleSearch}
+                                disabled={currentTabData.loading || !searchQuery.trim()}
+                                className="px-3 py-1.5 text-sm rounded transition-all"
+                                style={{
+                                    backgroundColor: currentTabData.loading || !searchQuery.trim()
+                                        ? 'var(--color-bg-tertiary)'
+                                        : 'var(--color-accent)',
+                                    color: currentTabData.loading || !searchQuery.trim()
+                                        ? 'var(--color-text-tertiary)'
+                                        : '#FFFFFF',
+                                    fontFamily: 'var(--font-body)',
+                                    cursor: currentTabData.loading || !searchQuery.trim() ? 'not-allowed' : 'pointer',
+                                    transitionDuration: 'var(--duration-base)',
+                                    transitionTimingFunction: 'var(--ease-out)'
+                                }}
+                                onMouseEnter={(e) => {
+                                    if (!currentTabData.loading && searchQuery.trim()) {
+                                        e.currentTarget.style.opacity = '0.9';
+                                    }
+                                }}
+                                onMouseLeave={(e) => {
+                                    if (!currentTabData.loading && searchQuery.trim()) {
+                                        e.currentTarget.style.opacity = '1';
+                                    }
+                                }}
+                            >
+                                {currentTabData.loading ? 'Searching...' : 'Search'}
+                            </button>
+                        </div>
+                    )}
+
+                    {/* Error State */}
+                    {currentTabData.error && (
+                        <div className="rounded-lg p-2.5 mb-3 border"
                              style={{
-                                 borderColor: 'var(--color-accent)',
-                                 borderTopColor: 'transparent'
-                             }}></div>
-                        <span className="ml-3 font-medium"
-                              style={{
-                                  color: 'var(--color-text-secondary)',
-                                  fontFamily: 'var(--font-body)'
-                              }}>Loading issues...</span>
-                    </div>
-                ) : currentTabData.issues.length === 0 ? (
-                    <div className="text-center py-10"
-                         style={{ color: 'var(--color-text-tertiary)' }}>
-                        <svg xmlns="http://www.w3.org/2000/svg" width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="mx-auto mb-3" style={{ opacity: 0.4 }}>
-                            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
-                            <circle cx="12" cy="12" r="4"/>
-                        </svg>
-                        <p className="text-sm font-medium mb-1"
-                           style={{
-                               color: 'var(--color-text-secondary)',
-                               fontFamily: 'var(--font-body)'
-                           }}>No issues found</p>
-                        <p className="text-xs"
-                           style={{ fontFamily: 'var(--font-body)' }}>
-                            {activeTab === 'search'
-                                ? 'Try searching with different keywords'
-                                : 'Issues will appear here when available from your Jira instance'
-                            }
-                        </p>
-                    </div>
-                ) : (
-                    <div className="space-y-2">
-                        {currentTabData.issues.map((issue) => {
-                            const isEpic = issue.fields.issuetype.name.toLowerCase() === 'epic';
+                                 backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                                 borderColor: 'rgba(239, 68, 68, 0.3)',
+                                 borderRadius: 'var(--radius-lg)'
+                             }}>
+                            <p className="text-sm"
+                               style={{
+                                   color: 'var(--color-error)',
+                                   fontFamily: 'var(--font-body)'
+                               }}>
+                                {currentTabData.error}
+                            </p>
+                            <button
+                                onClick={() => loadTabData(activeTab)}
+                                className="mt-2 text-xs underline transition-colors"
+                                style={{
+                                    color: 'var(--color-error)',
+                                    fontFamily: 'var(--font-body)',
+                                    transitionDuration: 'var(--duration-fast)'
+                                }}
+                                onMouseEnter={(e) => e.currentTarget.style.color = 'var(--color-text-primary)'}
+                                onMouseLeave={(e) => e.currentTarget.style.color = 'var(--color-error)'}
+                            >
+                                Retry
+                            </button>
+                        </div>
+                    )}
 
-                            return (
-                                <div
-                                    key={issue.id}
-                                    onClick={() => onIssueClick?.(issue)}
-                                    className="rounded-lg p-2.5 cursor-pointer"
-                                    style={{
-                                        backgroundColor: isEpic ? 'rgba(168, 85, 247, 0.05)' : 'white',
-                                        border: isEpic ? '1px solid rgba(168, 85, 247, 0.3)' : '1px solid var(--color-border-primary)',
-                                        transition: 'all var(--duration-base) var(--ease-out)'
-                                    }}
-                                    onMouseEnter={(e) => {
-                                        e.currentTarget.style.backgroundColor = isEpic ? 'rgba(168, 85, 247, 0.1)' : '#FAF5EE';
-                                        e.currentTarget.style.borderColor = isEpic ? 'rgba(168, 85, 247, 0.5)' : 'var(--color-border-secondary)';
-                                    }}
-                                    onMouseLeave={(e) => {
-                                        e.currentTarget.style.backgroundColor = isEpic ? 'rgba(168, 85, 247, 0.05)' : 'white';
-                                        e.currentTarget.style.borderColor = isEpic ? 'rgba(168, 85, 247, 0.3)' : 'var(--color-border-primary)';
-                                    }}
-                                >
-                                    <div className="flex items-start justify-between">
-                                        <div className="flex-1 min-w-0">
-                                            <div className="flex items-center gap-2 mb-1.5">
-                                                <span className="font-mono text-sm font-semibold"
-                                                      style={{
-                                                          color: 'var(--color-info)',
-                                                          fontFamily: 'var(--font-mono)'
-                                                      }}>
-                                                    {issue.key}
-                                                </span>
-                                                <span className="text-xs"
-                                                      style={{
-                                                          color: 'var(--color-text-tertiary)',
-                                                          fontFamily: 'var(--font-body)'
-                                                      }}>
-                                                    {issue.fields.project.name}
-                                                </span>
-                                                <span className="text-xs px-2 py-0.5 rounded"
-                                                      style={{
-                                                          backgroundColor: isEpic ? 'rgba(168, 85, 247, 0.2)' : 'var(--color-bg-quaternary)',
-                                                          color: isEpic ? '#c084fc' : 'var(--color-text-secondary)',
-                                                          border: isEpic ? '1px solid rgba(168, 85, 247, 0.4)' : 'none',
-                                                          fontFamily: 'var(--font-body)',
-                                                          fontWeight: isEpic ? 'var(--font-semibold)' : 'normal'
-                                                      }}>
-                                                    {issue.fields.issuetype.name}
-                                                </span>
-                                            </div>
-                                            <h4 className="font-medium text-sm mb-2 line-clamp-2"
-                                                style={{
-                                                    color: 'var(--color-text-primary)',
-                                                    fontFamily: 'var(--font-body)'
-                                                }}>
-                                                {issue.fields.summary}
-                                            </h4>
-                                            <div className="flex items-center gap-2">
-                                                <span className="px-2 py-1 rounded text-xs"
-                                                      style={{
-                                                          ...getStatusColor(issue.fields.status.statusCategory.key),
-                                                          fontFamily: 'var(--font-body)',
-                                                          fontWeight: 'var(--font-medium)'
-                                                      }}>
-                                                    {issue.fields.status.name}
-                                                </span>
-                                                {issue.fields.assignee && (
-                                                    <span className="text-xs"
-                                                          style={{
-                                                              color: 'var(--color-text-tertiary)',
-                                                              fontFamily: 'var(--font-body)'
-                                                          }}>
-                                                        → {issue.fields.assignee.displayName}
-                                                    </span>
-                                                )}
+                    {/* Issues List */}
+                    <div className="rounded-xl p-4 border"
+                         style={{
+                             backgroundColor: 'var(--color-bg-secondary)',
+                             borderColor: 'var(--color-border-primary)',
+                             borderRadius: 'var(--radius-xl)'
+                         }}>
+                        {currentTabData.loading ? (
+                            <div className="flex items-center justify-center py-8">
+                                <div className="w-8 h-8 border-2 rounded-full animate-spin"
+                                     style={{
+                                         borderColor: 'var(--color-accent)',
+                                         borderTopColor: 'transparent'
+                                     }}></div>
+                                <span className="ml-3 font-medium"
+                                      style={{
+                                          color: 'var(--color-text-secondary)',
+                                          fontFamily: 'var(--font-body)'
+                                      }}>Loading issues...</span>
+                            </div>
+                        ) : currentTabData.issues.length === 0 ? (
+                            <div className="text-center py-10"
+                                 style={{ color: 'var(--color-text-tertiary)' }}>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="mx-auto mb-3" style={{ opacity: 0.4 }}>
+                                    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                                    <circle cx="12" cy="12" r="4"/>
+                                </svg>
+                                <p className="text-sm font-medium mb-1"
+                                   style={{
+                                       color: 'var(--color-text-secondary)',
+                                       fontFamily: 'var(--font-body)'
+                                   }}>No issues found</p>
+                                <p className="text-xs"
+                                   style={{ fontFamily: 'var(--font-body)' }}>
+                                    {activeTab === 'search'
+                                        ? 'Try searching with different keywords'
+                                        : 'Issues will appear here when available from your Jira instance'
+                                    }
+                                </p>
+                            </div>
+                        ) : (
+                            <div className="space-y-2">
+                                {currentTabData.issues.map((issue) => {
+                                    const isEpic = issue.fields.issuetype.name.toLowerCase() === 'epic';
+
+                                    return (
+                                        <div
+                                            key={issue.id}
+                                            onClick={() => onIssueClick?.(issue)}
+                                            className="rounded-lg p-2.5 cursor-pointer"
+                                            style={{
+                                                backgroundColor: isEpic ? 'rgba(168, 85, 247, 0.05)' : 'white',
+                                                border: isEpic ? '1px solid rgba(168, 85, 247, 0.3)' : '1px solid var(--color-border-primary)',
+                                                transition: 'all var(--duration-base) var(--ease-out)'
+                                            }}
+                                            onMouseEnter={(e) => {
+                                                e.currentTarget.style.backgroundColor = isEpic ? 'rgba(168, 85, 247, 0.1)' : '#FAF5EE';
+                                                e.currentTarget.style.borderColor = isEpic ? 'rgba(168, 85, 247, 0.5)' : 'var(--color-border-secondary)';
+                                            }}
+                                            onMouseLeave={(e) => {
+                                                e.currentTarget.style.backgroundColor = isEpic ? 'rgba(168, 85, 247, 0.05)' : 'white';
+                                                e.currentTarget.style.borderColor = isEpic ? 'rgba(168, 85, 247, 0.3)' : 'var(--color-border-primary)';
+                                            }}
+                                        >
+                                            <div className="flex items-start justify-between">
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex items-center gap-2 mb-1.5">
+                                                        <span className="font-mono text-sm font-semibold"
+                                                              style={{
+                                                                  color: 'var(--color-info)',
+                                                                  fontFamily: 'var(--font-mono)'
+                                                              }}>
+                                                            {issue.key}
+                                                        </span>
+                                                        <span className="text-xs"
+                                                              style={{
+                                                                  color: 'var(--color-text-tertiary)',
+                                                                  fontFamily: 'var(--font-body)'
+                                                              }}>
+                                                            {issue.fields.project.name}
+                                                        </span>
+                                                        <span className="text-xs px-2 py-0.5 rounded"
+                                                              style={{
+                                                                  backgroundColor: isEpic ? 'rgba(168, 85, 247, 0.2)' : 'var(--color-bg-quaternary)',
+                                                                  color: isEpic ? '#c084fc' : 'var(--color-text-secondary)',
+                                                                  border: isEpic ? '1px solid rgba(168, 85, 247, 0.4)' : 'none',
+                                                                  fontFamily: 'var(--font-body)',
+                                                                  fontWeight: isEpic ? 'var(--font-semibold)' : 'normal'
+                                                              }}>
+                                                            {issue.fields.issuetype.name}
+                                                        </span>
+                                                    </div>
+                                                    <h4 className="font-medium text-sm mb-2 line-clamp-2"
+                                                        style={{
+                                                            color: 'var(--color-text-primary)',
+                                                            fontFamily: 'var(--font-body)'
+                                                        }}>
+                                                        {issue.fields.summary}
+                                                    </h4>
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="px-2 py-1 rounded text-xs"
+                                                              style={{
+                                                                  ...getStatusColor(issue.fields.status.statusCategory.key),
+                                                                  fontFamily: 'var(--font-body)',
+                                                                  fontWeight: 'var(--font-medium)'
+                                                              }}>
+                                                            {issue.fields.status.name}
+                                                        </span>
+                                                        {issue.fields.assignee && (
+                                                            <span className="text-xs"
+                                                                  style={{
+                                                                      color: 'var(--color-text-tertiary)',
+                                                                      fontFamily: 'var(--font-body)'
+                                                                  }}>
+                                                                → {issue.fields.assignee.displayName}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </div>
                                             </div>
                                         </div>
-                                    </div>
-                                </div>
-                            );
-                        })}
+                                    );
+                                })}
+                            </div>
+                        )}
                     </div>
-                )}
-            </div>
 
-            {currentTabData.issues.length > 0 && (
-                <p className="text-xs mt-3 text-center"
-                   style={{
-                       color: 'var(--color-text-tertiary)',
-                       fontFamily: 'var(--font-body)'
-                   }}>
-                    Click on any issue above to link it to a time entry
-                </p>
-            )}
+                    {currentTabData.issues.length > 0 && (
+                        <p className="text-xs mt-3 text-center"
+                           style={{
+                               color: 'var(--color-text-tertiary)',
+                               fontFamily: 'var(--font-body)'
+                           }}>
+                            Click on any issue above to link it to a time entry
+                        </p>
+                    )}
+                </div>
+            </div>
         </div>
     );
 }
