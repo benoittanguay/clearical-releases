@@ -157,8 +157,7 @@ export const WorklogEntryList: React.FC<WorklogEntryListProps> = ({
                                 {formatWeekLabel(parseInt(weekKey))}
                             </h2>
                             <div className="flex items-center gap-3">
-                                {/* Hide week-level Log to Tempo in detail view - only show at day level */}
-                                {!isDetailView && tempoEnabled && weekHasLoggableJiraActivities && onBulkLogToTempo && (
+                                {tempoEnabled && weekHasLoggableJiraActivities && onBulkLogToTempo && (
                                     <button
                                         onClick={(e) => {
                                             e.stopPropagation();
