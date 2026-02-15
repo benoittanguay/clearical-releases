@@ -4,6 +4,7 @@ import type { TimeEntry, TimeBucket } from '../types/shared';
 export interface BucketBreakdown {
     bucketId: string | null;
     bucketName: string;
+    chartLabel: string; // Short label for chart axis (e.g. "DES-380" instead of full name)
     bucketColor: string;
     totalTime: number;
     entryCount: number;
@@ -231,17 +232,20 @@ export function useReportData(entries: TimeEntry[], buckets: TimeBucket[]): Repo
         const bucketBreakdowns: BucketBreakdown[] = [];
         for (const [key, data] of assignmentTimeMap) {
             let name = 'Unassigned';
+            let shortLabel = 'Unassigned';
             let color = '#9CA3AF';
             if (key.startsWith('jira:')) {
                 const jiraInfo = jiraIssueInfo.get(key);
                 if (jiraInfo) {
                     name = `${jiraInfo.key} - ${jiraInfo.summary}`;
+                    shortLabel = jiraInfo.key;
                     color = jiraInfo.color;
                 }
             } else if (key !== '__unassigned__') {
                 const bucket = bucketMap.get(key);
                 if (bucket) {
                     name = bucket.name;
+                    shortLabel = bucket.name;
                     color = bucket.color;
                 } else {
                     // Try assignment bucket info from entries
@@ -250,6 +254,7 @@ export function useReportData(entries: TimeEntry[], buckets: TimeBucket[]): Repo
                     );
                     if (matchingEntry?.assignment?.bucket) {
                         name = matchingEntry.assignment.bucket.name;
+                        shortLabel = matchingEntry.assignment.bucket.name;
                         color = matchingEntry.assignment.bucket.color;
                     }
                 }
@@ -257,6 +262,7 @@ export function useReportData(entries: TimeEntry[], buckets: TimeBucket[]): Repo
             bucketBreakdowns.push({
                 bucketId: key === '__unassigned__' ? null : key,
                 bucketName: name,
+                chartLabel: shortLabel,
                 bucketColor: color,
                 totalTime: data.time,
                 entryCount: data.count,
