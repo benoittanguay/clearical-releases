@@ -551,7 +551,7 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
                         // Map frequency bins to bars
                         const binIndex = Math.floor(i * dataArray.length / NUM_BARS);
                         const level = dataArray[binIndex] / 255;
-                        levels.push(Math.max(0.05, level)); // Minimum level for visibility
+                        levels.push(level); // Raw level — waveform handles minimum height
                         averageLevel += level;
                     }
                     averageLevel /= NUM_BARS;

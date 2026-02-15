@@ -10,7 +10,8 @@ import './Waveform.css';
 
 interface WaveformProps {
     isRecording: boolean;
-    audioLevel?: number; // 0-1 normalized audio level
+    audioLevels?: number[]; // Raw frequency bin levels (0-1), drives bar heights directly
+    audioLevel?: number; // Fallback single level if audioLevels not provided
     elapsedMs?: number; // Recording elapsed time in milliseconds (for sync)
     width?: number; // Container width in pixels
     height?: number; // Container height in pixels
@@ -34,6 +35,7 @@ const MAX_HEIGHT_RATIO = 0.75;
 
 export function Waveform({
     isRecording,
+    audioLevels,
     audioLevel = 0,
     elapsedMs = 0,
     width = 400,
@@ -51,55 +53,55 @@ export function Waveform({
     const barIdCounterRef = useRef(0);
     const lastTimeRef = useRef(performance.now());
     const lastHeightRef = useRef(maxHeight * 0.5);
-    const currentAudioLevelRef = useRef(0);
     const hasRealAudioRef = useRef(false);
-    const recentAudioLevelsRef = useRef<number[]>([]);
     const initializedRef = useRef(false);
     const initialElapsedMsRef = useRef(elapsedMs); // Capture initial elapsed time for sync
+
+    // Raw frequency bin data — drives bar heights directly
+    const currentBinsRef = useRef<number[]>([]);
+    const binIndexRef = useRef(0);
 
     // State for rendering (updated periodically)
     const [, forceUpdate] = useState(0);
 
-    // Update audio level ref when prop changes
+    // Update frequency bins when new audio data arrives
     useEffect(() => {
-        if (audioLevel > 0) {
+        if (audioLevels && audioLevels.length > 0) {
+            currentBinsRef.current = audioLevels;
             hasRealAudioRef.current = true;
-            recentAudioLevelsRef.current.push(audioLevel);
-            if (recentAudioLevelsRef.current.length > 5) {
-                recentAudioLevelsRef.current.shift();
-            }
-            // Use average instead of max for more natural variation
-            const avg = recentAudioLevelsRef.current.reduce((a, b) => a + b, 0) / recentAudioLevelsRef.current.length;
-            // Light compression to preserve dynamic range
-            const compressed = Math.pow(avg, 0.7);
-            currentAudioLevelRef.current = Math.max(0.02, Math.min(1, compressed));
+        } else if (audioLevel > 0) {
+            // Fallback: create uniform bins from single level
+            currentBinsRef.current = new Array(24).fill(audioLevel);
+            hasRealAudioRef.current = true;
         }
-    }, [audioLevel]);
+    }, [audioLevels, audioLevel]);
 
-    // Generate bar height based on audio level
+    // Generate bar height from actual audio frequency data
     const generateBarHeight = useCallback((): number => {
-        if (hasRealAudioRef.current && isRecording) {
-            const level = currentAudioLevelRef.current;
-            // More variation at all audio levels for dynamic waveform
-            const variationRange = 0.3 + level * 0.4;
-            const variation = 1 + (Math.random() - 0.5) * 2 * variationRange;
-            // Scale the level to preserve dynamic range (quiet = short bars)
-            const scaledLevel = Math.pow(level, 0.7);
-            const baseHeight = MIN_HEIGHT + (maxHeight - MIN_HEIGHT) * scaledLevel;
-            const targetHeight = baseHeight * variation;
-            // Less smoothing for more responsive movement
+        const bins = currentBinsRef.current;
+
+        if (hasRealAudioRef.current && isRecording && bins.length > 0) {
+            // Cycle through frequency bins so consecutive bars show different frequencies
+            const binIndex = binIndexRef.current % bins.length;
+            binIndexRef.current++;
+
+            const binLevel = bins[binIndex];
+
+            // Direct mapping: bin level drives bar height
+            const targetHeight = MIN_HEIGHT + (maxHeight - MIN_HEIGHT) * binLevel;
+
+            // Light smoothing (20% previous, 80% new) for visual continuity
             const smoothed = lastHeightRef.current * 0.2 + targetHeight * 0.8;
             lastHeightRef.current = smoothed;
             return Math.max(MIN_HEIGHT, Math.min(maxHeight, Math.round(smoothed)));
         }
 
         if (isRecording) {
-            // Idle animation with more variation
-            const variation = 0.2 + Math.random() * 0.5;
-            const targetHeight = MIN_HEIGHT + (maxHeight - MIN_HEIGHT) * variation;
-            const smoothed = lastHeightRef.current * 0.2 + targetHeight * 0.8;
+            // No audio data yet — show flat minimum bars
+            const targetHeight = MIN_HEIGHT;
+            const smoothed = lastHeightRef.current * 0.3 + targetHeight * 0.7;
             lastHeightRef.current = smoothed;
-            return Math.round(smoothed);
+            return Math.max(MIN_HEIGHT, Math.round(smoothed));
         }
 
         return MIN_HEIGHT;
@@ -117,17 +119,11 @@ export function Waveform({
         const barsScrolledPast = Math.max(0, Math.floor(Math.abs(targetPosition) / BAR_STEP));
         const totalBarsNeeded = barsNeeded + barsScrolledPast;
 
-        // Generate initial bars with varied heights to look natural
+        // Generate initial bars at minimum height — real audio data will drive heights
         const initialBars: WaveformBar[] = [];
-        let lastHeight = maxHeight * 0.5;
         for (let i = 0; i < totalBarsNeeded; i++) {
-            // Use random variation similar to idle animation
-            const variation = 0.2 + Math.random() * 0.5;
-            const targetHeight = MIN_HEIGHT + (maxHeight - MIN_HEIGHT) * variation;
-            const smoothed = lastHeight * 0.2 + targetHeight * 0.8;
-            lastHeight = smoothed;
             initialBars.push({
-                height: Math.round(smoothed),
+                height: MIN_HEIGHT,
                 id: barIdCounterRef.current++
             });
         }
@@ -135,7 +131,7 @@ export function Waveform({
         barsRef.current = initialBars;
         trackPositionRef.current = targetPosition;
         initializedRef.current = true;
-        lastHeightRef.current = lastHeight; // Preserve continuity
+        lastHeightRef.current = MIN_HEIGHT;
         forceUpdate(n => n + 1);
     }, [containerWidth, maxHeight]);
 
@@ -143,7 +139,7 @@ export function Waveform({
     useEffect(() => {
         if (!isRecording) {
             hasRealAudioRef.current = false;
-            recentAudioLevelsRef.current = [];
+            currentBinsRef.current = [];
             return;
         }
 
