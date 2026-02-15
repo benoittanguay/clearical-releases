@@ -470,6 +470,10 @@ export interface ElectronAPI {
                 };
                 error?: string;
             }>;
+            // Pending transcription persistence
+            savePendingTranscription: (sessionId: string, transcriptions: any[]) => Promise<{ success: boolean; error?: string }>;
+            loadPendingTranscriptions: () => Promise<{ success: boolean; data?: Record<string, any>; error?: string }>;
+            removePendingTranscription: (sessionId: string) => Promise<{ success: boolean; error?: string }>;
             // System audio capture (for capturing what others say in meetings)
             isSystemAudioAvailable: () => Promise<boolean>;
             startSystemAudioCapture: () => Promise<{ success: boolean; error?: string }>;
