@@ -140,7 +140,7 @@ export const WorklogEntryList: React.FC<WorklogEntryListProps> = ({
                     <div key={weekKey} className="mb-6 last:mb-0">
                         {/* Week Header - Sticky with fixed height for consistent positioning */}
                         <div
-                            className="sticky top-0 z-20 px-2.5 h-9 flex items-center justify-between"
+                            className="sticky top-0 z-20 px-4 -mx-4 h-9 flex items-center justify-between"
                             style={{
                                 backgroundColor: 'var(--color-bg-primary)',
                                 backdropFilter: 'blur(8px)',
@@ -217,7 +217,7 @@ export const WorklogEntryList: React.FC<WorklogEntryListProps> = ({
                                     <div key={dateKey} className={dayIndex > 0 ? 'mt-3' : ''}>
                                         {/* Date Separator Header - Sticky below week header (top = week header h-9 = 36px) */}
                                         <div
-                                            className="sticky z-10 px-2.5 h-9 flex items-center justify-between"
+                                            className="sticky z-10 px-4 -mx-4 h-9 flex items-center justify-between"
                                             style={{
                                                 backgroundColor: 'var(--color-bg-secondary)',
                                                 borderBottom: '1px solid var(--color-border-primary)',
