@@ -55,7 +55,6 @@ function App() {
   const [showPermissionModal, setShowPermissionModal] = useState(false);
   const [isStopping, setIsStopping] = useState(false);
   const [bucketsTab, setBucketsTab] = useState<'buckets' | 'jira'>('buckets');
-  const [jiraRefreshFn, setJiraRefreshFn] = useState<(() => void) | null>(null);
   const [isAudioRecording, setIsAudioRecording] = useState(false);
   const [shouldPromptSplitting, setShouldPromptSplitting] = useState(false);
   const [worklogViewMode, setWorklogViewMode] = useState<'list' | 'calendar'>('list');
@@ -1388,28 +1387,6 @@ function App() {
                   >
                     Manage Buckets
                   </h2>
-                  {bucketsTab === 'jira' && jiraRefreshFn && (
-                    <button
-                      onClick={jiraRefreshFn}
-                      className="no-drag px-3 py-1.5 text-xs font-medium rounded-lg transition-all"
-                      style={{
-                        backgroundColor: 'var(--color-bg-tertiary)',
-                        color: 'var(--color-text-primary)',
-                        fontFamily: 'var(--font-body)',
-                        border: '1px solid var(--color-border-primary)',
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.backgroundColor = 'var(--color-bg-quaternary)';
-                        e.currentTarget.style.borderColor = 'var(--color-border-secondary)';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)';
-                        e.currentTarget.style.borderColor = 'var(--color-border-primary)';
-                      }}
-                    >
-                      Refresh
-                    </button>
-                  )}
                 </div>
 
                 {/* Tab Bar - Underline style */}
@@ -1550,7 +1527,7 @@ function App() {
                         const jiraEntries = await fetchEntriesByJiraKey(jiraKey);
                         setDetailViewEntries(jiraEntries);
                       }}
-                      onRefreshReady={(fn) => setJiraRefreshFn(() => fn)}
+                      onOpenJiraConfig={() => setShowJiraModal(true)}
                     />
                   </div>
                 )}
