@@ -138,7 +138,7 @@ export const BucketDetailView: React.FC<BucketDetailViewProps> = ({
 
             {/* Scrollable Content Area - matches Worklog layout */}
             <div
-                className="flex-1 overflow-y-auto pb-4"
+                className="flex-1 overflow-y-auto px-4 pb-4"
                 style={{ backgroundColor: 'var(--color-bg-primary)' }}
             >
                 <WorklogEntryList
