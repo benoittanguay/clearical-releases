@@ -340,6 +340,7 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
     const [isAnalyzingSplits, setIsAnalyzingSplits] = useState(false);
     const [showNoSplitsModal, setShowNoSplitsModal] = useState(false);
     const splitsDismissedRef = useRef(false);
+    const descriptionSetByAiRef = useRef(false);
 
     // AI Analysis retry state
     const [isRetryingAnalysis, setIsRetryingAnalysis] = useState(false);
@@ -472,6 +473,12 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
     const autoSave = () => {
         if (saveTimeoutId) {
             clearTimeout(saveTimeoutId);
+        }
+
+        // If description was just set by AI generation, don't reset the flag
+        if (descriptionSetByAiRef.current) {
+            descriptionSetByAiRef.current = false;
+            return;
         }
 
         const timeoutId = setTimeout(() => {
@@ -1503,6 +1510,7 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
 
             if (result?.success && result.summary) {
                 // Populate the description field with the generated summary
+                descriptionSetByAiRef.current = true;
                 setDescription(result.summary);
 
                 // Update the entry with metadata and auto-generated flag
@@ -2084,7 +2092,7 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                                 style={{
                                     backgroundColor: 'var(--color-bg-secondary)',
                                     color: isAnalyzingSplits ? 'var(--color-text-tertiary)' : 'var(--color-text-secondary)',
-                                    borderRadius: 'var(--btn-radius)',
+                                    borderRadius: '0.5rem',
                                     transitionDuration: 'var(--duration-fast)',
                                     transitionTimingFunction: 'var(--ease-out)',
                                     boxShadow: 'var(--shadow-sm)',
