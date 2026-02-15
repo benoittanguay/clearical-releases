@@ -54,6 +54,7 @@ export function RecordingWidget(): React.ReactElement {
 
     // Audio level state for waveform component
     const [audioLevel, setAudioLevel] = useState(0);
+    const [audioLevels, setAudioLevels] = useState<number[]>([]);
     const [elapsedMs, setElapsedMs] = useState(0);
 
     // Refs
@@ -61,7 +62,6 @@ export function RecordingWidget(): React.ReactElement {
     const waveformContainerRef = useRef<HTMLDivElement>(null);
     const widgetRef = useRef<HTMLDivElement>(null);
     const recordingPillRef = useRef<HTMLDivElement>(null);
-    const recentAudioLevelsRef = useRef<number[]>([]); // Rolling buffer for smoothing
 
     // Verify IPC connection on mount
     useEffect(() => {
@@ -113,38 +113,12 @@ export function RecordingWidget(): React.ReactElement {
             }
 
             if (data && data.levels && data.levels.length > 0) {
-                // Calculate a weighted RMS across frequency bins
-                // Weight mid frequencies (speech range) higher for voice visualization
-                let weightedSum = 0;
-                let totalWeight = 0;
-                for (let i = 0; i < data.levels.length; i++) {
-                    // Weight curve: higher for mid frequencies (bins 2-15 out of 24)
-                    // This corresponds to 200Hz-4kHz range where speech energy is concentrated
-                    const weight = i < 2 ? 0.3 : i < 15 ? 1.0 : 0.5;
-                    weightedSum += data.levels[i] * data.levels[i] * weight;
-                    totalWeight += weight;
-                }
-                const rms = Math.sqrt(weightedSum / totalWeight);
+                // Pass raw frequency bins directly to waveform — no smoothing/collapsing
+                setAudioLevels(data.levels);
 
-                // Also get peak level for dynamic response
+                // Simple scalar for any other consumers (peak level)
                 const peak = Math.max(...data.levels);
-
-                // Blend RMS (sustained volume) with peak (transients) for responsive visualization
-                const blendedLevel = rms * 0.6 + peak * 0.4;
-
-                // Store in rolling buffer for smoothing (keep last 5 readings)
-                recentAudioLevelsRef.current.push(blendedLevel);
-                if (recentAudioLevelsRef.current.length > 5) {
-                    recentAudioLevelsRef.current.shift();
-                }
-
-                // Use average for more natural variation (max tends to flatten dynamics)
-                const smoothedLevel = recentAudioLevelsRef.current.reduce((a, b) => a + b, 0) / recentAudioLevelsRef.current.length;
-
-                // Light compression to preserve dynamic range while avoiding clipping
-                const compressed = Math.pow(smoothedLevel, 0.7);
-
-                setAudioLevel(Math.max(0.02, Math.min(1, compressed)));
+                setAudioLevel(Math.max(0.02, Math.min(1, peak)));
             }
 
             // Update elapsed time for waveform sync
@@ -575,6 +549,7 @@ export function RecordingWidget(): React.ReactElement {
             <div className="waveform-container" ref={waveformContainerRef}>
                 <Waveform
                     isRecording={contentMode === 'recording' && !isHiding}
+                    audioLevels={audioLevels}
                     audioLevel={audioLevel}
                     elapsedMs={elapsedMs}
                     width={WAVEFORM_WIDTH}
