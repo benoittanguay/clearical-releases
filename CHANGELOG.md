@@ -2,6 +2,27 @@
 
 All notable changes to Clearical will be documented in this file.
 
+## [1.7.41] - 2026-02-15
+
+### Features
+- **Audio Recording**: Persist pending transcriptions to disk — recordings now survive app crashes and reloads
+- **Audio Recording**: Event-driven transcription attachment replaces timeout — no more data loss on long recordings
+- **Audio Recording**: Parallel chunk transcription (batches of 3) — ~3x faster for long meetings
+- **Audio Recording**: Audio compression before upload (WAV→Opus 32kbps) — ~95% smaller uploads
+- **Audio Recording**: Automatic token refresh on 401 — fixes transcription failures on 2+ hour recordings
+- **Audio Recording**: Bundled ffmpeg with the app — no manual installation required
+- **Reports**: Jira issue and epic assignments now included in report breakdowns
+
+### Bug Fixes
+- **Installer**: Disabled autoInstallOnAppQuit to prevent macOS password prompt
+- **TypeScript**: Resolved spread error in useTimer consolidation
+- **TypeScript**: Resolved narrowing errors in main.ts
+
+### Improvements
+- **UI**: Aligned BucketDetail and JiraDetail views with Worklog page patterns (Export button, headers)
+
+---
+
 ## [1.7.37] - 2026-02-06
 
 ### Bug Fixes
