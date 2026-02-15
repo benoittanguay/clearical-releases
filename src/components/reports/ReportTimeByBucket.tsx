@@ -27,7 +27,8 @@ export function ReportTimeByBucket({ bucketBreakdowns }: ReportTimeByBucketProps
     }
 
     const chartData = bucketBreakdowns.map(b => ({
-        name: b.bucketName,
+        name: b.chartLabel,
+        fullName: b.bucketName,
         hours: msToHours(b.totalTime),
         color: b.bucketColor,
         ms: b.totalTime,
@@ -61,7 +62,7 @@ export function ReportTimeByBucket({ bucketBreakdowns }: ReportTimeByBucketProps
                                 const data = payload[0].payload;
                                 return (
                                     <div className="rounded-lg p-2 border text-xs" style={{ backgroundColor: 'var(--color-bg-secondary)', borderColor: 'var(--color-border-primary)', fontFamily: 'var(--font-mono)' }}>
-                                        <div style={{ color: 'var(--color-text-primary)' }}>{data.name}</div>
+                                        <div style={{ color: 'var(--color-text-primary)' }}>{data.fullName}</div>
                                         <div style={{ color: 'var(--color-text-secondary)' }}>{formatDuration(data.ms)}</div>
                                     </div>
                                 );
