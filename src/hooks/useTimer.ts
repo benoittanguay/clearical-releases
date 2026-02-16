@@ -916,7 +916,11 @@ export function useTimer() {
 
         if (isRunning && !isPaused && startTime) {
             intervalRef.current = setInterval(() => {
-                setElapsed(Date.now() - startTime);
+                // Use ref to avoid restarting intervals when adjustStartTime changes startTime
+                const currentStart = startTimeRef.current;
+                if (currentStart) {
+                    setElapsed(Date.now() - currentStart);
+                }
             }, 100);
 
             // Start window polling immediately, then continue every interval
@@ -940,7 +944,11 @@ export function useTimer() {
             if (screenshotIntervalRef.current) clearInterval(screenshotIntervalRef.current);
             if (windowPollRef.current) clearInterval(windowPollRef.current);
         };
-    }, [isRunning, isPaused, startTime, settings.screenshotCooldown]); // Note: windowActivity intentionally excluded to prevent interval thrashing
+    // Note: startTime intentionally excluded — uses startTimeRef inside interval to prevent
+    // interval teardown/rebuild when adjustStartTime changes startTime (TimeWarp feature).
+    // windowActivity also excluded to prevent interval thrashing.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isRunning, isPaused, settings.screenshotCooldown]);
 
     const checkPermissions = useCallback(async (): Promise<PermissionCheckResult> => {
         try {
@@ -973,21 +981,50 @@ export function useTimer() {
         }
     }, []);
 
-    const start = useCallback(() => {
+    const start = useCallback((overrideStartTime?: number) => {
         setIsRunning(true);
         setIsPaused(false);
-        // Use callback form to get current elapsed value without it being a dependency
-        setElapsed(currentElapsed => {
-            // If starting fresh (not resuming), start from 0
-            if (currentElapsed === 0) {
-                setStartTime(Date.now());
-            } else {
-                // Resuming - adjust start time to account for elapsed
-                setStartTime(Date.now() - currentElapsed);
-            }
-            return currentElapsed;
-        });
-        setWindowActivity([]); // Clear previous activity
+        if (overrideStartTime) {
+            // TimeWarp: retroactive start
+            setStartTime(overrideStartTime);
+            setElapsed(Date.now() - overrideStartTime);
+
+            // Claim background activities for the retroactive period and convert to WindowActivity[]
+            // @ts-ignore
+            window.electron?.backgroundActivity?.claimActivities?.(overrideStartTime, Date.now())
+                .then((claimed: any[]) => {
+                    if (claimed && claimed.length > 0) {
+                        const claimedWindowActivities: WindowActivity[] = claimed.map((bg: any) => ({
+                            appName: bg.appName,
+                            windowTitle: bg.windowTitle,
+                            bundleId: bg.bundleId,
+                            browserProfile: bg.browserProfile,
+                            timestamp: bg.startTimestamp,
+                            duration: bg.endTimestamp - bg.startTimestamp,
+                            screenshotPaths: bg.screenshotPaths || [],
+                        }));
+                        // Merge: prepend claimed activities, keep any that polling added in the meantime
+                        setWindowActivity(prev => [...claimedWindowActivities, ...prev]);
+                        console.log(`[Timer] TimeWarp: claimed ${claimedWindowActivities.length} background activities`);
+                    }
+                })
+                .catch((err: any) => {
+                    console.error('[Timer] TimeWarp: failed to claim background activities:', err);
+                });
+        } else {
+            // Use callback form to get current elapsed value without it being a dependency
+            setElapsed(currentElapsed => {
+                // If starting fresh (not resuming), start from 0
+                if (currentElapsed === 0) {
+                    setStartTime(Date.now());
+                } else {
+                    // Resuming - adjust start time to account for elapsed
+                    setStartTime(Date.now() - currentElapsed);
+                }
+                return currentElapsed;
+            });
+            setWindowActivity([]); // Clear previous activity for non-retroactive starts
+        }
         lastWindowRef.current = null;
         currentActivityScreenshots.current = []; // Reset screenshots
         currentActivityScreenshotDescriptions.current = {}; // Reset descriptions
@@ -1006,6 +1043,9 @@ export function useTimer() {
             clearTimeout(batchTimeoutRef.current);
             batchTimeoutRef.current = null;
         }
+        // Pause background activity tracker — useTimer takes over
+        // @ts-ignore
+        window.electron?.backgroundActivity?.pause?.();
     }, []);
 
     // Store state values in refs for use in memoized callbacks without dependencies
@@ -1044,6 +1084,12 @@ export function useTimer() {
             setStartTime(Date.now() - currentElapsed);
             return currentElapsed;
         });
+    }, []);
+
+    const adjustStartTime = useCallback((newStartTime: number) => {
+        if (!isRunningRef.current) return;
+        setStartTime(newStartTime);
+        // Elapsed will auto-recalculate from the interval since it uses Date.now() - startTime
     }, []);
 
     const stop = useCallback(async () => {
@@ -1137,6 +1183,10 @@ export function useTimer() {
         }
 
         const finalActivity = calculateFinalActivities(now);
+
+        // Resume background activity tracker
+        // @ts-ignore
+        window.electron?.backgroundActivity?.resume?.();
 
         // Reset elapsed time to zero after stopping
         setElapsed(0);
@@ -1406,5 +1456,5 @@ export function useTimer() {
         }
     }, []);
 
-    return { isRunning, isPaused, elapsed, windowActivity, start, stop, pause, resume, reset, formatTime, checkPermissions, setActiveRecordingEntry };
+    return { isRunning, isPaused, elapsed, startTime, windowActivity, start, stop, pause, resume, adjustStartTime, reset, formatTime, checkPermissions, setActiveRecordingEntry };
 }
