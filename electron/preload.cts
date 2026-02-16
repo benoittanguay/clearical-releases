@@ -353,6 +353,19 @@ contextBridge.exposeInMainWorld('electron', {
                 return () => ipcRenderer.removeListener('working-hours:start-timer', subscription);
             },
         },
+        // TimeWarp: Background activity tracking
+        backgroundActivity: {
+            getActivities: () => ipcRenderer.invoke('get-background-activities'),
+            claimActivities: (fromTimestamp: number, toTimestamp: number) =>
+                ipcRenderer.invoke('claim-background-activities', fromTimestamp, toTimestamp),
+            pause: () => ipcRenderer.send('pause-background-tracker'),
+            resume: () => ipcRenderer.send('resume-background-tracker'),
+            onUpdate: (callback: (activities: any[]) => void) => {
+                const subscription = (_event: any, activities: any[]) => callback(activities);
+                ipcRenderer.on('background-activities-update', subscription);
+                return () => ipcRenderer.removeListener('background-activities-update', subscription);
+            },
+        },
     },
     // Analytics (top-level, not inside ipcRenderer)
     analytics: {

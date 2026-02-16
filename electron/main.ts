@@ -33,6 +33,7 @@ import { MigrationService } from './migration.js';
 import { updater } from './autoUpdater.js';
 import { AppDiscoveryService } from './appDiscoveryService.js';
 import { BlacklistService } from './blacklistService.js';
+import { BackgroundActivityTracker } from './backgroundActivityTracker.js';
 import {
     aiService,
     signalAggregator,
@@ -3599,6 +3600,30 @@ ipcMain.handle('is-tempo-account-blacklisted', async (event, accountKey: string)
     }
 });
 
+// ========================================================================
+// TimeWarp: Background activity tracking IPC
+// ========================================================================
+
+ipcMain.handle('get-background-activities', () => {
+    const tracker = BackgroundActivityTracker.getInstance();
+    return tracker.getActivities();
+});
+
+ipcMain.handle('claim-background-activities', async (_event, fromTimestamp: number, toTimestamp: number) => {
+    const tracker = BackgroundActivityTracker.getInstance();
+    return tracker.claimActivities(fromTimestamp, toTimestamp);
+});
+
+ipcMain.on('pause-background-tracker', () => {
+    const tracker = BackgroundActivityTracker.getInstance();
+    tracker.pause();
+});
+
+ipcMain.on('resume-background-tracker', () => {
+    const tracker = BackgroundActivityTracker.getInstance();
+    tracker.resume();
+});
+
 // Calendar Integration
 ipcMain.handle('calendar:connect', async () => {
     try {
@@ -3947,6 +3972,16 @@ async function cleanupAndQuit(): Promise<void> {
     console.log('[Main] Starting comprehensive cleanup...');
 
     try {
+        // 0. Stop background activity tracker
+        try {
+            const tracker = BackgroundActivityTracker.getInstance();
+            tracker.stop();
+            await tracker.cleanupAll();
+            console.log('[Main] Background activity tracker cleaned up');
+        } catch (error) {
+            console.error('[Main] Failed to cleanup background activity tracker:', error);
+        }
+
         // 1. Cleanup subscription system (webhook server, trial notifications)
         await cleanupSubscription();
 
@@ -4509,6 +4544,23 @@ app.whenReady().then(async () => {
         console.log('[Main] Pending transcription cleanup scheduled (every 6h, max age 24h)');
     } catch (error) {
         console.error('[Main] Failed to initialize recording manager:', error);
+    }
+
+    // Initialize background activity tracker for TimeWarp feature
+    try {
+        const tracker = BackgroundActivityTracker.getInstance();
+
+        // Push updates to renderer
+        tracker.setUpdateCallback((activities) => {
+            if (win && !win.isDestroyed()) {
+                win.webContents.send('background-activities-update', activities);
+            }
+        });
+
+        await tracker.start();
+        console.log('[Main] Background activity tracker initialized');
+    } catch (error) {
+        console.error('[Main] Failed to initialize background activity tracker:', error);
     }
 
     // Create application menu (required by App Store)
