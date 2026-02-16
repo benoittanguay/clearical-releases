@@ -365,6 +365,7 @@ contextBridge.exposeInMainWorld('electron', {
                 ipcRenderer.on('background-activities-update', subscription);
                 return () => ipcRenderer.removeListener('background-activities-update', subscription);
             },
+            getAppIcon: (bundleId: string) => ipcRenderer.invoke('get-app-icon-by-bundle', bundleId),
         },
     },
     // Analytics (top-level, not inside ipcRenderer)

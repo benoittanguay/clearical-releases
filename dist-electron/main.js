@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, systemPreferences, shell, desktopCapturer, dialog, powerMonitor } from 'electron';
+import { app, BrowserWindow, Tray, Menu, screen, nativeImage, ipcMain, systemPreferences, shell, desktopCapturer, dialog, powerMonitor, protocol } from 'electron';
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
@@ -31,6 +31,7 @@ import { MigrationService } from './migration.js';
 import { updater } from './autoUpdater.js';
 import { AppDiscoveryService } from './appDiscoveryService.js';
 import { BlacklistService } from './blacklistService.js';
+import { BackgroundActivityTracker } from './backgroundActivityTracker.js';
 import { aiService, signalAggregator, createCalendarSignal, createUserProfileSignal, createTimeContextSignal } from './ai/aiService.js';
 import { getCalendarService, initializeCalendarService } from './calendar/calendarService.js';
 import { getRecordingManager } from './meeting/recordingManager.js';
@@ -117,6 +118,17 @@ else {
     // Production: register normally
     app.setAsDefaultProtocolClient(PROTOCOL_NAME);
 }
+// Register custom protocol for serving decrypted screenshots directly
+// This must be called before app.whenReady()
+protocol.registerSchemesAsPrivileged([{
+        scheme: 'clearical-screenshot',
+        privileges: {
+            standard: true,
+            secure: true,
+            supportFetchAPI: true,
+            corsEnabled: false,
+        }
+    }]);
 // Handle protocol URL on macOS (app already running)
 app.on('open-url', (event, url) => {
     event.preventDefault();
@@ -315,389 +327,59 @@ const SCREENSHOTS_DIR = path.join(app.getPath('userData'), 'screenshots');
 if (!fs.existsSync(SCREENSHOTS_DIR)) {
     fs.mkdirSync(SCREENSHOTS_DIR, { recursive: true });
 }
-ipcMain.handle('capture-screenshot', async () => {
-    console.log('[Main] capture-screenshot requested');
+ipcMain.handle('capture-screenshot', async (_event, windowInfo) => {
+    console.log('[Main] capture-screenshot requested', windowInfo ? `for ${windowInfo.appName} (pid=${windowInfo.pid})` : '(no window info)');
+    // Check screen recording permission
     if (process.platform === 'darwin') {
         const status = systemPreferences.getMediaAccessStatus('screen');
         console.log('[Main] Current Screen Access Status:', status);
     }
-    // Helper function for robust screen capture fallback
-    // This ensures we ALWAYS get a screenshot when called, using the full screen if window matching fails
-    const captureScreenFallback = async (currentWindow, reason) => {
-        console.log(`[Main] Using screen capture fallback (reason: ${reason})`);
-        try {
-            const screenSources = await desktopCapturer.getSources({
-                types: ['screen'],
-                thumbnailSize: { width: 1920, height: 1080 }
-            });
-            if (screenSources.length > 0) {
-                const image = screenSources[0].thumbnail.toPNG();
-                const timestamp = Date.now();
-                // Use the active window info from AppleScript for proper attribution
-                const appNameSafe = (currentWindow?.appName || 'Unknown').replace(/[\/\\:*?"<>|]/g, '_');
-                const windowTitleSafe = (currentWindow?.windowTitle || 'Unknown').replace(/[\/\\:*?"<>|]/g, '_').substring(0, 100);
-                const filename = `${timestamp}|||${appNameSafe}|||${windowTitleSafe}.png`;
-                const filePath = path.join(SCREENSHOTS_DIR, filename);
-                try {
-                    await saveEncryptedFile(filePath, image);
-                    console.log('[Main] Screen screenshot saved (encrypted, fallback):', filePath);
-                }
-                catch (encryptError) {
-                    console.error('[Main] Failed to encrypt screenshot, saving unencrypted:', encryptError);
-                    await fs.promises.writeFile(filePath, image);
-                    console.log('[Main] Screen screenshot saved (unencrypted fallback):', filePath);
-                }
-                return filePath;
-            }
-            console.error('[Main] No screen sources available for fallback');
-            return null;
-        }
-        catch (error) {
-            console.error('[Main] Screen capture fallback failed:', error);
-            return null;
-        }
-    };
+    // Guard: return null if no window info or no PID
+    if (!windowInfo || !windowInfo.pid) {
+        console.log('[Main] No window info or PID provided, skipping screenshot');
+        return null;
+    }
+    // Check if the active app is blacklisted
+    const blacklistService = BlacklistService.getInstance();
+    if (windowInfo.bundleId && blacklistService.isAppBlacklisted(windowInfo.bundleId)) {
+        console.log(`[Main] capture-screenshot - App is blacklisted (${windowInfo.appName}, ${windowInfo.bundleId}), skipping screenshot`);
+        return null;
+    }
+    // Skip screenshots when Clearical itself is the frontmost app
+    const appNameLower = windowInfo.appName.toLowerCase();
+    if (appNameLower === 'clearical' || appNameLower === 'time-portal' || appNameLower === 'timeportal' || windowInfo.bundleId === 'io.clearical.app') {
+        console.log(`[Main] capture-screenshot - Clearical app is frontmost, skipping to avoid self-capture`);
+        return null;
+    }
     try {
-        // IMPORTANT: To avoid race conditions, we capture window sources FIRST,
-        // then immediately get the active window info. This minimizes the window
-        // where the user could switch apps between detection and capture.
-        // Step 1: Get all window sources immediately
-        const sources = await desktopCapturer.getSources({
-            types: ['window'],
-            thumbnailSize: { width: 1920, height: 1080 },
-            fetchWindowIcons: true
-        });
-        const captureTimestamp = Date.now(); // Record when we captured
-        console.log('[Main] Window sources captured at:', captureTimestamp, 'count:', sources.length);
-        // Step 2: IMMEDIATELY get current active window info (minimize race window)
-        let currentWindow = null;
+        // Capture the specific window by PID using native CGWindowListCreateImage
+        const image = mediaMonitor.captureWindowScreenshot(windowInfo.pid, windowInfo.windowTitle);
+        if (!image) {
+            console.log(`[Main] Native capture returned null for PID ${windowInfo.pid}`);
+            return null;
+        }
+        // Save encrypted PNG with descriptive filename
+        // Format: timestamp|||AppName|||WindowTitle.png
+        const timestamp = Date.now();
+        const appNameSafe = windowInfo.appName.replace(/[\/\\:*?"<>|]/g, '_');
+        const windowTitleSafe = windowInfo.windowTitle.replace(/[\/\\:*?"<>|]/g, '_').substring(0, 100);
+        const filename = `${timestamp}|||${appNameSafe}|||${windowTitleSafe}.png`;
+        const filePath = path.join(SCREENSHOTS_DIR, filename);
         try {
-            if (process.platform === 'darwin') {
-                const { exec } = await import('child_process');
-                const { promisify } = await import('util');
-                const execAsync = promisify(exec);
-                // Get active app name, window title, and bundle ID
-                // Enhanced to handle empty titles, missing values, and apps with no windows
-                // Uses multiple strategies for Electron apps (Cursor, VS Code, etc.) which may not expose window titles via standard API
-                const result = await execAsync(`osascript -e '
-                    tell application "System Events"
-                        set frontApp to first application process whose frontmost is true
-                        set appName to name of frontApp
-                        set bundleId to bundle identifier of frontApp
-                        set windowTitle to ""
-
-                        -- Strategy 1: Try to get title from front window (standard approach)
-                        set windowCount to 0
-                        try
-                            set windowCount to count of windows of frontApp
-                        end try
-
-                        if windowCount > 0 then
-                            try
-                                set windowTitle to title of front window of frontApp
-                                if windowTitle is missing value then
-                                    set windowTitle to ""
-                                end if
-                            on error
-                                set windowTitle to ""
-                            end try
-                        end if
-
-                        -- Strategy 2: For Electron apps, try AXTitle from UI elements
-                        -- Electron apps often have the title in a different accessibility element
-                        if windowTitle is "" then
-                            try
-                                set uiElements to UI elements of frontApp
-                                repeat with elem in uiElements
-                                    try
-                                        set elemRole to role of elem
-                                        if elemRole is "AXWindow" then
-                                            set axTitle to value of attribute "AXTitle" of elem
-                                            if axTitle is not missing value and axTitle is not "" then
-                                                set windowTitle to axTitle
-                                                exit repeat
-                                            end if
-                                        end if
-                                    end try
-                                end repeat
-                            end try
-                        end if
-
-                        -- Strategy 3: Try getting title from the first window directly via AXTitle attribute
-                        if windowTitle is "" and windowCount > 0 then
-                            try
-                                set firstWindow to window 1 of frontApp
-                                set axTitle to value of attribute "AXTitle" of firstWindow
-                                if axTitle is not missing value and axTitle is not "" then
-                                    set windowTitle to axTitle
-                                end if
-                            end try
-                        end if
-
-                        -- Strategy 4: For Electron apps, the document title is sometimes in AXDocument
-                        if windowTitle is "" then
-                            try
-                                set firstWindow to window 1 of frontApp
-                                set docTitle to value of attribute "AXDocument" of firstWindow
-                                if docTitle is not missing value and docTitle is not "" then
-                                    -- Extract filename from path if it looks like a path
-                                    if docTitle contains "/" then
-                                        set AppleScript'"'"'s text item delimiters to "/"
-                                        set pathParts to text items of docTitle
-                                        set windowTitle to last item of pathParts
-                                        set AppleScript'"'"'s text item delimiters to ""
-                                    else
-                                        set windowTitle to docTitle
-                                    end if
-                                end if
-                            end try
-                        end if
-
-                        return appName & "|||" & windowTitle & "|||" & bundleId
-                    end tell
-                '`);
-                const parts = result.stdout.trim().split('|||');
-                const appName = parts[0] || 'Unknown';
-                const windowTitle = parts[1] || 'Unknown';
-                const bundleId = parts[2] || '';
-                currentWindow = { appName, windowTitle, bundleId };
-                console.log('[Main] capture-screenshot - Active window:', currentWindow);
-                // Check if the active app is blacklisted
-                const blacklistService = BlacklistService.getInstance();
-                if (bundleId && blacklistService.isAppBlacklisted(bundleId)) {
-                    console.log(`[Main] capture-screenshot - App is blacklisted (${appName}, ${bundleId}), skipping screenshot`);
-                    return null;
-                }
-                // Skip screenshots when Clearical itself is the frontmost app
-                // This prevents race conditions where the app gains focus during screenshot capture
-                const appNameLower = appName.toLowerCase();
-                if (appNameLower === 'clearical' || appNameLower === 'time-portal' || appNameLower === 'timeportal' || bundleId === 'io.clearical.app') {
-                    console.log(`[Main] capture-screenshot - Clearical app is frontmost, skipping to avoid self-capture`);
-                    return null;
-                }
-            }
+            await saveEncryptedFile(filePath, image);
+            console.log('[Main] Window screenshot saved (encrypted, native):', filePath);
         }
-        catch (error) {
-            console.log('[Main] Could not get active window info for screenshot:', error);
+        catch (encryptError) {
+            console.error('[Main] Failed to encrypt screenshot, saving unencrypted:', encryptError);
+            await fs.promises.writeFile(filePath, image);
+            console.log('[Main] Window screenshot saved (unencrypted fallback):', filePath);
         }
-        console.log('[Main] Window sources found:', sources.length);
-        // Log all available windows for debugging
-        console.log('[Main] Available windows:');
-        sources.forEach((source, index) => {
-            const size = source.thumbnail.getSize();
-            console.log(`[Main] ${index}: "${source.name}" (${size.width}x${size.height})`);
-        });
-        // Filter out the Clearical app window itself and very small windows
-        const validSources = sources.filter(source => {
-            const lowerName = source.name.toLowerCase();
-            const size = source.thumbnail.getSize();
-            // Filter out the actual Clearical app window
-            if (lowerName === 'time-portal' || lowerName === 'timeportal' || lowerName === 'clearical') {
-                console.log('[Main] Filtering out Clearical app window:', source.name);
-                return false;
-            }
-            // Filter out Electron windows (these are usually the Clearical app or dev tools)
-            if (lowerName === 'electron' || source.name === 'Electron') {
-                console.log('[Main] Filtering out Electron window:', source.name);
-                return false;
-            }
-            // Filter out very small windows (likely toolbar or menu items)
-            if (size.width < 200 || size.height < 100) {
-                console.log('[Main] Filtering out small window:', source.name, `(${size.width}x${size.height})`);
-                return false;
-            }
-            // Filter out empty or unnamed windows
-            if (!source.name || source.name.trim() === '') {
-                console.log('[Main] Filtering out unnamed window');
-                return false;
-            }
-            // Log which windows pass the filter
-            console.log('[Main] Window passed filtering:', source.name, `(${size.width}x${size.height})`);
-            return true;
-        });
-        console.log('[Main] Valid window sources after filtering:', validSources.length);
-        if (validSources.length > 0) {
-            console.log('[Main] Valid windows:');
-            validSources.forEach((source, index) => {
-                const size = source.thumbnail.getSize();
-                console.log(`[Main] ${index}: "${source.name}" (${size.width}x${size.height})`);
-            });
-        }
-        if (validSources.length > 0) {
-            // Try to find the window that matches the active window
-            // Track match confidence for debugging and validation
-            let targetSource = null;
-            let matchConfidence = 'none';
-            if (currentWindow && currentWindow.appName && currentWindow.windowTitle) {
-                console.log('[Main] Looking for window match - App:', currentWindow.appName, 'Title:', currentWindow.windowTitle);
-                // Strategy 1: Exact window title match (highest confidence)
-                const exactTitleMatch = validSources.find(source => source.name === currentWindow.windowTitle);
-                if (exactTitleMatch) {
-                    targetSource = exactTitleMatch;
-                    matchConfidence = 'exact';
-                    console.log('[Main] Found exact window title match:', targetSource.name);
-                }
-                else {
-                    // Strategy 2: Match windows that contain the app name
-                    const appNameMatches = validSources.filter(source => {
-                        const sourceLower = source.name.toLowerCase();
-                        const appNameLower = currentWindow.appName.toLowerCase();
-                        // Check if the window name contains the app name or vice versa
-                        return sourceLower.includes(appNameLower) || appNameLower.includes(sourceLower);
-                    });
-                    if (appNameMatches.length > 0) {
-                        // If multiple matches, prefer the one with the window title
-                        const titleMatch = appNameMatches.find(source => source.name.includes(currentWindow.windowTitle) ||
-                            currentWindow.windowTitle.includes(source.name));
-                        targetSource = titleMatch || appNameMatches[0];
-                        matchConfidence = 'app_match';
-                        console.log('[Main] Found app name match:', targetSource.name, 'from', appNameMatches.length, 'candidates');
-                    }
-                    else {
-                        // Strategy 3: Enhanced partial title matching for browsers
-                        let partialMatch = null;
-                        // Try matching by removing browser-specific suffixes
-                        const cleanTitle = currentWindow.windowTitle
-                            .replace(/ - Audio playing.*/i, '') // Remove "- Audio playing - Browser"
-                            .replace(/ - Google Chrome$/i, '') // Remove "- Google Chrome"
-                            .replace(/ - Safari$/i, '') // Remove "- Safari"
-                            .replace(/ - Firefox$/i, '') // Remove "- Firefox"
-                            .replace(/ - Brave$/i, '') // Remove "- Brave"
-                            .replace(/ - Opera$/i, '') // Remove "- Opera"
-                            .trim();
-                        console.log('[Main] Cleaned title for matching:', cleanTitle);
-                        partialMatch = validSources.find(source => {
-                            // Direct partial match
-                            if (source.name.includes(cleanTitle) || cleanTitle.includes(source.name)) {
-                                return true;
-                            }
-                            // Try matching the first significant part (before " - ")
-                            const sourceMainPart = source.name.split(' - ')[0];
-                            const titleMainPart = cleanTitle.split(' - ')[0];
-                            if (sourceMainPart.length > 10 && titleMainPart.length > 10) {
-                                return sourceMainPart.includes(titleMainPart) || titleMainPart.includes(sourceMainPart);
-                            }
-                            return false;
-                        });
-                        if (partialMatch) {
-                            targetSource = partialMatch;
-                            matchConfidence = 'partial';
-                            console.log('[Main] Found partial window title match:', partialMatch.name);
-                        }
-                        else {
-                            console.log('[Main] No window match found. App:', currentWindow.appName, 'Title:', currentWindow.windowTitle);
-                            console.log('[Main] Available windows:', validSources.map(s => s.name));
-                        }
-                    }
-                }
-            }
-            else {
-                console.log('[Main] No active window info available');
-            }
-            // If we still don't have a target, use conservative fallback strategies
-            // IMPORTANT: We prioritize accuracy over capturing something - a skipped
-            // capture is better than a misattributed one
-            if (!targetSource) {
-                console.log('[Main] No matching window found for app:', currentWindow?.appName || 'unknown');
-                console.log('[Main] Available windows:', validSources.map(s => `"${s.name}"`).join(', '));
-                // Fallback strategy 1: If there's only one valid window, use it
-                // This is safe because there's no ambiguity
-                if (validSources.length === 1) {
-                    targetSource = validSources[0];
-                    matchConfidence = 'single_window';
-                    console.log('[Main] Using single available window as fallback:', targetSource.name);
-                }
-                else if (validSources.length > 1 && currentWindow?.appName) {
-                    // Fallback strategy 2: Try lenient app name matching
-                    // Look for any window containing significant words from the app name
-                    const appNameWords = currentWindow.appName.toLowerCase().split(/\s+/);
-                    const possibleMatches = validSources.filter(source => {
-                        const sourceLower = source.name.toLowerCase();
-                        return appNameWords.some(word => word.length > 3 && sourceLower.includes(word));
-                    });
-                    if (possibleMatches.length === 1) {
-                        // Only use lenient match if it's unambiguous (single match)
-                        targetSource = possibleMatches[0];
-                        matchConfidence = 'lenient';
-                        console.log('[Main] Using lenient app name match (unambiguous):', targetSource.name);
-                    }
-                    else if (possibleMatches.length > 1) {
-                        // Multiple lenient matches - ambiguous, use screen capture fallback
-                        console.log('[Main] Multiple lenient matches found, using screen capture fallback:', possibleMatches.map(s => s.name).join(', '));
-                        return captureScreenFallback(currentWindow, 'multiple_lenient_matches');
-                    }
-                    else {
-                        // No matches at all - use screen capture fallback with active window info
-                        console.log('[Main] No window matches detected app, using screen capture fallback.');
-                        console.log('[Main] Active app was:', currentWindow.appName);
-                        console.log('[Main] Available windows were:', validSources.map(s => s.name).join(', '));
-                        return captureScreenFallback(currentWindow, 'no_window_match');
-                    }
-                }
-                // If still no target after safe fallbacks, use screen capture
-                if (!targetSource) {
-                    console.log('[Main] No suitable window found, using screen capture fallback');
-                    return captureScreenFallback(currentWindow, 'no_suitable_window');
-                }
-            }
-            // Final validation: Verify the captured window reasonably belongs to the detected app
-            // This catches edge cases where the window switched between capture and detection
-            if (currentWindow?.appName && matchConfidence !== 'exact') {
-                const windowNameLower = targetSource.name.toLowerCase();
-                const appNameLower = currentWindow.appName.toLowerCase();
-                // For non-exact matches, verify there's SOME relationship between app and window
-                const hasAppRelation = windowNameLower.includes(appNameLower) ||
-                    appNameLower.includes(windowNameLower) ||
-                    // Check for common app name patterns (e.g., "Code" in "Visual Studio Code")
-                    appNameLower.split(/\s+/).some(word => word.length > 3 && windowNameLower.includes(word)) ||
-                    // Single window fallback is acceptable - no ambiguity
-                    matchConfidence === 'single_window';
-                if (!hasAppRelation && matchConfidence !== 'single_window') {
-                    console.log('[Main] VALIDATION FAILED: Captured window does not appear to belong to detected app');
-                    console.log('[Main] App:', currentWindow.appName, '| Window:', targetSource.name, '| Match type:', matchConfidence);
-                    console.log('[Main] Using screen capture fallback due to possible race condition');
-                    return captureScreenFallback(currentWindow, 'validation_failed_race_condition');
-                }
-            }
-            console.log('[Main] Capturing window:', targetSource.name, `(${targetSource.thumbnail.getSize().width}x${targetSource.thumbnail.getSize().height})`, '| Match confidence:', matchConfidence);
-            const image = targetSource.thumbnail.toPNG();
-            // Create a more descriptive filename with app name and timestamp
-            // Format: timestamp|||AppName|||WindowTitle.png
-            // Using ||| as delimiter to preserve spaces in app names and window titles
-            const timestamp = Date.now();
-            const appNameSafe = (currentWindow?.appName || 'Unknown').replace(/[\/\\:*?"<>|]/g, '_');
-            const windowTitleSafe = targetSource.name.replace(/[\/\\:*?"<>|]/g, '_').substring(0, 100);
-            const filename = `${timestamp}|||${appNameSafe}|||${windowTitleSafe}.png`;
-            const filePath = path.join(SCREENSHOTS_DIR, filename);
-            // Save screenshot with encryption
-            try {
-                await saveEncryptedFile(filePath, image);
-                console.log('[Main] Window screenshot saved (encrypted):', filePath, '| Match:', matchConfidence);
-            }
-            catch (encryptError) {
-                console.error('[Main] Failed to encrypt screenshot, saving unencrypted:', encryptError);
-                // Fallback to unencrypted if encryption fails
-                await fs.promises.writeFile(filePath, image);
-                console.log('[Main] Window screenshot saved (unencrypted fallback):', filePath);
-            }
-            return filePath;
-        }
-        else {
-            console.log('[Main] No valid window sources found for screenshot');
-            return captureScreenFallback(currentWindow, 'no_valid_window_sources');
-        }
+        return filePath;
     }
     catch (error) {
         console.error('[Main] Failed to capture screenshot:', error);
-        // Even on error, try to capture something
-        try {
-            return await captureScreenFallback(null, 'error_recovery');
-        }
-        catch {
-            return null;
-        }
+        return null;
     }
-    return null;
 });
 // AI Screenshot Analysis (via Gemini cloud service)
 // PREMIUM FEATURE: Requires Workplace Plan subscription
@@ -1319,6 +1001,7 @@ ipcMain.handle('get-active-window', async () => {
                     set frontApp to first application process whose frontmost is true
                     set appName to name of frontApp
                     set bundleId to bundle identifier of frontApp
+                    set appPID to unix id of frontApp
                     set windowTitle to ""
 
                     -- Strategy 1: Try to get title from front window (standard approach)
@@ -1386,13 +1069,14 @@ ipcMain.handle('get-active-window', async () => {
                         end try
                     end if
 
-                    return appName & "|||" & windowTitle & "|||" & bundleId
+                    return appName & "|||" & windowTitle & "|||" & bundleId & "|||" & appPID
                 end tell
             '`);
             const parts = result.stdout.trim().split('|||');
             const appName = parts[0] || 'Unknown';
             const rawWindowTitle = parts[1];
             const bundleId = parts[2] || '';
+            const pid = parseInt(parts[3], 10) || 0;
             // Check if we got an actual window title
             const windowTitle = (rawWindowTitle && rawWindowTitle.trim() !== '') ? rawWindowTitle : 'Unknown';
             // Log warning if window title is consistently empty (might indicate Accessibility permission issue)
@@ -1401,15 +1085,15 @@ ipcMain.handle('get-active-window', async () => {
                 console.warn('[Main] This may indicate Accessibility permission is not granted.');
                 console.warn('[Main] Grant Accessibility permission in System Settings > Privacy & Security > Accessibility');
             }
-            console.log('[Main] get-active-window result:', { appName, windowTitle, bundleId, rawWindowTitle });
-            return { appName, windowTitle, bundleId };
+            console.log('[Main] get-active-window result:', { appName, windowTitle, bundleId, pid, rawWindowTitle });
+            return { appName, windowTitle, bundleId, pid };
         }
         catch (error) {
             console.error('[Main] Failed to get active window:', error);
-            return { appName: 'Unknown', windowTitle: 'Unknown', bundleId: '' };
+            return { appName: 'Unknown', windowTitle: 'Unknown', bundleId: '', pid: 0 };
         }
     }
-    return { appName: 'Not supported', windowTitle: 'Not supported', bundleId: '' };
+    return { appName: 'Not supported', windowTitle: 'Not supported', bundleId: '', pid: 0 };
 });
 ipcMain.handle('check-accessibility-permission', () => {
     if (process.platform === 'darwin') {
@@ -2103,11 +1787,108 @@ function getAudioExtension(mimeType) {
     };
     return mimeToExt[mimeType] || 'webm';
 }
+/**
+ * Compress audio file for transcription to reduce upload size
+ * Uses ffmpeg to convert to WebM/Opus format optimized for speech
+ *
+ * @param inputPath - Path to the input audio file
+ * @param outputPath - Path for the compressed output file
+ * @returns Compression result with success status, output path, and compression stats
+ */
+async function compressAudioForTranscription(inputPath, outputPath) {
+    console.log('[AudioCompression] Compressing audio for transcription:', inputPath);
+    // Check if input file exists
+    if (!fs.existsSync(inputPath)) {
+        return {
+            success: false,
+            error: 'Input file not found'
+        };
+    }
+    // Check if ffmpeg is available
+    const { isFfmpegAvailable } = await import('./meeting/audioChunker.js');
+    const ffmpegAvailable = await isFfmpegAvailable();
+    if (!ffmpegAvailable) {
+        console.log('[AudioCompression] ffmpeg not available, skipping compression');
+        return {
+            success: false,
+            error: 'ffmpeg not available'
+        };
+    }
+    // Get input file size for logging
+    const inputStats = fs.statSync(inputPath);
+    const inputSizeMB = Math.round(inputStats.size / 1024 / 1024 * 10) / 10;
+    console.log('[AudioCompression] Input file size:', inputSizeMB, 'MB');
+    // Create output directory if needed
+    const outputDir = path.dirname(outputPath);
+    if (!fs.existsSync(outputDir)) {
+        fs.mkdirSync(outputDir, { recursive: true });
+    }
+    return new Promise((resolve) => {
+        const { spawn } = require('child_process');
+        // ffmpeg command optimized for speech transcription:
+        // - libopus codec (best for speech)
+        // - 32kbps bitrate (excellent quality for speech, very small file)
+        // - 16kHz sample rate (Whisper's expected input)
+        // - Mono channel (speech doesn't need stereo)
+        const ffmpeg = spawn('ffmpeg', [
+            '-y', // Overwrite output
+            '-i', inputPath, // Input file
+            '-c:a', 'libopus', // Opus codec
+            '-b:a', '32k', // 32kbps bitrate
+            '-ar', '16000', // 16kHz sample rate
+            '-ac', '1', // Mono (1 channel)
+            outputPath
+        ]);
+        let stderr = '';
+        ffmpeg.stderr.on('data', (data) => {
+            stderr += data.toString();
+        });
+        ffmpeg.on('error', (err) => {
+            console.error('[AudioCompression] ffmpeg error:', err);
+            resolve({
+                success: false,
+                error: `ffmpeg error: ${err.message}`
+            });
+        });
+        ffmpeg.on('close', (code) => {
+            if (code === 0) {
+                // Get output file size and calculate compression ratio
+                const outputStats = fs.statSync(outputPath);
+                const outputSizeMB = Math.round(outputStats.size / 1024 / 1024 * 10) / 10;
+                const compressionRatio = `${inputSizeMB}MB → ${outputSizeMB}MB (${Math.round((1 - outputStats.size / inputStats.size) * 100)}% reduction)`;
+                console.log('[AudioCompression] Compression successful:', compressionRatio);
+                resolve({
+                    success: true,
+                    outputPath,
+                    compressionRatio
+                });
+            }
+            else {
+                console.error('[AudioCompression] ffmpeg failed with code:', code);
+                console.error('[AudioCompression] stderr:', stderr.slice(-500));
+                resolve({
+                    success: false,
+                    error: `ffmpeg exited with code ${code}`
+                });
+            }
+        });
+        // Timeout after 5 minutes for long recordings
+        setTimeout(() => {
+            console.error('[AudioCompression] ffmpeg compression timeout');
+            ffmpeg.kill();
+            resolve({
+                success: false,
+                error: 'Compression timeout'
+            });
+        }, 300000);
+    });
+}
 ipcMain.handle(MEETING_IPC_CHANNELS.SAVE_AUDIO_AND_TRANSCRIBE, async (_event, entryId, audioDataOrPath, mimeType, isFilePath) => {
     console.log('[Main] SAVE_AUDIO_AND_TRANSCRIBE called for entry:', entryId, 'isFilePath:', isFilePath);
     const actualMimeType = mimeType || 'audio/webm';
     let audioPath;
     let audioBase64;
+    let compressedPath;
     try {
         // Handle file path vs base64 data
         if (isFilePath) {
@@ -2142,14 +1923,68 @@ ipcMain.handle(MEETING_IPC_CHANNELS.SAVE_AUDIO_AND_TRANSCRIBE, async (_event, en
             fs.writeFileSync(audioPath, audioBuffer);
             console.log('[Main] Audio file saved:', audioPath, 'size:', audioBuffer.length);
         }
-        // 2. Attempt transcription
+        // 2. Compress audio before transcription to reduce upload size
+        let transcriptionMimeType = actualMimeType;
+        let transcriptionBase64 = audioBase64;
+        // Check file size threshold (10MB) and file type
+        const audioSizeBytes = Buffer.byteLength(audioBase64, 'base64');
+        const audioSizeMB = Math.round(audioSizeBytes / 1024 / 1024 * 10) / 10;
+        const shouldCompress = audioSizeMB > 10 || actualMimeType === 'audio/wav';
+        if (shouldCompress && audioPath) {
+            console.log(`[Main] Audio file is ${audioSizeMB}MB, attempting compression...`);
+            const timestamp = Date.now();
+            const compressedFilename = `${entryId}-${timestamp}-compressed.webm`;
+            compressedPath = path.join(RECORDINGS_DIR, compressedFilename);
+            const compressionResult = await compressAudioForTranscription(audioPath, compressedPath);
+            if (compressionResult.success && compressionResult.outputPath) {
+                // Compression succeeded - use compressed file for transcription
+                console.log('[Main] Using compressed audio for transcription:', compressionResult.compressionRatio);
+                const compressedBuffer = fs.readFileSync(compressedPath);
+                transcriptionBase64 = compressedBuffer.toString('base64');
+                transcriptionMimeType = 'audio/webm';
+            }
+            else {
+                // Compression failed - fall back to original file
+                console.log('[Main] Compression failed, using original file:', compressionResult.error);
+                compressedPath = undefined; // Don't try to clean up a file that doesn't exist
+            }
+        }
+        else {
+            console.log(`[Main] Audio file is ${audioSizeMB}MB, skipping compression (threshold: 10MB)`);
+        }
+        // 3. Ensure auth session is fresh before transcription (long recordings can outlast tokens)
+        try {
+            const authService = getAuthService();
+            await authService.proactiveRefresh();
+        }
+        catch (refreshError) {
+            console.warn('[Main] Auth refresh before transcription failed:', refreshError);
+        }
+        // 4. Attempt transcription
         const { getTranscriptionService } = await import('./meeting/transcriptionService.js');
         const transcriptionService = getTranscriptionService();
-        const result = await transcriptionService.transcribe(audioBase64, entryId, actualMimeType);
+        const result = await transcriptionService.transcribe(transcriptionBase64, entryId, transcriptionMimeType);
         if (result.success) {
-            // Transcription succeeded - optionally clean up audio file
-            // For now, keep it for reference
-            console.log('[Main] Transcription succeeded, audio saved at:', audioPath);
+            // Transcription succeeded - clean up audio files to save disk space
+            if (audioPath && fs.existsSync(audioPath)) {
+                try {
+                    fs.unlinkSync(audioPath);
+                    console.log('[Main] Transcription succeeded, cleaned up audio file:', audioPath);
+                }
+                catch (cleanupErr) {
+                    console.warn('[Main] Failed to clean up audio file:', audioPath, cleanupErr);
+                }
+            }
+            // Clean up compressed file if it exists
+            if (compressedPath && fs.existsSync(compressedPath)) {
+                try {
+                    fs.unlinkSync(compressedPath);
+                    console.log('[Main] Cleaned up compressed audio file:', compressedPath);
+                }
+                catch (cleanupErr) {
+                    console.warn('[Main] Failed to clean up compressed file:', compressedPath, cleanupErr);
+                }
+            }
             return {
                 success: true,
                 audioPath,
@@ -2166,6 +2001,16 @@ ipcMain.handle(MEETING_IPC_CHANNELS.SAVE_AUDIO_AND_TRANSCRIBE, async (_event, en
         else {
             // Transcription failed but audio file is saved
             console.log('[Main] Transcription failed but audio saved at:', audioPath);
+            // Clean up compressed file on failure (keep original for retry)
+            if (compressedPath && fs.existsSync(compressedPath)) {
+                try {
+                    fs.unlinkSync(compressedPath);
+                    console.log('[Main] Cleaned up compressed file after transcription failure:', compressedPath);
+                }
+                catch (cleanupErr) {
+                    console.warn('[Main] Failed to clean up compressed file:', compressedPath, cleanupErr);
+                }
+            }
             return {
                 success: false,
                 audioPath,
@@ -2176,11 +2021,69 @@ ipcMain.handle(MEETING_IPC_CHANNELS.SAVE_AUDIO_AND_TRANSCRIBE, async (_event, en
     }
     catch (error) {
         console.error('[Main] SAVE_AUDIO_AND_TRANSCRIBE error:', error);
+        // Clean up compressed file on exception (keep original for retry)
+        if (compressedPath && fs.existsSync(compressedPath)) {
+            try {
+                fs.unlinkSync(compressedPath);
+                console.log('[Main] Cleaned up compressed file after error:', compressedPath);
+            }
+            catch (cleanupErr) {
+                console.warn('[Main] Failed to clean up compressed file:', compressedPath, cleanupErr);
+            }
+        }
         return {
             success: false,
             audioPath, // May be undefined if save failed
             mimeType: actualMimeType,
             error: error instanceof Error ? error.message : 'Unknown error',
+        };
+    }
+});
+// Pending transcription store IPC handlers
+ipcMain.handle('meeting:save-pending-transcription', async (_event, sessionId, transcriptions) => {
+    console.log('[Main] SAVE_PENDING_TRANSCRIPTION called for session:', sessionId, 'count:', transcriptions.length);
+    try {
+        const { save } = await import('./meeting/pendingTranscriptionStore.js');
+        save(sessionId, transcriptions);
+        return { success: true };
+    }
+    catch (error) {
+        console.error('[Main] Failed to save pending transcription:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Failed to save',
+        };
+    }
+});
+ipcMain.handle('meeting:load-pending-transcriptions', async () => {
+    console.log('[Main] LOAD_PENDING_TRANSCRIPTIONS called');
+    try {
+        const { load } = await import('./meeting/pendingTranscriptionStore.js');
+        const transcriptions = load();
+        console.log('[Main] Loaded pending transcriptions for', Object.keys(transcriptions).length, 'sessions');
+        return { success: true, transcriptions };
+    }
+    catch (error) {
+        console.error('[Main] Failed to load pending transcriptions:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Failed to load',
+            transcriptions: {},
+        };
+    }
+});
+ipcMain.handle('meeting:remove-pending-transcription', async (_event, sessionId) => {
+    console.log('[Main] REMOVE_PENDING_TRANSCRIPTION called for session:', sessionId);
+    try {
+        const { remove } = await import('./meeting/pendingTranscriptionStore.js');
+        remove(sessionId);
+        return { success: true };
+    }
+    catch (error) {
+        console.error('[Main] Failed to remove pending transcription:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Failed to remove',
         };
     }
 });
@@ -2198,12 +2101,29 @@ ipcMain.handle('meeting:retry-transcription', async (_event, entryId, audioPath,
         const audioBuffer = fs.readFileSync(audioPath);
         const audioBase64 = audioBuffer.toString('base64');
         console.log('[Main] Loaded audio file for retry:', audioPath, 'size:', audioBuffer.length);
+        // Ensure auth session is fresh before retry transcription
+        try {
+            const authService = getAuthService();
+            await authService.proactiveRefresh();
+        }
+        catch (refreshError) {
+            console.warn('[Main] Auth refresh before retry transcription failed:', refreshError);
+        }
         // Attempt transcription
         const { getTranscriptionService } = await import('./meeting/transcriptionService.js');
         const transcriptionService = getTranscriptionService();
         const result = await transcriptionService.transcribe(audioBase64, entryId, mimeType);
         if (result.success) {
-            console.log('[Main] Retry transcription succeeded for:', entryId);
+            // Clean up audio file after successful retry transcription
+            if (audioPath && fs.existsSync(audioPath)) {
+                try {
+                    fs.unlinkSync(audioPath);
+                    console.log('[Main] Retry transcription succeeded, cleaned up audio file:', audioPath);
+                }
+                catch (cleanupErr) {
+                    console.warn('[Main] Failed to clean up audio file after retry:', audioPath, cleanupErr);
+                }
+            }
             return {
                 success: true,
                 transcription: {
@@ -2601,6 +2521,46 @@ ipcMain.handle('db:get-all-entries', async () => {
     catch (error) {
         console.error('[Main] db:get-all-entries failed:', error);
         return { success: false, error: error instanceof Error ? error.message : 'Unknown error', data: [] };
+    }
+});
+ipcMain.handle('db:get-entries-by-date-range', async (event, startTime, endTime) => {
+    try {
+        const db = DatabaseService.getInstance();
+        return { success: true, data: db.getEntriesByDateRange(startTime, endTime) };
+    }
+    catch (error) {
+        console.error('[Main] db:get-entries-by-date-range failed:', error);
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error', data: [] };
+    }
+});
+ipcMain.handle('db:get-entries-by-bucket', async (event, bucketId) => {
+    try {
+        const db = DatabaseService.getInstance();
+        return { success: true, data: db.getEntriesByBucketId(bucketId) };
+    }
+    catch (error) {
+        console.error('[Main] db:get-entries-by-bucket failed:', error);
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error', data: [] };
+    }
+});
+ipcMain.handle('db:get-entries-by-jira-key', async (event, jiraKey) => {
+    try {
+        const db = DatabaseService.getInstance();
+        return { success: true, data: db.getEntriesByJiraKey(jiraKey) };
+    }
+    catch (error) {
+        console.error('[Main] db:get-entries-by-jira-key failed:', error);
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error', data: [] };
+    }
+});
+ipcMain.handle('db:get-entry-count', async () => {
+    try {
+        const db = DatabaseService.getInstance();
+        return { success: true, data: db.getEntryCount() };
+    }
+    catch (error) {
+        console.error('[Main] db:get-entry-count failed:', error);
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error', data: 0 };
     }
 });
 ipcMain.handle('db:get-entry', async (event, id) => {
@@ -3296,6 +3256,51 @@ ipcMain.handle('is-tempo-account-blacklisted', async (event, accountKey) => {
         };
     }
 });
+// ========================================================================
+// TimeWarp: Background activity tracking IPC
+// ========================================================================
+ipcMain.handle('get-background-activities', () => {
+    const tracker = BackgroundActivityTracker.getInstance();
+    return tracker.getActivities();
+});
+ipcMain.handle('claim-background-activities', async (_event, fromTimestamp, toTimestamp) => {
+    const tracker = BackgroundActivityTracker.getInstance();
+    return tracker.claimActivities(fromTimestamp, toTimestamp);
+});
+ipcMain.on('pause-background-tracker', () => {
+    const tracker = BackgroundActivityTracker.getInstance();
+    tracker.pause();
+});
+ipcMain.on('resume-background-tracker', () => {
+    const tracker = BackgroundActivityTracker.getInstance();
+    tracker.resume();
+});
+const bundleIconCache = new Map();
+ipcMain.handle('get-app-icon-by-bundle', async (_event, bundleId) => {
+    if (!bundleId || !/^[a-zA-Z0-9._-]+$/.test(bundleId))
+        return null;
+    if (bundleIconCache.has(bundleId))
+        return bundleIconCache.get(bundleId) ?? null;
+    try {
+        const { exec } = await import('child_process');
+        const appPath = await new Promise((resolve, reject) => {
+            exec(`mdfind "kMDItemCFBundleIdentifier == '${bundleId}'" | head -1`, { timeout: 3000 }, (err, stdout) => err ? reject(err) : resolve(stdout.toString().trim()));
+        });
+        if (!appPath) {
+            bundleIconCache.set(bundleId, null);
+            return null;
+        }
+        const icon = await app.getFileIcon(appPath, { size: 'small' });
+        const dataUrl = icon.toDataURL();
+        bundleIconCache.set(bundleId, dataUrl);
+        return dataUrl;
+    }
+    catch (err) {
+        console.error(`[Main] get-app-icon failed for ${bundleId}:`, err);
+        bundleIconCache.set(bundleId, null);
+        return null;
+    }
+});
 // Calendar Integration
 ipcMain.handle('calendar:connect', async () => {
     try {
@@ -3375,10 +3380,10 @@ ipcMain.handle('calendar:create-focus-time', async (_, input) => {
     }
 });
 // Helper function to build split analysis prompt
-function buildSplitAnalysisPrompt(activityData, calendarContext) {
+function buildSplitAnalysisPrompt(activityData, calendarContext, manuallyTriggered = false) {
     const formatTime = (timestamp) => new Date(timestamp).toLocaleTimeString();
     const formatDuration = (ms) => `${Math.round(ms / 60000)} minutes`;
-    let prompt = `Analyze the following sequence of work activities and identify points where the user clearly switched to a different project or task.
+    let prompt = `Analyze the following sequence of work activities and identify points where the user switched between different tasks or areas of work. The goal is to produce granular time entries that accurately reflect how time was spent — it is better to over-split into smaller entries (they can always be grouped later) than to leave a long session as one vague block.
 
 **Time Range:** ${formatTime(activityData.startTime)} - ${formatTime(activityData.endTime)} (${formatDuration(activityData.duration)})
 
@@ -3396,13 +3401,32 @@ function buildSplitAnalysisPrompt(activityData, calendarContext) {
     activityData.screenshots.forEach((screenshot, i) => {
         prompt += `${i + 1}. [${formatTime(screenshot.timestamp)}] ${screenshot.description}\n`;
     });
-    prompt += `\n**Instructions:**
-1. Identify semantic boundaries where the user switched to a DIFFERENT project, task, or meeting
-2. DO NOT split for minor app switches within the same project (e.g., switching from IDE to browser while debugging)
-3. DO split when there's clear evidence of changing focus (e.g., switching from coding Project A to reviewing Project B)
-4. Consider calendar events as strong signals for context switches
-5. Each suggested split should have a clear description of what work was done in that segment
-6. Provide a confidence score (0.0 to 1.0) based on how clear the switch is
+    if (manuallyTriggered) {
+        prompt += `\n**Important Context:** The user manually requested this split analysis, which means they believe this session contains multiple distinct tasks. Be generous with splitting — look for any reasonable boundary including:`;
+        prompt += `
+- Switching between different projects, repos, or codebases
+- Shifting between different types of work (coding vs reviewing vs communicating vs researching)
+- Calendar events that overlap with the session (meetings, standups, etc.)
+- Gaps or transitions in activity that suggest a context switch
+- Working on different features, tickets, or topics within the same project
+- Switching between different communication threads or channels
+
+Even subtle shifts in focus should be treated as split points. When in doubt, split.`;
+    }
+    else {
+        prompt += `\n**Instructions:**`;
+        prompt += `
+- Split when the user shifts between different projects, tasks, meetings, or areas of work
+- Split when there is a calendar event that represents a distinct block of time (e.g., a meeting)
+- Split when the type of work changes meaningfully (e.g., coding → code review → Slack conversations)
+- Split when working on different features or tickets, even within the same project
+- Do NOT split for trivial app switches that are part of the same workflow (e.g., IDE ↔ browser while debugging the same issue)
+- When in doubt, prefer splitting — smaller accurate entries are more useful than one large vague entry`;
+    }
+    prompt += `
+
+Each suggested split should have a clear, concise description of the work done in that segment.
+Provide a confidence score (0.0 to 1.0) based on how clear the boundary is.
 
 **Output Format:**
 Return a JSON array of split suggestions. Each suggestion should have:
@@ -3410,8 +3434,8 @@ Return a JSON array of split suggestions. Each suggestion should have:
   "startTime": <timestamp in ms>,
   "endTime": <timestamp in ms>,
   "description": "<concise description of work done in this segment>",
-  "suggestedBucket": null,  // Will be filled in later by assignment AI
-  "suggestedJiraKey": null, // Will be filled in later by assignment AI
+  "suggestedBucket": null,
+  "suggestedJiraKey": null,
   "confidence": <0.0 to 1.0>
 }
 
@@ -3488,7 +3512,7 @@ ipcMain.handle('ai:analyze-splits', async (_, activityData) => {
         // 3. Build analysis prompt with all signals
         // Note: Split analysis requires a specific prompt format for JSON output,
         // so we use a custom prompt builder rather than the generic signal-based approach
-        const prompt = buildSplitAnalysisPrompt(activityData, calendarContext);
+        const prompt = buildSplitAnalysisPrompt(activityData, calendarContext, activityData.manuallyTriggered ?? false);
         // 4. Call AI service to analyze and suggest splits
         // Build task request for 'split_suggestion' task type
         const taskRequest = signalAggregator.buildTaskRequest(activityData.id, 'split_suggestion', {
@@ -3550,10 +3574,22 @@ ipcMain.handle('ai:analyze-splits', async (_, activityData) => {
 async function cleanupAndQuit() {
     console.log('[Main] Starting comprehensive cleanup...');
     try {
+        // 0. Stop background activity tracker
+        try {
+            const tracker = BackgroundActivityTracker.getInstance();
+            tracker.stop();
+            await tracker.cleanupAll();
+            console.log('[Main] Background activity tracker cleaned up');
+        }
+        catch (error) {
+            console.error('[Main] Failed to cleanup background activity tracker:', error);
+        }
         // 1. Cleanup subscription system (webhook server, trial notifications)
         await cleanupSubscription();
         // 2. Cleanup auto-updater interval
-        updater.cleanup();
+        if (!process.mas) {
+            updater.cleanup();
+        }
         // 3. Destroy tray icon
         if (tray) {
             tray.destroy();
@@ -3633,84 +3669,90 @@ function createTray() {
         tray?.popUpContextMenu(contextMenu);
     });
 }
-function getWindowPosition() {
-    const windowBounds = win?.getBounds();
-    const trayBounds = tray?.getBounds();
-    if (!windowBounds || !trayBounds) {
-        console.warn('[Main] Cannot calculate window position - missing bounds', {
-            hasWindowBounds: !!windowBounds,
-            hasTrayBounds: !!trayBounds,
-            trayBounds
-        });
-        return null;
+// --- Window bounds persistence ---
+const windowStatePath = path.join(app.getPath('userData'), 'window-state.json');
+let saveBoundsTimer = null;
+function loadWindowState() {
+    try {
+        if (fs.existsSync(windowStatePath)) {
+            const data = JSON.parse(fs.readFileSync(windowStatePath, 'utf-8'));
+            // Validate saved bounds are on a visible display
+            const display = screen.getDisplayMatching(data);
+            const { x, y, width, height } = display.workArea;
+            // Check that at least part of the window is visible
+            if (data.x + data.width > x && data.x < x + width &&
+                data.y + data.height > y && data.y < y + height) {
+                return data;
+            }
+            console.log('[Main] Saved window bounds are off-screen, ignoring');
+        }
     }
-    const x = Math.round(trayBounds.x + (trayBounds.width / 2) - (windowBounds.width / 2));
-    const y = Math.round(trayBounds.y + trayBounds.height + 4);
-    return { x, y };
+    catch (err) {
+        console.warn('[Main] Failed to load window state:', err);
+    }
+    return null;
+}
+function saveWindowState() {
+    if (!win || win.isDestroyed() || win.isMinimized())
+        return;
+    const bounds = win.getBounds();
+    try {
+        fs.writeFileSync(windowStatePath, JSON.stringify(bounds));
+    }
+    catch (err) {
+        console.warn('[Main] Failed to save window state:', err);
+    }
+}
+function debouncedSaveWindowState() {
+    if (saveBoundsTimer)
+        clearTimeout(saveBoundsTimer);
+    saveBoundsTimer = setTimeout(saveWindowState, 300);
 }
 function toggleWindow() {
     if (win?.isVisible()) {
         win.hide();
     }
     else {
-        const position = getWindowPosition();
-        if (position) {
-            win?.setPosition(position.x, position.y, false);
-        }
-        else {
-            console.warn('[Main] Unable to position window, showing at last known position');
-        }
         win?.show();
         win?.focus();
     }
 }
-function showWindowBelowTray() {
-    if (!win || !tray) {
-        console.warn('[Main] Cannot show window - window or tray not initialized');
-        return;
-    }
-    const position = getWindowPosition();
-    if (!position) {
-        console.warn('[Main] Cannot show window - tray bounds not available yet, will retry');
-        // Retry after a short delay to allow tray to fully initialize
-        setTimeout(() => {
-            showWindowBelowTray();
-        }, 50);
-        return;
-    }
-    win.setPosition(position.x, position.y, false);
-    win.show();
-    win.focus();
-    console.log('[Main] Window shown below tray icon at position:', position);
-}
 function createWindow() {
     const preloadPath = path.join(__dirname, 'preload.cjs');
     console.log('[Main] Preload Path:', preloadPath);
+    const savedState = loadWindowState();
     win = new BrowserWindow({
-        width: 570,
-        height: 660,
-        show: false, // Don't show immediately - we'll position and show after tray is ready
-        frame: false,
+        width: savedState?.width ?? 640,
+        height: savedState?.height ?? 660,
+        x: savedState?.x,
+        y: savedState?.y,
+        show: false,
+        titleBarStyle: 'hiddenInset',
+        trafficLightPosition: { x: 16, y: 16 },
         resizable: true,
         minWidth: 400,
         minHeight: 300,
         movable: true,
-        minimizable: true, // Enable minimize to dock
+        minimizable: true,
         maximizable: false,
         fullscreenable: false,
-        skipTaskbar: false, // Show in dock
+        skipTaskbar: false,
         webPreferences: {
             preload: preloadPath,
             nodeIntegration: false,
             contextIsolation: true,
             webSecurity: true,
             sandbox: false,
-            devTools: true // Enable for debugging
+            devTools: true
         },
     });
-    // Position window off-screen initially to prevent flash at (0,0)
-    // This prevents the window from appearing in lower-left corner before repositioning
-    win.setPosition(-9999, -9999);
+    // Center on first launch (no saved state)
+    if (!savedState) {
+        win.center();
+    }
+    // Persist window bounds on move/resize
+    win.on('move', debouncedSaveWindowState);
+    win.on('resize', debouncedSaveWindowState);
     // In test mode or production, load from built files
     // In development (not test), load from Vite dev server
     const isTestMode = process.env.NODE_ENV === 'test';
@@ -3740,15 +3782,159 @@ function createWindow() {
             win?.hide();
         });
     }
-    win.on('blur', () => {
-        if (!win?.webContents.isDevToolsOpened()) {
-            win?.hide();
+}
+/**
+ * Create macOS application menu
+ * Required by App Store guidelines to provide window management options
+ */
+function createApplicationMenu() {
+    const isMac = process.platform === 'darwin';
+    const template = [
+        // App menu (macOS only)
+        ...(isMac ? [{
+                label: app.name,
+                submenu: [
+                    { role: 'about' },
+                    { type: 'separator' },
+                    {
+                        label: 'Settings...',
+                        accelerator: 'Cmd+,',
+                        click: () => {
+                            if (win && !win.isDestroyed()) {
+                                win.show();
+                                win.focus();
+                                win.webContents.send('navigate-to-settings');
+                            }
+                        }
+                    },
+                    { type: 'separator' },
+                    { role: 'services' },
+                    { type: 'separator' },
+                    { role: 'hide' },
+                    { role: 'hideOthers' },
+                    { role: 'unhide' },
+                    { type: 'separator' },
+                    { role: 'quit' }
+                ]
+            }] : []),
+        // File menu
+        {
+            label: 'File',
+            submenu: [
+                isMac ? { role: 'close' } : { role: 'quit' }
+            ]
+        },
+        // Edit menu
+        {
+            label: 'Edit',
+            submenu: [
+                { role: 'undo' },
+                { role: 'redo' },
+                { type: 'separator' },
+                { role: 'cut' },
+                { role: 'copy' },
+                { role: 'paste' },
+                ...(isMac ? [
+                    { role: 'pasteAndMatchStyle' },
+                    { role: 'delete' },
+                    { role: 'selectAll' },
+                    { type: 'separator' },
+                    {
+                        label: 'Speech',
+                        submenu: [
+                            { role: 'startSpeaking' },
+                            { role: 'stopSpeaking' }
+                        ]
+                    }
+                ] : [
+                    { role: 'delete' },
+                    { type: 'separator' },
+                    { role: 'selectAll' }
+                ])
+            ]
+        },
+        // View menu
+        {
+            label: 'View',
+            submenu: [
+                { role: 'reload' },
+                { role: 'forceReload' },
+                { role: 'toggleDevTools' },
+                { type: 'separator' },
+                { role: 'resetZoom' },
+                { role: 'zoomIn' },
+                { role: 'zoomOut' },
+                { type: 'separator' },
+                { role: 'togglefullscreen' }
+            ]
+        },
+        // Window menu (REQUIRED by App Store)
+        {
+            label: 'Window',
+            submenu: [
+                {
+                    label: 'Show Clearical',
+                    accelerator: 'Cmd+0',
+                    click: () => {
+                        if (win) {
+                            if (win.isMinimized()) {
+                                win.restore();
+                            }
+                            win.show();
+                            win.focus();
+                        }
+                        else {
+                            createWindow();
+                            win.show();
+                            win.focus();
+                        }
+                    }
+                },
+                { type: 'separator' },
+                { role: 'minimize' },
+                { role: 'zoom' },
+                ...(isMac ? [
+                    { type: 'separator' },
+                    { role: 'front' },
+                    { type: 'separator' },
+                    { role: 'window' }
+                ] : [
+                    { role: 'close' }
+                ])
+            ]
+        },
+        // Help menu
+        {
+            role: 'help',
+            submenu: [
+                {
+                    label: 'Learn More',
+                    click: async () => {
+                        await shell.openExternal('https://clearical.app');
+                    }
+                },
+                {
+                    label: 'Report an Issue',
+                    click: async () => {
+                        await shell.openExternal('https://clearical.app/support');
+                    }
+                }
+            ]
         }
-    });
+    ];
+    const menu = Menu.buildFromTemplate(template);
+    Menu.setApplicationMenu(menu);
+    console.log('[Main] Application menu created');
 }
 // Track if cleanup has already been initiated to prevent multiple cleanups
 let isCleaningUp = false;
 app.on('before-quit', async (event) => {
+    // When the auto-updater is installing, let the quit proceed unblocked
+    // so electron-updater can replace the app and relaunch
+    if (updater.isInstallingUpdate) {
+        console.log('[Main] Quit triggered by auto-updater install — allowing quit to proceed');
+        return;
+    }
     if (!isCleaningUp) {
         // Prevent the app from quitting until cleanup is complete
         event.preventDefault();
@@ -3770,16 +3956,15 @@ app.on('activate', () => {
     if (win === null) {
         createTray();
         createWindow();
-        // Give tray time to initialize before showing window
-        setTimeout(() => {
-            showWindowBelowTray();
-        }, 150);
+        win.show();
+        win.focus();
     }
     else {
-        toggleWindow();
+        win.show();
+        win.focus();
     }
 });
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
     // Initialize encryption key on app startup
     try {
         getEncryptionKey();
@@ -3789,6 +3974,40 @@ app.whenReady().then(() => {
         console.error('[Main] Failed to initialize encryption:', error);
         console.warn('[Main] Screenshots will be saved unencrypted as fallback');
     }
+    // Register clearical-screenshot:// protocol handler
+    // Serves decrypted screenshots directly to <img> tags without base64 IPC transfer
+    protocol.handle('clearical-screenshot', async (request) => {
+        try {
+            const url = new URL(request.url);
+            const filePath = decodeURIComponent(url.searchParams.get('path') || '');
+            if (!filePath) {
+                return new Response('Missing path parameter', { status: 400 });
+            }
+            if (!fs.existsSync(filePath)) {
+                return new Response('File not found', { status: 404 });
+            }
+            // Read and decrypt (supports both encrypted and unencrypted)
+            let fileBuffer;
+            try {
+                fileBuffer = await decryptFile(filePath);
+            }
+            catch (decryptError) {
+                // Fallback to raw read if decryption fails
+                fileBuffer = await fs.promises.readFile(filePath);
+            }
+            return new Response(fileBuffer, {
+                headers: {
+                    'Content-Type': 'image/png',
+                    'Cache-Control': 'private, max-age=3600',
+                }
+            });
+        }
+        catch (error) {
+            console.error('[Main] clearical-screenshot protocol error:', error);
+            return new Response('Internal error', { status: 500 });
+        }
+    });
+    console.log('[Main] clearical-screenshot:// protocol registered');
     // Initialize auth system (Supabase)
     try {
         initializeAuth();
@@ -3800,6 +4019,20 @@ app.whenReady().then(() => {
     }
     catch (error) {
         console.error('[Main] Failed to initialize auth:', error);
+    }
+    // Initialize transcription service with auth refresh callback
+    try {
+        const { getTranscriptionService } = await import('./meeting/transcriptionService.js');
+        const transcriptionService = getTranscriptionService();
+        // Register auth refresh callback for token expiration handling
+        transcriptionService.setRefreshAuthCallback(async () => {
+            const authService = getAuthService();
+            await authService.proactiveRefresh();
+        });
+        console.log('[Main] Transcription service initialized with auth refresh callback');
+    }
+    catch (error) {
+        console.error('[Main] Failed to initialize transcription service:', error);
     }
     // Set up system wake/unlock detection for token refresh
     // This ensures auth tokens stay fresh after sleep/hibernate
@@ -3858,23 +4091,51 @@ app.whenReady().then(() => {
         // Set up callback for recording manager to check timer state
         // This prevents showing prompts when timer is already running
         recordingManager.setIsTimerRunningCallback(() => {
-            return timerState.isRunning;
+            return timerState.isRunning && !timerState.isPaused;
         });
         recordingManager.start();
         console.log('[Main] Recording manager initialized (mic/camera detection)');
+        // Set up periodic cleanup of old pending transcriptions (every 6 hours)
+        // Clean up transcriptions older than 24 hours to handle crash recovery scenarios
+        const cleanupInterval = 6 * 60 * 60 * 1000; // 6 hours
+        const maxAge = 24 * 60 * 60 * 1000; // 24 hours
+        setInterval(async () => {
+            try {
+                const { cleanupOld } = await import('./meeting/pendingTranscriptionStore.js');
+                cleanupOld(maxAge);
+            }
+            catch (error) {
+                console.error('[Main] Failed to cleanup old pending transcriptions:', error);
+            }
+        }, cleanupInterval);
+        console.log('[Main] Pending transcription cleanup scheduled (every 6h, max age 24h)');
     }
     catch (error) {
         console.error('[Main] Failed to initialize recording manager:', error);
     }
-    // Create tray first to ensure it's fully initialized before window positioning
+    // Initialize background activity tracker for TimeWarp feature
+    try {
+        const tracker = BackgroundActivityTracker.getInstance();
+        // Push updates to renderer
+        tracker.setUpdateCallback((activities) => {
+            if (win && !win.isDestroyed()) {
+                win.webContents.send('background-activities-update', activities);
+            }
+        });
+        await tracker.start();
+        console.log('[Main] Background activity tracker initialized');
+    }
+    catch (error) {
+        console.error('[Main] Failed to initialize background activity tracker:', error);
+    }
+    // Create application menu (required by App Store)
+    createApplicationMenu();
     createTray();
-    // Create window (it will be positioned off-screen initially)
     createWindow();
-    // Now that both tray and window are created, show the window below the tray icon
-    // The showWindowBelowTray function has built-in retry logic if tray bounds aren't ready
-    // We use a small delay to ensure the tray icon is fully rendered by the OS
+    // Show the window at saved position (or centered on first launch)
+    win?.show();
+    win?.focus();
     setTimeout(() => {
-        showWindowBelowTray();
         // Initialize working hours scheduler after window is ready
         // This allows the scheduler to use the main window for IPC
         try {
@@ -3900,10 +4161,13 @@ app.whenReady().then(() => {
             console.error('[Main] Failed to initialize working hours scheduler:', error);
         }
     }, 150);
-    // Initialize auto-updater
-    // Set main window reference so updater can send status updates
-    updater.setMainWindow(win);
-    // Start auto-update checks (with delay)
-    updater.start();
-    console.log('[Main] Auto-updater initialized');
+    // Initialize auto-updater (skip for Mac App Store builds)
+    if (!process.mas) {
+        updater.setMainWindow(win);
+        updater.start();
+        console.log('[Main] Auto-updater initialized');
+    }
+    else {
+        console.log('[Main] Skipping auto-updater (Mac App Store build)');
+    }
 });

@@ -1359,9 +1359,24 @@ export function Settings({ onOpenJiraModal, onOpenTempoModal }: SettingsProps = 
 
             <div className="bg-[var(--color-bg-secondary)] p-4 rounded-2xl border border-[var(--color-border-primary)]">
                 <h3 className="text-[10px] font-bold text-[var(--color-text-secondary)] uppercase tracking-wider mb-2 font-display">About</h3>
-                <p className="text-xs text-[var(--color-text-secondary)]">
-                    Clearical is an intelligent time tracking application that helps you log and manage your work activities.
-                </p>
+                <div className="flex items-start justify-between">
+                    <p className="text-xs text-[var(--color-text-secondary)]">
+                        Clearical is an intelligent time tracking application that helps you log and manage your work activities.
+                    </p>
+                    <a
+                        href="#"
+                        onClick={(e) => {
+                            e.preventDefault();
+                            window.electron.ipcRenderer.openExternal('mailto:support@clearical.io');
+                        }}
+                        className="text-xs font-medium flex-shrink-0 ml-4 transition-colors"
+                        style={{ color: 'var(--color-accent)' }}
+                        onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--color-accent-hover)'; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--color-accent)'; }}
+                    >
+                        support@clearical.io
+                    </a>
+                </div>
             </div>
         </div>
     );

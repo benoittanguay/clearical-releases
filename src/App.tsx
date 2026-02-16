@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useTimer } from './hooks/useTimer';
 import { useStorage } from './context/StorageContext';
 import { useSettings } from './context/SettingsContext';
@@ -67,8 +67,25 @@ function App() {
   // Threshold for auto-prompting the Splitting Assistant (45 minutes)
   const SPLITTING_PROMPT_THRESHOLD_MS = 45 * 60 * 1000;
 
-  const { isRunning, isPaused, elapsed, startTime, start: startTimer, stop: stopTimer, pause: pauseTimer, resume: resumeTimer, formatTime, checkPermissions, setActiveRecordingEntry, adjustStartTime } = useTimer();
+  const { isRunning, isPaused, elapsed, startTime, actualStartTime, windowActivity, start: startTimer, stop: stopTimer, pause: pauseTimer, resume: resumeTimer, formatTime, checkPermissions, setActiveRecordingEntry, adjustStartTime } = useTimer();
   const { activities: backgroundActivities } = useBackgroundActivity();
+
+  // Merge background activities with timer's window activities for the timeline
+  const timelineActivities = useMemo(() => {
+    if (!windowActivity || windowActivity.length === 0) return backgroundActivities;
+    const timerActivities = windowActivity.map((wa, i) => ({
+      id: `timer-${wa.timestamp}-${i}`,
+      appName: wa.appName,
+      windowTitle: wa.windowTitle,
+      bundleId: wa.bundleId || '',
+      startTimestamp: wa.timestamp,
+      endTimestamp: wa.timestamp + wa.duration,
+      isMeeting: false,
+      screenshotPaths: wa.screenshotPaths || [],
+    }));
+    return [...backgroundActivities, ...timerActivities];
+  }, [backgroundActivities, windowActivity]);
+
   const { clearPendingTranscription, getPendingTranscriptions, getPendingAudio, clearPendingAudio, onTranscriptionComplete } = useAudioRecording();
   const { roundTime, isRoundingEnabled } = useTimeRounding();
   const recordingSessionIdRef = useRef<string | null>(null);
@@ -589,12 +606,21 @@ function App() {
   };
 
   const handleTimeWarpChange = useCallback((timestamp: number) => {
-    if (isRunning) {
-      adjustStartTime(timestamp);
-    } else {
-      setProposedStartTime(timestamp);
-    }
+    if (!isRunning) return;
+    adjustStartTime(timestamp);
   }, [isRunning, adjustStartTime]);
+
+  const handleTimelineStartTimer = useCallback(async (timestamp: number) => {
+    if (isRunning) return;
+    // Check permissions before starting
+    const permissions = await checkPermissions();
+    if (!permissions.requiredGranted || !permissions.hasScreenRecording) {
+      setProposedStartTime(timestamp);
+      setShowPermissionModal(true);
+      return;
+    }
+    startTimer(timestamp);
+  }, [isRunning, checkPermissions, startTimer]);
 
   // Toggle audio recording independently of timer
   const handleToggleRecording = async () => {
@@ -1384,11 +1410,14 @@ function App() {
                 </div>
               </div>
               {/* TimeWarp Timeline - anchored to bottom */}
-              <div className="absolute bottom-0 left-0 right-0 px-4 pb-2">
+              <div className="absolute bottom-0 left-0 right-0 pb-2">
                   <TimeWarpTimeline
-                      backgroundActivities={backgroundActivities}
-                      timerStartTime={isRunning ? startTime : proposedStartTime}
+                      backgroundActivities={timelineActivities}
+                      timerStartTime={startTime}
+                      actualStartTime={actualStartTime}
+                      isRunning={isRunning}
                       onStartTimeChange={handleTimeWarpChange}
+                      onStartTimer={handleTimelineStartTimer}
                   />
               </div>
             </div>
