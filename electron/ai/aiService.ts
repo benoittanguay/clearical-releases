@@ -423,14 +423,26 @@ class AIService {
     }
 
     /**
-     * Check if token is fresh enough for a request, refresh if needed
+     * Check if token is fresh enough for a request, refresh if needed.
+     * Retries once after a short delay if session is null, to handle
+     * the case where the system just woke from sleep and the network
+     * stack needs a moment to reconnect.
      */
     private async ensureFreshToken(): Promise<{ accessToken: string; expiresAt: number } | null> {
         const authService = getAuthService();
         let session = await authService.getSession();
 
         if (!session) {
-            return null;
+            // Retry once after a short delay — after system sleep, the network
+            // may not be ready yet and the first refresh attempt fails transiently.
+            // The powerMonitor 'resume' handler also triggers proactiveRefresh(),
+            // so waiting gives it time to complete.
+            console.log('[AIService] No session on first attempt, retrying after 3s (possible post-sleep)...');
+            await sleep(3000);
+            session = await authService.getSession();
+            if (!session) {
+                return null;
+            }
         }
 
         const now = Date.now();
