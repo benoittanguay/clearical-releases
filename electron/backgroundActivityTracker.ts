@@ -76,6 +76,7 @@ export class BackgroundActivityTracker {
 
     private pollInterval: ReturnType<typeof setInterval> | null = null;
     private cleanupInterval: ReturnType<typeof setInterval> | null = null;
+    private updateInterval: ReturnType<typeof setInterval> | null = null;
 
     private paused = false;
     private running = false;
@@ -131,6 +132,11 @@ export class BackgroundActivityTracker {
             });
         }, CLEANUP_INTERVAL_MS);
 
+        // Push updates to renderer every 5 seconds so current activity shows on timeline
+        this.updateInterval = setInterval(() => {
+            if (!this.paused) this.notifyUpdate();
+        }, 5000);
+
         console.log('[BackgroundActivityTracker] Started');
     }
 
@@ -151,6 +157,11 @@ export class BackgroundActivityTracker {
         if (this.cleanupInterval) {
             clearInterval(this.cleanupInterval);
             this.cleanupInterval = null;
+        }
+
+        if (this.updateInterval) {
+            clearInterval(this.updateInterval);
+            this.updateInterval = null;
         }
 
         this.finalizeCurrentActivity();
@@ -182,10 +193,17 @@ export class BackgroundActivityTracker {
     }
 
     /**
-     * Get a copy of all tracked activities
+     * Get a copy of all tracked activities, including the one currently being tracked
      */
     public getActivities(): BackgroundActivity[] {
-        return [...this.activities];
+        const result = [...this.activities];
+        if (this.currentActivity) {
+            result.push({
+                ...this.currentActivity,
+                endTimestamp: Date.now(),
+            });
+        }
+        return result;
     }
 
     /**
