@@ -34,6 +34,29 @@ const IMAGE_CONFIG = {
     warningSizeMB: 2,           // Log warning if image exceeds this size
 };
 
+/**
+ * Filter and deduplicate OCR text for AI prompt inclusion.
+ * Removes noise (short strings, duplicates) and caps at a reasonable count.
+ */
+export function filterOcrText(texts: string[], maxEntries = 50): string[] {
+    if (!texts || texts.length === 0) return [];
+
+    const seen = new Set<string>();
+    const filtered: string[] = [];
+
+    for (const text of texts) {
+        const trimmed = text.trim();
+        if (trimmed.length < 3) continue;
+        const key = trimmed.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        filtered.push(trimmed);
+    }
+
+    filtered.sort((a, b) => b.length - a.length);
+    return filtered.slice(0, maxEntries);
+}
+
 // Re-export signal types and utilities for convenience
 export {
     AnyContextSignal,
@@ -92,6 +115,7 @@ export interface BatchAnalysisInput {
     appName?: string;
     windowTitle?: string;
     requestId?: string;
+    ocrText?: string[];
 }
 
 export interface BatchAnalysisResult {
@@ -642,7 +666,8 @@ class AIService {
         appName?: string,
         windowTitle?: string,
         requestId?: string,
-        signals?: AnyContextSignal[]
+        signals?: AnyContextSignal[],
+        ocrText?: string[]
     ): Promise<AnalysisResponse> {
         console.log('[AIService] Analyzing screenshot:', imagePath);
         if (signals && signals.length > 0) {
@@ -666,7 +691,8 @@ class AIService {
             imageBase64: imageResult.base64,
             appName,
             windowTitle,
-            signals
+            signals,
+            ocrText
         });
 
         if (result.success && result.description) {
@@ -1006,6 +1032,7 @@ class AIService {
                 mimeType?: string;
                 appName?: string;
                 windowTitle?: string;
+                ocrText?: string[];
                 error?: string;
             }> = [];
 
@@ -1037,7 +1064,8 @@ class AIService {
                         base64: imageResult.base64,
                         mimeType: imageResult.mimeType,
                         appName: input.appName,
-                        windowTitle: input.windowTitle
+                        windowTitle: input.windowTitle,
+                        ocrText: input.ocrText
                     });
                 } catch (error) {
                     processedImages.push({
@@ -1071,7 +1099,8 @@ class AIService {
                 base64: img.base64!,
                 mimeType: img.mimeType!,
                 appName: img.appName,
-                windowTitle: img.windowTitle
+                windowTitle: img.windowTitle,
+                ocrText: img.ocrText
             }));
 
             // Release base64 strings from processedImages to free memory before the API call
