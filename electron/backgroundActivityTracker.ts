@@ -132,9 +132,9 @@ export class BackgroundActivityTracker {
             });
         }, CLEANUP_INTERVAL_MS);
 
-        // Push updates to renderer every 5 seconds so current activity shows on timeline
+        // Push updates to renderer every 5 seconds so timeline always has data
         this.updateInterval = setInterval(() => {
-            if (!this.paused) this.notifyUpdate();
+            this.notifyUpdate();
         }, 5000);
 
         console.log('[BackgroundActivityTracker] Started');
@@ -228,39 +228,34 @@ export class BackgroundActivityTracker {
         await fs.promises.mkdir(this.screenshotsDir, { recursive: true });
 
         const claimed: BackgroundActivity[] = [];
-        const remaining: BackgroundActivity[] = [];
 
         for (const activity of this.activities) {
             // Activity overlaps with the claim range
             if (activity.startTimestamp <= to && activity.endTimestamp >= from) {
-                claimed.push(activity);
-            } else {
-                remaining.push(activity);
+                claimed.push({ ...activity });
             }
         }
 
-        // Move screenshot files from background-captures to main screenshots dir
+        // Copy screenshot files from background-captures to main screenshots dir
         for (const activity of claimed) {
-            const movedPaths: string[] = [];
+            const copiedPaths: string[] = [];
             for (const screenshotPath of activity.screenshotPaths) {
                 try {
                     const filename = path.basename(screenshotPath);
                     const destPath = path.join(this.screenshotsDir, filename);
 
                     if (fs.existsSync(screenshotPath)) {
-                        await fs.promises.rename(screenshotPath, destPath);
-                        movedPaths.push(destPath);
+                        await fs.promises.copyFile(screenshotPath, destPath);
+                        copiedPaths.push(destPath);
                     }
                 } catch (err) {
-                    console.error('[BackgroundActivityTracker] Failed to move screenshot:', err);
+                    console.error('[BackgroundActivityTracker] Failed to copy screenshot:', err);
                 }
             }
-            activity.screenshotPaths = movedPaths;
+            activity.screenshotPaths = copiedPaths;
         }
 
-        this.activities = remaining;
-        this.notifyUpdate();
-
+        // Activities remain in the buffer for the timeline display
         console.log(`[BackgroundActivityTracker] Claimed ${claimed.length} activities (${from} - ${to})`);
         return claimed;
     }

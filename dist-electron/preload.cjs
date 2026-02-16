@@ -9,6 +9,7 @@ catch (e) {
     console.error('Preload ping failed', e);
 }
 electron_1.contextBridge.exposeInMainWorld('electron', {
+    isMas: !!process.mas,
     ipcRenderer: {
         send: (channel, data) => electron_1.ipcRenderer.send(channel, data),
         on: (channel, func) => {
@@ -22,7 +23,7 @@ electron_1.contextBridge.exposeInMainWorld('electron', {
         invoke: (channel, ...args) => electron_1.ipcRenderer.invoke(channel, ...args),
         // Auth OAuth
         signInWithOAuth: (provider) => electron_1.ipcRenderer.invoke('auth:sign-in-oauth', provider),
-        captureScreenshot: () => electron_1.ipcRenderer.invoke('capture-screenshot'),
+        captureScreenshot: (windowInfo) => electron_1.ipcRenderer.invoke('capture-screenshot', windowInfo),
         analyzeScreenshot: (imagePath, requestId) => electron_1.ipcRenderer.invoke('analyze-screenshot', imagePath, requestId),
         analyzeScreenshotBatch: (inputs) => electron_1.ipcRenderer.invoke('analyze-screenshot-batch', inputs),
         generateActivitySummary: (context) => electron_1.ipcRenderer.invoke('generate-activity-summary', context),
@@ -93,6 +94,10 @@ electron_1.contextBridge.exposeInMainWorld('electron', {
         db: {
             // Entries
             getAllEntries: () => electron_1.ipcRenderer.invoke('db:get-all-entries'),
+            getEntriesByDateRange: (startTime, endTime) => electron_1.ipcRenderer.invoke('db:get-entries-by-date-range', startTime, endTime),
+            getEntriesByBucket: (bucketId) => electron_1.ipcRenderer.invoke('db:get-entries-by-bucket', bucketId),
+            getEntriesByJiraKey: (jiraKey) => electron_1.ipcRenderer.invoke('db:get-entries-by-jira-key', jiraKey),
+            getEntryCount: () => electron_1.ipcRenderer.invoke('db:get-entry-count'),
             getEntry: (id) => electron_1.ipcRenderer.invoke('db:get-entry', id),
             insertEntry: (entry) => electron_1.ipcRenderer.invoke('db:insert-entry', entry),
             updateEntry: (id, updates) => electron_1.ipcRenderer.invoke('db:update-entry', id, updates),
@@ -172,6 +177,10 @@ electron_1.contextBridge.exposeInMainWorld('electron', {
             saveAudioAndTranscribe: (entryId, audioDataOrPath, mimeType, isFilePath) => electron_1.ipcRenderer.invoke('meeting:save-audio-and-transcribe', entryId, audioDataOrPath, mimeType, isFilePath),
             retryTranscription: (entryId, audioPath, mimeType) => electron_1.ipcRenderer.invoke('meeting:retry-transcription', entryId, audioPath, mimeType),
             getTranscriptionUsage: () => electron_1.ipcRenderer.invoke('meeting:get-transcription-usage'),
+            // Pending transcription persistence
+            savePendingTranscription: (sessionId, transcriptions) => electron_1.ipcRenderer.invoke('meeting:save-pending-transcription', sessionId, transcriptions),
+            loadPendingTranscriptions: () => electron_1.ipcRenderer.invoke('meeting:load-pending-transcriptions'),
+            removePendingTranscription: (sessionId) => electron_1.ipcRenderer.invoke('meeting:remove-pending-transcription', sessionId),
             // System audio capture (for capturing what others say in meetings)
             isSystemAudioAvailable: () => electron_1.ipcRenderer.invoke('meeting:is-system-audio-available'),
             startSystemAudioCapture: () => electron_1.ipcRenderer.invoke('meeting:start-system-audio-capture'),
@@ -228,6 +237,19 @@ electron_1.contextBridge.exposeInMainWorld('electron', {
                 electron_1.ipcRenderer.on('working-hours:start-timer', subscription);
                 return () => electron_1.ipcRenderer.removeListener('working-hours:start-timer', subscription);
             },
+        },
+        // TimeWarp: Background activity tracking
+        backgroundActivity: {
+            getActivities: () => electron_1.ipcRenderer.invoke('get-background-activities'),
+            claimActivities: (fromTimestamp, toTimestamp) => electron_1.ipcRenderer.invoke('claim-background-activities', fromTimestamp, toTimestamp),
+            pause: () => electron_1.ipcRenderer.send('pause-background-tracker'),
+            resume: () => electron_1.ipcRenderer.send('resume-background-tracker'),
+            onUpdate: (callback) => {
+                const subscription = (_event, activities) => callback(activities);
+                electron_1.ipcRenderer.on('background-activities-update', subscription);
+                return () => electron_1.ipcRenderer.removeListener('background-activities-update', subscription);
+            },
+            getAppIcon: (bundleId) => electron_1.ipcRenderer.invoke('get-app-icon-by-bundle', bundleId),
         },
     },
     // Analytics (top-level, not inside ipcRenderer)

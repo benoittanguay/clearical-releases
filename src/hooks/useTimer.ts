@@ -274,6 +274,7 @@ export function useTimer() {
     const [isRunning, setIsRunning] = useState(false);
     const [isPaused, setIsPaused] = useState(false);
     const [startTime, setStartTime] = useState<number | null>(null);
+    const [actualStartTime, setActualStartTime] = useState<number | null>(null);
     const [elapsed, setElapsed] = useState(0);
     const [windowActivity, setWindowActivity] = useState<WindowActivity[]>([]);
     const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -984,6 +985,7 @@ export function useTimer() {
     const start = useCallback((overrideStartTime?: number) => {
         setIsRunning(true);
         setIsPaused(false);
+        setActualStartTime(Date.now());
         if (overrideStartTime) {
             // TimeWarp: retroactive start
             setStartTime(overrideStartTime);
@@ -991,7 +993,7 @@ export function useTimer() {
 
             // Claim background activities for the retroactive period and convert to WindowActivity[]
             // @ts-ignore
-            window.electron?.backgroundActivity?.claimActivities?.(overrideStartTime, Date.now())
+            window.electron?.ipcRenderer?.backgroundActivity?.claimActivities?.(overrideStartTime, Date.now())
                 .then((claimed: any[]) => {
                     if (claimed && claimed.length > 0) {
                         const claimedWindowActivities: WindowActivity[] = claimed.map((bg: any) => ({
@@ -1045,7 +1047,7 @@ export function useTimer() {
         }
         // Pause background activity tracker — useTimer takes over
         // @ts-ignore
-        window.electron?.backgroundActivity?.pause?.();
+        window.electron?.ipcRenderer?.backgroundActivity?.pause?.();
     }, []);
 
     // Store state values in refs for use in memoized callbacks without dependencies
@@ -1186,11 +1188,12 @@ export function useTimer() {
 
         // Resume background activity tracker
         // @ts-ignore
-        window.electron?.backgroundActivity?.resume?.();
+        window.electron?.ipcRenderer?.backgroundActivity?.resume?.();
 
         // Reset elapsed time to zero after stopping
         setElapsed(0);
         setStartTime(null);
+        setActualStartTime(null);
 
         return finalActivity;
     }, []);
@@ -1394,6 +1397,7 @@ export function useTimer() {
         setIsPaused(false);
         setElapsed(0);
         setStartTime(null);
+        setActualStartTime(null);
         setWindowActivity([]);
         lastWindowRef.current = null;
         currentActivityScreenshots.current = []; // Reset screenshots
@@ -1456,5 +1460,5 @@ export function useTimer() {
         }
     }, []);
 
-    return { isRunning, isPaused, elapsed, startTime, windowActivity, start, stop, pause, resume, adjustStartTime, reset, formatTime, checkPermissions, setActiveRecordingEntry };
+    return { isRunning, isPaused, elapsed, startTime, actualStartTime, windowActivity, start, stop, pause, resume, adjustStartTime, reset, formatTime, checkPermissions, setActiveRecordingEntry };
 }

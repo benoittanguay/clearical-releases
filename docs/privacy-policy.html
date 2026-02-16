@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Privacy Policy — Clearical</title>
+<style>
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    max-width: 800px;
+    margin: 40px auto;
+    padding: 0 20px;
+    color: #222;
+    line-height: 1.6;
+    font-size: 15px;
+  }
+  h1 { font-size: 28px; margin-bottom: 4px; }
+  h2 { font-size: 20px; margin-top: 32px; border-bottom: 1px solid #ddd; padding-bottom: 6px; }
+  h3 { font-size: 16px; margin-top: 20px; }
+  p, li { margin-bottom: 8px; }
+  ul { padding-left: 24px; }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; }
+  th, td { border: 1px solid #ccc; padding: 8px 12px; text-align: left; font-size: 14px; }
+  th { background: #f5f5f5; font-weight: 600; }
+  a { color: #1a6ed8; }
+  .meta { color: #555; font-size: 14px; margin-bottom: 16px; }
+</style>
+</head>
+<body>
+
+<h1>Privacy Policy</h1>
+<p class="meta"><strong>Effective Date:</strong> February 14, 2026<br>
+<strong>Last Updated:</strong> February 14, 2026</p>
+
+<p>Clearical Technologies ("we," "us," or "our") operates the Clearical desktop application and website at clearical.io (collectively, the "Service"). This Privacy Policy explains how we collect, use, disclose, and protect your information when you use our Service.</p>
+
+<p>By using Clearical, you agree to the collection and use of information in accordance with this Privacy Policy.</p>
+
+<h2>1. Information We Collect</h2>
+
+<h3>1.1 Information You Provide</h3>
+<ul>
+  <li><strong>Account Information:</strong> Email address used for authentication and account management.</li>
+  <li><strong>Payment Information:</strong> When you subscribe to a paid plan, payment processing is handled by Stripe. We store your Stripe customer ID but do not store credit card numbers or payment details directly.</li>
+  <li><strong>API Credentials:</strong> If you choose to integrate with Jira or Tempo, you provide API tokens for these services. These credentials are encrypted and stored locally on your device.</li>
+</ul>
+
+<h3>1.2 Information Collected Automatically</h3>
+<p>When you use Clearical's time tracking features, the application collects:</p>
+<ul>
+  <li><strong>Time Entry Data:</strong> Start and end times, duration of work sessions, and associated notes or descriptions.</li>
+  <li><strong>Window Activity Data:</strong> The name, bundle identifier, and window title of the frontmost application. This data is collected via the macOS Accessibility API (AppleScript <code>System Events</code>) to read the title bar text of the active window. No content inside windows is read — only the application name and window title. This is used to automatically generate time entry descriptions (e.g., "Working in Excel — Budget Q3.xlsx").</li>
+  <li><strong>Screenshots:</strong> If you enable screenshot capture, Clearical captures an image of the single active window (not the full screen) using the macOS <code>CGWindowListCreateImage</code> API targeted by window ID. Screenshots are encrypted using AES-256-GCM and stored locally on your device. Clearical does not record video or stream screen content.</li>
+  <li><strong>Meeting Audio Recordings:</strong> If you enable the optional meeting recording feature, Clearical records audio from your microphone via the native <code>AVAudioEngine</code> API when it detects an active video call (Zoom, Microsoft Teams, Google Meet, etc.). Audio recordings are stored locally on your device. Recordings are transcribed on-device using Apple's <code>SFSpeechRecognizer</code> framework, and the resulting text is attached to the relevant time entry as meeting notes. No audio data is streamed or stored externally.</li>
+  <li><strong>AI Analysis Data:</strong> If you enable AI-powered descriptions (premium feature), screenshots may be sent to Google's Gemini API for processing to generate activity descriptions (e.g., "Editing a React component in VS Code"). Images are processed transiently and are not retained by the AI service. This feature is optional and disabled by default.</li>
+</ul>
+
+<h3>1.3 Device Information</h3>
+<ul>
+  <li>Device identifier, device name, platform, and operating system version (used for subscription validation across devices).</li>
+</ul>
+
+<h2>2. How We Use Your Information</h2>
+<p>We use the information we collect to:</p>
+<ul>
+  <li><strong>Provide the Service:</strong> Enable time tracking, automatic activity descriptions, meeting transcription, and integration with Jira and Tempo.</li>
+  <li><strong>Process Payments:</strong> Manage subscriptions and billing through Stripe.</li>
+  <li><strong>Authenticate Users:</strong> Verify your identity and manage your account.</li>
+  <li><strong>Improve the Service:</strong> Understand how features are used to enhance functionality.</li>
+  <li><strong>Provide AI Features:</strong> Generate activity summaries and classifications using cloud-based AI services (Google Gemini) when the user explicitly opts in.</li>
+  <li><strong>Communicate with You:</strong> Send service-related notifications, updates, and support responses.</li>
+</ul>
+
+<h2>3. macOS Permissions</h2>
+<p>Clearical requests the following macOS permissions. Each can be revoked at any time through System Settings &gt; Privacy &amp; Security, which will disable the related features.</p>
+
+<h3>3.1 Accessibility</h3>
+<p>Clearical uses the Accessibility API to read the name, bundle identifier, and window title of the frontmost application via AppleScript (<code>tell application "System Events"</code>). This is used solely to generate automatic time entry descriptions. Clearical does not inject keystrokes, perform UI automation, or interact with any application controls. No content inside windows is read — only the title bar text.</p>
+
+<h3>3.2 Screen Recording</h3>
+<p>Clearical uses the Screen Recording permission to capture a screenshot of the single active window (not the full screen) using <code>CGWindowListCreateImage()</code>. Screenshots are captured only while the timer is running, stored locally in the app's sandboxed data directory, and encrypted at rest. Clearical does not record video, stream screen content, or capture when the timer is stopped. Users can blacklist specific applications to prevent any capture.</p>
+
+<h3>3.3 Microphone</h3>
+<p>Clearical uses microphone access to record audio during video calls for meeting transcription. Recording is opt-in — the user must explicitly enable auto-recording in settings. Audio is captured via the native <code>AVAudioEngine</code> API and transcribed on-device using Apple's <code>SFSpeechRecognizer</code> framework. Audio files are stored locally in the app's sandboxed data directory. No audio is streamed or stored externally.</p>
+
+<h3>3.4 Speech Recognition</h3>
+<p>Clearical uses on-device speech recognition (<code>SFSpeechRecognizer</code>) to transcribe meeting audio recordings into text. Transcription happens entirely on-device. The resulting text is attached to time entries as meeting notes.</p>
+
+<h2>4. Data Storage and Security</h2>
+
+<h3>4.1 Local Storage</h3>
+<p>The majority of your data is stored locally on your device:</p>
+<ul>
+  <li><strong>Database:</strong> Time entries, work buckets, and cached data are stored in an SQLite database on your device.</li>
+  <li><strong>Screenshots:</strong> Captured screenshots are encrypted using AES-256-GCM encryption and stored locally. The encryption key is protected by your operating system's secure storage (Keychain on macOS).</li>
+  <li><strong>Audio Recordings:</strong> Meeting recordings are stored locally in the app's sandboxed data directory.</li>
+  <li><strong>API Credentials:</strong> Jira and Tempo API tokens are encrypted using your operating system's secure storage and never transmitted except to authenticate with those services.</li>
+</ul>
+
+<h3>4.2 Cloud Services</h3>
+<p>Limited data is transmitted to third-party services:</p>
+<ul>
+  <li><strong>Supabase:</strong> Handles authentication. Stores your email address and authentication tokens.</li>
+  <li><strong>Stripe:</strong> Processes payments. Stores customer ID, subscription status, and payment method details.</li>
+  <li><strong>Google Gemini (Optional):</strong> If you enable AI-powered screenshot analysis, screenshot data may be sent to Google's Gemini API for transient processing. Images are not retained by the service. This feature is optional and disabled by default.</li>
+</ul>
+
+<h3>4.3 Security Measures</h3>
+<p>We implement industry-standard security measures including:</p>
+<ul>
+  <li>Encryption of sensitive data at rest (AES-256-GCM)</li>
+  <li>Encryption of data in transit (HTTPS/TLS)</li>
+  <li>Operating system-level credential protection</li>
+  <li>Secure session management</li>
+</ul>
+
+<h2>5. Third-Party Services</h2>
+<p>Clearical integrates with the following third-party services:</p>
+
+<table>
+  <thead>
+    <tr><th>Service</th><th>Purpose</th><th>Data Shared</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>Stripe</td><td>Payment processing</td><td>Email, subscription data</td></tr>
+    <tr><td>Supabase</td><td>Authentication</td><td>Email, auth tokens</td></tr>
+    <tr><td>Jira (user-configured)</td><td>Issue tracking integration</td><td>API requests with your credentials</td></tr>
+    <tr><td>Tempo (user-configured)</td><td>Time logging integration</td><td>Time entries, API requests with your credentials</td></tr>
+    <tr><td>Google Gemini (optional)</td><td>AI screenshot analysis</td><td>Screenshot images (transient, not retained)</td></tr>
+  </tbody>
+</table>
+
+<p>Each third-party service has its own privacy policy. We encourage you to review them:</p>
+<ul>
+  <li>Stripe: <a href="https://stripe.com/privacy">https://stripe.com/privacy</a></li>
+  <li>Supabase: <a href="https://supabase.com/privacy">https://supabase.com/privacy</a></li>
+  <li>Atlassian (Jira): <a href="https://www.atlassian.com/legal/privacy-policy">https://www.atlassian.com/legal/privacy-policy</a></li>
+  <li>Tempo: <a href="https://www.tempo.io/privacy-policy">https://www.tempo.io/privacy-policy</a></li>
+  <li>Google: <a href="https://policies.google.com/privacy">https://policies.google.com/privacy</a></li>
+</ul>
+
+<h2>6. Data Retention</h2>
+<ul>
+  <li><strong>Local Data:</strong> Time entries, screenshots, audio recordings, and activity data are retained on your device until you delete them. We do not automatically delete local data.</li>
+  <li><strong>Account Data:</strong> Your account information is retained as long as your account is active. Upon account deletion, we remove your data from our cloud services.</li>
+  <li><strong>Payment Data:</strong> Stripe retains payment information according to their policies and legal requirements.</li>
+</ul>
+
+<h2>7. Your Rights and Choices</h2>
+
+<h3>7.1 Access and Export</h3>
+<p>You can export your time tracking data at any time through the application's export feature.</p>
+
+<h3>7.2 Deletion</h3>
+<ul>
+  <li>Delete individual time entries, screenshots, and audio recordings within the application.</li>
+  <li>Request deletion of your account and associated cloud data by contacting <a href="mailto:support@clearical.io">support@clearical.io</a>.</li>
+</ul>
+
+<h3>7.3 Control Over Data Collection</h3>
+<ul>
+  <li><strong>App Blacklisting:</strong> Exclude specific applications from activity tracking and screenshot capture.</li>
+  <li><strong>Screenshot Settings:</strong> Enable, disable, or adjust screenshot capture frequency.</li>
+  <li><strong>Meeting Recording:</strong> Enable or disable automatic meeting recording. This feature is opt-in and disabled by default.</li>
+  <li><strong>AI Features:</strong> Enable or disable AI-powered screenshot analysis.</li>
+  <li><strong>Integrations:</strong> Connect or disconnect Jira and Tempo integrations at any time.</li>
+</ul>
+
+<h3>7.4 Permissions</h3>
+<p>On macOS, Clearical requests Accessibility, Screen Recording, Microphone, and Speech Recognition permissions. You can revoke any of these permissions at any time through System Settings &gt; Privacy &amp; Security, which will disable the related features. See Section 3 for details on how each permission is used.</p>
+
+<h2>8. Children's Privacy</h2>
+<p>Clearical is not intended for use by individuals under the age of 16. We do not knowingly collect personal information from children. If you believe we have collected information from a child, please contact us at <a href="mailto:support@clearical.io">support@clearical.io</a>.</p>
+
+<h2>9. Analytics and Tracking</h2>
+<p>Clearical does not use third-party analytics services or tracking cookies. We do not track your usage patterns, share data with advertisers, or build behavioral profiles.</p>
+
+<h2>10. International Data Transfers</h2>
+<p>Your data may be processed in countries other than your own when using cloud services (Stripe, Supabase, Google). These services maintain appropriate safeguards for international data transfers.</p>
+
+<h2>11. Changes to This Privacy Policy</h2>
+<p>We may update this Privacy Policy from time to time. We will notify you of any changes by:</p>
+<ul>
+  <li>Posting the new Privacy Policy on this page</li>
+  <li>Updating the "Last Updated" date</li>
+  <li>Notifying you through the application for significant changes</li>
+</ul>
+<p>We encourage you to review this Privacy Policy periodically.</p>
+
+<h2>12. Quebec Privacy Law Compliance</h2>
+<p>As a Quebec-based company, we comply with Quebec's Act respecting the protection of personal information in the private sector. You have the right to:</p>
+<ul>
+  <li>Access your personal information</li>
+  <li>Request correction of inaccurate information</li>
+  <li>Withdraw consent to data processing (subject to legal limitations)</li>
+  <li>File a complaint with the Commission d'accès à l'information du Québec</li>
+</ul>
+
+<h2>13. Contact Us</h2>
+<p>If you have questions about this Privacy Policy or our privacy practices, please contact us:</p>
+<p>Clearical Technologies<br>
+Email: <a href="mailto:support@clearical.io">support@clearical.io</a><br>
+Website: <a href="https://clearical.io">https://clearical.io</a></p>
+
+</body>
+</html>

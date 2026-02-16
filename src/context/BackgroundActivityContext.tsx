@@ -16,7 +16,7 @@ export function BackgroundActivityProvider({ children }: { children: ReactNode }
     useEffect(() => {
         // Load initial activities
         // @ts-ignore
-        window.electron?.backgroundActivity?.getActivities?.()
+        window.electron?.ipcRenderer?.backgroundActivity?.getActivities?.()
             .then((result: BackgroundActivity[]) => {
                 if (result) setActivities(result);
             })
@@ -24,7 +24,7 @@ export function BackgroundActivityProvider({ children }: { children: ReactNode }
 
         // Subscribe to updates
         // @ts-ignore
-        const unsubscribe = window.electron?.backgroundActivity?.onUpdate?.((newActivities: BackgroundActivity[]) => {
+        const unsubscribe = window.electron?.ipcRenderer?.backgroundActivity?.onUpdate?.((newActivities: BackgroundActivity[]) => {
             setActivities(newActivities);
         });
 
@@ -35,18 +35,18 @@ export function BackgroundActivityProvider({ children }: { children: ReactNode }
 
     const claimActivities = useCallback(async (fromTimestamp: number, toTimestamp: number): Promise<BackgroundActivity[]> => {
         // @ts-ignore
-        const claimed = await window.electron?.backgroundActivity?.claimActivities?.(fromTimestamp, toTimestamp);
+        const claimed = await window.electron?.ipcRenderer?.backgroundActivity?.claimActivities?.(fromTimestamp, toTimestamp);
         return claimed || [];
     }, []);
 
     const pauseTracking = useCallback(() => {
         // @ts-ignore
-        window.electron?.backgroundActivity?.pause?.();
+        window.electron?.ipcRenderer?.backgroundActivity?.pause?.();
     }, []);
 
     const resumeTracking = useCallback(() => {
         // @ts-ignore
-        window.electron?.backgroundActivity?.resume?.();
+        window.electron?.ipcRenderer?.backgroundActivity?.resume?.();
     }, []);
 
     return (

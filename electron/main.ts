@@ -3624,6 +3624,31 @@ ipcMain.on('resume-background-tracker', () => {
     tracker.resume();
 });
 
+const bundleIconCache = new Map<string, string | null>();
+ipcMain.handle('get-app-icon-by-bundle', async (_event, bundleId: string) => {
+    if (!bundleId || !/^[a-zA-Z0-9._-]+$/.test(bundleId)) return null;
+    if (bundleIconCache.has(bundleId)) return bundleIconCache.get(bundleId) ?? null;
+    try {
+        const { exec } = await import('child_process');
+        const appPath = await new Promise<string>((resolve, reject) => {
+            exec(
+                `mdfind "kMDItemCFBundleIdentifier == '${bundleId}'" | head -1`,
+                { timeout: 3000 },
+                (err, stdout) => err ? reject(err) : resolve(stdout.toString().trim())
+            );
+        });
+        if (!appPath) { bundleIconCache.set(bundleId, null); return null; }
+        const icon = await app.getFileIcon(appPath, { size: 'small' });
+        const dataUrl = icon.toDataURL();
+        bundleIconCache.set(bundleId, dataUrl);
+        return dataUrl;
+    } catch (err) {
+        console.error(`[Main] get-app-icon failed for ${bundleId}:`, err);
+        bundleIconCache.set(bundleId, null);
+        return null;
+    }
+});
+
 // Calendar Integration
 ipcMain.handle('calendar:connect', async () => {
     try {
@@ -4354,6 +4379,13 @@ function createApplicationMenu() {
 let isCleaningUp = false;
 
 app.on('before-quit', async (event) => {
+    // When the auto-updater is installing, let the quit proceed unblocked
+    // so electron-updater can replace the app and relaunch
+    if (updater.isInstallingUpdate) {
+        console.log('[Main] Quit triggered by auto-updater install — allowing quit to proceed');
+        return;
+    }
+
     if (!isCleaningUp) {
         // Prevent the app from quitting until cleanup is complete
         event.preventDefault();

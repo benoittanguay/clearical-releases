@@ -51,6 +51,7 @@ export class AutoUpdater {
         downloaded: false,
         downloading: false,
     };
+    private _isInstallingUpdate = false;
 
     // Configuration
     private checkOnStartup = true;
@@ -388,6 +389,7 @@ export class AutoUpdater {
                 // isSilent: true = don't show installer window (better for macOS)
                 // isForceRunAfter: true = force app to restart after install
                 log.info('[AutoUpdater] Calling autoUpdater.quitAndInstall(true, true)...');
+                this._isInstallingUpdate = true;
                 autoUpdater.quitAndInstall(true, true);
 
                 // If quitAndInstall doesn't exit the app (rare), force quit after a delay
@@ -415,6 +417,14 @@ export class AutoUpdater {
                 }
             }
         }, 500);
+    }
+
+    /**
+     * Whether the updater is currently in the process of installing an update.
+     * When true, the app's before-quit handler should not block the quit.
+     */
+    public get isInstallingUpdate(): boolean {
+        return this._isInstallingUpdate;
     }
 
     /**

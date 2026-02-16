@@ -2,6 +2,13 @@
 
 All notable changes to Clearical will be documented in this file.
 
+## [1.7.43] - 2026-02-16
+
+### Bug Fixes
+- **Auto-Update**: Fixed "Install & Restart" doing nothing — before-quit handler was blocking electron-updater's quit flow, preventing the update from being applied
+
+---
+
 ## [1.7.41] - 2026-02-15
 
 ### Features
