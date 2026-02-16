@@ -973,20 +973,26 @@ export function useTimer() {
         }
     }, []);
 
-    const start = useCallback(() => {
+    const start = useCallback((overrideStartTime?: number) => {
         setIsRunning(true);
         setIsPaused(false);
-        // Use callback form to get current elapsed value without it being a dependency
-        setElapsed(currentElapsed => {
-            // If starting fresh (not resuming), start from 0
-            if (currentElapsed === 0) {
-                setStartTime(Date.now());
-            } else {
-                // Resuming - adjust start time to account for elapsed
-                setStartTime(Date.now() - currentElapsed);
-            }
-            return currentElapsed;
-        });
+        if (overrideStartTime) {
+            // TimeWarp: retroactive start
+            setStartTime(overrideStartTime);
+            setElapsed(Date.now() - overrideStartTime);
+        } else {
+            // Use callback form to get current elapsed value without it being a dependency
+            setElapsed(currentElapsed => {
+                // If starting fresh (not resuming), start from 0
+                if (currentElapsed === 0) {
+                    setStartTime(Date.now());
+                } else {
+                    // Resuming - adjust start time to account for elapsed
+                    setStartTime(Date.now() - currentElapsed);
+                }
+                return currentElapsed;
+            });
+        }
         setWindowActivity([]); // Clear previous activity
         lastWindowRef.current = null;
         currentActivityScreenshots.current = []; // Reset screenshots
@@ -1006,6 +1012,9 @@ export function useTimer() {
             clearTimeout(batchTimeoutRef.current);
             batchTimeoutRef.current = null;
         }
+        // Pause background activity tracker — useTimer takes over
+        // @ts-ignore
+        window.electron?.backgroundActivity?.pause?.();
     }, []);
 
     // Store state values in refs for use in memoized callbacks without dependencies
@@ -1044,6 +1053,12 @@ export function useTimer() {
             setStartTime(Date.now() - currentElapsed);
             return currentElapsed;
         });
+    }, []);
+
+    const adjustStartTime = useCallback((newStartTime: number) => {
+        if (!isRunningRef.current) return;
+        setStartTime(newStartTime);
+        // Elapsed will auto-recalculate from the interval since it uses Date.now() - startTime
     }, []);
 
     const stop = useCallback(async () => {
@@ -1137,6 +1152,10 @@ export function useTimer() {
         }
 
         const finalActivity = calculateFinalActivities(now);
+
+        // Resume background activity tracker
+        // @ts-ignore
+        window.electron?.backgroundActivity?.resume?.();
 
         // Reset elapsed time to zero after stopping
         setElapsed(0);
@@ -1406,5 +1425,5 @@ export function useTimer() {
         }
     }, []);
 
-    return { isRunning, isPaused, elapsed, windowActivity, start, stop, pause, resume, reset, formatTime, checkPermissions, setActiveRecordingEntry };
+    return { isRunning, isPaused, elapsed, startTime, windowActivity, start, stop, pause, resume, adjustStartTime, reset, formatTime, checkPermissions, setActiveRecordingEntry };
 }
