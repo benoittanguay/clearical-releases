@@ -433,7 +433,7 @@ ipcMain.handle('capture-screenshot', async (_event, windowInfo?: { appName: stri
 
 // AI Screenshot Analysis (via Gemini cloud service)
 // PREMIUM FEATURE: Requires Workplace Plan subscription
-ipcMain.handle('analyze-screenshot', requirePremium('AI Analysis', async (event, imagePath: string, requestId?: string) => {
+ipcMain.handle('analyze-screenshot', requirePremium('AI Analysis', async (event, imagePath: string, requestId?: string, ocrText?: string[]) => {
     console.log('[Main] analyze-screenshot requested for:', imagePath);
     console.log('[Main] Using Gemini cloud AI for screenshot analysis');
 
@@ -586,7 +586,8 @@ ipcMain.handle('analyze-screenshot', requirePremium('AI Analysis', async (event,
             appName,
             windowTitle,
             requestId,
-            contextSignals.length > 0 ? contextSignals : undefined
+            contextSignals.length > 0 ? contextSignals : undefined,
+            ocrText
         );
 
         // Clean up temp decrypted file if we created one
@@ -659,6 +660,7 @@ ipcMain.handle('analyze-screenshot-batch', requirePremium('AI Analysis', async (
     appName?: string;
     windowTitle?: string;
     requestId?: string;
+    ocrText?: string[];
 }>) => {
     console.log(`[Main] analyze-screenshot-batch requested for ${inputs.length} screenshots`);
 
@@ -672,6 +674,7 @@ ipcMain.handle('analyze-screenshot-batch', requirePremium('AI Analysis', async (
         appName?: string;
         windowTitle?: string;
         requestId?: string;
+        ocrText?: string[];
     }> = [];
 
     const tempFiles: string[] = [];
@@ -724,7 +727,8 @@ ipcMain.handle('analyze-screenshot-batch', requirePremium('AI Analysis', async (
             imagePath: analyzeImagePath,
             appName,
             windowTitle,
-            requestId: input.requestId
+            requestId: input.requestId,
+            ocrText: input.ocrText
         });
     }
 
