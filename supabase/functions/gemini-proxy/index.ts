@@ -384,7 +384,7 @@ async function handleAnalyze(body: RequestBody): Promise<AnalyzeResponse> {
     // Add OCR text if provided — this gives the LLM exact text from the screen
     if (body.ocrText && body.ocrText.length > 0) {
         prompt += `\n\nText detected on screen (use these for specific details):`;
-        prompt += `\n${body.ocrText.slice(0, 50).join('\n')}`;
+        prompt += `\n${body.ocrText.slice(0, 50).map(t => String(t).slice(0, 500)).join('\n')}`;
     }
 
     // Add context from signals if provided

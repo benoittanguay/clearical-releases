@@ -692,7 +692,7 @@ class AIService {
             appName,
             windowTitle,
             signals,
-            ocrText
+            ocrText: ocrText ? filterOcrText(ocrText) : undefined
         });
 
         if (result.success && result.description) {
@@ -1065,7 +1065,7 @@ class AIService {
                         mimeType: imageResult.mimeType,
                         appName: input.appName,
                         windowTitle: input.windowTitle,
-                        ocrText: input.ocrText
+                        ocrText: input.ocrText ? filterOcrText(input.ocrText) : undefined
                     });
                 } catch (error) {
                     processedImages.push({
