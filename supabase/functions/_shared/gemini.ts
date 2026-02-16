@@ -272,6 +272,7 @@ export interface BatchImageInput {
     mimeType: string;
     appName?: string;
     windowTitle?: string;
+    ocrText?: string[];  // OCR text detected on screen
 }
 
 /**
@@ -325,16 +326,16 @@ export async function analyzeImageBatch(
 
     // Add instruction text first
     parts.push({
-        text: `Analyze the following ${images.length} screenshots and describe what the user is doing in each one. For each screenshot, provide a single, concise sentence (under 100 words) focusing on the specific task or activity visible, not general app descriptions.
+        text: `Analyze the following ${images.length} screenshots and describe what the user is doing in each one. For each screenshot, provide 2-3 detailed sentences. Include specific details visible on screen: file names, function names, URLs, error messages, UI elements, document titles, or data being viewed. Do NOT give generic descriptions like "editing code" — instead say WHAT code, WHAT file, WHAT function.
 
 Respond with ONLY a JSON array containing exactly ${images.length} objects, one for each image in order. Each object should have:
-- "description": a concise activity description
+- "description": a detailed activity description (2-3 sentences)
 - "confidence": a number between 0 and 1 indicating your confidence
 
 Example response format:
 [
-  {"description": "Editing a React component in VS Code", "confidence": 0.95},
-  {"description": "Browsing GitHub pull requests", "confidence": 0.9}
+  {"description": "Editing the handleSubmit function in src/components/LoginForm.tsx, adding form validation logic for email and password fields. The VS Code editor shows TypeScript with React hooks.", "confidence": 0.95},
+  {"description": "Reviewing pull request #142 on GitHub titled 'Add user authentication flow'. The diff view shows changes to the auth middleware with new JWT token validation.", "confidence": 0.9}
 ]
 
 Now analyze these ${images.length} screenshots:`
@@ -358,6 +359,9 @@ Now analyze these ${images.length} screenshots:`
             context += ' context:';
             if (img.appName) context += ` Application: ${img.appName}`;
             if (img.windowTitle) context += ` Window: ${img.windowTitle}`;
+        }
+        if (img.ocrText && img.ocrText.length > 0) {
+            context += `\nText on screen: ${img.ocrText.slice(0, 30).join(', ')}`;
         }
         parts.push({ text: context });
     }
