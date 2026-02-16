@@ -206,6 +206,9 @@ export class BackgroundActivityTracker {
      * @returns The claimed activities
      */
     public async claimActivities(from: number, to: number): Promise<BackgroundActivity[]> {
+        // Ensure main screenshots directory exists before moving files
+        await fs.promises.mkdir(this.screenshotsDir, { recursive: true });
+
         const claimed: BackgroundActivity[] = [];
         const remaining: BackgroundActivity[] = [];
 

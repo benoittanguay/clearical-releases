@@ -137,14 +137,20 @@ export function TimeWarpTimeline({
         onStartTimeChange(ts);
     }, [isDragging, pixelToTimestamp, visibleStart, now, isRunning, onStartTimeChange]);
 
-    // --- Scroll zoom ---
-    const handleWheel = useCallback((e: React.WheelEvent) => {
-        e.preventDefault();
-        setVisibleDuration(prev => {
-            const factor = e.deltaY > 0 ? 1.2 : 0.8;
-            const next = prev * factor;
-            return Math.max(MIN_VISIBLE_DURATION, Math.min(MAX_VISIBLE_DURATION, next));
-        });
+    // --- Scroll zoom (non-passive to allow preventDefault) ---
+    useEffect(() => {
+        const el = containerRef.current;
+        if (!el) return;
+        const onWheel = (e: WheelEvent) => {
+            e.preventDefault();
+            setVisibleDuration(prev => {
+                const factor = e.deltaY > 0 ? 1.2 : 0.8;
+                const next = prev * factor;
+                return Math.max(MIN_VISIBLE_DURATION, Math.min(MAX_VISIBLE_DURATION, next));
+            });
+        };
+        el.addEventListener('wheel', onWheel, { passive: false });
+        return () => el.removeEventListener('wheel', onWheel);
     }, []);
 
     // --- Compute hour marks ---
@@ -178,7 +184,6 @@ export function TimeWarpTimeline({
                 cursor: isDragging ? 'grabbing' : 'pointer',
             }}
             onClick={handleTimelineClick}
-            onWheel={handleWheel}
         >
             {/* Horizontal baseline line */}
             <div
