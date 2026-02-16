@@ -916,7 +916,11 @@ export function useTimer() {
 
         if (isRunning && !isPaused && startTime) {
             intervalRef.current = setInterval(() => {
-                setElapsed(Date.now() - startTime);
+                // Use ref to avoid restarting intervals when adjustStartTime changes startTime
+                const currentStart = startTimeRef.current;
+                if (currentStart) {
+                    setElapsed(Date.now() - currentStart);
+                }
             }, 100);
 
             // Start window polling immediately, then continue every interval
@@ -940,7 +944,11 @@ export function useTimer() {
             if (screenshotIntervalRef.current) clearInterval(screenshotIntervalRef.current);
             if (windowPollRef.current) clearInterval(windowPollRef.current);
         };
-    }, [isRunning, isPaused, startTime, settings.screenshotCooldown]); // Note: windowActivity intentionally excluded to prevent interval thrashing
+    // Note: startTime intentionally excluded — uses startTimeRef inside interval to prevent
+    // interval teardown/rebuild when adjustStartTime changes startTime (TimeWarp feature).
+    // windowActivity also excluded to prevent interval thrashing.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isRunning, isPaused, settings.screenshotCooldown]);
 
     const checkPermissions = useCallback(async (): Promise<PermissionCheckResult> => {
         try {
@@ -980,6 +988,28 @@ export function useTimer() {
             // TimeWarp: retroactive start
             setStartTime(overrideStartTime);
             setElapsed(Date.now() - overrideStartTime);
+
+            // Claim background activities for the retroactive period and convert to WindowActivity[]
+            // @ts-ignore
+            window.electron?.backgroundActivity?.claimActivities?.(overrideStartTime, Date.now())
+                .then((claimed: any[]) => {
+                    if (claimed && claimed.length > 0) {
+                        const claimedWindowActivities: WindowActivity[] = claimed.map((bg: any) => ({
+                            appName: bg.appName,
+                            windowTitle: bg.windowTitle,
+                            bundleId: bg.bundleId,
+                            browserProfile: bg.browserProfile,
+                            timestamp: bg.startTimestamp,
+                            duration: bg.endTimestamp - bg.startTimestamp,
+                            screenshotPaths: bg.screenshotPaths || [],
+                        }));
+                        setWindowActivity(claimedWindowActivities);
+                        console.log(`[Timer] TimeWarp: claimed ${claimedWindowActivities.length} background activities`);
+                    }
+                })
+                .catch((err: any) => {
+                    console.error('[Timer] TimeWarp: failed to claim background activities:', err);
+                });
         } else {
             // Use callback form to get current elapsed value without it being a dependency
             setElapsed(currentElapsed => {
@@ -993,7 +1023,7 @@ export function useTimer() {
                 return currentElapsed;
             });
         }
-        setWindowActivity([]); // Clear previous activity
+        setWindowActivity(prev => overrideStartTime ? prev : []); // Clear only if not retroactive
         lastWindowRef.current = null;
         currentActivityScreenshots.current = []; // Reset screenshots
         currentActivityScreenshotDescriptions.current = {}; // Reset descriptions
