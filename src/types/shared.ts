@@ -82,6 +82,18 @@ export interface WindowActivity {
     screenshotAnalysis?: { [path: string]: ScreenshotAnalysisResult };
 }
 
+export interface BackgroundActivity {
+    id: string;
+    appName: string;
+    windowTitle: string;
+    bundleId: string;
+    browserProfile?: string;
+    startTimestamp: number;
+    endTimestamp: number;
+    isMeeting: boolean;
+    screenshotPaths: string[];
+}
+
 /**
  * Transcription segment from Whisper API
  */
