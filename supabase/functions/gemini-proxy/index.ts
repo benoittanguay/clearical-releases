@@ -434,7 +434,8 @@ async function handleAnalyzeBatch(body: RequestBody): Promise<AnalyzeBatchRespon
         base64: img.base64,
         mimeType: img.mimeType,
         appName: img.appName,
-        windowTitle: img.windowTitle
+        windowTitle: img.windowTitle,
+        ocrText: img.ocrText
     }));
 
     const result = await analyzeImageBatch(batchInput);
@@ -932,7 +933,7 @@ Example bad: "Managed notifications while reviewing code changes and checking em
     }
 
     // Final instruction
-    sections.push(`\nOutput ONLY the timesheet entry (1-2 sentences). Describe the PRIMARY task, not a list of everything that happened.`);
+    sections.push(`\nOutput ONLY the timesheet entry (3-5 sentences). Focus on the PRIMARY productive tasks and include specific details — file names, features, issues, documents. Do not list every app used; describe what was accomplished.`);
 
     return sections.join('\n');
 }
