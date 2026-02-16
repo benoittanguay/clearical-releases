@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTimer } from './hooks/useTimer';
 import { useStorage } from './context/StorageContext';
 import { useSettings } from './context/SettingsContext';
@@ -28,6 +28,8 @@ import { JiraDetailView } from './components/JiraDetailView';
 import { RecordingControls } from './components/RecordingControls';
 import { WorklogCalendar } from './components/WorklogCalendar';
 import { ReportsView } from './components/reports/ReportsView';
+import { TimeWarpTimeline } from './components/TimeWarpTimeline';
+import { useBackgroundActivity } from './context/BackgroundActivityContext';
 import type { WorkAssignment, TimeBucket, LinkedJiraIssue, TimeEntry } from './context/StorageContext';
 import './App.css'
 
@@ -60,11 +62,13 @@ function App() {
   const [worklogViewMode, setWorklogViewMode] = useState<'list' | 'calendar'>('list');
   const [calendarMonth, setCalendarMonth] = useState<Date>(() => new Date());
   const [selectedCalendarDay, setSelectedCalendarDay] = useState<Date | null>(null);
+  const [proposedStartTime, setProposedStartTime] = useState<number | null>(null);
 
   // Threshold for auto-prompting the Splitting Assistant (45 minutes)
   const SPLITTING_PROMPT_THRESHOLD_MS = 45 * 60 * 1000;
 
-  const { isRunning, isPaused, elapsed, start: startTimer, stop: stopTimer, pause: pauseTimer, resume: resumeTimer, formatTime, checkPermissions, setActiveRecordingEntry } = useTimer();
+  const { isRunning, isPaused, elapsed, startTime, start: startTimer, stop: stopTimer, pause: pauseTimer, resume: resumeTimer, formatTime, checkPermissions, setActiveRecordingEntry, adjustStartTime } = useTimer();
+  const { activities: backgroundActivities } = useBackgroundActivity();
   const { clearPendingTranscription, getPendingTranscriptions, getPendingAudio, clearPendingAudio, onTranscriptionComplete } = useAudioRecording();
   const { roundTime, isRoundingEnabled } = useTimeRounding();
   const recordingSessionIdRef = useRef<string | null>(null);
@@ -471,7 +475,8 @@ function App() {
 
       // Start timer fresh (elapsed should be 0)
       // Note: Recording is NOT started automatically - user must explicitly start it
-      startTimer();
+      startTimer(proposedStartTime || undefined);
+      setProposedStartTime(null);
     } else {
       try {
         // Set stopping state to show loading UI
@@ -571,7 +576,8 @@ function App() {
   const handlePermissionsGranted = () => {
     // Permissions are now granted, start the timer
     // Note: Recording is NOT started automatically - user must explicitly start it
-    startTimer();
+    startTimer(proposedStartTime || undefined);
+    setProposedStartTime(null);
   };
 
   const handlePauseResume = () => {
@@ -581,6 +587,14 @@ function App() {
       pauseTimer();
     }
   };
+
+  const handleTimeWarpChange = useCallback((timestamp: number) => {
+    if (isRunning) {
+      adjustStartTime(timestamp);
+    } else {
+      setProposedStartTime(timestamp);
+    }
+  }, [isRunning, adjustStartTime]);
 
   // Toggle audio recording independently of timer
   const handleToggleRecording = async () => {
@@ -1368,6 +1382,15 @@ function App() {
                   )}
                 </button>
                 </div>
+              </div>
+              {/* TimeWarp Timeline - anchored to bottom */}
+              <div className="absolute bottom-0 left-0 right-0 px-4 pb-2">
+                  <TimeWarpTimeline
+                      backgroundActivities={backgroundActivities}
+                      timerStartTime={startTime}
+                      isRunning={isRunning}
+                      onStartTimeChange={handleTimeWarpChange}
+                  />
               </div>
             </div>
           )}
