@@ -1387,8 +1387,7 @@ function App() {
               <div className="absolute bottom-0 left-0 right-0 px-4 pb-2">
                   <TimeWarpTimeline
                       backgroundActivities={backgroundActivities}
-                      timerStartTime={startTime}
-                      isRunning={isRunning}
+                      timerStartTime={isRunning ? startTime : proposedStartTime}
                       onStartTimeChange={handleTimeWarpChange}
                   />
               </div>
