@@ -129,8 +129,9 @@ interface RequestBody {
     imageBase64?: string;
     appName?: string;
     windowTitle?: string;
+    ocrText?: string[];  // OCR text detected on screen
     // For analyze-batch
-    images?: Array<{ base64: string; mimeType: string; appName?: string; windowTitle?: string }>;
+    images?: Array<{ base64: string; mimeType: string; appName?: string; windowTitle?: string; ocrText?: string[] }>;
     // For classify
     description?: string;
     options?: Array<{ id: string; name: string }>;
@@ -371,13 +372,19 @@ async function handleAnalyze(body: RequestBody): Promise<AnalyzeResponse> {
     }
 
     // Build the prompt with context from signals
-    let prompt = `Analyze this screenshot and describe what the user is doing in a single, concise sentence (under 100 words). Focus on the specific task or activity visible, not general app descriptions.`;
+    let prompt = `Analyze this screenshot and describe what the user is doing in 2-3 detailed sentences. Include specific details visible on screen: file names, function names, URLs, error messages, UI elements, document titles, or data being viewed. Do NOT give generic descriptions like "editing code" — instead say WHAT code, WHAT file, WHAT function.`;
 
     // Add basic context
     if (appName || windowTitle) {
         prompt += `\n\nContext:`;
         if (appName) prompt += `\n- Application: ${appName}`;
         if (windowTitle) prompt += `\n- Window: ${windowTitle}`;
+    }
+
+    // Add OCR text if provided — this gives the LLM exact text from the screen
+    if (body.ocrText && body.ocrText.length > 0) {
+        prompt += `\n\nText detected on screen (use these for specific details):`;
+        prompt += `\n${body.ocrText.slice(0, 50).join('\n')}`;
     }
 
     // Add context from signals if provided
