@@ -138,7 +138,7 @@ export interface ElectronAPI {
             error?: string;
         }>;
         captureScreenshot: (windowInfo?: { appName: string; windowTitle: string; bundleId: string; pid: number }) => Promise<string | null>;
-        analyzeScreenshot: (imagePath: string, requestId?: string) => Promise<ScreenshotAnalysisResult>;
+        analyzeScreenshot: (imagePath: string, requestId?: string, ocrText?: string[]) => Promise<ScreenshotAnalysisResult>;
         generateActivitySummary: (context: {
             entryId: string;
             screenshotDescriptions: string[];

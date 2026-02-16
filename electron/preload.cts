@@ -25,12 +25,14 @@ contextBridge.exposeInMainWorld('electron', {
             ipcRenderer.invoke('auth:sign-in-oauth', provider),
         captureScreenshot: (windowInfo?: { appName: string; windowTitle: string; bundleId: string; pid: number }) =>
             ipcRenderer.invoke('capture-screenshot', windowInfo),
-        analyzeScreenshot: (imagePath: string, requestId?: string) => ipcRenderer.invoke('analyze-screenshot', imagePath, requestId),
+        analyzeScreenshot: (imagePath: string, requestId?: string, ocrText?: string[]) =>
+            ipcRenderer.invoke('analyze-screenshot', imagePath, requestId, ocrText),
         analyzeScreenshotBatch: (inputs: Array<{
             imagePath: string;
             appName?: string;
             windowTitle?: string;
             requestId?: string;
+            ocrText?: string[];
         }>) => ipcRenderer.invoke('analyze-screenshot-batch', inputs),
         generateActivitySummary: (context: {
             entryId: string;
