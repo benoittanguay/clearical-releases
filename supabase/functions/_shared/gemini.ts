@@ -186,8 +186,8 @@ export async function analyzeImage(
     const requestBody = JSON.stringify({
         contents: [content],
         generationConfig: {
-            temperature: 0.2,
-            maxOutputTokens: 1024,
+            temperature: 0.3,
+            maxOutputTokens: 2048,
         },
     });
 
@@ -371,8 +371,8 @@ Now analyze these ${images.length} screenshots:`
     const requestBody = JSON.stringify({
         contents: [content],
         generationConfig: {
-            temperature: 0.2,
-            maxOutputTokens: 2048, // Increased for multiple descriptions
+            temperature: 0.3,
+            maxOutputTokens: 4096, // Increased for multiple descriptions
         },
     });
 
