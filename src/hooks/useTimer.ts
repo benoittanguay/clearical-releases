@@ -1003,7 +1003,8 @@ export function useTimer() {
                             duration: bg.endTimestamp - bg.startTimestamp,
                             screenshotPaths: bg.screenshotPaths || [],
                         }));
-                        setWindowActivity(claimedWindowActivities);
+                        // Merge: prepend claimed activities, keep any that polling added in the meantime
+                        setWindowActivity(prev => [...claimedWindowActivities, ...prev]);
                         console.log(`[Timer] TimeWarp: claimed ${claimedWindowActivities.length} background activities`);
                     }
                 })
@@ -1022,8 +1023,8 @@ export function useTimer() {
                 }
                 return currentElapsed;
             });
+            setWindowActivity([]); // Clear previous activity for non-retroactive starts
         }
-        setWindowActivity(prev => overrideStartTime ? prev : []); // Clear only if not retroactive
         lastWindowRef.current = null;
         currentActivityScreenshots.current = []; // Reset screenshots
         currentActivityScreenshotDescriptions.current = {}; // Reset descriptions
