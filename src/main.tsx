@@ -13,6 +13,7 @@ import { ScreenshotAnalysisProvider } from './context/ScreenshotAnalysisContext.
 import { AuthProvider } from './context/AuthContext.tsx'
 import { AnimationProvider } from './context/AnimationContext.tsx'
 import { AudioRecordingProvider } from './context/AudioRecordingContext.tsx'
+import { BackgroundActivityProvider } from './context/BackgroundActivityContext'
 import { ErrorBoundary } from './components/ErrorBoundary.tsx'
 import { SplitAnimationOverlay } from './components/SplitAnimationOverlay.tsx'
 import { AuthGate } from './components/AuthGate.tsx'
@@ -46,10 +47,12 @@ createRoot(document.getElementById('root')!).render(
                     <CrawlerProgressProvider>
                       <ScreenshotAnalysisProvider>
                         <AudioRecordingProvider>
-                          <AnimationProvider>
-                            <App />
-                            <SplitAnimationOverlay />
-                          </AnimationProvider>
+                          <BackgroundActivityProvider>
+                            <AnimationProvider>
+                              <App />
+                              <SplitAnimationOverlay />
+                            </AnimationProvider>
+                          </BackgroundActivityProvider>
                         </AudioRecordingProvider>
                       </ScreenshotAnalysisProvider>
                     </CrawlerProgressProvider>
