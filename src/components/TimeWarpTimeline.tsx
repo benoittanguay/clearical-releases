@@ -4,7 +4,6 @@ import type { BackgroundActivity } from '../types/shared';
 interface TimeWarpTimelineProps {
     backgroundActivities: BackgroundActivity[];
     timerStartTime: number | null;
-    isRunning: boolean;
     onStartTimeChange: (timestamp: number) => void;
 }
 
@@ -30,7 +29,6 @@ function formatHourLabel(timestamp: number): string {
 export function TimeWarpTimeline({
     backgroundActivities,
     timerStartTime,
-    isRunning,
     onStartTimeChange,
 }: TimeWarpTimelineProps) {
     const containerRef = useRef<HTMLDivElement>(null);
@@ -40,16 +38,6 @@ export function TimeWarpTimeline({
     const [hoveredNode, setHoveredNode] = useState<BackgroundActivity | null>(null);
     const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
 
-    // Track the original start time when timer is running to prevent dragging right past it
-    const originalStartTimeRef = useRef<number | null>(null);
-    useEffect(() => {
-        if (isRunning && timerStartTime !== null && originalStartTimeRef.current === null) {
-            originalStartTimeRef.current = timerStartTime;
-        }
-        if (!isRunning) {
-            originalStartTimeRef.current = null;
-        }
-    }, [isRunning, timerStartTime]);
 
     // Update "now" every second
     useEffect(() => {
@@ -97,11 +85,6 @@ export function TimeWarpTimeline({
             // Clamp to visible range
             ts = Math.max(visibleStart, Math.min(now, ts));
 
-            // If timer is running, cannot drag right past original start
-            if (isRunning && originalStartTimeRef.current !== null) {
-                ts = Math.min(ts, originalStartTimeRef.current);
-            }
-
             setProposedTime(ts);
         };
 
@@ -120,7 +103,7 @@ export function TimeWarpTimeline({
             window.removeEventListener('mousemove', handleMouseMove);
             window.removeEventListener('mouseup', handleMouseUp);
         };
-    }, [isDragging, pixelToTimestamp, visibleStart, now, isRunning, proposedTime, onStartTimeChange]);
+    }, [isDragging, pixelToTimestamp, visibleStart, now, proposedTime, onStartTimeChange]);
 
     // --- Click on timeline to set playhead ---
     const handleTimelineClick = useCallback((e: React.MouseEvent) => {
@@ -130,12 +113,21 @@ export function TimeWarpTimeline({
         let ts = pixelToTimestamp(e.clientX);
         ts = Math.max(visibleStart, Math.min(now, ts));
 
-        if (isRunning && originalStartTimeRef.current !== null) {
-            ts = Math.min(ts, originalStartTimeRef.current);
-        }
-
         onStartTimeChange(ts);
-    }, [isDragging, pixelToTimestamp, visibleStart, now, isRunning, onStartTimeChange]);
+    }, [isDragging, pixelToTimestamp, visibleStart, now, onStartTimeChange]);
+
+    // --- Zoom helpers ---
+    const zoomIn = useCallback(() => {
+        setVisibleDuration(prev =>
+            Math.max(MIN_VISIBLE_DURATION, prev * 0.6)
+        );
+    }, []);
+
+    const zoomOut = useCallback(() => {
+        setVisibleDuration(prev =>
+            Math.min(MAX_VISIBLE_DURATION, prev * 1.6)
+        );
+    }, []);
 
     // --- Scroll zoom (non-passive to allow preventDefault) ---
     useEffect(() => {
@@ -367,6 +359,63 @@ export function TimeWarpTimeline({
                     </div>
                 );
             })()}
+
+            {/* Zoom controls */}
+            <div
+                style={{
+                    position: 'absolute',
+                    left: 0,
+                    top: BASELINE_Y - 18,
+                    display: 'flex',
+                    gap: 2,
+                    zIndex: 20,
+                    pointerEvents: 'auto',
+                }}
+                onClick={(e) => e.stopPropagation()}
+            >
+                <button
+                    onClick={zoomIn}
+                    style={{
+                        width: 18,
+                        height: 18,
+                        borderRadius: 3,
+                        border: '1px solid var(--color-border-primary)',
+                        backgroundColor: 'var(--color-bg-secondary)',
+                        color: 'var(--color-text-secondary)',
+                        fontSize: 11,
+                        lineHeight: '16px',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: 0,
+                    }}
+                    title="Zoom in"
+                >
+                    +
+                </button>
+                <button
+                    onClick={zoomOut}
+                    style={{
+                        width: 18,
+                        height: 18,
+                        borderRadius: 3,
+                        border: '1px solid var(--color-border-primary)',
+                        backgroundColor: 'var(--color-bg-secondary)',
+                        color: 'var(--color-text-secondary)',
+                        fontSize: 11,
+                        lineHeight: '16px',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: 0,
+                    }}
+                    title="Zoom out"
+                >
+                    −
+                </button>
+            </div>
 
             {/* "NOW" label at right edge */}
             <div
