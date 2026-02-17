@@ -574,8 +574,30 @@ function App() {
 
         // Map ALL still-pending session IDs → entry ID for late transcription attachment
         for (const sid of sessionIdsStillPending) {
-          console.log('[App] Mapping pending session', sid, '→ entry', newEntry.id);
           sessionToEntryIdRef.current.set(sid, newEntry.id);
+        }
+
+        // Re-check: transcription may have completed during `await addEntry()` above.
+        // The onTranscriptionComplete callback would have fired but found no mapping yet,
+        // so the data is still in pending storage. Attach it now.
+        for (const sid of sessionIdsStillPending) {
+          const lateTranscriptions = getPendingTranscriptions(sid);
+          if (lateTranscriptions.length > 0) {
+            console.log('[App] Transcription completed during entry creation for session', sid, '- attaching now');
+            try {
+              await updateEntry(newEntry.id, {
+                transcriptions: lateTranscriptions,
+                transcription: lateTranscriptions.length === 1 ? lateTranscriptions[0] : undefined,
+              });
+              clearPendingTranscription(sid);
+              sessionToEntryIdRef.current.delete(sid);
+            } catch (error) {
+              console.error('[App] Failed to attach late transcription:', error);
+              // Keep mapping — onTranscriptionComplete won't re-fire, but data persists on disk
+            }
+          } else {
+            console.log('[App] Mapping pending session', sid, '→ entry', newEntry.id);
+          }
         }
 
         // Clear session tracking for this timer session
