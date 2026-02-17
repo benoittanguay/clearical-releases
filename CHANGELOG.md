@@ -2,6 +2,13 @@
 
 All notable changes to Clearical will be documented in this file.
 
+## [1.7.44] - 2026-02-16
+
+### Tests
+- **Audio Recording**: Added 13 E2E tests covering recording controls UI, main process event sync, race condition regressions, and transcription flow
+
+---
+
 ## [1.7.43] - 2026-02-16
 
 ### Bug Fixes
