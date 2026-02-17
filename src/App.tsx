@@ -35,6 +35,11 @@ import './App.css'
 
 type View = 'chrono' | 'worklog' | 'buckets' | 'reports' | 'settings' | 'worklog-detail' | 'bucket-detail' | 'jira-detail';
 
+/** Generate a unique recording session ID. Used as the key for transcription lookup. */
+function generateRecordingSessionId(): string {
+    return `session-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+}
+
 function App() {
   const { buckets, entries, fetchEntriesByBucket, fetchEntriesByJiraKey, fetchEntriesForExport, addEntry, addBucket, removeBucket, renameBucket, createFolder, moveBucket, updateEntry, removeEntry, unlinkJiraIssueFromBucket } = useStorage();
   const { settings, updateSettings } = useSettings();
@@ -86,7 +91,7 @@ function App() {
     return [...backgroundActivities, ...timerActivities];
   }, [backgroundActivities, windowActivity]);
 
-  const { clearPendingTranscription, getPendingTranscriptions, getPendingAudio, clearPendingAudio, onTranscriptionComplete } = useAudioRecording();
+  const { state: recordingState, clearPendingTranscription, getPendingTranscriptions, getPendingAudio, clearPendingAudio, onTranscriptionComplete } = useAudioRecording();
   const { roundTime, isRoundingEnabled } = useTimeRounding();
   const recordingSessionIdRef = useRef<string | null>(null);
   // Keep track of session ID even after recording stops, for transcription retrieval when timer stops
@@ -507,11 +512,8 @@ function App() {
         const sessionId = recordingSessionIdRef.current || lastRecordingSessionIdRef.current;
         console.log('[App] Session ID for transcription lookup:', sessionId, '(current:', recordingSessionIdRef.current, ', last:', lastRecordingSessionIdRef.current, ')');
 
-        // Clear recording session - must happen before stopTimer for proper cleanup
-        // Await to ensure main process receives the stop signal before we proceed
-        await setActiveRecordingEntry(null);
-        recordingSessionIdRef.current = null;
-        setIsAudioRecording(false);
+        // Stop recording — canonical function handles IPC + state cleanup
+        await stopRecording();
 
         // Stop timer and save entry - await to ensure AI analyses complete
         const finalActivity = await stopTimer();
@@ -625,35 +627,37 @@ function App() {
     startTimer(timestamp);
   }, [isRunning, checkPermissions, startTimer]);
 
+  // Canonical recording start — all trigger points route through this
+  const startRecording = useCallback(async (): Promise<boolean> => {
+    const sessionId = generateRecordingSessionId();
+    console.log('[App] Starting recording, sessionId:', sessionId);
+    const result = await setActiveRecordingEntry(sessionId, true);
+    if (result.success) {
+      recordingSessionIdRef.current = sessionId;
+      lastRecordingSessionIdRef.current = sessionId;
+      setIsAudioRecording(true);
+      return true;
+    } else {
+      console.error('[App] Failed to start recording:', result.error);
+      return false;
+    }
+  }, [setActiveRecordingEntry]);
+
+  // Canonical recording stop — all trigger points route through this
+  const stopRecording = useCallback(async (): Promise<void> => {
+    console.log('[App] Stopping recording');
+    await setActiveRecordingEntry(null);
+    recordingSessionIdRef.current = null;
+    setIsAudioRecording(false);
+  }, [setActiveRecordingEntry]);
+
   // Toggle audio recording independently of timer
   const handleToggleRecording = async () => {
     if (recordingSessionIdRef.current) {
-      // Stop recording
-      console.log('[App] Stopping recording from controls');
-      const result = await setActiveRecordingEntry(null);
-      if (result.success) {
-        recordingSessionIdRef.current = null;
-        setIsAudioRecording(false);
-      } else {
-        console.error('[App] Failed to stop recording:', result.error);
-        // Still update UI state since we initiated the stop
-        recordingSessionIdRef.current = null;
-        setIsAudioRecording(false);
-      }
+      await stopRecording();
     } else if (isRunning) {
-      // Start recording (only when timer is running)
-      // forceStart=true ensures recording starts even if media detection doesn't see mic in use
-      console.log('[App] Starting recording from controls (forceStart=true)');
-      const sessionId = `session-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-      const result = await setActiveRecordingEntry(sessionId, true);
-      if (result.success) {
-        recordingSessionIdRef.current = sessionId;
-        lastRecordingSessionIdRef.current = sessionId; // Preserve for transcription lookup when timer stops
-        setIsAudioRecording(true);
-      } else {
-        console.error('[App] Failed to start recording:', result.error);
-        // Don't update state if recording failed to start
-      }
+      checkPermissions();
+      await startRecording();
     }
   };
 
@@ -714,40 +718,22 @@ function App() {
         handleStartStopRef.current();
       });
 
-      // @ts-ignore
       const unsubscribeRecording = window.electron.ipcRenderer.on('tray:toggle-recording', async () => {
         console.log('[Renderer] Tray toggle recording command received');
-        // Toggle recording state
         if (recordingSessionIdRef.current) {
-          // Stop recording
-          const result = await setActiveRecordingEntry(null);
-          console.log('[Renderer] Stop recording result:', result);
-          recordingSessionIdRef.current = null;
-          setIsAudioRecording(false);
+          await stopRecording();
         } else {
-          // Start recording - also start timer if not running (same as widget prompt)
           if (!isRunning) {
             console.log('[Renderer] Timer not running, starting timer first');
-            // Check permissions before starting
             const permissions = await checkPermissions();
             if (!permissions.requiredGranted || !permissions.hasScreenRecording) {
               console.log('[Renderer] Missing permissions, showing modal');
               setShowPermissionModal(true);
               return;
             }
-            // Start timer
             startTimer();
           }
-          // Start recording session (forceStart=true since user explicitly requested)
-          const sessionId = `session-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-          const result = await setActiveRecordingEntry(sessionId, true);
-          if (result.success) {
-            recordingSessionIdRef.current = sessionId;
-            lastRecordingSessionIdRef.current = sessionId; // Preserve for transcription lookup when timer stops
-            setIsAudioRecording(true);
-          } else {
-            console.error('[Renderer] Failed to start recording from tray:', result.error);
-          }
+          await startRecording();
         }
       });
 
@@ -756,7 +742,7 @@ function App() {
         if (unsubscribeRecording) unsubscribeRecording();
       };
     }
-  }, [setActiveRecordingEntry, isRunning, checkPermissions, startTimer]);
+  }, [stopRecording, startRecording, isRunning, checkPermissions, startTimer]);
 
   // Listen for recording stop events from widget or main process (media detection)
   // This keeps App.tsx's isAudioRecording state in sync with actual recording state
@@ -804,6 +790,17 @@ function App() {
 
     return () => { unsubscribe?.(); };
   }, []);
+
+  // Safety sync: correct "ghost recording" state if context says not recording but App thinks it is
+  // This catches edge cases where an error in AudioRecordingContext stops recording
+  // but the stop event doesn't reach App.tsx (e.g., MediaRecorder error before onstop fires)
+  useEffect(() => {
+    if (!recordingState.isRecording && isAudioRecording) {
+      console.warn('[App] Recording state desync detected — context says stopped, correcting App state');
+      recordingSessionIdRef.current = null;
+      setIsAudioRecording(false);
+    }
+  }, [recordingState.isRecording, isAudioRecording]);
 
   // Event-driven transcription attachment
   // When transcription completes after entry is created, attach it to the entry
@@ -882,7 +879,7 @@ function App() {
         // This handles both cases: new timer + recording, or just adding recording to existing timer
         // forceStart=true ensures recording starts even if media detection briefly missed the mic
         if (!recordingSessionIdRef.current) {
-          const sessionId = `session-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+          const sessionId = generateRecordingSessionId();
           const result = await setActiveRecordingEntry(sessionId, true);
           if (result.success) {
             recordingSessionIdRef.current = sessionId;
