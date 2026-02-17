@@ -94,8 +94,10 @@ function App() {
   const { state: recordingState, clearPendingTranscription, getPendingTranscriptions, getPendingAudio, clearPendingAudio, onTranscriptionComplete } = useAudioRecording();
   const { roundTime, isRoundingEnabled } = useTimeRounding();
   const recordingSessionIdRef = useRef<string | null>(null);
-  // Keep track of session ID even after recording stops, for transcription retrieval when timer stops
-  const lastRecordingSessionIdRef = useRef<string | null>(null);
+  // Track ALL recording session IDs for this timer session (supports multiple recordings).
+  // Each start/stop cycle generates a new session ID. When the timer stops, transcriptions
+  // from ALL session IDs are collected and attached to the entry.
+  const allSessionIdsRef = useRef<Set<string>>(new Set());
   // Maps recording sessionId → created entryId for late transcription attachment
   // This avoids the stale entries closure in onTranscriptionComplete
   const sessionToEntryIdRef = useRef<Map<string, string>>(new Map());
@@ -507,10 +509,9 @@ function App() {
         // Set stopping state to show loading UI
         setIsStopping(true);
 
-        // Get the session ID before clearing
-        // Use lastRecordingSessionIdRef if current session is null (recording was stopped earlier via widget)
-        const sessionId = recordingSessionIdRef.current || lastRecordingSessionIdRef.current;
-        console.log('[App] Session ID for transcription lookup:', sessionId, '(current:', recordingSessionIdRef.current, ', last:', lastRecordingSessionIdRef.current, ')');
+        // Snapshot all recording session IDs before clearing
+        const sessionIds = Array.from(allSessionIdsRef.current);
+        console.log('[App] Session IDs for transcription lookup:', sessionIds);
 
         // Stop recording — canonical function handles IPC + state cleanup
         await stopRecording();
@@ -518,19 +519,34 @@ function App() {
         // Stop timer and save entry - await to ensure AI analyses complete
         const finalActivity = await stopTimer();
 
-        // Check for any already-completed transcriptions (no timeout - immediate check)
-        // If transcription is still in progress, it will be attached later via event callback
-        const pendingTranscriptions = sessionId ? getPendingTranscriptions(sessionId) : [];
-        if (pendingTranscriptions.length > 0) {
-          console.log('[App] Found', pendingTranscriptions.length, 'completed transcription(s) from recording session');
-        } else {
-          console.log('[App] No completed transcription yet (will attach later if still transcribing)');
+        // Collect transcriptions from ALL recording sessions (supports multiple recordings per timer session)
+        const allTranscriptions: import('./types/shared').EntryTranscription[] = [];
+        let firstPendingAudio: import('./types/shared').PendingTranscription | null = null;
+        const sessionIdsWithTranscriptions: string[] = [];
+        const sessionIdsStillPending: string[] = [];
+
+        for (const sid of sessionIds) {
+          const transcriptions = getPendingTranscriptions(sid);
+          if (transcriptions.length > 0) {
+            allTranscriptions.push(...transcriptions);
+            sessionIdsWithTranscriptions.push(sid);
+          } else {
+            // Check for pending audio (failed transcription) — keep first one found
+            const audio = getPendingAudio(sid);
+            if (audio) {
+              if (!firstPendingAudio) firstPendingAudio = audio;
+              console.log('[App] Found pending audio from failed transcription for session', sid, ':', audio.audioPath);
+            } else {
+              sessionIdsStillPending.push(sid);
+            }
+          }
         }
 
-        // Check for pending audio (failed transcription)
-        const pendingAudio = sessionId ? getPendingAudio(sessionId) : null;
-        if (pendingAudio) {
-          console.log('[App] Found pending audio from failed transcription:', pendingAudio.audioPath);
+        if (allTranscriptions.length > 0) {
+          console.log('[App] Found', allTranscriptions.length, 'completed transcription(s) from', sessionIdsWithTranscriptions.length, 'recording session(s)');
+        }
+        if (sessionIdsStillPending.length > 0) {
+          console.log('[App] Transcription still in progress for', sessionIdsStillPending.length, 'session(s)');
         }
 
         const newEntry = await addEntry({
@@ -539,32 +555,31 @@ function App() {
           duration: elapsed,
           assignment: selectedAssignment || undefined,
           windowActivity: finalActivity,
-          // Store transcriptions as array for separate display (only if already completed)
-          transcriptions: pendingTranscriptions.length > 0 ? pendingTranscriptions : undefined,
-          // Keep legacy field for backwards compatibility
-          transcription: pendingTranscriptions.length === 1 ? pendingTranscriptions[0] : undefined,
-          pendingTranscription: pendingAudio || undefined,
+          transcriptions: allTranscriptions.length > 0 ? allTranscriptions : undefined,
+          transcription: allTranscriptions.length === 1 ? allTranscriptions[0] : undefined,
+          pendingTranscription: firstPendingAudio || undefined,
         });
 
-        // Clear the pending transcription after it's been applied
-        if (sessionId && pendingTranscriptions.length > 0) {
-          clearPendingTranscription(sessionId);
+        // Clear applied transcriptions
+        for (const sid of sessionIdsWithTranscriptions) {
+          clearPendingTranscription(sid);
         }
 
-        // Clear the pending audio after it's been saved to entry
-        if (sessionId && pendingAudio) {
-          clearPendingAudio(sessionId);
+        // Clear applied pending audio
+        if (firstPendingAudio) {
+          for (const sid of sessionIds) {
+            clearPendingAudio(sid);
+          }
         }
 
-        // If transcription is still pending (not in pendingTranscriptions), map sessionId → entryId
-        // so the onTranscriptionComplete callback can find the entry by sessionId alone
-        if (sessionId && pendingTranscriptions.length === 0 && !pendingAudio) {
-          console.log('[App] Transcription may still be in progress - mapping session', sessionId, '→ entry', newEntry.id);
-          sessionToEntryIdRef.current.set(sessionId, newEntry.id);
+        // Map ALL still-pending session IDs → entry ID for late transcription attachment
+        for (const sid of sessionIdsStillPending) {
+          console.log('[App] Mapping pending session', sid, '→ entry', newEntry.id);
+          sessionToEntryIdRef.current.set(sid, newEntry.id);
         }
 
-        // Clear the last recording session ID after it's been used
-        lastRecordingSessionIdRef.current = null;
+        // Clear session tracking for this timer session
+        allSessionIdsRef.current.clear();
 
         console.log('[App] Activity saved, navigating to details for entry:', newEntry.id);
 
@@ -634,7 +649,7 @@ function App() {
     const result = await setActiveRecordingEntry(sessionId, true);
     if (result.success) {
       recordingSessionIdRef.current = sessionId;
-      lastRecordingSessionIdRef.current = sessionId;
+      allSessionIdsRef.current.add(sessionId);
       setIsAudioRecording(true);
       return true;
     } else {
@@ -782,7 +797,7 @@ function App() {
         // AudioRecordingContext use. Using a different ID would cause transcription
         // lookup to fail when the timer stops.
         recordingSessionIdRef.current = data.entryId;
-        lastRecordingSessionIdRef.current = data.entryId;
+        allSessionIdsRef.current.add(data.entryId);
         setIsAudioRecording(true);
         console.log('[App] Synced recording state from external start, sessionId:', data.entryId);
       }
@@ -883,7 +898,7 @@ function App() {
           const result = await setActiveRecordingEntry(sessionId, true);
           if (result.success) {
             recordingSessionIdRef.current = sessionId;
-            lastRecordingSessionIdRef.current = sessionId; // Preserve for transcription lookup when timer stops
+            allSessionIdsRef.current.add(sessionId);
             setIsAudioRecording(true);
             console.log('[Renderer] Started recording session:', sessionId);
           } else {
