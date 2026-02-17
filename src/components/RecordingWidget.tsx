@@ -157,7 +157,7 @@ export function RecordingWidget(): React.ReactElement {
         };
 
         // Register all listeners
-        const unsubscribeAudioLevels = onFn('widget:audio-levels', handleAudioLevels);
+        const unsubscribeAudioLevels = onFn('recording:audio-levels', handleAudioLevels);
         const unsubscribeMeetingEnded = onFn('widget:show-meeting-ended-prompt', handleShowMeetingEndedPrompt);
         const unsubscribeStartPrompt = onFn('widget:show-prompt', handleShowStartPrompt);
         const unsubscribeWorkingHours = onFn('widget:show-working-hours-prompt', handleShowWorkingHoursPrompt);
