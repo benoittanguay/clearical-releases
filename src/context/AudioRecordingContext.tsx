@@ -551,13 +551,9 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
             silenceStartTimeRef.current = null; // Reset silence detection
             const recordingStartTimestamp = Date.now(); // For waveform sync
 
-            // Also get time domain data for raw waveform analysis
-            const timeDomainArray = new Uint8Array(analyser.frequencyBinCount);
-
             audioLevelIntervalRef.current = window.setInterval(() => {
                 if (analyserRef.current) {
                     analyserRef.current.getByteFrequencyData(dataArray);
-                    analyserRef.current.getByteTimeDomainData(timeDomainArray);
 
                     // Convert to normalized levels (0-1)
                     const levels: number[] = [];
@@ -571,48 +567,54 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
                     }
                     averageLevel /= NUM_BARS;
 
-                    // Calculate time domain deviation from center (128 = silence)
-                    let timeDomainMax = 0;
-                    let timeDomainMin = 255;
-                    for (let i = 0; i < timeDomainArray.length; i++) {
-                        if (timeDomainArray[i] > timeDomainMax) timeDomainMax = timeDomainArray[i];
-                        if (timeDomainArray[i] < timeDomainMin) timeDomainMin = timeDomainArray[i];
+                    // Check if system audio has recent activity using raw buffer RMS.
+                    // NOTE: We do NOT use getByteTimeDomainData for silence detection because
+                    // Uint8 quantization loses precision for low-amplitude audio — a signal at
+                    // amplitude 0.001 produces timeDomainDeviation=0 while the same signal
+                    // shows significant energy in frequency bins (dB scale). Checking raw
+                    // Float32 samples directly avoids this quantization problem entirely.
+                    let isSystemAudioActive = false;
+                    if (systemAudioBufferRef.current.length > 0) {
+                        const recentSysChunk = systemAudioBufferRef.current[systemAudioBufferRef.current.length - 1];
+                        if (recentSysChunk && recentSysChunk.length > 0) {
+                            let sumSquares = 0;
+                            const len = Math.min(recentSysChunk.length, 1000);
+                            for (let i = 0; i < len; i++) {
+                                sumSquares += recentSysChunk[i] * recentSysChunk[i];
+                            }
+                            const sysRms = Math.sqrt(sumSquares / len);
+                            isSystemAudioActive = sysRms > 0.003;
+                        }
                     }
-                    const timeDomainDeviation = Math.max(timeDomainMax - 128, 128 - timeDomainMin);
 
-                    // Use time domain for silence detection (more reliable than frequency)
-                    const isSystemAudioSilent = timeDomainDeviation < 3; // Very little deviation from center
-
-                    // Also check if native mic has recent audio activity
+                    // Check if native mic has recent audio activity
                     // This prevents false silence detection when Chrome has exclusive system audio
                     let isMicActive = false;
                     if (nativeMicBufferRef.current.length > 0) {
-                        // Check the most recent mic buffer chunk for audio activity
                         const recentMicChunk = nativeMicBufferRef.current[nativeMicBufferRef.current.length - 1];
                         if (recentMicChunk && recentMicChunk.length > 0) {
-                            // Calculate RMS (root mean square) to detect audio activity
                             let sumSquares = 0;
-                            for (let i = 0; i < Math.min(recentMicChunk.length, 1000); i++) {
+                            const len = Math.min(recentMicChunk.length, 1000);
+                            for (let i = 0; i < len; i++) {
                                 sumSquares += recentMicChunk[i] * recentMicChunk[i];
                             }
-                            const rms = Math.sqrt(sumSquares / Math.min(recentMicChunk.length, 1000));
-                            // If RMS is above threshold, mic has audio (threshold ~0.01 for speech)
+                            const rms = Math.sqrt(sumSquares / len);
                             isMicActive = rms > 0.005;
                         }
                     }
 
-                    // Also check if frequency data shows energy (prevents false silence when waveform shows bars)
+                    // Also check if frequency data shows energy (belt-and-suspenders with raw RMS checks)
                     const hasFrequencyEnergy = averageLevel > 0.05;
 
-                    // Only consider truly silent if system audio, mic, AND frequency bins all agree
-                    const isTrulySilent = isSystemAudioSilent && !isMicActive && !hasFrequencyEnergy;
+                    // Only consider truly silent if ALL signals agree: no system audio, no mic, no frequency energy
+                    const isTrulySilent = !isSystemAudioActive && !isMicActive && !hasFrequencyEnergy;
 
                     // Silence detection for meeting end
                     if (isTrulySilent) {
                         if (silenceStartTimeRef.current === null) {
                             silenceStartTimeRef.current = Date.now();
                             silenceConfirmationShownRef.current = false;
-                            console.log('[AudioRecordingContext] Silence detected (sysAudio silent + mic inactive), starting timer...');
+                            console.log('[AudioRecordingContext] Silence detected (sysRms quiet + mic inactive + no freq energy), starting timer...');
                         } else {
                             const silenceDuration = Date.now() - silenceStartTimeRef.current;
                             // Log every 5 seconds of silence
@@ -633,10 +635,13 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
                             }
                         }
                     } else {
-                        // Reset silence timer when audio is detected (either system audio or mic)
+                        // Reset silence timer when audio is detected
                         if (silenceStartTimeRef.current !== null) {
-                            const reason = isMicActive ? 'mic active' : 'system audio detected';
-                            console.log('[AudioRecordingContext] Audio detected (' + reason + '), resetting silence timer');
+                            const reasons: string[] = [];
+                            if (isSystemAudioActive) reasons.push('system audio');
+                            if (isMicActive) reasons.push('mic');
+                            if (hasFrequencyEnergy) reasons.push('freq energy');
+                            console.log('[AudioRecordingContext] Audio detected (' + reasons.join(' + ') + '), resetting silence timer');
                             silenceConfirmationShownRef.current = false;
                         }
                         silenceStartTimeRef.current = null;
@@ -655,9 +660,9 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
                             const minVal = Math.min(...Array.from(dataArray));
                             console.log('[AudioRecordingContext] ANALYSER DATA #' + audioLevelsSentCount + ':',
                                 'freqMax:', maxVal, 'freqMin:', minVal,
-                                'timeMax:', timeDomainMax, 'timeMin:', timeDomainMin, 'timeDev:', timeDomainDeviation,
                                 'avg:', averageLevel.toFixed(3),
-                                'sysAudioSilent:', isSystemAudioSilent, 'micActive:', isMicActive, 'trulySilent:', isTrulySilent);
+                                'sysActive:', isSystemAudioActive, 'micActive:', isMicActive,
+                                'freqEnergy:', hasFrequencyEnergy, 'trulySilent:', isTrulySilent);
                         }
                     } else if (audioLevelsSentCount === 0) {
                         console.error('[AudioRecordingContext] sendAudioLevels function not available!');
