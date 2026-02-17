@@ -91,6 +91,9 @@ function App() {
   const recordingSessionIdRef = useRef<string | null>(null);
   // Keep track of session ID even after recording stops, for transcription retrieval when timer stops
   const lastRecordingSessionIdRef = useRef<string | null>(null);
+  // Maps recording sessionId → created entryId for late transcription attachment
+  // This avoids the stale entries closure in onTranscriptionComplete
+  const sessionToEntryIdRef = useRef<Map<string, string>>(new Map());
   const handleStartStopRef = useRef<() => void>(() => {});
 
   // Check for onboarding BEFORE migration - prevents flash of main UI
@@ -551,11 +554,11 @@ function App() {
           clearPendingAudio(sessionId);
         }
 
-        // If transcription is still pending (not in pendingTranscriptions), set up event listener
-        // to attach it when it completes
+        // If transcription is still pending (not in pendingTranscriptions), map sessionId → entryId
+        // so the onTranscriptionComplete callback can find the entry by sessionId alone
         if (sessionId && pendingTranscriptions.length === 0 && !pendingAudio) {
-          console.log('[App] Transcription may still be in progress - will attach via event when complete');
-          // The event handler will be registered in a separate effect below
+          console.log('[App] Transcription may still be in progress - mapping session', sessionId, '→ entry', newEntry.id);
+          sessionToEntryIdRef.current.set(sessionId, newEntry.id);
         }
 
         // Clear the last recording session ID after it's been used
@@ -789,11 +792,13 @@ function App() {
       console.log('[App] Recording started externally (media detection):', data);
       // Only update if we don't already have an active session
       if (!recordingSessionIdRef.current) {
-        const sessionId = `session-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-        recordingSessionIdRef.current = sessionId;
-        lastRecordingSessionIdRef.current = sessionId;
+        // Use the entryId from the event — this matches what RecordingManager and
+        // AudioRecordingContext use. Using a different ID would cause transcription
+        // lookup to fail when the timer stops.
+        recordingSessionIdRef.current = data.entryId;
+        lastRecordingSessionIdRef.current = data.entryId;
         setIsAudioRecording(true);
-        console.log('[App] Synced recording state from external start, sessionId:', sessionId);
+        console.log('[App] Synced recording state from external start, sessionId:', data.entryId);
       }
     });
 
@@ -802,39 +807,35 @@ function App() {
 
   // Event-driven transcription attachment
   // When transcription completes after entry is created, attach it to the entry
+  // Uses sessionToEntryIdRef for direct sessionId → entryId lookup (no stale entries closure)
   useEffect(() => {
     console.log('[App] Setting up transcription completion listener');
 
     const unsubscribe = onTranscriptionComplete(async (sessionId, transcriptions) => {
       console.log('[App] Transcription completed for session:', sessionId, 'count:', transcriptions.length);
 
-      // Find the most recent entry that doesn't have transcriptions yet
-      // and was created around the same time as this session
-      const recentEntries = entries.filter(e => {
-        const entryAge = Date.now() - e.endTime;
-        // Look for entries created in the last 5 minutes without transcriptions
-        return entryAge < 5 * 60 * 1000 && !e.transcriptions && !e.transcription;
-      }).sort((a, b) => b.endTime - a.endTime);
+      // Look up the entry ID from the session mapping (populated in handleStartStop)
+      const entryId = sessionToEntryIdRef.current.get(sessionId);
 
-      if (recentEntries.length > 0) {
-        const targetEntry = recentEntries[0];
-        console.log('[App] Attaching transcription to entry:', targetEntry.id);
+      if (entryId) {
+        console.log('[App] Found mapped entry for session:', sessionId, '→', entryId);
 
         try {
-          await updateEntry(targetEntry.id, {
+          await updateEntry(entryId, {
             transcriptions,
             transcription: transcriptions.length === 1 ? transcriptions[0] : undefined,
           });
 
-          // Clear from pending storage
+          // Clear from pending storage and session mapping
           clearPendingTranscription(sessionId);
+          sessionToEntryIdRef.current.delete(sessionId);
 
           console.log('[App] Successfully attached transcription to entry');
         } catch (error) {
           console.error('[App] Failed to attach transcription to entry:', error);
         }
       } else {
-        console.log('[App] No suitable entry found for transcription attachment');
+        console.log('[App] No mapped entry found for session:', sessionId, '(transcription arrived before entry creation or after cleanup)');
       }
     });
 
@@ -842,7 +843,7 @@ function App() {
       console.log('[App] Cleaning up transcription completion listener');
       unsubscribe();
     };
-  }, [entries, updateEntry, clearPendingTranscription, onTranscriptionComplete]);
+  }, [updateEntry, clearPendingTranscription, onTranscriptionComplete]);
 
   // Listen for widget prompt to start timer (meeting detected but timer not running)
   useEffect(() => {

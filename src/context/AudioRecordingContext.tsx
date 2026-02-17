@@ -767,58 +767,85 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
         isStoppingRecordingRef.current = true;
         console.log('[AudioRecordingContext] Stop lock acquired, stopping recording...');
 
-        // CRITICAL: Capture chunks and mimeType BEFORE calling stop() to prevent race condition
-        // If a new recording starts before onstop fires, audioChunksRef would be reset
+        // CRITICAL: Capture ALL shared state BEFORE calling stop() to prevent race condition.
+        // If a new recording starts before onstop fires, refs would point to the new recording's
+        // resources. The onstop handler must only clean up THIS recording's resources.
         const capturedChunks = [...audioChunksRef.current];
         const capturedMimeType = mediaRecorderRef.current.mimeType || 'audio/webm';
+        const capturedMediaRecorder = mediaRecorderRef.current;
+        const capturedAudioContext = audioContextRef.current;
+        const capturedWorkletNode = audioWorkletNodeRef.current;
+        const capturedStream = streamRef.current;
+        const capturedAudioLevelInterval = audioLevelIntervalRef.current;
+        const capturedIsNativeMicActive = isNativeMicActiveRef.current;
+        const capturedNativeMicUnsubscribe = nativeMicUnsubscribeRef.current;
+        const capturedIsSystemAudioActive = isSystemAudioActiveRef.current;
+        const capturedSystemAudioUnsubscribe = systemAudioUnsubscribeRef.current;
+        const capturedIsFileRecordingActive = isFileRecordingActiveRef.current;
+
         console.log('[AudioRecordingContext] Captured', capturedChunks.length, 'chunks before stop, mimeType:', capturedMimeType);
 
+        // Clear refs immediately so a new recording can set fresh state without interference
+        mediaRecorderRef.current = null; // CRITICAL: Clear so state.isRecording reflects reality
+        audioChunksRef.current = [];
+        audioContextRef.current = null;
+        analyserRef.current = null;
+        audioWorkletNodeRef.current = null;
+        streamRef.current = null;
+        audioLevelIntervalRef.current = null;
+        isNativeMicActiveRef.current = false;
+        nativeMicBufferRef.current = [];
+        nativeMicUnsubscribeRef.current = null;
+        isSystemAudioActiveRef.current = false;
+        systemAudioBufferRef.current = [];
+        systemAudioUnsubscribeRef.current = null;
+        silenceStartTimeRef.current = null;
+        silenceConfirmationShownRef.current = false;
+        isFileRecordingActiveRef.current = false;
+        micFilePathRef.current = null;
+        systemFilePathRef.current = null;
+
         return new Promise<void>((resolve) => {
-            mediaRecorderRef.current!.onstop = async () => {
+            capturedMediaRecorder.onstop = async () => {
+                // All cleanup below uses captured locals, NOT refs.
+                // This prevents destroying a new recording's resources if one started
+                // between stop() and this onstop callback firing.
+
                 // Stop audio level analysis
-                if (audioLevelIntervalRef.current) {
-                    clearInterval(audioLevelIntervalRef.current);
-                    audioLevelIntervalRef.current = null;
+                if (capturedAudioLevelInterval) {
+                    clearInterval(capturedAudioLevelInterval);
                 }
                 // Fully close AudioContext to release audio resources
                 // This is critical for Bluetooth headsets to switch back to A2DP codec
-                if (audioContextRef.current) {
+                if (capturedAudioContext) {
                     try {
-                        await audioContextRef.current.close();
+                        await capturedAudioContext.close();
                         console.log('[AudioRecordingContext] AudioContext closed successfully');
                     } catch (e) {
                         console.warn('[AudioRecordingContext] Error closing AudioContext:', e);
                     }
-                    audioContextRef.current = null;
                 }
-                analyserRef.current = null;
 
                 // Clean up AudioWorkletNode
-                if (audioWorkletNodeRef.current) {
+                if (capturedWorkletNode) {
                     try {
-                        // Tell worklet to clear its buffers
-                        audioWorkletNodeRef.current.port.postMessage({ type: 'clear' });
-                        audioWorkletNodeRef.current.disconnect();
+                        capturedWorkletNode.port.postMessage({ type: 'clear' });
+                        capturedWorkletNode.disconnect();
                         console.log('[AudioRecordingContext] AudioWorkletNode disconnected');
                     } catch (e) {
                         console.warn('[AudioRecordingContext] Error disconnecting AudioWorkletNode:', e);
                     }
-                    audioWorkletNodeRef.current = null;
                 }
 
                 // Stop all tracks
-                if (streamRef.current) {
-                    streamRef.current.getTracks().forEach(track => track.stop());
-                    streamRef.current = null;
+                if (capturedStream) {
+                    capturedStream.getTracks().forEach(track => track.stop());
                 }
 
                 // Stop native mic capture
-                if (isNativeMicActiveRef.current) {
-                    isNativeMicActiveRef.current = false;
-                    nativeMicBufferRef.current = [];
-                    if (nativeMicUnsubscribeRef.current) {
-                        nativeMicUnsubscribeRef.current();
-                        nativeMicUnsubscribeRef.current = null;
+                if (capturedIsNativeMicActive) {
+                    if (capturedNativeMicUnsubscribe) {
+                        capturedNativeMicUnsubscribe();
                     }
                     try {
                         await window.electron?.ipcRenderer?.meeting?.stopMicCapture?.();
@@ -829,12 +856,9 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
                 }
 
                 // Stop system audio capture
-                if (isSystemAudioActiveRef.current) {
-                    isSystemAudioActiveRef.current = false;
-                    systemAudioBufferRef.current = [];
-                    if (systemAudioUnsubscribeRef.current) {
-                        systemAudioUnsubscribeRef.current();
-                        systemAudioUnsubscribeRef.current = null;
+                if (capturedIsSystemAudioActive) {
+                    if (capturedSystemAudioUnsubscribe) {
+                        capturedSystemAudioUnsubscribe();
                     }
                     try {
                         await window.electron?.ipcRenderer?.meeting?.stopSystemAudioCapture?.();
@@ -844,21 +868,15 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
                     }
                 }
 
-                // Reset silence detection
-                silenceStartTimeRef.current = null;
-                silenceConfirmationShownRef.current = false;
-
                 // ============================================================
                 // STOP FILE-BASED RECORDING AND MERGE
                 // ============================================================
                 let mergedFilePath: string | null = null;
-                if (isFileRecordingActiveRef.current) {
+                if (capturedIsFileRecordingActive) {
                     try {
                         console.log('[AudioRecordingContext] Stopping file-based recording...');
                         const fileResult = await window.electron?.ipcRenderer?.meeting?.stopFileRecording?.();
                         console.log('[AudioRecordingContext] File recording stopped:', fileResult);
-
-                        isFileRecordingActiveRef.current = false;
 
                         // Merge the files with FFmpeg
                         if (fileResult?.success && (fileResult.mic?.filePath || fileResult.system?.filePath)) {
@@ -886,10 +904,6 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
                     } catch (fileError) {
                         console.error('[AudioRecordingContext] Error stopping file recording:', fileError);
                     }
-
-                    // Clean up file path refs
-                    micFilePathRef.current = null;
-                    systemFilePathRef.current = null;
                 }
 
                 // Create blob from captured chunks (fallback if file-based recording failed)
@@ -1054,7 +1068,7 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
                 resolve();
             };
 
-            mediaRecorderRef.current!.stop();
+            capturedMediaRecorder.stop();
         });
     }, [updateEntry]);
 
@@ -1153,6 +1167,10 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
      * Wait for transcription to complete for a session ID
      * Polls the pending transcriptions until one is available or timeout
      * Returns merged transcription if multiple recordings occurred during the session
+     *
+     * NOTE: Uses refs (mediaRecorderRef, isStoppingRecordingRef) instead of state values
+     * to avoid stale closures — state.isRecording is captured at useCallback creation time
+     * and would never update inside the polling loop.
      */
     const waitForTranscription = useCallback(async (sessionId: string, timeoutMs: number = 30000): Promise<EntryTranscription | null> => {
         console.log('[AudioRecordingContext] waitForTranscription called, sessionId:', sessionId, 'timeout:', timeoutMs);
@@ -1162,12 +1180,16 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
         const minWaitTime = 2000; // Wait at least 2 seconds to allow STOP event to propagate
 
         while (Date.now() - startTime < timeoutMs) {
+            // Use refs for live state — state.isRecording would be stale in this closure
+            const isRecordingNow = mediaRecorderRef.current !== null && mediaRecorderRef.current.state !== 'inactive';
+            const isStopping = isStoppingRecordingRef.current;
+
             // Check if transcription is available (uses array, checks length > 0)
             const transcriptions = pendingTranscriptionsRef.current.get(sessionId);
             if (transcriptions && transcriptions.length > 0) {
                 // Wait a bit more to see if more recordings are coming
                 // (give time for any in-progress transcription to finish)
-                if (!state.isRecording && !transcriptionProgress) {
+                if (!isRecordingNow && !isStopping) {
                     console.log('[AudioRecordingContext] Transcription(s) found after', Date.now() - startTime, 'ms, count:', transcriptions.length);
                     return getPendingTranscription(sessionId); // Returns merged transcription
                 }
@@ -1179,21 +1201,15 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
             if (elapsedMs > minWaitTime) {
                 // If we have transcriptions and no recording is active, return them
                 const existingTranscriptions = pendingTranscriptionsRef.current.get(sessionId);
-                if (existingTranscriptions && existingTranscriptions.length > 0 && !state.isRecording && !transcriptionProgress) {
+                if (existingTranscriptions && existingTranscriptions.length > 0 && !isRecordingNow && !isStopping) {
                     console.log('[AudioRecordingContext] Returning', existingTranscriptions.length, 'transcription(s) after', elapsedMs, 'ms');
                     return getPendingTranscription(sessionId); // Returns merged transcription
                 }
 
                 // Check if transcription failed (no recording was active or it errored)
                 // If there's no recording and no pending transcription, don't wait
-                if (!state.isRecording && !transcriptionProgress && (!existingTranscriptions || existingTranscriptions.length === 0)) {
+                if (!isRecordingNow && !isStopping && (!existingTranscriptions || existingTranscriptions.length === 0)) {
                     console.log('[AudioRecordingContext] No active recording and no transcription in progress after', elapsedMs, 'ms, returning null');
-                    return null;
-                }
-
-                // If transcription errored, return null
-                if (transcriptionProgress?.status === 'error') {
-                    console.log('[AudioRecordingContext] Transcription errored, returning null');
                     return null;
                 }
             }
@@ -1211,11 +1227,13 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
 
         console.log('[AudioRecordingContext] waitForTranscription timed out after', timeoutMs, 'ms');
         return null;
-    }, [state.isRecording, transcriptionProgress, getPendingTranscription]);
+    }, [getPendingTranscription]);
 
     /**
      * Wait for transcriptions to complete for a session ID
      * Returns array of transcriptions (one per recording) if completed successfully within timeout
+     *
+     * NOTE: Uses refs instead of state values to avoid stale closures (same as waitForTranscription).
      */
     const waitForTranscriptions = useCallback(async (sessionId: string, timeoutMs: number = 30000): Promise<EntryTranscription[]> => {
         console.log('[AudioRecordingContext] waitForTranscriptions called, sessionId:', sessionId, 'timeout:', timeoutMs);
@@ -1225,9 +1243,12 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
         const minWaitTime = 2000;
 
         while (Date.now() - startTime < timeoutMs) {
+            const isRecordingNow = mediaRecorderRef.current !== null && mediaRecorderRef.current.state !== 'inactive';
+            const isStopping = isStoppingRecordingRef.current;
+
             const transcriptions = pendingTranscriptionsRef.current.get(sessionId);
             if (transcriptions && transcriptions.length > 0) {
-                if (!state.isRecording && !transcriptionProgress) {
+                if (!isRecordingNow && !isStopping) {
                     console.log('[AudioRecordingContext] Transcriptions found:', transcriptions.length);
                     return transcriptions;
                 }
@@ -1236,18 +1257,13 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
             const elapsedMs = Date.now() - startTime;
             if (elapsedMs > minWaitTime) {
                 const existingTranscriptions = pendingTranscriptionsRef.current.get(sessionId);
-                if (existingTranscriptions && existingTranscriptions.length > 0 && !state.isRecording && !transcriptionProgress) {
+                if (existingTranscriptions && existingTranscriptions.length > 0 && !isRecordingNow && !isStopping) {
                     console.log('[AudioRecordingContext] Returning', existingTranscriptions.length, 'transcription(s) after', elapsedMs, 'ms');
                     return existingTranscriptions;
                 }
 
-                if (!state.isRecording && !transcriptionProgress && (!existingTranscriptions || existingTranscriptions.length === 0)) {
+                if (!isRecordingNow && !isStopping && (!existingTranscriptions || existingTranscriptions.length === 0)) {
                     console.log('[AudioRecordingContext] No transcriptions available after', elapsedMs, 'ms');
-                    return [];
-                }
-
-                if (transcriptionProgress?.status === 'error') {
-                    console.log('[AudioRecordingContext] Transcription errored');
                     return [];
                 }
             }
@@ -1263,7 +1279,7 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
 
         console.log('[AudioRecordingContext] waitForTranscriptions timed out after', timeoutMs, 'ms');
         return [];
-    }, [state.isRecording, transcriptionProgress]);
+    }, []);
 
     /**
      * Get pending audio info for a session/entry ID (when transcription failed but audio was saved)
