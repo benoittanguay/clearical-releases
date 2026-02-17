@@ -121,19 +121,42 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
     // Store callbacks for transcription completion events
     const transcriptionCallbacksRef = useRef<Set<(sessionId: string, transcriptions: EntryTranscription[]) => void>>(new Set());
 
-    // Load pending transcriptions from disk on mount (crash recovery)
+    // Load pending transcriptions from disk on mount (crash recovery).
+    // Also cleans up orphans older than 24 hours — these are from crashed sessions
+    // where the entry was never created. During normal operation, pending transcriptions
+    // are cleaned up explicitly via clearPendingTranscription() when applied to an entry.
+    // There is NO periodic cleanup timer — sessions can run for many hours, and
+    // transcription/audio data must remain available for the entire session lifetime.
+    const ORPHAN_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours
     useEffect(() => {
         const loadPersisted = async () => {
             try {
                 const result = await window.electron?.ipcRenderer?.meeting?.loadPendingTranscriptions?.();
                 if (result?.success && result.transcriptions) {
-                    const persistedCount = Object.keys(result.transcriptions).length;
-                    if (persistedCount > 0) {
-                        console.log('[AudioRecordingContext] Recovered', persistedCount, 'pending transcription session(s) from disk');
-                        // Merge with in-memory state
-                        for (const [sessionId, transcriptions] of Object.entries(result.transcriptions)) {
-                            pendingTranscriptionsRef.current.set(sessionId, transcriptions as EntryTranscription[]);
+                    const now = Date.now();
+                    let recoveredCount = 0;
+                    let orphanCount = 0;
+
+                    for (const [sessionId, transcriptions] of Object.entries(result.transcriptions)) {
+                        const typedTranscriptions = transcriptions as EntryTranscription[];
+                        // Discard orphans from crashed sessions (>24h old)
+                        const allOrphaned = typedTranscriptions.every(t => now - t.createdAt > ORPHAN_MAX_AGE_MS);
+                        if (allOrphaned) {
+                            orphanCount++;
+                            window.electron?.ipcRenderer?.meeting?.removePendingTranscription?.(sessionId).catch((err: Error) => {
+                                console.error('[AudioRecordingContext] Failed to remove orphaned transcription from disk:', err);
+                            });
+                        } else {
+                            pendingTranscriptionsRef.current.set(sessionId, typedTranscriptions);
+                            recoveredCount++;
                         }
+                    }
+
+                    if (recoveredCount > 0) {
+                        console.log('[AudioRecordingContext] Recovered', recoveredCount, 'pending transcription session(s) from disk');
+                    }
+                    if (orphanCount > 0) {
+                        console.log('[AudioRecordingContext] Cleaned up', orphanCount, 'orphaned transcription session(s) older than 24h');
                     }
                 }
             } catch (error) {
@@ -141,47 +164,6 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
             }
         };
         loadPersisted();
-    }, []);
-
-    // Cleanup old pending transcriptions to prevent memory leaks
-    // Must be long enough to cover the entire timer session — user may record a meeting,
-    // then continue working for hours before stopping the timer (which creates the entry).
-    // Transcription data is small (just text), so 2 hours is safe.
-    const PENDING_TRANSCRIPTION_MAX_AGE_MS = 2 * 60 * 60 * 1000; // 2 hours
-    useEffect(() => {
-        const cleanupInterval = setInterval(() => {
-            const now = Date.now();
-            let cleanedCount = 0;
-
-            // Clean up old transcriptions
-            for (const [sessionId, transcriptions] of pendingTranscriptionsRef.current.entries()) {
-                // Check if all transcriptions for this session are old
-                const allOld = transcriptions.every(t => now - t.createdAt > PENDING_TRANSCRIPTION_MAX_AGE_MS);
-                if (allOld) {
-                    pendingTranscriptionsRef.current.delete(sessionId);
-                    // Also remove from disk
-                    window.electron?.ipcRenderer?.meeting?.removePendingTranscription?.(sessionId).catch((err: Error) => {
-                        console.error('[AudioRecordingContext] Failed to remove old transcription from disk:', err);
-                    });
-                    cleanedCount++;
-                }
-            }
-
-            // Clean up old pending audio
-            for (const [sessionId, pending] of pendingAudioRef.current.entries()) {
-                const attemptedAt = pending.attemptedAt ?? 0;
-                if (now - attemptedAt > PENDING_TRANSCRIPTION_MAX_AGE_MS) {
-                    pendingAudioRef.current.delete(sessionId);
-                    cleanedCount++;
-                }
-            }
-
-            if (cleanedCount > 0) {
-                console.log(`[AudioRecordingContext] Cleaned up ${cleanedCount} old pending transcriptions/audio`);
-            }
-        }, 60000); // Check every minute
-
-        return () => clearInterval(cleanupInterval);
     }, []);
 
     // MediaRecorder refs
