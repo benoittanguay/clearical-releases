@@ -79,6 +79,12 @@ interface AudioRecordingContextValue {
      * Used to attach transcriptions to entries after they're created
      */
     onTranscriptionComplete: (callback: (sessionId: string, transcriptions: EntryTranscription[]) => void) => () => void;
+    /**
+     * Subscribe to real-time audio level updates (called ~20fps during recording).
+     * Returns unsubscribe function. Used by RecordingControls to get levels
+     * without IPC round-trip (data is already in this renderer process).
+     */
+    subscribeToAudioLevels: (callback: (levels: number[], elapsedMs: number) => void) => () => void;
 }
 
 const AudioRecordingContext = createContext<AudioRecordingContextValue | null>(null);
@@ -217,6 +223,14 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
     // CRITICAL: Synchronous lock to prevent race conditions when multiple STOP events arrive
     // Prevents duplicate transcriptions if stop is called twice before onstop fires
     const isStoppingRecordingRef = useRef<boolean>(false);
+
+    // Subscribers for audio level data (RecordingControls uses this instead of IPC)
+    const audioLevelsSubscribersRef = useRef<Set<(levels: number[], elapsedMs: number) => void>>(new Set());
+
+    const subscribeToAudioLevels = useCallback((callback: (levels: number[], elapsedMs: number) => void) => {
+        audioLevelsSubscribersRef.current.add(callback);
+        return () => { audioLevelsSubscribersRef.current.delete(callback); };
+    }, []);
 
     // CRITICAL: Refs to hold current callbacks to avoid useEffect re-registration race condition
     // When stopRecordingAndTranscribe changes (due to updateEntry dependency), we don't want
@@ -624,9 +638,9 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
                     }
 
                     // Send to main process to forward to widget
+                    const elapsedMs = Date.now() - recordingStartTimestamp;
                     const sendFn = window.electron?.ipcRenderer?.meeting?.sendAudioLevels;
                     if (sendFn) {
-                        const elapsedMs = Date.now() - recordingStartTimestamp;
                         sendFn(levels, elapsedMs);
                         audioLevelsSentCount++;
                         // Log every 100 sends (~5 seconds)
@@ -644,6 +658,9 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
                         console.error('[AudioRecordingContext] sendAudioLevels function not available!');
                         audioLevelsSentCount = -1; // Only log once
                     }
+
+                    // Notify in-process subscribers (RecordingControls waveform)
+                    audioLevelsSubscribersRef.current.forEach(cb => cb(levels, elapsedMs));
                 }
             }, 50); // Update at ~20fps
 
@@ -1543,6 +1560,7 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
         retryTranscription,
         clearPendingAudio,
         onTranscriptionComplete,
+        subscribeToAudioLevels,
     };
 
     return (

@@ -3,22 +3,21 @@
  *
  * Displays audio recording controls with waveform visualization.
  * Placed below the split flap timer in the chrono page.
+ *
+ * Audio levels come directly from AudioRecordingContext (same renderer process)
+ * rather than IPC — identical data to what the widget receives.
  */
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Waveform } from './Waveform';
+import { useAudioRecording } from '../context/AudioRecordingContext';
 import './RecordingControls.css';
 
 interface RecordingControlsProps {
     isRecording: boolean;
     onToggleRecording: () => void;
     disabled?: boolean;
-    elapsedMs?: number; // Recording elapsed time for waveform sync
-}
-
-interface AudioLevelData {
-    levels: number[];
-    timestamp: number;
+    elapsedMs?: number;
 }
 
 export function RecordingControls({
@@ -27,11 +26,11 @@ export function RecordingControls({
     disabled = false,
     elapsedMs = 0
 }: RecordingControlsProps): React.ReactElement {
-    const [audioLevel, setAudioLevel] = useState(0);
+    const [audioLevels, setAudioLevels] = useState<number[]>([]);
     const [isVisible, setIsVisible] = useState(false);
     const [waveformWidth, setWaveformWidth] = useState(320);
     const waveformContainerRef = useRef<HTMLDivElement>(null);
-    const recentAudioLevelsRef = useRef<number[]>([]);
+    const { subscribeToAudioLevels } = useAudioRecording();
 
     // Animate in on mount
     useEffect(() => {
@@ -54,61 +53,30 @@ export function RecordingControls({
         });
 
         resizeObserver.observe(container);
-        // Initial measurement
         setWaveformWidth(Math.floor(container.offsetWidth) || 320);
 
         return () => resizeObserver.disconnect();
     }, []);
 
-    // Listen for audio level updates from main process (same as widget)
+    // Subscribe to audio levels from context (same data widget receives)
     useEffect(() => {
         if (!isRecording) {
-            setAudioLevel(0);
+            setAudioLevels([]);
             return;
         }
 
-        const handleAudioLevels = (data: AudioLevelData) => {
-            if (data && data.levels && data.levels.length > 0) {
-                // Calculate weighted RMS across frequency bins (speech-weighted)
-                let weightedSum = 0;
-                let totalWeight = 0;
-                for (let i = 0; i < data.levels.length; i++) {
-                    const weight = i < 2 ? 0.3 : i < 15 ? 1.0 : 0.5;
-                    weightedSum += data.levels[i] * data.levels[i] * weight;
-                    totalWeight += weight;
-                }
-                const rms = Math.sqrt(weightedSum / totalWeight);
-                const peak = Math.max(...data.levels);
-                const blendedLevel = rms * 0.6 + peak * 0.4;
-
-                // Rolling buffer for smoothing
-                recentAudioLevelsRef.current.push(blendedLevel);
-                if (recentAudioLevelsRef.current.length > 5) {
-                    recentAudioLevelsRef.current.shift();
-                }
-
-                // Use average for more natural variation (max tends to flatten dynamics)
-                const smoothedLevel = recentAudioLevelsRef.current.reduce((a, b) => a + b, 0) / recentAudioLevelsRef.current.length;
-                // Light compression to preserve dynamic range
-                const compressed = Math.pow(smoothedLevel, 0.7);
-                setAudioLevel(Math.max(0.02, Math.min(1, compressed)));
-            }
-        };
-
-        const onFn = window.electron?.ipcRenderer?.on;
-        if (!onFn) return;
-
-        const unsubscribe = onFn('widget:audio-levels', handleAudioLevels);
+        const unsubscribe = subscribeToAudioLevels((levels) => {
+            setAudioLevels(levels);
+        });
 
         return () => {
-            unsubscribe?.();
-            recentAudioLevelsRef.current = [];
+            unsubscribe();
+            setAudioLevels([]);
         };
-    }, [isRecording]);
+    }, [isRecording, subscribeToAudioLevels]);
 
     return (
         <div className={`recording-controls ${isVisible ? 'recording-controls--visible' : ''}`}>
-            {/* Recording toggle button */}
             <button
                 className={`recording-controls__button ${isRecording ? 'recording-controls__button--recording' : ''}`}
                 onClick={onToggleRecording}
@@ -116,7 +84,6 @@ export function RecordingControls({
                 title={isRecording ? 'Stop Recording' : 'Start Recording'}
             >
                 {isRecording ? (
-                    // Stop icon (square)
                     <svg
                         viewBox="0 0 24 24"
                         fill="currentColor"
@@ -125,7 +92,6 @@ export function RecordingControls({
                         <rect x="6" y="6" width="12" height="12" rx="2" />
                     </svg>
                 ) : (
-                    // Microphone icon
                     <svg
                         viewBox="0 0 24 24"
                         fill="none"
@@ -143,14 +109,13 @@ export function RecordingControls({
                 {isRecording && <span className="recording-controls__pulse" />}
             </button>
 
-            {/* Waveform container */}
             <div
                 ref={waveformContainerRef}
                 className={`recording-controls__waveform ${isRecording ? 'recording-controls__waveform--active' : ''}`}
             >
                 <Waveform
                     isRecording={isRecording}
-                    audioLevel={audioLevel}
+                    audioLevels={audioLevels}
                     elapsedMs={elapsedMs}
                     width={waveformWidth}
                     height={40}
