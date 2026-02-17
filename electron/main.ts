@@ -3,6 +3,7 @@ import path from 'path';
 import fs from 'fs';
 import os from 'os';
 import { fileURLToPath, pathToFileURL } from 'url';
+import { spawn } from 'child_process';
 import { config as dotenvConfig } from 'dotenv';
 
 // Initialize main process file logger FIRST - before any other logging
@@ -2022,7 +2023,7 @@ async function compressAudioForTranscription(
     }
 
     // Check if ffmpeg is available
-    const { isFfmpegAvailable } = await import('./meeting/audioChunker.js');
+    const { isFfmpegAvailable, getFfmpegPath } = await import('./meeting/audioChunker.js');
     const ffmpegAvailable = await isFfmpegAvailable();
     if (!ffmpegAvailable) {
         console.log('[AudioCompression] ffmpeg not available, skipping compression');
@@ -2031,6 +2032,9 @@ async function compressAudioForTranscription(
             error: 'ffmpeg not available'
         };
     }
+
+    // Get the bundled ffmpeg path (already verified available above)
+    const ffmpegPath = getFfmpegPath();
 
     // Get input file size for logging
     const inputStats = fs.statSync(inputPath);
@@ -2044,14 +2048,13 @@ async function compressAudioForTranscription(
     }
 
     return new Promise((resolve) => {
-        const { spawn } = require('child_process');
 
         // ffmpeg command optimized for speech transcription:
         // - libopus codec (best for speech)
         // - 32kbps bitrate (excellent quality for speech, very small file)
         // - 16kHz sample rate (Whisper's expected input)
         // - Mono channel (speech doesn't need stereo)
-        const ffmpeg = spawn('ffmpeg', [
+        const ffmpeg = spawn(ffmpegPath, [
             '-y',                           // Overwrite output
             '-i', inputPath,                // Input file
             '-c:a', 'libopus',              // Opus codec

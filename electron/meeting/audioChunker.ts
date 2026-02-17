@@ -17,37 +17,46 @@ export const MAX_CHUNK_SIZE_BYTES = 24 * 1024 * 1024; // 24MB to be safe
 
 /**
  * Get the path to the ffmpeg binary
- * Priority: 1) Bundled ffmpeg-static, 2) System ffmpeg
+ * Priority: 1) Bundled ffmpeg-static (direct path), 2) System ffmpeg
  */
-function getFfmpegPath(): string {
-    try {
-        // Try to use bundled ffmpeg-static
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
-        const ffmpegStatic = require('ffmpeg-static');
-        let ffmpegPath = ffmpegStatic as string;
-
-        // In production builds with asar, we need to use the unpacked path
-        if (app.isPackaged && ffmpegPath.includes('app.asar')) {
-            ffmpegPath = ffmpegPath.replace('app.asar', 'app.asar.unpacked');
-        }
-
-        // Verify the bundled binary exists and is executable
-        if (fs.existsSync(ffmpegPath)) {
+export function getFfmpegPath(): string {
+    // In packaged builds, construct the path directly — require('ffmpeg-static')
+    // may not work reliably in ESM context within asar
+    if (app.isPackaged) {
+        const bundledPath = path.join(
+            process.resourcesPath,
+            'app.asar.unpacked',
+            'node_modules',
+            'ffmpeg-static',
+            'ffmpeg'
+        );
+        if (fs.existsSync(bundledPath)) {
             try {
-                fs.accessSync(ffmpegPath, fs.constants.X_OK);
-                console.log('[AudioChunker] Using bundled ffmpeg:', ffmpegPath);
-                return ffmpegPath;
+                fs.accessSync(bundledPath, fs.constants.X_OK);
+                console.log('[AudioChunker] Using bundled ffmpeg:', bundledPath);
+                return bundledPath;
             } catch {
-                console.warn('[AudioChunker] Bundled ffmpeg not executable, falling back to system');
+                console.warn('[AudioChunker] Bundled ffmpeg not executable at:', bundledPath);
             }
         } else {
-            console.warn('[AudioChunker] Bundled ffmpeg not found at:', ffmpegPath, ', falling back to system');
+            console.warn('[AudioChunker] Bundled ffmpeg not found at:', bundledPath);
         }
-    } catch (error) {
-        console.warn('[AudioChunker] Failed to load ffmpeg-static, falling back to system ffmpeg:', error);
+    } else {
+        // In development, use require to find the binary in node_modules
+        try {
+            // eslint-disable-next-line @typescript-eslint/no-var-requires
+            const ffmpegStatic = require('ffmpeg-static') as string;
+            if (ffmpegStatic && fs.existsSync(ffmpegStatic)) {
+                console.log('[AudioChunker] Using dev ffmpeg:', ffmpegStatic);
+                return ffmpegStatic;
+            }
+        } catch (error) {
+            console.warn('[AudioChunker] Failed to load ffmpeg-static in dev:', error);
+        }
     }
 
     // Fallback to system ffmpeg
+    console.warn('[AudioChunker] Falling back to system ffmpeg');
     return 'ffmpeg';
 }
 

@@ -392,11 +392,13 @@ export class AutoUpdater {
                 this._isInstallingUpdate = true;
                 autoUpdater.quitAndInstall(true, true);
 
-                // If quitAndInstall doesn't exit the app (rare), force quit after a delay
+                // If quitAndInstall doesn't exit the app (rare), force quit after a delay.
+                // On macOS, Squirrel.Mac needs time to extract the ZIP (~240MB) and replace
+                // the app bundle before the process exits. 60 seconds gives ample time.
                 setTimeout(() => {
-                    log.info('[AutoUpdater] Force quitting app as fallback...');
+                    log.info('[AutoUpdater] Force quitting app as fallback (60s timeout)...');
                     app.exit(0);
-                }, 1000);
+                }, 60000);
             } catch (error) {
                 // Catch errors that occur during the actual quit and install
                 log.error('[AutoUpdater] Failed to quit and install:', error);

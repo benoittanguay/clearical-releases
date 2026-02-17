@@ -2,6 +2,15 @@
 
 All notable changes to Clearical will be documented in this file.
 
+## [1.7.45] - 2026-02-17
+
+### Bug Fixes
+- **Audio Recording**: Fixed ffmpeg not found in production builds — path resolution now uses direct resource path instead of unreliable `require()` in ESM context
+- **Audio Recording**: Fixed audio compression using system ffmpeg instead of bundled binary, causing compression to fail on systems without ffmpeg installed
+- **Auto-Update**: Fixed "Install & Restart" not applying updates — force-quit fallback was killing the process after 1 second, before Squirrel.Mac could finish extracting the ~240MB update
+
+---
+
 ## [1.7.44] - 2026-02-16
 
 ### Tests
