@@ -144,8 +144,10 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
     }, []);
 
     // Cleanup old pending transcriptions to prevent memory leaks
-    // Transcriptions older than 5 minutes are likely orphaned (entry was never created)
-    const PENDING_TRANSCRIPTION_MAX_AGE_MS = 5 * 60 * 1000; // 5 minutes
+    // Must be long enough to cover the entire timer session — user may record a meeting,
+    // then continue working for hours before stopping the timer (which creates the entry).
+    // Transcription data is small (just text), so 2 hours is safe.
+    const PENDING_TRANSCRIPTION_MAX_AGE_MS = 2 * 60 * 60 * 1000; // 2 hours
     useEffect(() => {
         const cleanupInterval = setInterval(() => {
             const now = Date.now();
