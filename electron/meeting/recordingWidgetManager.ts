@@ -348,7 +348,7 @@ export class RecordingWidgetManager {
             if (this.audioLevelsSentCount <= 3 || this.audioLevelsSentCount % 100 === 0) {
                 console.log('[RecordingWidgetManager] Sending audio levels to widget, count:', this.audioLevelsSentCount);
             }
-            this.widgetWindow.webContents.send('widget:audio-levels', {
+            this.widgetWindow.webContents.send('recording:audio-levels', {
                 levels,
                 elapsedMs,
                 timestamp: Date.now(),
