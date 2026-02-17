@@ -213,8 +213,9 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
     // Silence detection for meeting end
     const silenceStartTimeRef = useRef<number | null>(null);
     const silenceConfirmationShownRef = useRef<boolean>(false);
-    // Note: Using time domain deviation (< 3) instead of frequency threshold for more reliable silence detection
-    const SILENCE_DURATION_FOR_PROMPT = 10000; // 10 seconds of silence = ask user if meeting ended
+    const silenceCooldownUntilRef = useRef<number>(0); // After user clicks "Continue", don't re-prompt for 2 minutes
+    const SILENCE_DURATION_FOR_PROMPT = 20000; // 20 seconds of silence = ask user if meeting ended
+    const SILENCE_COOLDOWN_AFTER_DISMISS = 120000; // 2 minutes cooldown after user clicks "Continue"
 
     // CRITICAL: Synchronous lock to prevent race conditions when multiple START events arrive
     // This is set immediately (synchronously) before any async operations
@@ -600,8 +601,11 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
                         }
                     }
 
-                    // Only consider truly silent if BOTH system audio AND mic are silent
-                    const isTrulySilent = isSystemAudioSilent && !isMicActive;
+                    // Also check if frequency data shows energy (prevents false silence when waveform shows bars)
+                    const hasFrequencyEnergy = averageLevel > 0.05;
+
+                    // Only consider truly silent if system audio, mic, AND frequency bins all agree
+                    const isTrulySilent = isSystemAudioSilent && !isMicActive && !hasFrequencyEnergy;
 
                     // Silence detection for meeting end
                     if (isTrulySilent) {
@@ -616,7 +620,8 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
                                 console.log('[AudioRecordingContext] Silence duration:', Math.floor(silenceDuration / 1000), 'seconds');
                             }
                             // Check if we've reached the silence threshold - show confirmation
-                            if (silenceDuration >= SILENCE_DURATION_FOR_PROMPT && !silenceConfirmationShownRef.current) {
+                            // Also respect cooldown after user clicks "Continue" (prevents rapid re-prompting)
+                            if (silenceDuration >= SILENCE_DURATION_FOR_PROMPT && !silenceConfirmationShownRef.current && Date.now() > silenceCooldownUntilRef.current) {
                                 console.log('[AudioRecordingContext] *** SILENCE THRESHOLD REACHED - Asking user if meeting ended ***');
                                 silenceConfirmationShownRef.current = true;
                                 // Signal to main process to show confirmation dialog
@@ -1468,6 +1473,7 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
                 console.log('[AudioRecordingContext] *** RECEIVED RESET SILENCE TIMER EVENT ***');
                 silenceStartTimeRef.current = null;
                 silenceConfirmationShownRef.current = false;
+                silenceCooldownUntilRef.current = Date.now() + SILENCE_COOLDOWN_AFTER_DISMISS;
             }
         );
 
