@@ -122,41 +122,20 @@ export function AudioRecordingProvider({ children }: AudioRecordingProviderProps
     const transcriptionCallbacksRef = useRef<Set<(sessionId: string, transcriptions: EntryTranscription[]) => void>>(new Set());
 
     // Load pending transcriptions from disk on mount (crash recovery).
-    // Also cleans up orphans older than 24 hours — these are from crashed sessions
-    // where the entry was never created. During normal operation, pending transcriptions
-    // are cleaned up explicitly via clearPendingTranscription() when applied to an entry.
-    // There is NO periodic cleanup timer — sessions can run for many hours, and
-    // transcription/audio data must remain available for the entire session lifetime.
-    const ORPHAN_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours
+    // Pending data is NEVER automatically cleaned up — it persists until explicitly
+    // cleared via clearPendingTranscription() after successful application to an entry.
+    // This ensures audio recordings remain available for transcription retry indefinitely.
     useEffect(() => {
         const loadPersisted = async () => {
             try {
                 const result = await window.electron?.ipcRenderer?.meeting?.loadPendingTranscriptions?.();
                 if (result?.success && result.transcriptions) {
-                    const now = Date.now();
-                    let recoveredCount = 0;
-                    let orphanCount = 0;
-
-                    for (const [sessionId, transcriptions] of Object.entries(result.transcriptions)) {
-                        const typedTranscriptions = transcriptions as EntryTranscription[];
-                        // Discard orphans from crashed sessions (>24h old)
-                        const allOrphaned = typedTranscriptions.every(t => now - t.createdAt > ORPHAN_MAX_AGE_MS);
-                        if (allOrphaned) {
-                            orphanCount++;
-                            window.electron?.ipcRenderer?.meeting?.removePendingTranscription?.(sessionId).catch((err: Error) => {
-                                console.error('[AudioRecordingContext] Failed to remove orphaned transcription from disk:', err);
-                            });
-                        } else {
-                            pendingTranscriptionsRef.current.set(sessionId, typedTranscriptions);
-                            recoveredCount++;
+                    const entries = Object.entries(result.transcriptions);
+                    if (entries.length > 0) {
+                        console.log('[AudioRecordingContext] Recovered', entries.length, 'pending transcription session(s) from disk');
+                        for (const [sessionId, transcriptions] of entries) {
+                            pendingTranscriptionsRef.current.set(sessionId, transcriptions as EntryTranscription[]);
                         }
-                    }
-
-                    if (recoveredCount > 0) {
-                        console.log('[AudioRecordingContext] Recovered', recoveredCount, 'pending transcription session(s) from disk');
-                    }
-                    if (orphanCount > 0) {
-                        console.log('[AudioRecordingContext] Cleaned up', orphanCount, 'orphaned transcription session(s) older than 24h');
                     }
                 }
             } catch (error) {
