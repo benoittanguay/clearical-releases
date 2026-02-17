@@ -625,7 +625,7 @@ export class TranscriptionService extends EventEmitter {
     }
 
     /**
-     * Call Groq API with retry on 401 (token expiration)
+     * Call Groq API with retry on 401 (token expiration) and transient failures (5xx, network errors)
      */
     private async callGroqApiWithRetry(
         audioBase64: string,
@@ -633,26 +633,70 @@ export class TranscriptionService extends EventEmitter {
         entryId: string,
         language?: string
     ): Promise<TranscriptionResult> {
-        // First attempt
-        let response = await this.callGroqApi(audioBase64, mimeType, entryId, language);
+        const MAX_RETRIES = 2; // Up to 2 retries (3 total attempts) for transient failures
+        let lastResponse: Response | null = null;
+        let lastError: Error | null = null;
 
-        // If 401 and we have a refresh callback, try refreshing once
-        if (response.status === 401 && this.refreshAuthCallback) {
-            console.log('[TranscriptionService] Got 401, attempting token refresh...');
+        for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
             try {
-                await this.refreshAuthCallback();
-                console.log('[TranscriptionService] Token refreshed, retrying transcription...');
+                const response = await this.callGroqApi(audioBase64, mimeType, entryId, language);
+                lastResponse = response;
 
-                // Retry once after refresh
-                response = await this.callGroqApi(audioBase64, mimeType, entryId, language);
-            } catch (refreshError) {
-                console.error('[TranscriptionService] Token refresh failed:', refreshError);
-                // Continue with the original 401 response handling
+                // If 401 and we have a refresh callback, try refreshing once
+                if (response.status === 401 && this.refreshAuthCallback && attempt === 0) {
+                    console.log('[TranscriptionService] Got 401, attempting token refresh...');
+                    try {
+                        await this.refreshAuthCallback();
+                        console.log('[TranscriptionService] Token refreshed, retrying transcription...');
+                        continue; // Retry with refreshed token
+                    } catch (refreshError) {
+                        console.error('[TranscriptionService] Token refresh failed:', refreshError);
+                        // Fall through to parse the 401 response
+                    }
+                }
+
+                // Retry on server errors (5xx) — these are transient
+                if (response.status >= 500 && attempt < MAX_RETRIES) {
+                    const backoffMs = (attempt + 1) * 2000; // 2s, 4s
+                    console.log(`[TranscriptionService] Server error ${response.status}, retrying in ${backoffMs}ms (attempt ${attempt + 1}/${MAX_RETRIES})...`);
+                    await new Promise(resolve => setTimeout(resolve, backoffMs));
+                    continue;
+                }
+
+                // Success or non-retryable error — parse the response
+                return this.parseGroqResponse(response, entryId);
+
+            } catch (error) {
+                // Network errors (DNS, connection reset, timeout) — retry
+                lastError = error instanceof Error ? error : new Error(String(error));
+                if (attempt < MAX_RETRIES) {
+                    const backoffMs = (attempt + 1) * 2000;
+                    console.log(`[TranscriptionService] Network error: ${lastError.message}, retrying in ${backoffMs}ms (attempt ${attempt + 1}/${MAX_RETRIES})...`);
+                    await new Promise(resolve => setTimeout(resolve, backoffMs));
+                    continue;
+                }
+                console.error(`[TranscriptionService] Network error after ${MAX_RETRIES + 1} attempts:`, lastError.message);
             }
         }
 
-        // Parse and return the response
-        return this.parseGroqResponse(response, entryId);
+        // All retries exhausted — parse last response or return error
+        if (lastResponse) {
+            return this.parseGroqResponse(lastResponse, entryId);
+        }
+
+        // No response at all (pure network failure)
+        const errorMessage = lastError?.message || 'Network error - could not reach transcription service';
+        this.emit(MEETING_EVENTS.TRANSCRIPTION_ERROR, { entryId, error: errorMessage });
+        return {
+            success: false,
+            transcriptionId: '',
+            segments: [],
+            fullText: '',
+            language: '',
+            duration: 0,
+            wordCount: 0,
+            error: errorMessage,
+        };
     }
 
     /**

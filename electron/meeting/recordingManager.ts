@@ -473,8 +473,9 @@ export class RecordingManager extends EventEmitter {
 
         const previousMeetingApp = this.currentMeetingApp;
 
-        // Clear meeting app when mic stops
-        if (device === 'microphone') {
+        // Only clear meeting app when mic stops if NOT actively recording
+        // During recording, preserve the meeting app info for reference
+        if (device === 'microphone' && !this.isRendererRecording) {
             this.currentMeetingApp = null;
             console.log('[RecordingManager] Cleared meeting app info');
         }
@@ -491,18 +492,13 @@ export class RecordingManager extends EventEmitter {
             isRendererRecording: this.isRendererRecording
         });
 
-        // Only stop recording if BOTH mic and camera are inactive
         if (!micInUse && !cameraInUse) {
-            // Check if we're in a grace period (ignore media-stopped events right after force start)
-            if (this.recordingGracePeriodUntil > Date.now()) {
-                console.log('[RecordingManager] *** IGNORING MEDIA STOPPED - Still in grace period ***');
-                console.log('[RecordingManager] Grace period remaining:', this.recordingGracePeriodUntil - Date.now(), 'ms');
-                return;
-            }
-
             if (this.isRendererRecording) {
-                console.log('[RecordingManager] *** ALL MEDIA STOPPED - STOPPING RECORDING AND CLOSING WIDGET ***');
-                this.notifyRendererToStopRecording();
+                // Recording is active — do NOT stop it automatically.
+                // The user controls when recording stops (widget stop button, tray toggle, or timer stop).
+                // Silence detection in AudioRecordingContext will prompt the user if the meeting ended.
+                console.log('[RecordingManager] All media stopped but recording is active — continuing recording');
+                console.log('[RecordingManager] Silence detection will prompt user if meeting ended');
             } else if (this.isPromptMode) {
                 // Edge case: Media stopped while prompt was showing - auto-dismiss
                 console.log('[RecordingManager] *** ALL MEDIA STOPPED WHILE PROMPT SHOWING - AUTO-DISMISSING ***');
@@ -511,7 +507,7 @@ export class RecordingManager extends EventEmitter {
                 console.log('[RecordingManager] All media stopped but not recording, nothing to stop');
             }
         } else {
-            console.log('[RecordingManager] Other media still active, continuing recording');
+            console.log('[RecordingManager] Other media still active, continuing');
         }
     }
 
@@ -561,17 +557,8 @@ export class RecordingManager extends EventEmitter {
 
         // Set up one-time listener for acknowledgment from renderer
         // This ensures the renderer has processed the start request
-        const ackTimeout = setTimeout(() => {
-            console.log('[RecordingManager] Timed out waiting for start-timer-ack');
-            ipcMain.removeAllListeners(MEETING_IPC_CHANNELS.START_TIMER_ACK);
-            // If recording didn't start (e.g., permissions issue), close the widget
-            if (!this.isRendererRecording) {
-                console.log('[RecordingManager] Recording not started, closing widget');
-                widgetManager.close();
-            }
-        }, 3000); // 3 second timeout
-
-        ipcMain.once(MEETING_IPC_CHANNELS.START_TIMER_ACK, (_event, data: { success: boolean; reason?: string }) => {
+        // Use a named listener so we can remove just this one (not all listeners on the channel)
+        const ackListener = (_event: Electron.IpcMainEvent, data: { success: boolean; reason?: string }) => {
             clearTimeout(ackTimeout);
             console.log('[RecordingManager] Received start-timer-ack:', data);
             // Widget transitions to recording mode via notifyRendererToStartRecording -> widgetManager.show()
@@ -582,7 +569,19 @@ export class RecordingManager extends EventEmitter {
             } else {
                 console.log('[RecordingManager] Recording started, widget transitioned to recording mode');
             }
-        });
+        };
+
+        const ackTimeout = setTimeout(() => {
+            console.log('[RecordingManager] Timed out waiting for start-timer-ack');
+            ipcMain.removeListener(MEETING_IPC_CHANNELS.START_TIMER_ACK, ackListener);
+            // If recording didn't start (e.g., permissions issue), close the widget
+            if (!this.isRendererRecording) {
+                console.log('[RecordingManager] Recording not started, closing widget');
+                widgetManager.close();
+            }
+        }, 3000); // 3 second timeout
+
+        ipcMain.once(MEETING_IPC_CHANNELS.START_TIMER_ACK, ackListener);
 
         // Send request to main app
         console.log('[RecordingManager] Sending request-start-timer to renderer, waiting for ack...');
