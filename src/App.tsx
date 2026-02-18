@@ -585,9 +585,14 @@ function App() {
           if (lateTranscriptions.length > 0) {
             console.log('[App] Transcription completed during entry creation for session', sid, '- attaching now');
             try {
+              // Read current entry and merge transcriptions to avoid overwriting
+              const entryResult = await window.electron.ipcRenderer.db.getEntry(newEntry.id);
+              const existingTranscriptions = entryResult?.data?.transcriptions || [];
+              const mergedTranscriptions = [...existingTranscriptions, ...lateTranscriptions];
+
               await updateEntry(newEntry.id, {
-                transcriptions: lateTranscriptions,
-                transcription: lateTranscriptions.length === 1 ? lateTranscriptions[0] : undefined,
+                transcriptions: mergedTranscriptions,
+                transcription: undefined,
               });
               clearPendingTranscription(sid);
               sessionToEntryIdRef.current.delete(sid);
@@ -855,9 +860,14 @@ function App() {
         console.log('[App] Found mapped entry for session:', sessionId, '→', entryId);
 
         try {
+          // Read current entry and merge transcriptions to avoid overwriting
+          const entryResult = await window.electron.ipcRenderer.db.getEntry(entryId);
+          const existingTranscriptions = entryResult?.data?.transcriptions || [];
+          const mergedTranscriptions = [...existingTranscriptions, ...transcriptions];
+
           await updateEntry(entryId, {
-            transcriptions,
-            transcription: transcriptions.length === 1 ? transcriptions[0] : undefined,
+            transcriptions: mergedTranscriptions,
+            transcription: undefined,
           });
 
           // Clear from pending storage and session mapping

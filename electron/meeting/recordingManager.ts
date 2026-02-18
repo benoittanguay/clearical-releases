@@ -166,21 +166,21 @@ export class RecordingManager extends EventEmitter {
                 forceStart,
             });
 
-            // Start recording if:
-            // 1. forceStart is true (manual recording button clicked), OR
-            // 2. Media is in use (auto-detection)
-            // AND not already recording
-            if ((forceStart || mediaInUse) && !this.isRendererRecording) {
-                console.log('[RecordingManager] *** STARTING RECORDING ***', forceStart ? '(forced by manual button)' : '(media in use)');
+            // Start recording only on explicit user action (forceStart),
+            // otherwise prompt the user when media is detected
+            if (forceStart && !this.isRendererRecording) {
+                console.log('[RecordingManager] *** STARTING RECORDING (forced by manual button/prompt accepted) ***');
 
-                // If force starting, set a grace period to ignore media-stopped events
+                // Set a grace period to ignore media-stopped events
                 // This prevents the widget from closing immediately if mic detection is flaky
-                if (forceStart) {
-                    this.recordingGracePeriodUntil = Date.now() + 10000; // 10 second grace period
-                    console.log('[RecordingManager] Force start - grace period set until:', this.recordingGracePeriodUntil);
-                }
+                this.recordingGracePeriodUntil = Date.now() + 10000; // 10 second grace period
+                console.log('[RecordingManager] Force start - grace period set until:', this.recordingGracePeriodUntil);
 
                 this.startRecording();
+            } else if (mediaInUse && !this.isRendererRecording) {
+                // Media in use but not explicitly requested — prompt user
+                console.log('[RecordingManager] *** Media detected but not forced - showing prompt ***');
+                this.showPromptWidget();
             }
         } else {
             console.log('[RecordingManager] Entry stopped - checking if need to stop recording');
@@ -464,8 +464,8 @@ export class RecordingManager extends EventEmitter {
             return;
         }
 
-        console.log('[RecordingManager] *** ALL CONDITIONS MET - Starting recording ***');
-        this.notifyRendererToStartRecording();
+        console.log('[RecordingManager] *** Media detected with active timer - showing prompt ***');
+        this.showPromptWidget();
     }
 
     private onMediaStopped(device: 'microphone' | 'camera'): void {
