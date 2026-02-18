@@ -24,7 +24,7 @@ electron_1.contextBridge.exposeInMainWorld('electron', {
         // Auth OAuth
         signInWithOAuth: (provider) => electron_1.ipcRenderer.invoke('auth:sign-in-oauth', provider),
         captureScreenshot: (windowInfo) => electron_1.ipcRenderer.invoke('capture-screenshot', windowInfo),
-        analyzeScreenshot: (imagePath, requestId) => electron_1.ipcRenderer.invoke('analyze-screenshot', imagePath, requestId),
+        analyzeScreenshot: (imagePath, requestId, ocrText) => electron_1.ipcRenderer.invoke('analyze-screenshot', imagePath, requestId, ocrText),
         analyzeScreenshotBatch: (inputs) => electron_1.ipcRenderer.invoke('analyze-screenshot-batch', inputs),
         generateActivitySummary: (context) => electron_1.ipcRenderer.invoke('generate-activity-summary', context),
         analyzeSplits: (activityData) => electron_1.ipcRenderer.invoke('ai:analyze-splits', activityData),

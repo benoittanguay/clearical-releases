@@ -3,6 +3,7 @@ import path from 'path';
 import fs from 'fs';
 import os from 'os';
 import { fileURLToPath } from 'url';
+import { spawn } from 'child_process';
 import { config as dotenvConfig } from 'dotenv';
 // Initialize main process file logger FIRST - before any other logging
 import { mainLogger } from './mainLogger.js';
@@ -383,7 +384,7 @@ ipcMain.handle('capture-screenshot', async (_event, windowInfo) => {
 });
 // AI Screenshot Analysis (via Gemini cloud service)
 // PREMIUM FEATURE: Requires Workplace Plan subscription
-ipcMain.handle('analyze-screenshot', requirePremium('AI Analysis', async (event, imagePath, requestId) => {
+ipcMain.handle('analyze-screenshot', requirePremium('AI Analysis', async (event, imagePath, requestId, ocrText) => {
     console.log('[Main] analyze-screenshot requested for:', imagePath);
     console.log('[Main] Using Gemini cloud AI for screenshot analysis');
     // Check if the image file exists
@@ -519,7 +520,7 @@ ipcMain.handle('analyze-screenshot', requirePremium('AI Analysis', async (event,
     // Add time context
     contextSignals.push(createTimeContextSignal(Date.now()));
     try {
-        const aiResult = await aiService.analyzeScreenshot(analyzeImagePath, appName, windowTitle, requestId, contextSignals.length > 0 ? contextSignals : undefined);
+        const aiResult = await aiService.analyzeScreenshot(analyzeImagePath, appName, windowTitle, requestId, contextSignals.length > 0 ? contextSignals : undefined, ocrText);
         // Clean up temp decrypted file if we created one
         if (tempDecryptedPath) {
             try {
@@ -637,7 +638,8 @@ ipcMain.handle('analyze-screenshot-batch', requirePremium('AI Analysis', async (
             imagePath: analyzeImagePath,
             appName,
             windowTitle,
-            requestId: input.requestId
+            requestId: input.requestId,
+            ocrText: input.ocrText
         });
     }
     if (batchInputs.length === 0) {
@@ -1805,7 +1807,7 @@ async function compressAudioForTranscription(inputPath, outputPath) {
         };
     }
     // Check if ffmpeg is available
-    const { isFfmpegAvailable } = await import('./meeting/audioChunker.js');
+    const { isFfmpegAvailable, getFfmpegPath } = await import('./meeting/audioChunker.js');
     const ffmpegAvailable = await isFfmpegAvailable();
     if (!ffmpegAvailable) {
         console.log('[AudioCompression] ffmpeg not available, skipping compression');
@@ -1814,6 +1816,8 @@ async function compressAudioForTranscription(inputPath, outputPath) {
             error: 'ffmpeg not available'
         };
     }
+    // Get the bundled ffmpeg path (already verified available above)
+    const ffmpegPath = getFfmpegPath();
     // Get input file size for logging
     const inputStats = fs.statSync(inputPath);
     const inputSizeMB = Math.round(inputStats.size / 1024 / 1024 * 10) / 10;
@@ -1824,13 +1828,12 @@ async function compressAudioForTranscription(inputPath, outputPath) {
         fs.mkdirSync(outputDir, { recursive: true });
     }
     return new Promise((resolve) => {
-        const { spawn } = require('child_process');
         // ffmpeg command optimized for speech transcription:
         // - libopus codec (best for speech)
         // - 32kbps bitrate (excellent quality for speech, very small file)
         // - 16kHz sample rate (Whisper's expected input)
         // - Mono channel (speech doesn't need stereo)
-        const ffmpeg = spawn('ffmpeg', [
+        const ffmpeg = spawn(ffmpegPath, [
             '-y', // Overwrite output
             '-i', inputPath, // Input file
             '-c:a', 'libopus', // Opus codec
