@@ -11,8 +11,6 @@
  */
 
 import { app } from 'electron';
-import { exec } from 'child_process';
-import { promisify } from 'util';
 import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
@@ -21,8 +19,6 @@ import { BlacklistService } from './blacklistService.js';
 import { mediaMonitor } from './native/index.js';
 import { saveEncryptedFile } from './encryption.js';
 import type { BackgroundActivity } from '../src/types/shared.js';
-
-const execAsync = promisify(exec);
 
 // Constants
 const POLL_INTERVAL_MS = 1000;         // 1 second
@@ -462,98 +458,22 @@ export class BackgroundActivityTracker {
     }
 
     /**
-     * Get the active window via AppleScript
-     * Returns appName, windowTitle, bundleId, and pid
+     * Get the active window via native APIs (NSWorkspace + CGWindowListCopyWindowInfo).
+     * Sandbox-safe — no osascript needed.
      */
     private async getActiveWindow(): Promise<WindowInfo | null> {
         if (process.platform !== 'darwin') return null;
 
         try {
-            const result = await execAsync(`osascript -e '
-                tell application "System Events"
-                    set frontApp to first application process whose frontmost is true
-                    set appName to name of frontApp
-                    set bundleId to bundle identifier of frontApp
-                    set appPID to unix id of frontApp
-                    set windowTitle to ""
+            const result = mediaMonitor.getActiveWindow();
+            if (!result || !result.appName) return null;
 
-                    -- Strategy 1: Try to get title from front window (standard approach)
-                    set windowCount to 0
-                    try
-                        set windowCount to count of windows of frontApp
-                    end try
-
-                    if windowCount > 0 then
-                        try
-                            set windowTitle to title of front window of frontApp
-                            if windowTitle is missing value then
-                                set windowTitle to ""
-                            end if
-                        on error
-                            set windowTitle to ""
-                        end try
-                    end if
-
-                    -- Strategy 2: For Electron apps, try AXTitle from UI elements
-                    if windowTitle is "" then
-                        try
-                            set uiElements to UI elements of frontApp
-                            repeat with elem in uiElements
-                                try
-                                    set elemRole to role of elem
-                                    if elemRole is "AXWindow" then
-                                        set axTitle to value of attribute "AXTitle" of elem
-                                        if axTitle is not missing value and axTitle is not "" then
-                                            set windowTitle to axTitle
-                                            exit repeat
-                                        end if
-                                    end if
-                                end try
-                            end repeat
-                        end try
-                    end if
-
-                    -- Strategy 3: Try AXTitle attribute directly on first window
-                    if windowTitle is "" and windowCount > 0 then
-                        try
-                            set firstWindow to window 1 of frontApp
-                            set axTitle to value of attribute "AXTitle" of firstWindow
-                            if axTitle is not missing value and axTitle is not "" then
-                                set windowTitle to axTitle
-                            end if
-                        end try
-                    end if
-
-                    -- Strategy 4: For Electron apps, try AXDocument attribute
-                    if windowTitle is "" then
-                        try
-                            set firstWindow to window 1 of frontApp
-                            set docTitle to value of attribute "AXDocument" of firstWindow
-                            if docTitle is not missing value and docTitle is not "" then
-                                if docTitle contains "/" then
-                                    set AppleScript'"'"'s text item delimiters to "/"
-                                    set pathParts to text items of docTitle
-                                    set windowTitle to last item of pathParts
-                                    set AppleScript'"'"'s text item delimiters to ""
-                                else
-                                    set windowTitle to docTitle
-                                end if
-                            end if
-                        end try
-                    end if
-
-                    return appName & "|||" & windowTitle & "|||" & bundleId & "|||" & appPID
-                end tell
-            '`);
-
-            const parts = result.stdout.trim().split('|||');
-            const appName = parts[0] || 'Unknown';
-            const rawWindowTitle = parts[1];
-            const bundleId = parts[2] || '';
-            const pid = parseInt(parts[3], 10) || 0;
-            const windowTitle = (rawWindowTitle && rawWindowTitle.trim() !== '') ? rawWindowTitle : 'Unknown';
-
-            return { appName, windowTitle, bundleId, pid };
+            return {
+                appName: result.appName || 'Unknown',
+                windowTitle: result.windowTitle || 'Unknown',
+                bundleId: result.bundleId || '',
+                pid: result.pid || 0,
+            };
         } catch (error) {
             console.error('[BackgroundActivityTracker] Failed to get active window:', error);
             return null;

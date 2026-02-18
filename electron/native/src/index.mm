@@ -809,6 +809,24 @@ Napi::Value CaptureWindowScreenshot(const Napi::CallbackInfo& info) {
     return Napi::Buffer<uint8_t>::Copy(env, (const uint8_t *)pngData.bytes, pngData.length);
 }
 
+// Active window detection via NSWorkspace + CGWindowList (sandbox-safe, replaces osascript)
+
+Napi::Value GetActiveWindow(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+
+    NSDictionary *windowInfo = [ScreenshotCapture getActiveWindow];
+    if (!windowInfo) {
+        return env.Null();
+    }
+
+    Napi::Object result = Napi::Object::New(env);
+    result.Set("appName", Napi::String::New(env, SafeUTF8String(windowInfo[@"appName"])));
+    result.Set("windowTitle", Napi::String::New(env, SafeUTF8String(windowInfo[@"windowTitle"])));
+    result.Set("bundleId", Napi::String::New(env, SafeUTF8String(windowInfo[@"bundleId"])));
+    result.Set("pid", Napi::Number::New(env, [windowInfo[@"pid"] intValue]));
+    return result;
+}
+
 Napi::Object Init(Napi::Env env, Napi::Object exports) {
     // Media monitoring
     exports.Set("start", Napi::Function::New(env, Start));
@@ -847,6 +865,9 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
 
     // Screenshot capture
     exports.Set("captureWindowScreenshot", Napi::Function::New(env, CaptureWindowScreenshot));
+
+    // Active window detection (sandbox-safe)
+    exports.Set("getActiveWindow", Napi::Function::New(env, GetActiveWindow));
 
     return exports;
 }

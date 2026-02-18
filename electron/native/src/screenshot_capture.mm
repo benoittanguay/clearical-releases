@@ -2,6 +2,7 @@
 #import <CoreGraphics/CoreGraphics.h>
 #import <ImageIO/ImageIO.h>
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
+#import <AppKit/AppKit.h>
 
 @implementation ScreenshotCapture
 
@@ -110,6 +111,49 @@
     NSLog(@"[ScreenshotCapture] Captured window (pid=%d, windowID=%u, %lu bytes PNG)",
           pid, targetWindowID, (unsigned long)pngData.length);
     return pngData;
+}
+
++ (NSDictionary * _Nullable)getActiveWindow {
+    // Get frontmost app via NSWorkspace (sandbox-safe)
+    NSRunningApplication *frontApp = [[NSWorkspace sharedWorkspace] frontmostApplication];
+    if (!frontApp) return nil;
+
+    NSString *appName = frontApp.localizedName ?: @"Unknown";
+    NSString *bundleId = frontApp.bundleIdentifier ?: @"";
+    pid_t pid = frontApp.processIdentifier;
+
+    // Get window title via CGWindowListCopyWindowInfo (sandbox-safe)
+    NSString *windowTitle = @"";
+
+    CFArrayRef windowList = CGWindowListCopyWindowInfo(
+        kCGWindowListOptionOnScreenOnly | kCGWindowListExcludeDesktopElements,
+        kCGNullWindowID
+    );
+
+    if (windowList) {
+        NSArray *windows = CFBridgingRelease(windowList);
+        for (NSDictionary *window in windows) {
+            pid_t ownerPID = [window[(__bridge NSString *)kCGWindowOwnerPID] intValue];
+            if (ownerPID != pid) continue;
+
+            // Only consider standard layer-0 windows
+            int windowLayer = [window[(__bridge NSString *)kCGWindowLayer] intValue];
+            if (windowLayer != 0) continue;
+
+            NSString *name = window[(__bridge NSString *)kCGWindowName];
+            if (name && name.length > 0) {
+                windowTitle = name;
+                break;
+            }
+        }
+    }
+
+    return @{
+        @"appName": appName,
+        @"windowTitle": windowTitle,
+        @"bundleId": bundleId,
+        @"pid": @(pid),
+    };
 }
 
 @end

@@ -365,6 +365,20 @@ class MediaMonitorWrapper extends EventEmitter {
             return null;
         }
     }
+
+    /**
+     * Get the frontmost (active) window info using native APIs.
+     * Uses NSWorkspace + CGWindowListCopyWindowInfo — sandbox-safe, no osascript.
+     */
+    getActiveWindow(): { appName: string; windowTitle: string; bundleId: string; pid: number } | null {
+        if (!this.native) return null;
+        try {
+            return this.native.getActiveWindow() || null;
+        } catch (err) {
+            console.error('[MediaMonitor] Failed to get active window:', err);
+            return null;
+        }
+    }
 }
 
 // Export singleton instance

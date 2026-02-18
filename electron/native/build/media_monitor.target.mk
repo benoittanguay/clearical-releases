@@ -176,7 +176,6 @@ LIBS := \
 	-framework CoreAudio \
 	-framework AVFoundation \
 	-framework CoreMediaIO \
-	-framework IOKit \
 	-framework Foundation \
 	-framework ScreenCaptureKit \
 	-framework CoreMedia \

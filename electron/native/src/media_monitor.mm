@@ -1,7 +1,6 @@
 // electron/native/src/media_monitor.mm
 #import "media_monitor.h"
 #import <CoreMediaIO/CMIOHardware.h>
-#import <IOKit/IOKitLib.h>
 #import <AppKit/AppKit.h>
 
 /**

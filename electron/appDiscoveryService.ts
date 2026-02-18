@@ -65,30 +65,36 @@ export class AppDiscoveryService {
         }
 
         const apps: InstalledApp[] = [];
+        const isMAS = (process as any).mas;
 
         // Method 1: Use mdfind to get all apps (most comprehensive)
-        try {
-            const { stdout } = await execAsync(
-                'mdfind "kMDItemContentType == \'com.apple.application-bundle\'" 2>/dev/null',
-                { timeout: 30000, maxBuffer: 10 * 1024 * 1024 }
-            );
-
-            const appPaths = stdout.trim().split('\n').filter(p => p.endsWith('.app'));
-            console.log(`[AppDiscoveryService] mdfind found ${appPaths.length} apps`);
-
-            // Process apps in parallel for better performance
-            const batchSize = 50;
-            for (let i = 0; i < appPaths.length; i += batchSize) {
-                const batch = appPaths.slice(i, i + batchSize);
-                const batchResults = await Promise.all(
-                    batch.map(appPath => this.extractAppInfo(appPath).catch(() => null))
+        // Skip on MAS — mdfind (Spotlight CLI) is sandbox-restricted
+        if (!isMAS) {
+            try {
+                const { stdout } = await execAsync(
+                    'mdfind "kMDItemContentType == \'com.apple.application-bundle\'" 2>/dev/null',
+                    { timeout: 30000, maxBuffer: 10 * 1024 * 1024 }
                 );
-                apps.push(...batchResults.filter((app): app is InstalledApp => app !== null));
-            }
-        } catch (error) {
-            console.error('[AppDiscoveryService] mdfind failed, falling back to directory scan:', error);
 
-            // Fallback: Directory scan
+                const appPaths = stdout.trim().split('\n').filter(p => p.endsWith('.app'));
+                console.log(`[AppDiscoveryService] mdfind found ${appPaths.length} apps`);
+
+                // Process apps in parallel for better performance
+                const batchSize = 50;
+                for (let i = 0; i < appPaths.length; i += batchSize) {
+                    const batch = appPaths.slice(i, i + batchSize);
+                    const batchResults = await Promise.all(
+                        batch.map(appPath => this.extractAppInfo(appPath).catch(() => null))
+                    );
+                    apps.push(...batchResults.filter((app): app is InstalledApp => app !== null));
+                }
+            } catch (error) {
+                console.error('[AppDiscoveryService] mdfind failed, falling back to directory scan:', error);
+            }
+        }
+
+        // Directory scan fallback (always used on MAS, fallback on direct builds)
+        if (apps.length === 0) {
             const searchPaths = [
                 '/Applications',
                 '/System/Applications',

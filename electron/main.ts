@@ -1111,115 +1111,22 @@ ipcMain.on('update-timer-display', (event, timerData: { isRunning: boolean; isPa
 
 // Active Window Tracking
 ipcMain.handle('get-active-window', async () => {
-    if (process.platform === 'darwin') {
-        try {
-            const { exec } = await import('child_process');
-            const { promisify } = await import('util');
-            const execAsync = promisify(exec);
-
-            // Get app name, window title, and bundle ID in a single AppleScript call to avoid race conditions
-            // Enhanced with multiple strategies for Electron apps (Cursor, VS Code, etc.)
-            const result = await execAsync(`osascript -e '
-                tell application "System Events"
-                    set frontApp to first application process whose frontmost is true
-                    set appName to name of frontApp
-                    set bundleId to bundle identifier of frontApp
-                    set appPID to unix id of frontApp
-                    set windowTitle to ""
-
-                    -- Strategy 1: Try to get title from front window (standard approach)
-                    set windowCount to 0
-                    try
-                        set windowCount to count of windows of frontApp
-                    end try
-
-                    if windowCount > 0 then
-                        try
-                            set windowTitle to title of front window of frontApp
-                            if windowTitle is missing value then
-                                set windowTitle to ""
-                            end if
-                        on error
-                            set windowTitle to ""
-                        end try
-                    end if
-
-                    -- Strategy 2: For Electron apps, try AXTitle from UI elements
-                    if windowTitle is "" then
-                        try
-                            set uiElements to UI elements of frontApp
-                            repeat with elem in uiElements
-                                try
-                                    set elemRole to role of elem
-                                    if elemRole is "AXWindow" then
-                                        set axTitle to value of attribute "AXTitle" of elem
-                                        if axTitle is not missing value and axTitle is not "" then
-                                            set windowTitle to axTitle
-                                            exit repeat
-                                        end if
-                                    end if
-                                end try
-                            end repeat
-                        end try
-                    end if
-
-                    -- Strategy 3: Try AXTitle attribute directly on first window
-                    if windowTitle is "" and windowCount > 0 then
-                        try
-                            set firstWindow to window 1 of frontApp
-                            set axTitle to value of attribute "AXTitle" of firstWindow
-                            if axTitle is not missing value and axTitle is not "" then
-                                set windowTitle to axTitle
-                            end if
-                        end try
-                    end if
-
-                    -- Strategy 4: For Electron apps, try AXDocument attribute
-                    if windowTitle is "" then
-                        try
-                            set firstWindow to window 1 of frontApp
-                            set docTitle to value of attribute "AXDocument" of firstWindow
-                            if docTitle is not missing value and docTitle is not "" then
-                                if docTitle contains "/" then
-                                    set AppleScript'"'"'s text item delimiters to "/"
-                                    set pathParts to text items of docTitle
-                                    set windowTitle to last item of pathParts
-                                    set AppleScript'"'"'s text item delimiters to ""
-                                else
-                                    set windowTitle to docTitle
-                                end if
-                            end if
-                        end try
-                    end if
-
-                    return appName & "|||" & windowTitle & "|||" & bundleId & "|||" & appPID
-                end tell
-            '`);
-
-            const parts = result.stdout.trim().split('|||');
-            const appName = parts[0] || 'Unknown';
-            const rawWindowTitle = parts[1];
-            const bundleId = parts[2] || '';
-            const pid = parseInt(parts[3], 10) || 0;
-
-            // Check if we got an actual window title
-            const windowTitle = (rawWindowTitle && rawWindowTitle.trim() !== '') ? rawWindowTitle : 'Unknown';
-
-            // Log warning if window title is consistently empty (might indicate Accessibility permission issue)
-            if (!rawWindowTitle || rawWindowTitle.trim() === '') {
-                console.warn('[Main] get-active-window: No window title returned for', appName);
-                console.warn('[Main] This may indicate Accessibility permission is not granted.');
-                console.warn('[Main] Grant Accessibility permission in System Settings > Privacy & Security > Accessibility');
-            }
-
-            console.log('[Main] get-active-window result:', { appName, windowTitle, bundleId, pid, rawWindowTitle });
-            return { appName, windowTitle, bundleId, pid };
-        } catch (error) {
-            console.error('[Main] Failed to get active window:', error);
-            return { appName: 'Unknown', windowTitle: 'Unknown', bundleId: '', pid: 0 };
-        }
+    if (process.platform !== 'darwin') {
+        return { appName: 'Not supported', windowTitle: 'Not supported', bundleId: '', pid: 0 };
     }
-    return { appName: 'Not supported', windowTitle: 'Not supported', bundleId: '', pid: 0 };
+
+    // Use native API (NSWorkspace + CGWindowListCopyWindowInfo) — sandbox-safe, ~0.1ms vs ~100ms osascript
+    const result = mediaMonitor.getActiveWindow();
+    if (result) {
+        return {
+            appName: result.appName || 'Unknown',
+            windowTitle: result.windowTitle || 'Unknown',
+            bundleId: result.bundleId || '',
+            pid: result.pid || 0,
+        };
+    }
+
+    return { appName: 'Unknown', windowTitle: 'Unknown', bundleId: '', pid: 0 };
 });
 
 ipcMain.handle('check-accessibility-permission', () => {
@@ -1238,43 +1145,47 @@ const appIconCache = new Map<string, string>();
 // Robust app path detection using macOS system APIs
 const findAppPaths = async (appName: string, execAsync: any): Promise<string[]> => {
     const foundPaths: string[] = [];
-    
-    try {
-        // Method 1: Use mdfind to search for apps by display name
-        const mdfindCmd = `mdfind "kMDItemDisplayName == '${appName.replace(/'/g, "\\'")}'c && kMDItemContentType == 'com.apple.application-bundle'"`;
-        const mdfindResult = await execAsync(mdfindCmd, { timeout: 3000 }).catch(() => ({ stdout: '' }));
-        
-        if (mdfindResult.stdout.trim()) {
-            const paths = mdfindResult.stdout.trim().split('\n').filter((p: string) => p.endsWith('.app'));
-            foundPaths.push(...paths);
-        }
-    } catch (error) {
-        console.log(`[Main] get-app-icon: mdfind failed for ${appName}:`, error);
-    }
-    
-    try {
-        // Method 2: Use mdfind to search by bundle name variations
-        const variations = [
-            appName,
-            appName.replace(/\s+/g, ''),
-            appName.replace(/\s+/g, '-'),
-            appName.replace(/\s+/g, '_'),
-        ];
-        
-        for (const variation of variations) {
-            const bundleCmd = `mdfind "kMDItemCFBundleName == '${variation.replace(/'/g, "\\'")}'c && kMDItemContentType == 'com.apple.application-bundle'"`;
-            const bundleResult = await execAsync(bundleCmd, { timeout: 2000 }).catch(() => ({ stdout: '' }));
-            
-            if (bundleResult.stdout.trim()) {
-                const paths = bundleResult.stdout.trim().split('\n').filter((p: string) => p.endsWith('.app'));
+    const isMAS = (process as any).mas;
+
+    // mdfind methods — not available in MAS sandbox
+    if (!isMAS) {
+        try {
+            // Method 1: Use mdfind to search for apps by display name
+            const mdfindCmd = `mdfind "kMDItemDisplayName == '${appName.replace(/'/g, "\\'")}'c && kMDItemContentType == 'com.apple.application-bundle'"`;
+            const mdfindResult = await execAsync(mdfindCmd, { timeout: 3000 }).catch(() => ({ stdout: '' }));
+
+            if (mdfindResult.stdout.trim()) {
+                const paths = mdfindResult.stdout.trim().split('\n').filter((p: string) => p.endsWith('.app'));
                 foundPaths.push(...paths);
             }
+        } catch (error) {
+            console.log(`[Main] get-app-icon: mdfind failed for ${appName}:`, error);
         }
-    } catch (error) {
-        console.log(`[Main] get-app-icon: bundle search failed for ${appName}:`, error);
+
+        try {
+            // Method 2: Use mdfind to search by bundle name variations
+            const variations = [
+                appName,
+                appName.replace(/\s+/g, ''),
+                appName.replace(/\s+/g, '-'),
+                appName.replace(/\s+/g, '_'),
+            ];
+
+            for (const variation of variations) {
+                const bundleCmd = `mdfind "kMDItemCFBundleName == '${variation.replace(/'/g, "\\'")}'c && kMDItemContentType == 'com.apple.application-bundle'"`;
+                const bundleResult = await execAsync(bundleCmd, { timeout: 2000 }).catch(() => ({ stdout: '' }));
+
+                if (bundleResult.stdout.trim()) {
+                    const paths = bundleResult.stdout.trim().split('\n').filter((p: string) => p.endsWith('.app'));
+                    foundPaths.push(...paths);
+                }
+            }
+        } catch (error) {
+            console.log(`[Main] get-app-icon: bundle search failed for ${appName}:`, error);
+        }
     }
-    
-    // Method 3: Common /Applications paths (fallback)
+
+    // Common /Applications paths (fallback, always used on MAS)
     const commonPaths = [
         `/Applications/${appName}.app`,
         `/Applications/${appName.replace(/\s+/g, '')}.app`,
@@ -3632,18 +3543,67 @@ ipcMain.on('resume-background-tracker', () => {
 });
 
 const bundleIconCache = new Map<string, string | null>();
+
+/**
+ * Find an app's path by bundle ID.
+ * Uses mdfind on direct builds, falls back to directory scan on MAS (sandbox-safe).
+ */
+async function findAppPathByBundleId(bundleId: string): Promise<string | null> {
+    // Try mdfind first (not available in MAS sandbox)
+    if (!(process as any).mas) {
+        try {
+            const { exec } = await import('child_process');
+            const appPath = await new Promise<string>((resolve, reject) => {
+                exec(
+                    `mdfind "kMDItemCFBundleIdentifier == '${bundleId}'" | head -1`,
+                    { timeout: 3000 },
+                    (err, stdout) => err ? reject(err) : resolve(stdout.toString().trim())
+                );
+            });
+            if (appPath) return appPath;
+        } catch {
+            // Fall through to directory scan
+        }
+    }
+
+    // Directory scan fallback — sandbox-safe
+    const searchDirs = [
+        '/Applications',
+        '/System/Applications',
+        '/System/Applications/Utilities',
+        path.join(process.env.HOME || '', 'Applications'),
+    ];
+
+    for (const dir of searchDirs) {
+        try {
+            if (!fs.existsSync(dir)) continue;
+            const entries = await fs.promises.readdir(dir);
+            for (const entry of entries) {
+                if (!entry.endsWith('.app')) continue;
+                const appPath = path.join(dir, entry);
+                const plistPath = path.join(appPath, 'Contents', 'Info.plist');
+                try {
+                    const plistContent = await fs.promises.readFile(plistPath, 'utf8');
+                    if (plistContent.includes(`<string>${bundleId}</string>`)) {
+                        return appPath;
+                    }
+                } catch {
+                    // Skip apps with unreadable plists
+                }
+            }
+        } catch {
+            // Skip unreadable directories
+        }
+    }
+
+    return null;
+}
+
 ipcMain.handle('get-app-icon-by-bundle', async (_event, bundleId: string) => {
     if (!bundleId || !/^[a-zA-Z0-9._-]+$/.test(bundleId)) return null;
     if (bundleIconCache.has(bundleId)) return bundleIconCache.get(bundleId) ?? null;
     try {
-        const { exec } = await import('child_process');
-        const appPath = await new Promise<string>((resolve, reject) => {
-            exec(
-                `mdfind "kMDItemCFBundleIdentifier == '${bundleId}'" | head -1`,
-                { timeout: 3000 },
-                (err, stdout) => err ? reject(err) : resolve(stdout.toString().trim())
-            );
-        });
+        const appPath = await findAppPathByBundleId(bundleId);
         if (!appPath) { bundleIconCache.set(bundleId, null); return null; }
         const icon = await app.getFileIcon(appPath, { size: 'small' });
         const dataUrl = icon.toDataURL();
