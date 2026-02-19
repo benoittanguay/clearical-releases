@@ -558,6 +558,7 @@ function App() {
           transcriptions: allTranscriptions.length > 0 ? allTranscriptions : undefined,
           transcription: allTranscriptions.length === 1 ? allTranscriptions[0] : undefined,
           pendingTranscription: firstPendingAudio || undefined,
+          pendingTranscriptionCount: sessionIdsStillPending.length > 0 ? sessionIdsStillPending.length : undefined,
         });
 
         // Clear applied transcriptions
@@ -589,10 +590,12 @@ function App() {
               const entryResult = await window.electron.ipcRenderer.db.getEntry(newEntry.id);
               const existingTranscriptions = entryResult?.data?.transcriptions || [];
               const mergedTranscriptions = [...existingTranscriptions, ...lateTranscriptions];
+              const newCount = (entryResult?.data?.pendingTranscriptionCount || 1) - 1;
 
               await updateEntry(newEntry.id, {
                 transcriptions: mergedTranscriptions,
                 transcription: undefined,
+                pendingTranscriptionCount: newCount > 0 ? newCount : undefined,
               });
               clearPendingTranscription(sid);
               sessionToEntryIdRef.current.delete(sid);
@@ -864,10 +867,12 @@ function App() {
           const entryResult = await window.electron.ipcRenderer.db.getEntry(entryId);
           const existingTranscriptions = entryResult?.data?.transcriptions || [];
           const mergedTranscriptions = [...existingTranscriptions, ...transcriptions];
+          const newCount = (entryResult?.data?.pendingTranscriptionCount || 1) - 1;
 
           await updateEntry(entryId, {
             transcriptions: mergedTranscriptions,
             transcription: undefined,
+            pendingTranscriptionCount: newCount > 0 ? newCount : undefined,
           });
 
           // Clear from pending storage and session mapping

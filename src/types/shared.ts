@@ -165,4 +165,6 @@ export interface TimeEntry {
     transcriptions?: EntryTranscription[];
     /** Pending transcription when audio was recorded but transcription failed */
     pendingTranscription?: PendingTranscription;
+    /** Number of recording sessions still being transcribed */
+    pendingTranscriptionCount?: number;
 }

@@ -3121,6 +3121,22 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                     );
                 })()}
 
+                {/* Transcribing indicator - shown while recording sessions are still being transcribed */}
+                {entry.pendingTranscriptionCount != null && entry.pendingTranscriptionCount > 0 && (
+                    <div className="mt-3 rounded-lg border p-4 animate-pulse" style={{
+                        backgroundColor: 'var(--color-bg-secondary)',
+                        borderColor: 'var(--color-border-primary)',
+                        borderRadius: 'var(--radius-xl)',
+                    }}>
+                        <div className="flex items-center gap-2">
+                            <div className="w-4 h-4 border-2 rounded-full animate-spin" style={{ borderColor: 'var(--color-text-secondary)', borderTopColor: 'transparent' }}></div>
+                            <span className="text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>
+                                Transcribing recording{entry.pendingTranscriptionCount > 1 ? 's' : ''}... ({entry.pendingTranscriptionCount} remaining)
+                            </span>
+                        </div>
+                    </div>
+                )}
+
                 {/* Transcription Section - Each recording displayed as separate activity entry */}
                 {(entry.transcriptions || (entry.transcription ? [entry.transcription] : [])).map((transcription, index) => {
                     const meetingApp = findMeetingApp(entry.windowActivity || []);
