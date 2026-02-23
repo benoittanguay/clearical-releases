@@ -271,6 +271,13 @@ function isSignificantWindowChange(
 export function useTimer() {
     const { settings } = useSettings();
     const { startAnalysis, completeAnalysis, failAnalysis } = useScreenshotAnalysis();
+
+    // Refs to avoid stale closures in memoized callbacks (stop/pause/resume)
+    const settingsRef = useRef(settings);
+    const startAnalysisRef = useRef(startAnalysis);
+    const completeAnalysisRef = useRef(completeAnalysis);
+    const failAnalysisRef = useRef(failAnalysis);
+
     const [isRunning, setIsRunning] = useState(false);
     const [isPaused, setIsPaused] = useState(false);
     const [startTime, setStartTime] = useState<number | null>(null);
@@ -312,11 +319,25 @@ export function useTimer() {
     useEffect(() => {
         const stored = localStorage.getItem('timeportal-timer-state');
         if (stored) {
-            const state: TimerState = JSON.parse(stored);
+            const state = JSON.parse(stored) as TimerState & { windowActivity?: WindowActivity[] };
             setIsRunning(state.isRunning || false);
             setIsPaused(state.isPaused || false);
             setStartTime(state.startTime);
             setElapsed(state.elapsed);
+
+            // Restore persisted window activities (survives component remount / HMR)
+            if (state.windowActivity && state.windowActivity.length > 0) {
+                setWindowActivity(state.windowActivity);
+                // Restore lastWindowRef from the most recent activity
+                const lastAct = state.windowActivity[state.windowActivity.length - 1];
+                lastWindowRef.current = {
+                    appName: lastAct.appName,
+                    windowTitle: lastAct.windowTitle,
+                    bundleId: lastAct.bundleId,
+                    timestamp: lastAct.timestamp
+                };
+                console.log(`[Timer] Restored ${state.windowActivity.length} activities from localStorage`);
+            }
 
             if (state.isRunning && !state.isPaused && state.startTime) {
                 // Calculate accrued time while app was potentially closed/inactive
@@ -328,10 +349,13 @@ export function useTimer() {
         }
     }, []);
 
-    // Persist state
+    // Persist state (including windowActivity so it survives remounts)
     useEffect(() => {
-        localStorage.setItem('timeportal-timer-state', JSON.stringify({ isRunning, isPaused, startTime, elapsed }));
-    }, [isRunning, isPaused, startTime, elapsed]);
+        localStorage.setItem('timeportal-timer-state', JSON.stringify({
+            isRunning, isPaused, startTime, elapsed,
+            windowActivity: isRunning ? windowActivity : []
+        }));
+    }, [isRunning, isPaused, startTime, elapsed, windowActivity]);
 
     // Send timer state to main process for menu bar display
     // Main process will handle the timer interval to avoid renderer throttling
@@ -384,6 +408,17 @@ export function useTimer() {
             if (lastScreenshotTime.current > 0 && (now - lastScreenshotTime.current) < MIN_SCREENSHOT_INTERVAL) {
                 console.log(`[Renderer] ⏱️ Too soon since last screenshot (${now - lastScreenshotTime.current}ms ago), skipping ${reason}`);
                 return null;
+            }
+
+            // Browser-level cooldown: prevent rapid screenshots when page title changes frequently
+            const isBrowser = BROWSER_BUNDLE_IDS.includes(currentWindow.bundleId || '');
+            if (!bypassEntityCooldown && isBrowser && currentWindow.bundleId) {
+                const browserCooldownKey = `browser:${currentWindow.bundleId}`;
+                const lastBrowserScreenshot = entityLastScreenshotTime.current.get(browserCooldownKey);
+                if (lastBrowserScreenshot && (now - lastBrowserScreenshot) < PER_ENTITY_COOLDOWN) {
+                    console.log(`[Renderer] ⏱️ Browser-level cooldown active for "${browserCooldownKey}", skipping`);
+                    return null;
+                }
             }
 
             // Per-entity cooldown check (only for window-change screenshots)
@@ -452,6 +487,11 @@ export function useTimer() {
                         );
                         entityLastScreenshotTime.current.set(entityKey, now);
                         console.log(`[Renderer] ✅ Cooldown set for "${entityKey}" at ${new Date(now).toISOString()}`);
+
+                        // Also set browser-level cooldown for browsers
+                        if (isBrowser && currentWindow.bundleId) {
+                            entityLastScreenshotTime.current.set(`browser:${currentWindow.bundleId}`, now);
+                        }
                     }
                 } else {
                     console.log('[Renderer] ⚠️ Duplicate screenshot path, skipping');
@@ -1068,7 +1108,16 @@ export function useTimer() {
         isPausedRef.current = isPaused;
     }, [isRunning, isPaused]);
 
+    // Keep context function and settings refs in sync
+    useEffect(() => {
+        settingsRef.current = settings;
+        startAnalysisRef.current = startAnalysis;
+        completeAnalysisRef.current = completeAnalysis;
+        failAnalysisRef.current = failAnalysis;
+    }, [settings, startAnalysis, completeAnalysis, failAnalysis]);
+
     const pause = useCallback(() => {
+        console.log('[Timer] pause() called', { isRunningRef: isRunningRef.current, isPausedRef: isPausedRef.current });
         if (!isRunningRef.current || isPausedRef.current) return;
         setIsPaused(true);
         // Update elapsed time to current value when pausing
@@ -1095,6 +1144,12 @@ export function useTimer() {
     }, []);
 
     const stop = useCallback(async () => {
+        console.log('[Timer] stop() called', {
+            isRunningRef: isRunningRef.current,
+            startTimeRef: !!startTimeRef.current,
+            windowActivityCount: windowActivityRef.current.length,
+            lastWindowRef: !!lastWindowRef.current
+        });
         setIsRunning(false);
         setIsPaused(false);
         const now = Date.now();
@@ -1120,7 +1175,7 @@ export function useTimer() {
             try {
                 // Notify context that analyses are starting
                 for (const item of itemsToProcess) {
-                    startAnalysis(item.path);
+                    startAnalysisRef.current(item.path);
                 }
 
                 // @ts-ignore
@@ -1139,24 +1194,24 @@ export function useTimer() {
                                 objects: result.objects,
                                 extraction: result.extraction
                             };
-                            completeAnalysis(item.path);
+                            completeAnalysisRef.current(item.path);
                         } else {
                             currentActivityScreenshotDescriptions.current[item.path] = FALLBACK_SCREENSHOT_DESCRIPTION;
-                            failAnalysis(item.path, result?.error || 'Analysis failed');
+                            failAnalysisRef.current(item.path, result?.error || 'Analysis failed');
                         }
                     }
                 } else {
                     // Batch failed, use fallbacks
                     for (const item of itemsToProcess) {
                         currentActivityScreenshotDescriptions.current[item.path] = FALLBACK_SCREENSHOT_DESCRIPTION;
-                        failAnalysis(item.path, batchResult?.error || 'Batch analysis failed');
+                        failAnalysisRef.current(item.path, batchResult?.error || 'Batch analysis failed');
                     }
                 }
             } catch (error) {
                 console.error('[Renderer] Error flushing pending batch on stop:', error);
                 for (const item of itemsToProcess) {
                     currentActivityScreenshotDescriptions.current[item.path] = FALLBACK_SCREENSHOT_DESCRIPTION;
-                    failAnalysis(item.path, error instanceof Error ? error.message : 'Unknown error');
+                    failAnalysisRef.current(item.path, error instanceof Error ? error.message : 'Unknown error');
                 }
             }
         }
@@ -1199,7 +1254,7 @@ export function useTimer() {
     }, []);
 
     const filterShortActivities = (activities: WindowActivity[]): WindowActivity[] => {
-        const { minActivityDuration, activityGapThreshold } = settings;
+        const { minActivityDuration, activityGapThreshold } = settingsRef.current;
         
         // Sort activities by timestamp to process in chronological order
         const sortedActivities = [...activities].sort((a, b) => a.timestamp - b.timestamp);

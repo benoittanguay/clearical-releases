@@ -490,6 +490,7 @@ function App() {
   };
 
   const handleStartStop = async () => {
+    console.log('[App] handleStartStop clicked', { isRunning, isStopping });
     if (!isRunning) {
       // Check permissions before starting
       const permissions = await checkPermissions();
@@ -648,6 +649,7 @@ function App() {
   };
 
   const handlePauseResume = () => {
+    console.log('[App] handlePauseResume clicked', { isPaused, isRunning, isStopping });
     if (isPaused) {
       resumeTimer();
     } else {
