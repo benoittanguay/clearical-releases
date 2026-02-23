@@ -1,7 +1,7 @@
 {
   "name": "clearical",
   "private": true,
-  "version": "1.7.48",
+  "version": "1.7.49",
   "type": "module",
   "build": {
     "appId": "com.clearical.app",
