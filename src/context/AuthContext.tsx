@@ -19,6 +19,7 @@ interface AuthContextType {
     verifyOtp: (email: string, token: string) => Promise<{ success: boolean; error?: string }>;
     signInWithOAuth: (provider: 'google' | 'azure' | 'apple') => Promise<{ success: boolean; error?: string }>;
     signOut: () => Promise<void>;
+    deleteAccount: () => Promise<{ success: boolean; error?: string }>;
     openCustomerPortal: () => Promise<{ success: boolean; error?: string }>;
     refreshAuthStatus: () => Promise<void>;
 }
@@ -123,7 +124,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
     }, []);
 
+    const deleteAccount = useCallback(async (): Promise<{ success: boolean; error?: string }> => {
+        try {
+            const result = await window.electron.ipcRenderer.deleteAccount();
+            if (result.success) {
+                setUser(null);
+                setAuthProvider(null);
+            }
+            return result;
+        } catch (error) {
+            console.error('[AuthContext] Delete account error:', error);
+            return {
+                success: false,
+                error: error instanceof Error ? error.message : 'Failed to delete account'
+            };
+        }
+    }, []);
+
     const openCustomerPortal = useCallback(async (): Promise<{ success: boolean; error?: string }> => {
+        if (window.electron?.isMas) {
+            return { success: false, error: 'Use App Store for subscription management' };
+        }
         try {
             const result = await window.electron.ipcRenderer.invoke('auth:open-customer-portal');
             return result;
@@ -147,6 +168,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 verifyOtp,
                 signInWithOAuth,
                 signOut,
+                deleteAccount,
                 openCustomerPortal,
                 refreshAuthStatus,
             }}

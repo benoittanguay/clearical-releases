@@ -33,7 +33,6 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
     const { settings, updateSettings } = useSettings();
 
     // Permission states
-    const [accessibilityGranted, setAccessibilityGranted] = useState<boolean | null>(null);
     const [screenRecordingGranted, setScreenRecordingGranted] = useState<boolean | null>(null);
     const [checkingPermissions, setCheckingPermissions] = useState(false);
 
@@ -128,14 +127,6 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
             const screenStatus = await window.electron.ipcRenderer.checkScreenPermission();
             // Treat 'stale' as not granted - requires user intervention
             setScreenRecordingGranted(screenStatus === 'granted');
-
-            // Accessibility can't be checked programmatically on macOS, so we test it
-            try {
-                await window.electron.ipcRenderer.getActiveWindow();
-                setAccessibilityGranted(true);
-            } catch {
-                setAccessibilityGranted(false);
-            }
         } catch (error) {
             console.error('Error checking permissions:', error);
         }
@@ -161,19 +152,6 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
         }
     };
 
-    // Request Accessibility permission
-    const requestAccessibility = async () => {
-        setCheckingPermissions(true);
-        try {
-            await window.electron.ipcRenderer.openAccessibilitySettings();
-            // Recheck after delay
-            setTimeout(checkPermissions, 1000);
-        } catch (error) {
-            console.error('Error requesting accessibility permission:', error);
-        } finally {
-            setCheckingPermissions(false);
-        }
-    };
 
     if (!isOpen) return null;
 
@@ -440,7 +418,7 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                                         </svg>
                                     </div>
                                     <h2 className="text-2xl font-bold text-[var(--color-text-primary)] mb-1 font-display tracking-tight">System Permissions</h2>
-                                    <p className="text-[var(--color-text-secondary)] text-lg">Clearical needs Accessibility access to track your activity</p>
+                                    <p className="text-[var(--color-text-secondary)] text-lg">Clearical needs Screen Recording access to track your activity</p>
                                 </div>
 
                                 {/* Info Box */}
@@ -454,7 +432,7 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                                         <div>
                                             <h4 className="text-sm font-semibold text-[var(--color-text-primary)] mb-1 font-display">Why these permissions?</h4>
                                             <p className="text-sm text-[var(--color-text-secondary)]">
-                                                <strong>Accessibility (Required):</strong> Tracks which apps you use. <strong>Screen Recording (Optional):</strong> Captures screenshots for better AI summaries. All data stays on your device.
+                                                <strong>Screen Recording:</strong> Tracks which apps you use and captures screenshots for AI-powered summaries. All data stays on your device.
                                             </p>
                                         </div>
                                     </div>
@@ -462,56 +440,6 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
 
                                 {/* Permissions List */}
                                 <div className="space-y-4 mb-6">
-                                    {/* Accessibility Permission */}
-                                    <div className="bg-[var(--color-bg-tertiary)] border border-[var(--color-border-primary)] rounded-xl p-5">
-                                        <div className="flex items-start gap-4">
-                                            <div className="flex-shrink-0">
-                                                <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                                                    accessibilityGranted
-                                                        ? 'bg-[var(--color-success-muted)]'
-                                                        : 'bg-[var(--color-bg-quaternary)]'
-                                                }`}>
-                                                    {accessibilityGranted ? (
-                                                        <svg className="w-5 h-5 text-[var(--color-success)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                                                        </svg>
-                                                    ) : (
-                                                        <svg className="w-5 h-5 text-[var(--color-text-tertiary)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                                                        </svg>
-                                                    )}
-                                                </div>
-                                            </div>
-                                            <div className="flex-1">
-                                                <div className="flex items-center justify-between mb-2">
-                                                    <div className="flex items-center gap-2">
-                                                        <h3 className="text-lg font-semibold text-[var(--color-text-primary)] font-display">Accessibility</h3>
-                                                        <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-[var(--color-error-muted)] text-[var(--color-error)] border border-[var(--color-error)]/30">
-                                                            Required
-                                                        </span>
-                                                    </div>
-                                                    {accessibilityGranted && (
-                                                        <span className="text-xs px-2.5 py-1 rounded-full font-medium bg-[var(--color-success-muted)] text-[var(--color-success)] border border-[var(--color-success)]/30">
-                                                            Granted
-                                                        </span>
-                                                    )}
-                                                </div>
-                                                <p className="text-sm text-[var(--color-text-secondary)] mb-3">
-                                                    Required to detect which app and window you're currently using
-                                                </p>
-                                                {!accessibilityGranted && (
-                                                    <button
-                                                        onClick={requestAccessibility}
-                                                        disabled={checkingPermissions}
-                                                        className="px-4 py-2 bg-[var(--color-warning)] hover:bg-[var(--color-warning)]/90 disabled:bg-[var(--color-bg-tertiary)] disabled:text-[var(--color-text-tertiary)] text-[var(--color-bg-primary)] text-sm font-semibold rounded-lg transition-all"
-                                                    >
-                                                        {checkingPermissions ? 'Opening Settings...' : 'Grant Permission'}
-                                                    </button>
-                                                )}
-                                            </div>
-                                        </div>
-                                    </div>
-
                                     {/* Screen Recording Permission */}
                                     <div className="bg-[var(--color-bg-tertiary)] border border-[var(--color-border-primary)] rounded-xl p-5">
                                         <div className="flex items-start gap-4">
@@ -536,8 +464,8 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                                                 <div className="flex items-center justify-between mb-2">
                                                     <div className="flex items-center gap-2">
                                                         <h3 className="text-lg font-semibold text-[var(--color-text-primary)] font-display">Screen Recording</h3>
-                                                        <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-[var(--color-accent-muted)] text-[var(--color-accent)] border border-[var(--color-accent)]/30">
-                                                            Optional
+                                                        <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-[var(--color-error-muted)] text-[var(--color-error)] border border-[var(--color-error)]/30">
+                                                            Required
                                                         </span>
                                                     </div>
                                                     {screenRecordingGranted && (
@@ -547,7 +475,7 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                                                     )}
                                                 </div>
                                                 <p className="text-sm text-[var(--color-text-secondary)] mb-3">
-                                                    Optional but recommended for AI-powered summaries and better activity insights
+                                                    Required to detect which app you're using and capture screenshots for AI-powered summaries
                                                 </p>
                                                 {!screenRecordingGranted && (
                                                     <button
@@ -563,15 +491,15 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                                     </div>
                                 </div>
 
-                                {/* Warning if accessibility not granted */}
-                                {!accessibilityGranted && (
+                                {/* Warning if screen recording not granted */}
+                                {!screenRecordingGranted && (
                                     <div className="bg-[var(--color-error-muted)] border border-[var(--color-error)]/30 rounded-lg px-4 py-3 mb-6">
                                         <div className="flex items-start gap-2 text-sm text-[var(--color-text-primary)]">
                                             <svg className="w-4 h-4 flex-shrink-0 mt-0.5 text-[var(--color-error)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                                             </svg>
                                             <span>
-                                                Accessibility permission is required to track your activity. The timer cannot start without it.
+                                                Screen Recording permission is required to track your activity. The timer cannot start without it.
                                             </span>
                                         </div>
                                     </div>
@@ -1234,7 +1162,7 @@ export function OnboardingModal({ isOpen, onClose }: OnboardingModalProps) {
                         {currentStep === 4 && (
                             <button
                                 onClick={handleFinish}
-                                disabled={!accessibilityGranted}
+                                disabled={!screenRecordingGranted}
                                 className="px-6 py-2.5 bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] disabled:bg-[var(--color-bg-tertiary)] disabled:text-[var(--color-text-tertiary)] disabled:cursor-not-allowed text-white text-sm font-semibold rounded-full transition-all transform hover:scale-105 active:scale-95 shadow-lg disabled:shadow-none"
                             >
                                 Finish Setup

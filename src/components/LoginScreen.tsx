@@ -111,7 +111,7 @@ export function LoginScreen() {
                                 className="text-sm mb-4"
                                 style={{ color: 'var(--color-text-secondary)' }}
                             >
-                                Enter your email to sign up or sign in
+                                Choose how to sign in
                             </p>
 
                             <SocialLoginButtons

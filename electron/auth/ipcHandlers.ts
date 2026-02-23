@@ -191,6 +191,9 @@ function registerIpcHandlers(): void {
     // Open Stripe Customer Portal
     ipcMain.handle('auth:open-customer-portal', handleOpenCustomerPortal);
 
+    // Delete account
+    ipcMain.handle('auth:delete-account', handleDeleteAccount);
+
     console.log('[Auth] IPC handlers registered');
 }
 
@@ -418,6 +421,11 @@ async function handleSignOut(): Promise<{ success: boolean }> {
  * Open Stripe Customer Portal via Edge Function
  */
 async function handleOpenCustomerPortal(): Promise<{ success: boolean; error?: string }> {
+    // MAS builds use App Store for subscription management
+    if ((process as any).mas) {
+        return { success: false, error: 'Use App Store for subscription management' };
+    }
+
     try {
         const authService = getAuthService();
         const user = await authService.getCurrentUser();
@@ -438,6 +446,29 @@ async function handleOpenCustomerPortal(): Promise<{ success: boolean; error?: s
         }
     } catch (error) {
         console.error('[Auth] Open customer portal error:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error'
+        };
+    }
+}
+
+/**
+ * Delete user account
+ */
+async function handleDeleteAccount(): Promise<{ success: boolean; error?: string }> {
+    try {
+        const authService = getAuthService();
+        const result = await authService.deleteAccount();
+
+        if (result.success) {
+            // Clear transcription service session
+            updateTranscriptionSession(null);
+        }
+
+        return result;
+    } catch (error) {
+        console.error('[Auth] Delete account error:', error);
         return {
             success: false,
             error: error instanceof Error ? error.message : 'Unknown error'

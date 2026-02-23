@@ -23,6 +23,7 @@ contextBridge.exposeInMainWorld('electron', {
         // Auth OAuth
         signInWithOAuth: (provider: 'google' | 'azure' | 'apple') =>
             ipcRenderer.invoke('auth:sign-in-oauth', provider),
+        deleteAccount: () => ipcRenderer.invoke('auth:delete-account'),
         captureScreenshot: (windowInfo?: { appName: string; windowTitle: string; bundleId: string; pid: number }) =>
             ipcRenderer.invoke('capture-screenshot', windowInfo),
         analyzeScreenshot: (imagePath: string, requestId?: string, ocrText?: string[]) =>
@@ -59,11 +60,9 @@ contextBridge.exposeInMainWorld('electron', {
             manuallyTriggered?: boolean;
         }) => ipcRenderer.invoke('ai:analyze-splits', activityData),
         getActiveWindow: () => ipcRenderer.invoke('get-active-window'),
-        checkAccessibilityPermission: () => ipcRenderer.invoke('check-accessibility-permission'),
         checkScreenPermission: () => ipcRenderer.invoke('check-screen-permission'),
         requestScreenPermission: () => ipcRenderer.invoke('request-screen-permission'),
         openScreenPermissionSettings: () => ipcRenderer.invoke('open-screen-permission-settings'),
-        openAccessibilitySettings: () => ipcRenderer.invoke('open-accessibility-settings'),
         showPermissionResetInstructions: () => ipcRenderer.invoke('show-permission-reset-instructions'),
         getAppIcon: (appName: string) => ipcRenderer.invoke('get-app-icon', appName),
         getScreenshot: (filePath: string) => ipcRenderer.invoke('get-screenshot', filePath),

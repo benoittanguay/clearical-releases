@@ -134,6 +134,9 @@ function App() {
             const currentVersion = envInfo.version;
             setAppVersion(currentVersion);
 
+            // MAS builds: App Store handles version management, skip update modal
+            if (window.electron?.isMas) return;
+
             const lastSeenVersion = localStorage.getItem('timeportal-last-seen-version');
             const onboardingComplete = localStorage.getItem('timeportal-onboarding-complete');
 
@@ -2312,13 +2315,15 @@ function App() {
       {/* Auto-Update Notification - shows when updates are available (not in MAS builds) */}
       {!window.electron?.isMas && <UpdateNotification showManualCheck={false} />}
 
-      {/* Update Success Modal - shows after successful auto-update */}
-      <UpdateSuccessModal
-        isOpen={showUpdateSuccessModal}
-        onClose={handleCloseUpdateSuccessModal}
-        version={appVersion}
-        releaseNotes={releaseNotes}
-      />
+      {/* Update Success Modal - shows after successful auto-update (not in MAS builds) */}
+      {!window.electron?.isMas && (
+        <UpdateSuccessModal
+          isOpen={showUpdateSuccessModal}
+          onClose={handleCloseUpdateSuccessModal}
+          version={appVersion}
+          releaseNotes={releaseNotes}
+        />
+      )}
 
       {/* Permission Request Modal - shows when permissions are missing */}
       <PermissionRequestModal

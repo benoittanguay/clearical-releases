@@ -85,9 +85,8 @@ function consolidateActivities(activities: WindowActivity[]): WindowActivity[] {
 }
 
 export interface PermissionCheckResult {
-    hasAccessibility: boolean;
     hasScreenRecording: boolean;
-    requiredGranted: boolean;  // Only accessibility is required
+    requiredGranted: boolean;  // Screen Recording is required
     allGranted: boolean;
 }
 
@@ -998,23 +997,16 @@ export function useTimer() {
             const screenStatus = await window.electron.ipcRenderer.checkScreenPermission();
             const hasScreenRecording = screenStatus === 'granted';
 
-            // Check accessibility permission using proper macOS API
-            // @ts-ignore
-            const accessibilityStatus = await window.electron.ipcRenderer.checkAccessibilityPermission();
-            const hasAccessibility = accessibilityStatus === 'granted';
-
-            console.log('[Timer] Permission check:', { hasAccessibility, hasScreenRecording, accessibilityStatus, screenStatus });
+            console.log('[Timer] Permission check:', { hasScreenRecording, screenStatus });
 
             return {
-                hasAccessibility,
                 hasScreenRecording,
-                requiredGranted: hasAccessibility,  // Only accessibility is required
-                allGranted: hasAccessibility && hasScreenRecording
+                requiredGranted: hasScreenRecording,
+                allGranted: hasScreenRecording
             };
         } catch (error) {
             console.error('[Timer] Error checking permissions:', error);
             return {
-                hasAccessibility: false,
                 hasScreenRecording: false,
                 requiredGranted: false,
                 allGranted: false

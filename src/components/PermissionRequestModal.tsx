@@ -6,16 +6,8 @@ interface PermissionRequestModalProps {
     onPermissionsGranted: () => void;
 }
 
-interface PermissionStatus {
-    accessibility: boolean;
-    screenRecording: boolean;
-}
-
 export function PermissionRequestModal({ isOpen, onClose, onPermissionsGranted }: PermissionRequestModalProps) {
-    const [permissions, setPermissions] = useState<PermissionStatus>({
-        accessibility: false,
-        screenRecording: false
-    });
+    const [screenRecordingGranted, setScreenRecordingGranted] = useState(false);
     const [checking, setChecking] = useState(false);
     const [showStaleInstructions, setShowStaleInstructions] = useState(false);
 
@@ -37,36 +29,20 @@ export function PermissionRequestModal({ isOpen, onClose, onPermissionsGranted }
         return () => clearInterval(interval);
     }, [isOpen]);
 
-    // Auto-close only when ALL permissions are granted
-    // If only accessibility is granted, user must click Continue to acknowledge missing screen recording
+    // Auto-close when permission is granted
     useEffect(() => {
-        if (permissions.accessibility === true && permissions.screenRecording === true) {
+        if (screenRecordingGranted) {
             setTimeout(() => {
                 onPermissionsGranted();
                 onClose();
             }, 500);
         }
-    }, [permissions, onPermissionsGranted, onClose]);
+    }, [screenRecordingGranted, onPermissionsGranted, onClose]);
 
     const checkPermissions = async () => {
         try {
-            // Check screen recording permission
             const screenStatus = await window.electron.ipcRenderer.checkScreenPermission();
-            const screenGranted = screenStatus === 'granted';
-
-            // Check accessibility permission by trying to get active window
-            let accessibilityGranted = false;
-            try {
-                await window.electron.ipcRenderer.getActiveWindow();
-                accessibilityGranted = true;
-            } catch {
-                accessibilityGranted = false;
-            }
-
-            setPermissions({
-                accessibility: accessibilityGranted,
-                screenRecording: screenGranted
-            });
+            setScreenRecordingGranted(screenStatus === 'granted');
         } catch (error) {
             console.error('Error checking permissions:', error);
         }
@@ -91,20 +67,6 @@ export function PermissionRequestModal({ isOpen, onClose, onPermissionsGranted }
         }
     };
 
-    const requestAccessibility = async () => {
-        setChecking(true);
-        try {
-            await window.electron.ipcRenderer.openAccessibilitySettings();
-
-            // Recheck after a delay
-            setTimeout(checkPermissions, 1000);
-        } catch (error) {
-            console.error('Error requesting accessibility permission:', error);
-        } finally {
-            setChecking(false);
-        }
-    };
-
     const handleCheckAgain = () => {
         checkPermissions();
     };
@@ -114,9 +76,6 @@ export function PermissionRequestModal({ isOpen, onClose, onPermissionsGranted }
     };
 
     if (!isOpen) return null;
-
-    const allGranted = permissions.accessibility && permissions.screenRecording;
-    const someGranted = permissions.accessibility || permissions.screenRecording;
 
     return (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 animate-fade-in">
@@ -134,8 +93,8 @@ export function PermissionRequestModal({ isOpen, onClose, onPermissionsGranted }
                             </div>
                         </div>
                         <div>
-                            <h2 className="text-2xl font-bold text-[var(--color-text-primary)] font-display tracking-tight">Permissions Required</h2>
-                            <p className="text-[var(--color-text-secondary)] text-sm">Clearical needs system permissions to track your activity</p>
+                            <h2 className="text-2xl font-bold text-[var(--color-text-primary)] font-display tracking-tight">Permission Required</h2>
+                            <p className="text-[var(--color-text-secondary)] text-sm">Clearical needs Screen Recording permission to track your activity</p>
                         </div>
                     </div>
                 </div>
@@ -151,112 +110,36 @@ export function PermissionRequestModal({ isOpen, onClose, onPermissionsGranted }
                                 </svg>
                             </div>
                             <div>
-                                <h4 className="text-sm font-semibold text-[var(--color-text-primary)] mb-1 font-display">Why these permissions?</h4>
+                                <h4 className="text-sm font-semibold text-[var(--color-text-primary)] mb-1 font-display">Why this permission?</h4>
                                 <p className="text-sm text-[var(--color-text-secondary)]">
-                                    <strong>Accessibility (Required):</strong> Needed to track which apps you're using - required for timer to function.<br/>
-                                    <strong>Screen Recording (Optional):</strong> Captures screenshots for AI-powered summaries - recommended but not required.
+                                    <strong>Screen Recording:</strong> Needed to track which apps you're using and capture screenshots for AI-powered summaries. All data stays on your device.
                                 </p>
                             </div>
                         </div>
                     </div>
 
-                    {/* Permissions List */}
+                    {/* Permission Card */}
                     <div className="space-y-4 mb-6">
-                        {/* Accessibility Permission */}
-                        <div className={`bg-[var(--color-bg-secondary)] border rounded-2xl p-5 transition-all shadow-sm ${
-                            permissions.accessibility === false
-                                ? 'border-[var(--color-error)]/40'
-                                : permissions.accessibility === true
-                                    ? 'border-[var(--color-success)]/40'
-                                    : 'border-[var(--color-border-primary)]'
-                        }`}>
-                            <div className="flex items-start gap-4">
-                                <div className="flex-shrink-0">
-                                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all ${
-                                        permissions.accessibility === true
-                                            ? 'bg-[var(--color-success-muted)]'
-                                            : permissions.accessibility === false
-                                                ? 'bg-[var(--color-error-muted)]'
-                                                : 'bg-[var(--color-bg-tertiary)]'
-                                    }`}>
-                                        {permissions.accessibility === true ? (
-                                            <svg className="w-6 h-6 text-[var(--color-success)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                                            </svg>
-                                        ) : permissions.accessibility === false ? (
-                                            <svg className="w-6 h-6 text-[var(--color-error)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                            </svg>
-                                        ) : (
-                                            <svg className="w-6 h-6 text-[var(--color-text-secondary)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                                            </svg>
-                                        )}
-                                    </div>
-                                </div>
-                                <div className="flex-1">
-                                    <div className="flex items-center justify-between mb-2">
-                                        <div className="flex items-center gap-2">
-                                            <h3 className="text-lg font-semibold text-[var(--color-text-primary)] font-display">Accessibility</h3>
-                                            <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-[var(--color-error-muted)] text-[var(--color-error)] border border-[var(--color-error)]/30">
-                                                Required
-                                            </span>
-                                        </div>
-                                        {permissions.accessibility === true && (
-                                            <span className="text-xs px-2.5 py-1 rounded-full font-medium bg-[var(--color-success-muted)] text-[var(--color-success)] border border-[var(--color-success)]/30">
-                                                Granted
-                                            </span>
-                                        )}
-                                        {permissions.accessibility === false && (
-                                            <span className="text-xs px-2.5 py-1 rounded-full font-medium bg-[var(--color-error-muted)] text-[var(--color-error)] border border-[var(--color-error)]/30">
-                                                Not Granted
-                                            </span>
-                                        )}
-                                    </div>
-                                    <p className="text-sm text-[var(--color-text-secondary)] mb-3">
-                                        Required to detect which app and window you're currently using
-                                    </p>
-                                    {permissions.accessibility !== true && (
-                                        <button
-                                            onClick={requestAccessibility}
-                                            disabled={checking}
-                                            className="px-4 py-2.5 bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] disabled:bg-[var(--color-bg-tertiary)] disabled:text-[var(--color-text-tertiary)] text-white text-sm font-semibold rounded-lg transition-all shadow-md hover:shadow-lg"
-                                        >
-                                            {checking ? 'Opening Settings...' : 'Grant Permission'}
-                                        </button>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-
                         {/* Screen Recording Permission */}
                         <div className={`bg-[var(--color-bg-secondary)] border rounded-2xl p-5 transition-all shadow-sm ${
-                            permissions.screenRecording === false
+                            !screenRecordingGranted
                                 ? 'border-[var(--color-error)]/40'
-                                : permissions.screenRecording === true
-                                    ? 'border-[var(--color-success)]/40'
-                                    : 'border-[var(--color-border-primary)]'
+                                : 'border-[var(--color-success)]/40'
                         }`}>
                             <div className="flex items-start gap-4">
                                 <div className="flex-shrink-0">
                                     <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all ${
-                                        permissions.screenRecording === true
+                                        screenRecordingGranted
                                             ? 'bg-[var(--color-success-muted)]'
-                                            : permissions.screenRecording === false
-                                                ? 'bg-[var(--color-error-muted)]'
-                                                : 'bg-[var(--color-bg-tertiary)]'
+                                            : 'bg-[var(--color-error-muted)]'
                                     }`}>
-                                        {permissions.screenRecording === true ? (
+                                        {screenRecordingGranted ? (
                                             <svg className="w-6 h-6 text-[var(--color-success)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
                                             </svg>
-                                        ) : permissions.screenRecording === false ? (
+                                        ) : (
                                             <svg className="w-6 h-6 text-[var(--color-error)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                            </svg>
-                                        ) : (
-                                            <svg className="w-6 h-6 text-[var(--color-text-secondary)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
                                             </svg>
                                         )}
                                     </div>
@@ -265,25 +148,25 @@ export function PermissionRequestModal({ isOpen, onClose, onPermissionsGranted }
                                     <div className="flex items-center justify-between mb-2">
                                         <div className="flex items-center gap-2">
                                             <h3 className="text-lg font-semibold text-[var(--color-text-primary)] font-display">Screen Recording</h3>
-                                            <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-[var(--color-accent-muted)] text-[var(--color-accent)] border border-[var(--color-accent)]/30">
-                                                Optional
+                                            <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-[var(--color-error-muted)] text-[var(--color-error)] border border-[var(--color-error)]/30">
+                                                Required
                                             </span>
                                         </div>
-                                        {permissions.screenRecording === true && (
+                                        {screenRecordingGranted && (
                                             <span className="text-xs px-2.5 py-1 rounded-full font-medium bg-[var(--color-success-muted)] text-[var(--color-success)] border border-[var(--color-success)]/30">
                                                 Granted
                                             </span>
                                         )}
-                                        {permissions.screenRecording === false && (
-                                            <span className="text-xs px-2.5 py-1 rounded-full font-medium bg-[var(--color-warning-muted)] text-[var(--color-warning)] border border-[var(--color-warning)]/30">
+                                        {!screenRecordingGranted && (
+                                            <span className="text-xs px-2.5 py-1 rounded-full font-medium bg-[var(--color-error-muted)] text-[var(--color-error)] border border-[var(--color-error)]/30">
                                                 Not Granted
                                             </span>
                                         )}
                                     </div>
                                     <p className="text-sm text-[var(--color-text-secondary)] mb-3">
-                                        Optional but recommended for AI-powered summaries and better activity insights
+                                        Required to detect which app and window you're currently using and capture screenshots for AI summaries
                                     </p>
-                                    {permissions.screenRecording !== true && (
+                                    {!screenRecordingGranted && (
                                         <button
                                             onClick={requestScreenRecording}
                                             disabled={checking}
@@ -298,7 +181,7 @@ export function PermissionRequestModal({ isOpen, onClose, onPermissionsGranted }
                     </div>
 
                     {/* Stale Permission Help */}
-                    {someGranted && !allGranted && (
+                    {!screenRecordingGranted && (
                         <div className="mb-6">
                             <button
                                 onClick={handleShowStaleInstructions}
@@ -317,7 +200,7 @@ export function PermissionRequestModal({ isOpen, onClose, onPermissionsGranted }
                             </p>
                             <ol className="text-sm text-[var(--color-text-secondary)] space-y-2 list-decimal list-inside">
                                 <li>Open System Settings → Privacy & Security</li>
-                                <li>Go to Screen Recording (or Accessibility)</li>
+                                <li>Go to Screen Recording</li>
                                 <li>Find Clearical in the list and toggle it OFF</li>
                                 <li>Wait 2 seconds, then toggle it back ON</li>
                                 <li>Restart Clearical</li>
@@ -325,8 +208,8 @@ export function PermissionRequestModal({ isOpen, onClose, onPermissionsGranted }
                         </div>
                     )}
 
-                    {/* Success message - only show when all permissions granted */}
-                    {allGranted && (
+                    {/* Success message */}
+                    {screenRecordingGranted && (
                         <div className="border rounded-2xl p-4 mb-6 bg-[var(--color-success-muted)] border-[var(--color-success)]/30 animate-pulse">
                             <div className="flex items-center gap-3">
                                 <svg className="w-6 h-6 text-[var(--color-success)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -334,7 +217,7 @@ export function PermissionRequestModal({ isOpen, onClose, onPermissionsGranted }
                                 </svg>
                                 <div>
                                     <h4 className="text-sm font-semibold text-[var(--color-text-primary)] font-display">
-                                        All permissions granted!
+                                        Permission granted!
                                     </h4>
                                     <p className="text-sm text-[var(--color-text-secondary)]">
                                         Starting timer with full features...
@@ -357,12 +240,12 @@ export function PermissionRequestModal({ isOpen, onClose, onPermissionsGranted }
                     <div className="flex gap-3">
                         <button
                             onClick={handleCheckAgain}
-                            disabled={checking || permissions.accessibility}
+                            disabled={checking || screenRecordingGranted}
                             className="px-5 py-2.5 bg-[var(--color-bg-tertiary)] hover:bg-[var(--color-border-primary)] disabled:bg-[var(--color-bg-tertiary)] disabled:text-[var(--color-text-tertiary)] disabled:cursor-not-allowed text-[var(--color-text-primary)] text-sm font-semibold rounded-lg transition-all border border-[var(--color-border-primary)]"
                         >
                             Check Again
                         </button>
-                        {permissions.accessibility && (
+                        {screenRecordingGranted && (
                             <button
                                 onClick={() => {
                                     onPermissionsGranted();

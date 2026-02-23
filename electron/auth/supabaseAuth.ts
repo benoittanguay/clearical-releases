@@ -377,10 +377,16 @@ export class SupabaseAuthService {
                 return { success: false, error: sessionError?.message || 'Failed to complete sign in' };
             }
 
-            // Check if email exists after OAuth callback
+            // Handle missing email after OAuth callback
             if (!sessionData.user.email) {
-                console.warn('[SupabaseAuth] OAuth sign-in: no email from provider');
-                return { success: false, error: 'Email required for sign-in' };
+                if (provider === 'apple') {
+                    // Apple may not return email (e.g. "Hide My Email" edge case) — use fallback
+                    console.warn('[SupabaseAuth] Apple sign-in: no email from provider, using fallback');
+                    sessionData.user.email = `${sessionData.user.id}@privaterelay.appleid.com`;
+                } else {
+                    console.warn('[SupabaseAuth] OAuth sign-in: no email from provider');
+                    return { success: false, error: 'Email required for sign-in' };
+                }
             }
 
             // Validate refresh token exists (required for session refresh)
@@ -578,6 +584,47 @@ export class SupabaseAuthService {
         }
         this.clearSession();
         console.log('[SupabaseAuth] User signed out');
+    }
+
+    /**
+     * Delete user account permanently.
+     * Calls the delete-account Edge Function which handles:
+     * - Canceling Stripe subscriptions
+     * - Deleting user data from database
+     * - Deleting the auth user
+     */
+    async deleteAccount(): Promise<{ success: boolean; error?: string }> {
+        try {
+            const session = await this.getSession();
+            if (!session) {
+                return { success: false, error: 'Not authenticated' };
+            }
+
+            const response = await fetch(`${this.currentSupabaseUrl}/functions/v1/delete-account`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${session.accessToken}`,
+                },
+                body: JSON.stringify({}),
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+                console.error('[SupabaseAuth] Delete account failed:', errorData);
+                return { success: false, error: (errorData as any).error || 'Failed to delete account' };
+            }
+
+            // Clean up local session
+            this.stopBackgroundRefresh();
+            this.clearSession();
+            console.log('[SupabaseAuth] Account deleted successfully');
+
+            return { success: true };
+        } catch (error) {
+            console.error('[SupabaseAuth] Delete account error:', error);
+            return { success: false, error: error instanceof Error ? error.message : 'Failed to delete account' };
+        }
     }
 
     /**

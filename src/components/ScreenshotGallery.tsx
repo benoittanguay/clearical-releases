@@ -403,10 +403,10 @@ export function ScreenshotGallery({ screenshotPaths, metadata, onClose, onScreen
                                             Window title not captured
                                         </p>
                                         <p className="text-[11px] mt-1" style={{ color: 'var(--color-text-secondary)' }}>
-                                            This may be due to accessibility permission issues.
+                                            This may be due to screen recording permission issues.
                                         </p>
                                         <button
-                                            onClick={() => window.electron.ipcRenderer.openAccessibilitySettings()}
+                                            onClick={() => window.electron.ipcRenderer.openScreenPermissionSettings()}
                                             className="mt-3 text-xs px-3 py-1.5 font-semibold rounded-lg transition-all hover:scale-105 active:scale-95"
                                             style={{
                                                 background: 'var(--color-warning)',

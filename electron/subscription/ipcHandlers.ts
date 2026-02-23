@@ -26,6 +26,7 @@ import {
 import { DeviceFingerprintService } from './deviceFingerprint.js';
 import { getConfig } from '../config.js';
 import { getEdgeFunctionClient } from './edgeFunctionClient.js';
+import * as StoreKit from './storekit.js';
 import { initializeTrialNotifications, cleanupTrialNotifications } from './trialNotifications.js';
 
 // Global subscription validator instance
@@ -121,6 +122,25 @@ function registerIpcHandlers(): void {
 
     // Cancel subscription
     ipcMain.handle('subscription:cancel', handleCancelSubscription);
+
+    // MAS-specific handlers (StoreKit)
+    if ((process as any).mas) {
+        ipcMain.handle('subscription:mas-get-products', handleMasGetProducts);
+        ipcMain.handle('subscription:mas-purchase', handleMasPurchase);
+        ipcMain.handle('subscription:mas-restore', handleMasRestore);
+
+        // Set up StoreKit transaction listener for ongoing updates
+        StoreKit.setupTransactionListener(
+            async (productId, receipt) => {
+                console.log('[Subscription] StoreKit purchase completed:', productId);
+                await validateAppStoreReceipt(receipt);
+            },
+            async (productId, receipt) => {
+                console.log('[Subscription] StoreKit purchase restored:', productId);
+                await validateAppStoreReceipt(receipt);
+            }
+        );
+    }
 
     console.log('[Subscription] IPC handlers registered');
 }
@@ -406,6 +426,11 @@ async function handleCreateCheckout(
     checkoutUrl?: string;
     error?: string;
 }> {
+    // MAS builds use StoreKit for purchases, not Stripe
+    if ((process as any).mas) {
+        return { success: false, error: 'Use App Store for purchases' };
+    }
+
     try {
         console.log('[Subscription] Creating checkout session:', { plan, email });
 
@@ -495,6 +520,11 @@ async function handleOpenCustomerPortal(): Promise<{
     portalUrl?: string;
     error?: string;
 }> {
+    // MAS builds use App Store for subscription management
+    if ((process as any).mas) {
+        return { success: false, error: 'Use App Store for subscription management' };
+    }
+
     try {
         console.log('[Subscription] Opening customer portal');
 
@@ -597,6 +627,125 @@ async function handleCancelSubscription(): Promise<{
             success: false,
             error: error instanceof Error ? error.message : 'Unknown error',
         };
+    }
+}
+
+/**
+ * MAS: Get StoreKit products
+ */
+async function handleMasGetProducts(): Promise<{
+    success: boolean;
+    products?: StoreKit.StoreKitProduct[];
+    error?: string;
+}> {
+    try {
+        const products = await StoreKit.getProducts();
+        return { success: true, products };
+    } catch (error) {
+        console.error('[Subscription] Failed to get MAS products:', error);
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+}
+
+/**
+ * MAS: Purchase a product via StoreKit
+ */
+async function handleMasPurchase(
+    _event: Electron.IpcMainInvokeEvent,
+    productId: string
+): Promise<{
+    success: boolean;
+    error?: string;
+}> {
+    try {
+        console.log('[Subscription] MAS purchase:', productId);
+        const result = await StoreKit.purchaseProduct(productId);
+
+        if (result.success && result.receipt) {
+            // Validate receipt with our server — propagate failure
+            const validated = await validateAppStoreReceipt(result.receipt);
+            if (!validated) {
+                return { success: false, error: 'Server receipt validation failed. Please try restoring purchases.' };
+            }
+        }
+
+        return result;
+    } catch (error) {
+        console.error('[Subscription] MAS purchase failed:', error);
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+}
+
+/**
+ * MAS: Restore purchases
+ */
+async function handleMasRestore(): Promise<{
+    success: boolean;
+    error?: string;
+}> {
+    try {
+        StoreKit.restorePurchases();
+
+        // Get receipt after restore — retry since App Store may not have written it yet
+        const receipt = await StoreKit.getReceiptWithRetry(3, 1500);
+        if (!receipt) {
+            return { success: false, error: 'No receipt found. You may not have an active subscription.' };
+        }
+
+        const validated = await validateAppStoreReceipt(receipt);
+        if (!validated) {
+            return { success: false, error: 'Failed to validate restored purchases with server.' };
+        }
+
+        return { success: true };
+    } catch (error) {
+        console.error('[Subscription] MAS restore failed:', error);
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+}
+
+/**
+ * Validate App Store receipt with our Edge Function.
+ * Returns true if validation succeeded, false otherwise.
+ */
+async function validateAppStoreReceipt(receipt: string): Promise<boolean> {
+    try {
+        const config = getConfig();
+        const { getAuthService } = await import('../auth/supabaseAuth.js');
+        const authService = getAuthService();
+        const session = await authService.getSession();
+
+        if (!session) {
+            console.error('[Subscription] Cannot validate receipt: not authenticated');
+            return false;
+        }
+
+        const response = await fetch(`${config.supabase.url}/functions/v1/verify-appstore-receipt`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${session.accessToken}`,
+            },
+            body: JSON.stringify({ receipt }),
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+            console.error('[Subscription] Receipt validation failed:', errorData);
+            return false;
+        }
+
+        const result = await response.json();
+        console.log('[Subscription] Receipt validated:', result);
+
+        // Force refresh subscription status
+        if (subscriptionValidator) {
+            await subscriptionValidator.validate();
+        }
+        return true;
+    } catch (error) {
+        console.error('[Subscription] Receipt validation error:', error);
+        return false;
     }
 }
 

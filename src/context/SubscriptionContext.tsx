@@ -20,6 +20,7 @@ interface SubscriptionContextType {
     refreshSubscription: () => Promise<void>;
     upgrade: (email: string) => Promise<{ success: boolean; error?: string }>;
     openCustomerPortal: () => Promise<{ success: boolean; error?: string }>;
+    restorePurchases: () => Promise<{ success: boolean; error?: string }>;
 }
 
 const defaultSubscription: SubscriptionStatus = {
@@ -95,9 +96,25 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
         await fetchSubscriptionStatus();
     }, [fetchSubscriptionStatus]);
 
-    // Upgrade to workplace plan - opens Stripe Checkout
+    // Upgrade to workplace plan - opens Stripe Checkout or StoreKit purchase on MAS
     const upgrade = useCallback(async (email: string): Promise<{ success: boolean; error?: string }> => {
         try {
+            // On MAS builds, use StoreKit for in-app purchase
+            if (window.electron?.isMas) {
+                console.log('[SubscriptionContext] Starting MAS purchase flow');
+                const result = await window.electron.ipcRenderer.invoke('subscription:mas-purchase', 'com.clearical.workplace.monthly');
+
+                if (result.success) {
+                    console.log('[SubscriptionContext] MAS purchase completed');
+                    await refreshSubscription();
+                    return { success: true };
+                } else {
+                    console.error('[SubscriptionContext] MAS purchase failed:', result.error);
+                    return { success: false, error: result.error };
+                }
+            }
+
+            // Direct download builds use Stripe
             console.log('[SubscriptionContext] Starting upgrade flow for:', email);
             const result = await window.electron.ipcRenderer.invoke('subscription:subscribe', email, 'workplace_monthly');
 
@@ -116,8 +133,32 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
         }
     }, [refreshSubscription]);
 
+    // Restore purchases (MAS only)
+    const restorePurchases = useCallback(async (): Promise<{ success: boolean; error?: string }> => {
+        try {
+            if (!window.electron?.isMas) {
+                return { success: false, error: 'Not a Mac App Store build' };
+            }
+
+            console.log('[SubscriptionContext] Restoring purchases');
+            const result = await window.electron.ipcRenderer.invoke('subscription:mas-restore');
+
+            if (result.success) {
+                await refreshSubscription();
+            }
+
+            return result;
+        } catch (error) {
+            console.error('[SubscriptionContext] Restore error:', error);
+            return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+        }
+    }, [refreshSubscription]);
+
     // Open customer portal for managing subscription
     const openCustomerPortal = useCallback(async (): Promise<{ success: boolean; error?: string }> => {
+        if (window.electron?.isMas) {
+            return { success: false, error: 'Use App Store for subscription management' };
+        }
         try {
             console.log('[SubscriptionContext] Opening customer portal');
             const result = await window.electron.ipcRenderer.invoke('subscription:open-portal');
@@ -141,7 +182,8 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
                 hasFeature,
                 refreshSubscription,
                 upgrade,
-                openCustomerPortal
+                openCustomerPortal,
+                restorePurchases
             }}
         >
             {children}

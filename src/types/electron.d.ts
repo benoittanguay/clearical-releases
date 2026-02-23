@@ -137,6 +137,7 @@ export interface ElectronAPI {
             };
             error?: string;
         }>;
+        deleteAccount: () => Promise<{ success: boolean; error?: string }>;
         captureScreenshot: (windowInfo?: { appName: string; windowTitle: string; bundleId: string; pid: number }) => Promise<string | null>;
         analyzeScreenshot: (imagePath: string, requestId?: string, ocrText?: string[]) => Promise<ScreenshotAnalysisResult>;
         generateActivitySummary: (context: {
@@ -174,11 +175,9 @@ export interface ElectronAPI {
         getMainLogPath: () => Promise<string>;
         openMainLogFolder: () => Promise<void>;
         getMainLogContent: () => Promise<string | null>;
-        checkAccessibilityPermission: () => Promise<string>;
         checkScreenPermission: () => Promise<string>;
         requestScreenPermission: () => Promise<string>;
         openScreenPermissionSettings: () => Promise<void>;
-        openAccessibilitySettings: () => Promise<void>;
         getAppIcon: (appName: string) => Promise<string | null>;
         getScreenshot: (filePath: string) => Promise<string | null>;
         showItemInFolder: (filePath: string) => Promise<{ success: boolean; error?: string }>;

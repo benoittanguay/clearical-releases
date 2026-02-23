@@ -915,32 +915,6 @@ ipcMain.handle('open-screen-permission-settings', async () => {
     }
 });
 
-ipcMain.handle('open-accessibility-settings', async () => {
-    console.log('[Main] open-accessibility-settings requested');
-    if (process.platform === 'darwin') {
-        const paths = [
-            'x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility',
-            'x-apple.systempreferences:com.apple.SystemSettings.PrivacySecurity.extension?Privacy_Accessibility',
-        ];
-
-        for (const p of paths) {
-            try {
-                console.log(`[Main] Trying to open: ${p}`);
-                await shell.openExternal(p);
-                return;
-            } catch (e) {
-                console.warn(`[Main] Failed to open ${p}`, e);
-            }
-        }
-
-        // Final fallback
-        try {
-            await shell.openExternal('x-apple.systempreferences:');
-        } catch (e) {
-            console.error('[Main] All attempts to open settings failed.', e);
-        }
-    }
-});
 
 /**
  * Shows instructions for resetting TCC permissions to fix stale permission issues.
@@ -1129,15 +1103,6 @@ ipcMain.handle('get-active-window', async () => {
     return { appName: 'Unknown', windowTitle: 'Unknown', bundleId: '', pid: 0 };
 });
 
-ipcMain.handle('check-accessibility-permission', () => {
-    if (process.platform === 'darwin') {
-        // Use Electron's API to check if we have accessibility permission
-        // Pass false to avoid prompting - we just want to check the status
-        const isTrusted = systemPreferences.isTrustedAccessibilityClient(false);
-        return isTrusted ? 'granted' : 'denied';
-    }
-    return 'granted';
-});
 
 // App Icon Cache
 const appIconCache = new Map<string, string>();
@@ -3082,8 +3047,10 @@ ipcMain.handle('db:clear-tempo-cache', async () => {
 });
 
 // ========================================================================
-// AUTO-UPDATE IPC HANDLERS
+// AUTO-UPDATE IPC HANDLERS (skip for MAS builds — App Store handles updates)
 // ========================================================================
+
+if (!(process as any).mas) {
 
 // Check for updates
 ipcMain.handle('updater:check-for-updates', async () => {
@@ -3170,6 +3137,8 @@ ipcMain.handle('updater:configure', async (event, options: {
         };
     }
 });
+
+} // end if (!(process as any).mas)
 
 // Crawler State
 ipcMain.handle('db:get-crawler-state', async (event, projectKey: string) => {

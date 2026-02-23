@@ -18,8 +18,8 @@ interface SettingsProps {
 
 export function Settings({ onOpenJiraModal, onOpenTempoModal }: SettingsProps = {}) {
     const { settings, updateSettings, resetSettings } = useSettings();
-    const { subscription, hasFeature, upgrade, openCustomerPortal } = useSubscription();
-    const { user, signOut } = useAuth();
+    const { subscription, hasFeature, upgrade, openCustomerPortal, restorePurchases } = useSubscription();
+    const { user, signOut, deleteAccount } = useAuth();
     const jiraCache = useJiraCache();
     const [permissionStatus, setPermissionStatus] = useState<PermissionStatus>('unknown');
     const [tempSettings, setTempSettings] = useState(settings);
@@ -86,6 +86,9 @@ export function Settings({ onOpenJiraModal, onOpenTempoModal }: SettingsProps = 
                 setAppVersion('Unknown');
             }
 
+            // Skip updater status on MAS builds — App Store handles updates
+            if (window.electron?.isMas) return;
+
             // Get current update status
             try {
                 const result = await window.electron.ipcRenderer.updater.getStatus();
@@ -99,7 +102,9 @@ export function Settings({ onOpenJiraModal, onOpenTempoModal }: SettingsProps = 
 
         getVersionAndUpdateStatus();
 
-        // Subscribe to update status changes
+        // Subscribe to update status changes (not needed on MAS)
+        if (window.electron?.isMas) return;
+
         const unsubscribe = window.electron.ipcRenderer.updater.onStatusUpdate((status) => {
             setUpdateStatus(status);
         });
@@ -326,6 +331,17 @@ export function Settings({ onOpenJiraModal, onOpenTempoModal }: SettingsProps = 
     const handleOpenPortal = async () => {
         setIsOpeningPortal(true);
 
+        // On MAS, open App Store subscription management
+        if (window.electron?.isMas) {
+            try {
+                await window.electron.ipcRenderer.openExternal('https://apps.apple.com/account/subscriptions');
+            } catch (error) {
+                console.error('[Settings] Failed to open App Store subscriptions:', error);
+            }
+            setIsOpeningPortal(false);
+            return;
+        }
+
         const result = await openCustomerPortal();
 
         setIsOpeningPortal(false);
@@ -336,10 +352,51 @@ export function Settings({ onOpenJiraModal, onOpenTempoModal }: SettingsProps = 
         }
     };
 
+    // Handle restore purchases (MAS only)
+    const [isRestoring, setIsRestoring] = useState(false);
+    const handleRestorePurchases = async () => {
+        setIsRestoring(true);
+        try {
+            const result = await restorePurchases();
+            if (result.success) {
+                alert('Purchases restored successfully!');
+            } else {
+                alert(`Failed to restore purchases: ${result.error}`);
+            }
+        } catch (error) {
+            alert('Failed to restore purchases. Please try again.');
+        } finally {
+            setIsRestoring(false);
+        }
+    };
+
     // Handle sign out
     const handleSignOut = async () => {
         if (confirm('Are you sure you want to sign out?')) {
             await signOut();
+        }
+    };
+
+    // Handle account deletion
+    const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+    const handleDeleteAccount = async () => {
+        if (!confirm('Are you sure you want to delete your account? This will permanently delete your account and all data. This cannot be undone.')) {
+            return;
+        }
+        // Double confirmation for destructive action
+        if (!confirm('This action is irreversible. Your subscription will be canceled and all data will be permanently deleted. Continue?')) {
+            return;
+        }
+        setIsDeletingAccount(true);
+        try {
+            const result = await deleteAccount();
+            if (!result.success) {
+                alert(`Failed to delete account: ${result.error}`);
+            }
+        } catch (error) {
+            alert('Failed to delete account. Please try again.');
+        } finally {
+            setIsDeletingAccount(false);
         }
     };
 
@@ -400,11 +457,27 @@ export function Settings({ onOpenJiraModal, onOpenTempoModal }: SettingsProps = 
                                 {isOpeningPortal ? 'Opening...' : 'Upgrade'}
                             </button>
                         )}
+                        {window.electron?.isMas && (
+                            <button
+                                onClick={handleRestorePurchases}
+                                disabled={isRestoring}
+                                className="px-3 py-1.5 bg-transparent hover:bg-[var(--color-bg-ghost-hover)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] text-xs rounded-lg transition-all border border-[var(--color-border-primary)] disabled:opacity-50"
+                            >
+                                {isRestoring ? 'Restoring...' : 'Restore Purchases'}
+                            </button>
+                        )}
                         <button
                             onClick={handleSignOut}
                             className="px-3 py-1.5 bg-transparent hover:bg-[var(--color-bg-ghost-hover)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] text-xs rounded-lg transition-all border border-[var(--color-border-primary)]"
                         >
                             Sign Out
+                        </button>
+                        <button
+                            onClick={handleDeleteAccount}
+                            disabled={isDeletingAccount}
+                            className="px-3 py-1.5 bg-transparent hover:bg-[var(--color-error-muted)] text-[var(--color-error)] text-xs rounded-lg transition-all border border-[var(--color-error)]/30 disabled:opacity-50"
+                        >
+                            {isDeletingAccount ? 'Deleting...' : 'Delete Account'}
                         </button>
                     </div>
                 </div>
@@ -1266,33 +1339,35 @@ export function Settings({ onOpenJiraModal, onOpenTempoModal }: SettingsProps = 
             {/* App Version & Updates */}
             <div className="bg-[var(--color-bg-secondary)] p-4 rounded-2xl mb-3 border border-[var(--color-border-primary)]">
                 <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-[10px] font-bold text-[var(--color-text-secondary)] uppercase tracking-wider font-display">App Version & Updates</h3>
-                    <button
-                        onClick={handleCheckForUpdates}
-                        disabled={isCheckingUpdate}
-                        className={`px-3 py-1.5 text-xs rounded-lg transition-all flex items-center gap-1.5 font-medium ${
-                            isCheckingUpdate
-                                ? 'bg-[var(--color-bg-tertiary)] text-[var(--color-text-secondary)] cursor-not-allowed'
-                                : 'bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white'
-                        }`}
-                    >
-                        {isCheckingUpdate ? (
-                            <>
-                                <svg className="animate-spin h-3.5 w-3.5" fill="none" viewBox="0 0 24 24">
-                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                </svg>
-                                Checking...
-                            </>
-                        ) : (
-                            <>
-                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                                </svg>
-                                Check for Updates
-                            </>
-                        )}
-                    </button>
+                    <h3 className="text-[10px] font-bold text-[var(--color-text-secondary)] uppercase tracking-wider font-display">App Version</h3>
+                    {!window.electron?.isMas && (
+                        <button
+                            onClick={handleCheckForUpdates}
+                            disabled={isCheckingUpdate}
+                            className={`px-3 py-1.5 text-xs rounded-lg transition-all flex items-center gap-1.5 font-medium ${
+                                isCheckingUpdate
+                                    ? 'bg-[var(--color-bg-tertiary)] text-[var(--color-text-secondary)] cursor-not-allowed'
+                                    : 'bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white'
+                            }`}
+                        >
+                            {isCheckingUpdate ? (
+                                <>
+                                    <svg className="animate-spin h-3.5 w-3.5" fill="none" viewBox="0 0 24 24">
+                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                    </svg>
+                                    Checking...
+                                </>
+                            ) : (
+                                <>
+                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                    </svg>
+                                    Check for Updates
+                                </>
+                            )}
+                        </button>
+                    )}
                 </div>
 
                 <div className="space-y-2">
