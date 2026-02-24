@@ -241,6 +241,7 @@ export interface ElectronAPI {
             buckets: TimeBucket[];
             jiraIssues: LinkedJiraIssue[];
             historicalEntries: TimeEntry[];
+            jiraEnabled?: boolean;
         }) => Promise<{
             success: boolean;
             suggestion?: {

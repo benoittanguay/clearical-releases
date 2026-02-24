@@ -2481,6 +2481,7 @@ ipcMain.handle('suggest-assignment', requirePremium('AI Analysis', async (event,
     buckets: any[];
     jiraIssues: LinkedJiraIssue[];
     historicalEntries: any[];
+    jiraEnabled?: boolean;
 }) => {
     console.log('[Main] suggest-assignment requested');
     console.log('[Main] Context:', {
@@ -2494,7 +2495,8 @@ ipcMain.handle('suggest-assignment', requirePremium('AI Analysis', async (event,
         const service = new AIAssignmentService(
             request.buckets,
             request.jiraIssues,
-            request.historicalEntries
+            request.historicalEntries,
+            request.jiraEnabled ?? false
         );
 
         // Get suggestion
@@ -3686,7 +3688,15 @@ function buildSplitAnalysisPrompt(
     const formatTime = (timestamp: number) => new Date(timestamp).toLocaleTimeString();
     const formatDuration = (ms: number) => `${Math.round(ms / 60000)} minutes`;
 
-    let prompt = `Analyze the following sequence of work activities and identify points where the user switched between different tasks or areas of work. The goal is to produce granular time entries that accurately reflect how time was spent — it is better to over-split into smaller entries (they can always be grouped later) than to leave a long session as one vague block.
+    let prompt = `Analyze the following sequence of work activities and split them into separate time entries. Your job is to produce granular entries that each represent ONE focused task or activity. It is always better to over-split (entries can be grouped later) than to under-split.
+
+**CRITICAL RULES:**
+- Calendar events (meetings, standups, calls) are ALWAYS their own separate entry — never merge a meeting with coding or other work.
+- Different projects, repositories, or codebases MUST be separate entries.
+- Unrelated activities (e.g., a design review followed by bug fixing on a different project) MUST be split.
+- A single entry should describe ONE coherent task, not a list of different things.
+- You MUST return at least 2 segments unless the ENTIRE session is truly one single uninterrupted task with no context switches whatsoever.
+- NEVER return an empty array — there is always at least one entry to create.
 
 **Time Range:** ${formatTime(activityData.startTime)} - ${formatTime(activityData.endTime)} (${formatDuration(activityData.duration)})
 
@@ -3708,21 +3718,21 @@ function buildSplitAnalysisPrompt(
     });
 
     if (manuallyTriggered) {
-        prompt += `\n**Important Context:** The user manually requested this split analysis, which means they believe this session contains multiple distinct tasks. Be generous with splitting — look for any reasonable boundary including:`;
+        prompt += `\n**Important Context:** The user manually requested this split analysis, which means they KNOW this session contains multiple distinct tasks. You MUST find split points. Look for:`;
         prompt += `
 - Switching between different projects, repos, or codebases
 - Shifting between different types of work (coding vs reviewing vs communicating vs researching)
-- Calendar events that overlap with the session (meetings, standups, etc.)
+- Calendar events that overlap with the session (meetings, standups, etc.) — these are ALWAYS a separate entry
 - Gaps or transitions in activity that suggest a context switch
 - Working on different features, tickets, or topics within the same project
 - Switching between different communication threads or channels
 
-Even subtle shifts in focus should be treated as split points. When in doubt, split.`;
+Even subtle shifts in focus should be treated as split points. When in doubt, split. You MUST return at least 2 segments.`;
     } else {
         prompt += `\n**Instructions:**`;
         prompt += `
 - Split when the user shifts between different projects, tasks, meetings, or areas of work
-- Split when there is a calendar event that represents a distinct block of time (e.g., a meeting)
+- Calendar events (meetings, standups, calls) MUST always be their own separate entry — never combine a meeting with other work
 - Split when the type of work changes meaningfully (e.g., coding → code review → Slack conversations)
 - Split when working on different features or tickets, even within the same project
 - Do NOT split for trivial app switches that are part of the same workflow (e.g., IDE ↔ browser while debugging the same issue)
@@ -3745,7 +3755,7 @@ Return a JSON array of split suggestions. Each suggestion should have:
   "confidence": <0.0 to 1.0>
 }
 
-If no meaningful splits are detected, return an empty array.
+The array MUST cover the entire time range from start to end with no gaps. Every minute of the session must belong to exactly one segment. If the session is truly a single focused task, return a single-element array covering the full range — but strongly prefer splitting into multiple entries.
 
 Respond with ONLY valid JSON (no markdown, no explanation):`;
 

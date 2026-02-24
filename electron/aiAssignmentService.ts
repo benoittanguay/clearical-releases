@@ -87,7 +87,8 @@ export class AIAssignmentService {
     constructor(
         private buckets: TimeBucket[] = [],
         private jiraIssues: LinkedJiraIssue[] = [],
-        private historicalEntries: TimeEntry[] = []
+        private historicalEntries: TimeEntry[] = [],
+        private jiraEnabled: boolean = false
     ) {
         this.historicalMatcher = new HistoricalMatchingService();
     }

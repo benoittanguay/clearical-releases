@@ -658,7 +658,8 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                 },
                 buckets: buckets,
                 jiraIssues: jiraIssues,
-                historicalEntries: entries.slice(0, 50) // Last 50 entries for pattern learning
+                historicalEntries: entries.slice(0, 50), // Last 50 entries for pattern learning
+                jiraEnabled: !!settings.jira?.enabled
             });
 
             console.log('[HistoryDetail] AI suggestion result:', result);
@@ -1599,7 +1600,7 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                 return;
             }
 
-            if (result.success && result.suggestions.length > 0) {
+            if (result.success && result.suggestions.length > 1) {
                 setSplitSuggestions(result.suggestions);
 
                 analytics.track('splits_suggested', {
@@ -1608,9 +1609,9 @@ export function HistoryDetail({ entry, buckets, onBack, onUpdate, onNavigateToSe
                     duration: entry.duration
                 });
             } else {
-                // No splits found — close the modal
+                // No meaningful splits found (0 or 1 segment = no split) — close the modal
                 setShowSplittingAssistant(false);
-                console.log('[HistoryDetail] No splits suggested for entry:', entry.id);
+                console.log('[HistoryDetail] No splits suggested for entry:', entry.id, '(segments:', result.suggestions.length, ')');
 
                 if (isAutoPrompted) {
                     // For auto-prompted sessions, inform user and generate summary
