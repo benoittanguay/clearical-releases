@@ -148,9 +148,19 @@ export class AIAssignmentService {
             reason: this.explainJiraScore(issue, context, aiClassification)
         }));
 
-        // Combine and sort by score
+        // Combine and sort by score, then by recency as tiebreaker
         const allCandidates = [...bucketScores, ...jiraScores]
-            .sort((a, b) => b.score - a.score);
+            .sort((a, b) => {
+                if (Math.abs(b.score - a.score) > 0.001) return b.score - a.score;
+                // Tiebreaker: prefer most recently manually assigned
+                const aKey = a.assignment.type === 'bucket'
+                    ? `bucket:${a.assignment.bucket?.id}`
+                    : `jira:${a.assignment.jiraIssue?.key}`;
+                const bKey = b.assignment.type === 'bucket'
+                    ? `bucket:${b.assignment.bucket?.id}`
+                    : `jira:${b.assignment.jiraIssue?.key}`;
+                return this.getLastManualAssignmentTime(bKey) - this.getLastManualAssignmentTime(aKey);
+            });
 
         console.log('[AIAssignmentService] Top 3 fallback candidates:');
         allCandidates.slice(0, 3).forEach((candidate, idx) => {
@@ -170,6 +180,21 @@ export class AIAssignmentService {
         }
 
         const best = allCandidates[0];
+
+        // Minimum confidence threshold: don't suggest low-confidence assignments
+        if (best.score < 0.15) {
+            console.log('[AIAssignmentService] Best score too low:', (best.score * 100).toFixed(1) + '%, returning no suggestion');
+            return {
+                assignment: null,
+                confidence: best.score,
+                reason: 'No strong match found',
+                alternatives: allCandidates.slice(0, 3).map(c => ({
+                    assignment: c.assignment,
+                    confidence: c.score,
+                    reason: c.reason
+                }))
+            };
+        }
 
         console.log('[AIAssignmentService] Suggesting fallback assignment with confidence:', (best.score * 100).toFixed(1) + '%');
         return {
@@ -325,9 +350,9 @@ export class AIAssignmentService {
 
     /**
      * Calculate score for a bucket assignment (FALLBACK ONLY)
-     * Used only when AI is unavailable:
-     * - 35% Historical usage pattern (reduced to avoid over-reliance on manual selections)
-     * - 40% Keyword matching in bucket name (primary signal for context relevance)
+     * - 35% Historical usage pattern
+     * - 30% Keyword matching bucket name vs description
+     * - 10% Keyword matching bucket name vs window titles
      * - 25% Linked Jira issue relevance
      */
     private calculateBucketScore(
@@ -337,18 +362,20 @@ export class AIAssignmentService {
     ): number {
         let score = 0;
 
-        // 1. Historical usage pattern (35%) - important but not dominant
-        // Reduced from 60% to prevent over-reliance on past manual selections
+        // 1. Historical usage pattern (35%)
         const historicalMatch = this.calculateHistoricalBucketMatch(bucket.id, context);
         score += historicalMatch * 0.35;
 
-        // 2. Keyword matching in bucket name (40%) - primary context signal
-        // Increased from 25% to prioritize semantic relevance over history
+        // 2. Keyword matching in bucket name vs description (30%)
         const nameMatch = this.keywordMatch(bucket.name, context.description);
-        score += nameMatch * 0.40;
+        score += nameMatch * 0.30;
 
-        // 3. Linked Jira issue relevance (25%)
-        // Increased from 15% to better leverage Jira context
+        // 3. Keyword matching bucket name vs window titles + app names (10%)
+        const contextText = [...context.windowTitles, ...context.appNames].join(' ');
+        const contextMatch = this.keywordMatch(bucket.name, contextText);
+        score += contextMatch * 0.10;
+
+        // 4. Linked Jira issue relevance (25%)
         if (bucket.linkedIssue) {
             const issueMatch = this.keywordMatch(
                 bucket.linkedIssue.summary,
@@ -362,11 +389,12 @@ export class AIAssignmentService {
 
     /**
      * Calculate score for a Jira issue assignment (FALLBACK ONLY)
-     * Used only when AI is unavailable:
-     * - 30% Historical usage pattern (reduced to avoid over-reliance on manual selections)
-     * - 35% Summary keyword match (primary signal for context relevance)
-     * - 20% Technology/domain match (increased for better tech stack matching)
+     * - 30% Historical usage pattern
+     * - 25% Summary keyword match vs description
+     * - 10% Summary keyword match vs window titles
+     * - 20% Technology/domain match
      * - 15% Project affinity
+     * + 0.15 Jira boost when jiraEnabled
      */
     private calculateJiraScore(
         issue: LinkedJiraIssue,
@@ -375,44 +403,51 @@ export class AIAssignmentService {
     ): number {
         let score = 0;
 
-        // 1. Historical usage (30%) - important but not dominant
-        // Reduced from 60% to prevent over-reliance on past manual selections
+        // 1. Historical usage (30%)
         const historicalMatch = this.calculateHistoricalJiraMatch(issue.key, context);
         score += historicalMatch * 0.30;
 
-        // 2. Summary keyword match (35%) - primary context signal
-        // Increased from 20% to prioritize semantic relevance over history
+        // 2. Summary keyword match vs description (25%)
         const summaryMatch = this.keywordMatch(issue.summary, context.description);
-        score += summaryMatch * 0.35;
+        score += summaryMatch * 0.25;
 
-        // 3. Technology/domain match (20%) - better tech stack matching
-        // Increased from 10% for more accurate domain-based suggestions
+        // 3. Summary keyword match vs window titles (10%)
+        const titleText = context.windowTitles.join(' ');
+        const titleMatch = this.keywordMatch(issue.summary, titleText);
+        score += titleMatch * 0.10;
+
+        // 4. Technology/domain match (20%)
         const techMatch = this.technologyMatch(issue, context.detectedTechnologies);
         score += techMatch * 0.20;
 
-        // 4. Project affinity (15%) - prefer recently used projects
-        // Increased from 10% to balance project context
+        // 5. Project affinity (15%)
         const projectMatch = this.projectAffinityMatch(issue.projectKey);
         score += projectMatch * 0.15;
+
+        // 6. Jira priority boost when Jira is enabled
+        if (this.jiraEnabled) {
+            score += 0.15;
+        }
 
         return Math.min(score, 1.0);
     }
 
     /**
-     * Calculate keyword match score between two text strings
+     * Calculate keyword match score between source and target text.
+     * Uses token overlap ratio: what fraction of source keywords appear in target.
+     * This avoids penalizing matches against long descriptions (the old Jaccard
+     * approach divided by the union, making short bucket names score near-zero).
      */
     private keywordMatch(source: string, target: string): number {
         if (!source || !target) return 0;
 
         const sourceWords = this.extractKeywords(source.toLowerCase());
-        const targetWords = this.extractKeywords(target.toLowerCase());
+        const targetWords = new Set(this.extractKeywords(target.toLowerCase()));
 
-        if (sourceWords.length === 0 || targetWords.length === 0) return 0;
+        if (sourceWords.length === 0 || targetWords.size === 0) return 0;
 
-        const matchCount = sourceWords.filter(w => targetWords.includes(w)).length;
-        const maxWords = Math.max(sourceWords.length, targetWords.length);
-
-        return matchCount / maxWords;
+        const matchCount = sourceWords.filter(w => targetWords.has(w)).length;
+        return matchCount / sourceWords.length;
     }
 
     /**
@@ -532,6 +567,26 @@ export class AIAssignmentService {
         );
 
         return projectEntries.length / Math.max(recentEntries.length, 1);
+    }
+
+    /**
+     * Get the most recent manual assignment timestamp for a given assignment key.
+     * Used as tiebreaker when scores are equal.
+     */
+    private getLastManualAssignmentTime(assignmentKey: string): number {
+        for (const entry of this.historicalEntries) {
+            if (entry.assignmentAutoSelected === true) continue;
+            if (!entry.assignment) continue;
+
+            const key = entry.assignment.type === 'bucket'
+                ? `bucket:${entry.assignment.bucket?.id}`
+                : `jira:${entry.assignment.jiraIssue?.key}`;
+
+            if (key === assignmentKey) {
+                return entry.startTime || 0;
+            }
+        }
+        return 0;
     }
 
     /**
