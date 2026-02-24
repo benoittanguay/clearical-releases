@@ -268,23 +268,38 @@ export class AIAssignmentService {
         available: boolean;
     }> {
         try {
-            // Build options list from buckets and Jira issues
+            // Build options list - Jira issues FIRST when enabled (AI prompt ordering matters)
             const options: Array<{ id: string; name: string }> = [];
 
-            // Add buckets
-            for (const bucket of this.buckets.filter(b => !b.isFolder)) {
-                options.push({
-                    id: `bucket:${bucket.id}`,
-                    name: bucket.name
-                });
-            }
-
-            // Add Jira issues
-            for (const issue of this.jiraIssues) {
-                options.push({
-                    id: `jira:${issue.key}`,
-                    name: `${issue.key}: ${issue.summary}`
-                });
+            if (this.jiraEnabled) {
+                // Add Jira issues first for priority
+                for (const issue of this.jiraIssues) {
+                    options.push({
+                        id: `jira:${issue.key}`,
+                        name: `${issue.key}: ${issue.summary}`
+                    });
+                }
+                // Then buckets
+                for (const bucket of this.buckets.filter(b => !b.isFolder)) {
+                    options.push({
+                        id: `bucket:${bucket.id}`,
+                        name: bucket.name
+                    });
+                }
+            } else {
+                // No Jira: buckets first, then any Jira issues
+                for (const bucket of this.buckets.filter(b => !b.isFolder)) {
+                    options.push({
+                        id: `bucket:${bucket.id}`,
+                        name: bucket.name
+                    });
+                }
+                for (const issue of this.jiraIssues) {
+                    options.push({
+                        id: `jira:${issue.key}`,
+                        name: `${issue.key}: ${issue.summary}`
+                    });
+                }
             }
 
             if (options.length === 0) {
@@ -316,6 +331,31 @@ export class AIAssignmentService {
             }
             if (context.upcomingCalendarEvents && context.upcomingCalendarEvents.length > 0) {
                 contextParts.push(`Upcoming events: ${context.upcomingCalendarEvents.join(', ')}`);
+            }
+
+            // Compute and include historical patterns
+            if (this.historicalEntries.length > 0) {
+                const similarEntries = this.historicalMatcher.findSimilarEntries(
+                    context,
+                    this.historicalEntries,
+                    { minScore: 0.1, maxResults: 20, requireAssignment: true }
+                );
+                const patterns = this.historicalMatcher.extractAssignmentPatterns(similarEntries);
+
+                if (patterns.length > 0) {
+                    const patternDescriptions = patterns.slice(0, 5).map(p => {
+                        // Resolve pattern key to readable name
+                        const option = options.find(o => o.id === p.assignmentKey);
+                        const name = option?.name || p.assignmentKey;
+                        return `${name} (${p.usageCount} times, ${Math.round(p.matchScore * 100)}% match)`;
+                    });
+                    contextParts.push(`User history: Previously assigned similar work to: ${patternDescriptions.join('; ')}`);
+                }
+            }
+
+            // Add Jira priority instruction
+            if (this.jiraEnabled && this.jiraIssues.length > 0) {
+                contextParts.push('Prefer Jira issues over generic buckets when a relevant Jira issue exists');
             }
 
             const contextStr = contextParts.join('. ');
