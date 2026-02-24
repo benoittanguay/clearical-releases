@@ -464,8 +464,8 @@ export class AIAssignmentService {
         const projectMatch = this.projectAffinityMatch(issue.projectKey);
         score += projectMatch * 0.15;
 
-        // 6. Jira priority boost when Jira is enabled
-        if (this.jiraEnabled) {
+        // 6. Jira priority boost when Jira is enabled (only if there's some base relevance)
+        if (this.jiraEnabled && score > 0) {
             score += 0.15;
         }
 
@@ -612,6 +612,7 @@ export class AIAssignmentService {
     /**
      * Get the most recent manual assignment timestamp for a given assignment key.
      * Used as tiebreaker when scores are equal.
+     * Assumes historicalEntries are sorted by recency (newest first).
      */
     private getLastManualAssignmentTime(assignmentKey: string): number {
         for (const entry of this.historicalEntries) {
